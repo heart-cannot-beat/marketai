@@ -404,3 +404,56 @@ class PostgresArchitectureTests(unittest.TestCase):
             self.assertEqual((details['reason_code'], details['execution_mode'], details['requested_mode']),
                 ('controlled_mock_source', 'mock', 'real'))
             self.assertEqual((details['bound_version_id'], details['bound_version_state']), (cv_id, 'active'))
+
+    def test_a_manual_fact_import_survives_a_crash_as_the_worker_and_reads_back_as_the_api(self):
+        """The API enqueues, replays and refuses a reused upload; a crashed run's expired lease is requeued by the claim, not left uncertain; the Worker writes the draft and settles the Operation under its row lock; the API reads both (#397)."""
+        from datetime import timedelta
+        from tests.test_library_manual_fact_import_worker import JOB_TYPE, RESULT_TYPE, ManualFactImportFixtures
+        from app.library.contracts import ROLE_OWNER
+        from app.platform.operations import OperationState, transition_operation
+        from app.worker_runtime import WorkerRuntime
+        fixture = ManualFactImportFixtures()
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[0]):
+            fixture.setUp()
+            fixture.ctx = fixture._make_context(workspace_id='ws_factimport_' + uuid.uuid4().hex, role=ROLE_OWNER)
+            fixture.act_as(fixture.ctx)
+            self.workspaces.append(fixture.ctx.workspace_id)
+        self.addCleanup(fixture.doCleanups)
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[1]):
+            data_source = fixture.data_source()
+            upload = fixture.upload(data_source)
+            first = fixture.import_(data_source, upload, 'ci-only-factimport-postgres')
+            replay = fixture.import_(data_source, upload, 'ci-only-factimport-postgres')
+            self.assertEqual((first.status_code, replay.status_code), (202, 202), replay.text)
+            self.assertEqual(replay.json()['operation_id'], first.json()['operation_id'])
+            fixture.assert_problem(fixture.import_(data_source, upload), 409, 'upload_intent_consumed')
+            [job] = fixture.jobs()
+            self.assertTrue(job.safe_to_retry_after_crash)
+        operation_id = first.json()['operation_id']
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[2]), \
+             patch('app.platform.jobs.engine', self.worker):
+            # A Worker took the Job, started the Operation and died.
+            claimed = jobs.claim_next('factimport-crashed', job_types=(JOB_TYPE,))
+            self.assertEqual(claimed.id, job.id)
+            jobs.mark_running(claimed.context, claimed.id, 'factimport-crashed')
+            with tenant_session(claimed.context) as session:
+                transition_operation(session, operation_id, OperationState.RUNNING, reason=None, actor=claimed.context.executor)
+        with self.owner.begin() as connection:
+            connection.execute(update(JobRecord).where(JobRecord.id == job.id)
+                .values(lease_expires_at=utcnow() - timedelta(seconds=1)))
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[2]), \
+             patch('app.platform.jobs.engine', self.worker):
+            runtime = WorkerRuntime(owner='factimport-postgres')
+            runtime.blob_store = fixture.store
+            self.assertTrue(asyncio.run(runtime.run_once(job_types=(JOB_TYPE,))))
+        with self.owner.connect() as connection:
+            self.assertEqual(connection.scalar(text(
+                "SELECT count(*) FROM audit_events WHERE resource_id = :job AND event_type = 'job.requeued'"),
+                {'job': job.id}), 1)
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[1]):
+            operation = fixture.operation(operation_id)
+            [fact_set] = fixture.fact_sets()
+            self.assertEqual((operation['state'], operation['result']),
+                ('succeeded', {'resource_type': RESULT_TYPE, 'resource_id': fact_set}))
+            [job] = fixture.jobs()
+            self.assertEqual(job.state, 'succeeded')

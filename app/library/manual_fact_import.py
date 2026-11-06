@@ -10,6 +10,8 @@ import csv
 import io
 import json
 
+from sqlalchemy.orm import Session
+
 from ..adapters.persistence.database import tenant_session
 from ..adapters.persistence.models import (
     LibraryDraftRecord,
@@ -145,9 +147,30 @@ def process_manual_fact_import(
     """Validate facts and create a Manual Fact Set entry with an editing draft.
 
     ``content_payload`` is the parsed JSON body from the finalized Upload
-    Intent. In production the Worker reads and parses the blob; for testing
-    it can be passed directly.
+    Intent. The Worker writes through :func:`write_manual_fact_set` inside
+    the transaction that settles its Operation; this wrapper commits on its
+    own.
     """
+    with tenant_session(context) as session:
+        entry = write_manual_fact_set(
+            session,
+            context,
+            data_source_entry_id=data_source_entry_id,
+            upload_intent_id=upload_intent_id,
+            content_payload=content_payload,
+        )
+        return _entry_dict(session, context, entry)
+
+
+def write_manual_fact_set(
+    session: Session,
+    context: TenantContext,
+    *,
+    data_source_entry_id: str,
+    upload_intent_id: str,
+    content_payload: dict | None,
+) -> LibraryEntryRecord:
+    """Validate facts and add a Manual Fact Set with its editing draft to ``session``'s transaction."""
     if content_payload is None:
         content_payload = {}
 
@@ -159,53 +182,51 @@ def process_manual_fact_import(
     if errors:
         raise ManualFactImportError(f"事实验证失败: {'; '.join(errors[:10])}")
 
-    with tenant_session(context) as session:
-        _require_workspace(session, context.workspace_id)
-        ds_entry = _entry(session, context, data_source_entry_id)
-        if ds_entry.entry_type != "data_source":
-            raise ManualFactImportError("目标条目不是数据源")
-        if ds_entry.lifecycle != LIFECYCLE_ACTIVE:
-            raise ManualFactImportError("数据源已归档")
+    _require_workspace(session, context.workspace_id)
+    ds_entry = _entry(session, context, data_source_entry_id)
+    if ds_entry.entry_type != "data_source":
+        raise ManualFactImportError("目标条目不是数据源")
+    if ds_entry.lifecycle != LIFECYCLE_ACTIVE:
+        raise ManualFactImportError("数据源已归档")
 
-        content = {
+    content = {
+        "data_source_entry_id": data_source_entry_id,
+        "upload_intent_id": upload_intent_id,
+        "facts": facts,
+    }
+
+    entry = LibraryEntryRecord(
+        id=new_id("lib"),
+        workspace_id=context.workspace_id,
+        entry_type=ENTRY_MANUAL_FACT_SET,
+        display_name=derived_display_name(f"Fact Import for {ds_entry.display_name}"),
+        lifecycle=LIFECYCLE_ACTIVE,
+    )
+    session.add(entry)
+    session.flush()
+    session.add(
+        LibraryDraftRecord(
+            id=new_id("libdraft"),
+            workspace_id=context.workspace_id,
+            entry_id=entry.id,
+            content_json=content,
+            revision=1,
+            state=DRAFT_EDITING,
+            origin_command="manual_fact_import",
+            source_version_id=None,
+        )
+    )
+    _emit(
+        session, context, entry.id, "draft_created", to_state=DRAFT_EDITING,
+        payload={"origin": "manual_fact_import", "upload_intent_id": upload_intent_id},
+    )
+    _audit(
+        session, context, "manual_fact_import",
+        entry_id=entry.id,
+        detail={
             "data_source_entry_id": data_source_entry_id,
             "upload_intent_id": upload_intent_id,
-            "facts": facts,
-        }
-
-        entry = LibraryEntryRecord(
-            id=new_id("lib"),
-            workspace_id=context.workspace_id,
-            entry_type=ENTRY_MANUAL_FACT_SET,
-            display_name=derived_display_name(f"Fact Import for {ds_entry.display_name}"),
-            lifecycle=LIFECYCLE_ACTIVE,
-        )
-        session.add(entry)
-        session.flush()
-        session.add(
-            LibraryDraftRecord(
-                id=new_id("libdraft"),
-                workspace_id=context.workspace_id,
-                entry_id=entry.id,
-                content_json=content,
-                revision=1,
-                state=DRAFT_EDITING,
-                origin_command="manual_fact_import",
-                source_version_id=None,
-            )
-        )
-        _emit(
-            session, context, entry.id, "draft_created", to_state=DRAFT_EDITING,
-            payload={"origin": "manual_fact_import", "upload_intent_id": upload_intent_id},
-        )
-        _audit(
-            session, context, "manual_fact_import",
-            entry_id=entry.id,
-            detail={
-                "data_source_entry_id": data_source_entry_id,
-                "upload_intent_id": upload_intent_id,
-                "fact_count": len(facts),
-            },
-        )
-        result = _entry_dict(session, context, entry)
-        return result
+            "fact_count": len(facts),
+        },
+    )
+    return entry
