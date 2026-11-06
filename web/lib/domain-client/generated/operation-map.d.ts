@@ -728,6 +728,14 @@ export type DomainOperationMap = {
         | components['schemas']['LibraryCommandNotApplied'];
     };
   };
+  get_library_data_source_connection_check: {
+    pathParams: { data_source_entry_id: string; check_id: string };
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: {
+      200: components['schemas']['DataSourceConnectionCheck'];
+    };
+  };
   get_library_data_source_credential_binding: {
     pathParams: { data_source_entry_id: string };
     queryParams: Record<string, never>;

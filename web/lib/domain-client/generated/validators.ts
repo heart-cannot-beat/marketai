@@ -3642,10 +3642,14 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
   },
   ConnectionCheckInput: {
     properties: {
-      execution_mode: { type: 'string', maxLength: 40, minLength: 1 },
+      execution_mode: {
+        anyOf: [{ type: 'string', maxLength: 40 }, { type: 'null' }],
+        description:
+          "Ignored. A data source is checked in its published version's execution mode.",
+        deprecated: true,
+      },
     },
     type: 'object',
-    required: ['execution_mode'],
   },
   ConversionRequest: {
     properties: {
@@ -4186,6 +4190,46 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     ],
     description:
       'Shape of ``datasources.bind_credential`` / ``get_active_binding``.',
+  },
+  DataSourceConnectionCheck: {
+    properties: {
+      check_id: { type: 'string' },
+      data_source_entry_id: { type: 'string' },
+      health: {
+        type: 'string',
+        enum: ['unknown', 'healthy', 'degraded', 'failed', 'revoked'],
+      },
+      reason_code: {
+        type: 'string',
+        description:
+          'One of the codes in app.library.connection_checks.REASON_HEALTH.',
+      },
+      adapter_kind: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      adapter_version: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      execution_mode: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      data_source_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      credential_state: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+        description:
+          'State of the bound CredentialVersion, or null when none is bound.',
+      },
+      checked_at: { type: 'string', format: 'date-time' },
+    },
+    type: 'object',
+    required: [
+      'check_id',
+      'data_source_entry_id',
+      'health',
+      'reason_code',
+      'adapter_kind',
+      'adapter_version',
+      'execution_mode',
+      'data_source_version_id',
+      'credential_state',
+      'checked_at',
+    ],
+    description:
+      "``GET /entries/{id}/connection-checks/{check_id}``: one check's evidence (#383).\n\nThe conclusion is ``health`` plus ``reason_code``; the Operation that ran\nthe check is ``succeeded`` whatever it found. ``execution_mode`` is the\nchecked version's, never the one a client asked for.",
   },
   'DecisionRules-Input': {
     properties: {
@@ -13303,10 +13347,14 @@ const SCHEMAS: Record<string, object> = {
   },
   check_library_data_source_connection_request: {
     properties: {
-      execution_mode: { type: 'string', maxLength: 40, minLength: 1 },
+      execution_mode: {
+        anyOf: [{ type: 'string', maxLength: 40 }, { type: 'null' }],
+        description:
+          "Ignored. A data source is checked in its published version's execution mode.",
+        deprecated: true,
+      },
     },
     type: 'object',
-    required: ['execution_mode'],
   },
   clone_library_product_201: {
     properties: {
@@ -16948,6 +16996,46 @@ const SCHEMAS: Record<string, object> = {
       { $ref: '#/components/schemas/LibraryCommandReconciliationRequired' },
       { $ref: '#/components/schemas/LibraryCommandNotApplied' },
     ],
+  },
+  get_library_data_source_connection_check_200: {
+    properties: {
+      check_id: { type: 'string' },
+      data_source_entry_id: { type: 'string' },
+      health: {
+        type: 'string',
+        enum: ['unknown', 'healthy', 'degraded', 'failed', 'revoked'],
+      },
+      reason_code: {
+        type: 'string',
+        description:
+          'One of the codes in app.library.connection_checks.REASON_HEALTH.',
+      },
+      adapter_kind: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      adapter_version: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      execution_mode: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      data_source_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      credential_state: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+        description:
+          'State of the bound CredentialVersion, or null when none is bound.',
+      },
+      checked_at: { type: 'string', format: 'date-time' },
+    },
+    type: 'object',
+    required: [
+      'check_id',
+      'data_source_entry_id',
+      'health',
+      'reason_code',
+      'adapter_kind',
+      'adapter_version',
+      'execution_mode',
+      'data_source_version_id',
+      'credential_state',
+      'checked_at',
+    ],
+    description:
+      "``GET /entries/{id}/connection-checks/{check_id}``: one check's evidence (#383).\n\nThe conclusion is ``health`` plus ``reason_code``; the Operation that ran\nthe check is ``succeeded`` whatever it found. ``execution_mode`` is the\nchecked version's, never the one a client asked for.",
   },
   get_library_data_source_credential_binding_200: {
     properties: {
@@ -21505,6 +21593,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'get_library_command_outcome_200',
       VALIDATOR_FUNCTIONS['get_library_command_outcome_200'],
+    ],
+    [
+      'get_library_data_source_connection_check_200',
+      VALIDATOR_FUNCTIONS['get_library_data_source_connection_check_200'],
     ],
     [
       'get_library_data_source_credential_binding_200',

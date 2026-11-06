@@ -16,7 +16,8 @@ Mock.
 Each check is one append-only audit event (``CHECK_EVENT``) on the data
 source, written in the same transaction that settles its Operation. The
 Operation only says the check ran; whether the source is healthy lives in the
-event (contract §3.2: one status never carries two dimensions).
+event (contract §3.2: one status never carries two dimensions), which
+``get_connection_check`` serves by the id the Operation's result names.
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from dataclasses import asdict, dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..adapters.persistence.database import tenant_session
 from ..adapters.persistence.models import (
     AuditEventRecord,
     DatasourceCredentialBindingRecord,
@@ -32,9 +34,9 @@ from ..adapters.persistence.models import (
 from ..entitlements.credentials import CredentialVersionRecord
 from ..localization.fact_sources import ControlledMockFactSourceAdapter
 from ..platform.audit import append_event
-from ..platform.tenancy import current_context
+from ..platform.tenancy import TenantContext, current_context
 from .contracts import ENTRY_DATA_SOURCE, validate_content
-from .service import LibraryError, _effective_version, _entry
+from .service import LibraryError, LibraryNotFound, _effective_version, _entry
 
 CHECK_EVENT = "library.data_source_connection_checked"
 #: What this check verifies. A future real probe gets its own version, so its
@@ -93,7 +95,7 @@ class ConnectionCheckOutcome:
     def health(self) -> str:
         return REASON_HEALTH[self.reason_code]
 
-    def as_details(self, *, requested_mode: str, operation_id: str) -> dict:
+    def as_details(self, *, requested_mode: str | None, operation_id: str) -> dict:
         return {
             "check_version": CHECK_VERSION,
             "health": self.health,
@@ -142,7 +144,7 @@ def record_connection_check(
     session: Session,
     *,
     data_source_entry_id: str,
-    requested_mode: str,
+    requested_mode: str | None,
     operation_id: str,
 ) -> AuditEventRecord:
     """Check the data source and append the evidence to ``session``'s transaction.
@@ -183,6 +185,43 @@ def record_connection_check(
         resource_type=ENTRY_DATA_SOURCE,
         resource_id=entry.id,
         details=outcome.as_details(
-            requested_mode=requested_mode[:40], operation_id=operation_id,
+            requested_mode=requested_mode[:40] if requested_mode else None,
+            operation_id=operation_id,
         ),
     )
+
+
+def get_connection_check(
+    context: TenantContext, data_source_entry_id: str, check_id: str,
+) -> dict:
+    """One check of ``data_source_entry_id``, read back from its evidence.
+
+    An id that names another Workspace's check, another data source's, or
+    any other audit event is ``connection_check_not_found``, the same as an
+    id that never existed.
+    """
+    with tenant_session(context) as session:
+        event = session.scalar(
+            select(AuditEventRecord).where(
+                AuditEventRecord.workspace_id == context.workspace_id,
+                AuditEventRecord.id == check_id,
+                AuditEventRecord.event_type == CHECK_EVENT,
+                AuditEventRecord.resource_type == ENTRY_DATA_SOURCE,
+                AuditEventRecord.resource_id == data_source_entry_id,
+            )
+        )
+        if event is None:
+            raise LibraryNotFound("连接检查不存在", code="connection_check_not_found")
+        details = event.details_json or {}
+        return {
+            "check_id": event.id,
+            "data_source_entry_id": event.resource_id,
+            "health": details.get("health"),
+            "reason_code": details.get("reason_code"),
+            "adapter_kind": details.get("adapter_kind"),
+            "adapter_version": details.get("adapter_version"),
+            "execution_mode": details.get("execution_mode"),
+            "data_source_version_id": details.get("data_source_version_id"),
+            "credential_state": details.get("bound_version_state"),
+            "checked_at": event.created_at,
+        }

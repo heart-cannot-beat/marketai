@@ -203,6 +203,12 @@
     "maxResponseBytes": 131072,
     "forwardConditionalHeaders": false
   },
+  "get_library_data_source_connection_check": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:data_source_entry_id/connection-checks/:check_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
   "import_library_manual_facts": {
     "bffPattern": "/api/domain/v1/w/:slug/library/entries/:data_source_entry_id/manual-fact-imports",
     "maxRequestBytes": 65536,

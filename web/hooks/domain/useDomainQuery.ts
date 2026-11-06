@@ -65,6 +65,7 @@ export type ReadOperationId =
   | 'list_external_creatives'
   | 'get_external_creative'
   | 'get_library_data_source_credential_binding'
+  | 'get_library_data_source_connection_check'
   | 'list_credentials'
   | 'get_generation_capabilities'
   | 'list_generation_drafts'
@@ -459,6 +460,15 @@ function callReadOperation<K extends ReadOperationId>(
       return gateway.getLibraryDataSourceCredentialBinding({
         workspaceSlug,
         dataSourceEntryId: p.data_source_entry_id,
+      }) as Promise<DomainResultFor<K>>;
+    }
+    case 'get_library_data_source_connection_check': {
+      const p =
+        params as DomainOperationMap['get_library_data_source_connection_check']['pathParams'];
+      return gateway.getLibraryDataSourceConnectionCheck({
+        workspaceSlug,
+        dataSourceEntryId: p.data_source_entry_id,
+        checkId: p.check_id,
       }) as Promise<DomainResultFor<K>>;
     }
     case 'list_credentials':

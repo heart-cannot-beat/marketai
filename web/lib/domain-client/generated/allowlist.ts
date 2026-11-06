@@ -1636,6 +1636,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: false,
   },
   {
+    operationId: 'get_library_data_source_connection_check',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/library/entries/:data_source_entry_id/connection-checks/:check_id',
+    fastapiPathTemplate:
+      '/api/v1/library/entries/{data_source_entry_id}/connection-checks/{check_id}',
+    pathParams: ['data_source_entry_id', 'check_id'],
+    querySchema: null,
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 65536,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: false,
+  },
+  {
     operationId: 'get_library_data_source_credential_binding',
     method: 'GET',
     bffPattern:

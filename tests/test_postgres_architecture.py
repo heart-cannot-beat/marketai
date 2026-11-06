@@ -366,7 +366,7 @@ class PostgresArchitectureTests(unittest.TestCase):
                 self.assertEqual(before, after)
 
     def test_a_connection_check_runs_as_the_worker_and_reads_back_as_the_api(self):
-        """The API enqueues and replays, the Worker reads the version and the bound credential state and appends the evidence, the API reads it (#383)."""
+        """The API enqueues and replays, the Worker reads the version and the bound credential state and appends the evidence, the API reads it back (#383)."""
         from tests.test_library_connection_check_worker import ConnectionCheckFixtures
         from tests.test_library_datasource_api import _provision_credential_version
         from app.library import connection_checks
@@ -404,3 +404,6 @@ class PostgresArchitectureTests(unittest.TestCase):
             self.assertEqual((details['reason_code'], details['execution_mode'], details['requested_mode']),
                 ('controlled_mock_source', 'mock', 'real'))
             self.assertEqual((details['bound_version_id'], details['bound_version_state']), (cv_id, 'active'))
+            read = fixture.client.get(f'/api/v1/library/entries/{entry_id}/connection-checks/{event.id}')
+            self.assertEqual(read.status_code, 200, read.text)
+            self.assertEqual((read.json()['reason_code'], read.json()['credential_state']), ('controlled_mock_source', 'active'))

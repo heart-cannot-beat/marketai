@@ -1174,7 +1174,8 @@ class WorkerRuntime:
 
         operation_id = str(job.payload.get("operation_id") or "")
         data_source_entry_id = str(job.payload.get("data_source_entry_id") or "")
-        requested_mode = str(job.payload.get("execution_mode") or "")
+        requested = job.payload.get("execution_mode")
+        requested_mode = str(requested) if requested else None
         if not operation_id or not data_source_entry_id:
             jobs.fail(
                 job.context, job.id, self.owner,

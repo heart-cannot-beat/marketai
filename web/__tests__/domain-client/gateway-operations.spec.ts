@@ -90,6 +90,7 @@ describe('DomainGateway operation coverage', () => {
     // `update_product_competitor_settings`) (#272).
     // 236 -> 238: competitor discovery (`list_competitor_scan_discoveries`,
     // `decide_competitor_discovery`) (#276).
-    expect(DOMAIN_ALLOWLIST.length).toBe(238);
+    // 238 -> 239: `get_library_data_source_connection_check` (#383).
+    expect(DOMAIN_ALLOWLIST.length).toBe(239);
   });
 });

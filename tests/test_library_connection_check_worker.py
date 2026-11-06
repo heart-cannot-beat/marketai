@@ -1,10 +1,11 @@
-"""The Worker's DataSource connection check (#383, phase 2a).
+"""The Worker's DataSource connection check and its read-back (#383).
 
 The check is local: the effective Published Version, its content, whether its
 adapter is implemented and the bound CredentialVersion's state. Every finished
 check is ``succeeded`` with one append-only audit event as its result; the
-conclusion lives in the event. Replays reuse the Operation, and a Job rerun
-after its Operation settled records nothing twice.
+conclusion lives in the event, which ``GET .../connection-checks/{check_id}``
+serves. Replays reuse the Operation, and a Job rerun after its Operation
+settled records nothing twice.
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ class ConnectionCheckFixtures(LibraryFixtures):
     def check(self, entry_id, key=None, mode="real"):
         return self.client.post(
             f"/api/v1/library/entries/{entry_id}/connection-checks",
-            json={"execution_mode": mode},
+            json={} if mode is None else {"execution_mode": mode},
             headers={"Idempotency-Key": key or f"ci-only-conncheck-{uuid.uuid4().hex}"},
         )
 
@@ -204,6 +205,88 @@ class TestConnectionCheckConclusions(ConnectionCheckFixtures):
         app.dependency_overrides[request_tenant_context] = lambda: member
         _, details = self.checked(entry_id)
         self.assertEqual(details["reason_code"], "manual_source_no_connection")
+
+
+class TestConnectionCheckRead(ConnectionCheckFixtures):
+    def read(self, entry_id, check_id):
+        return self.client.get(f"/api/v1/library/entries/{entry_id}/connection-checks/{check_id}")
+
+    def test_the_result_names_the_check_the_read_serves(self):
+        entry_id = self.data_source("mock", "mock")
+        operation, details = self.checked(entry_id, mode=None)
+        self.assertIsNone(details["requested_mode"], "a client that sends no mode records none")
+        response = self.read(entry_id, operation["result"]["resource_id"])
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(set(body), {
+            "check_id", "data_source_entry_id", "health", "reason_code", "adapter_kind",
+            "adapter_version", "execution_mode", "data_source_version_id", "credential_state",
+            "checked_at",
+        })
+        self.assertEqual(body["check_id"], operation["result"]["resource_id"])
+        self.assertEqual(body["data_source_entry_id"], entry_id)
+        self.assertEqual((body["health"], body["reason_code"]), ("healthy", "controlled_mock_source"))
+        self.assertEqual((body["adapter_kind"], body["adapter_version"], body["execution_mode"]),
+                         ("mock", "mock-v1", "mock"))
+        self.assertEqual(body["data_source_version_id"], details["data_source_version_id"])
+        self.assertIsNone(body["credential_state"])
+        self.assertTrue(body["checked_at"])
+
+    def test_the_read_reports_the_bound_credential_state(self):
+        entry_id = self.data_source("manual", "real")
+        with tenant_session(self.ctx) as session:
+            cv_id = _provision_credential_version(self.ctx, session)
+        bind_credential(self.ctx, entry_id, cv_id)
+        with tenant_session(self.ctx) as session:
+            session.execute(
+                update(CredentialVersionRecord)
+                .where(CredentialVersionRecord.id == cv_id)
+                .values(state="rotated")
+            )
+        operation, _ = self.checked(entry_id)
+        body = self.read(entry_id, operation["result"]["resource_id"]).json()
+        self.assertEqual((body["health"], body["reason_code"], body["credential_state"]),
+                         ("revoked", "credential_not_active", "rotated"))
+
+    def test_a_member_can_read(self):
+        entry_id = self.data_source()
+        operation, _ = self.checked(entry_id)
+        member = self._make_context(workspace_id=self.ctx.workspace_id, role=ROLE_MEMBER)
+        app.dependency_overrides[request_tenant_context] = lambda: member
+        self.assertEqual(self.read(entry_id, operation["result"]["resource_id"]).status_code, 200)
+
+    def assert_not_found(self, response):
+        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(response.json()["code"], "connection_check_not_found")
+        self.assertEqual(response.headers["content-type"], "application/problem+json")
+
+    def test_an_unknown_id_is_not_found(self):
+        self.assert_not_found(self.read(self.data_source(), "audit_ci_only_missing"))
+
+    def test_another_data_sources_check_is_not_found(self):
+        entry_id = self.data_source()
+        operation, _ = self.checked(entry_id)
+        self.assert_not_found(self.read(self.data_source(), operation["result"]["resource_id"]))
+
+    def test_another_workspaces_check_is_not_found_like_an_unknown_id(self):
+        entry_id = self.data_source()
+        operation, _ = self.checked(entry_id)
+        other = self._make_context(role=ROLE_OWNER)
+        app.dependency_overrides[request_tenant_context] = lambda: other
+        self.assert_not_found(self.read(entry_id, operation["result"]["resource_id"]))
+
+    def test_another_audit_event_is_not_found(self):
+        entry_id = self.data_source()
+        self.assertEqual(self.check(entry_id).status_code, 202)  # appends job.enqueued
+        with tenant_session(self.ctx) as session:
+            other_event = session.scalar(
+                select(AuditEventRecord.id).where(
+                    AuditEventRecord.workspace_id == self.ctx.workspace_id,
+                    AuditEventRecord.event_type != connection_checks.CHECK_EVENT,
+                )
+            )
+        self.assertIsNotNone(other_event)
+        self.assert_not_found(self.read(entry_id, other_event))
 
 
 class TestConnectionCheckEvaluate(unittest.TestCase):
