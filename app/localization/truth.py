@@ -501,8 +501,9 @@ def _resolve_market(
             # `_validate_uniform_truth_data_mode`, which rejects any mix of
             # modes before resolution starts.
 
-    # Sources exhausted (or fallback disabled): apply the frozen
-    # `on_failure` rule to whatever is still unresolved.
+    # Sources exhausted (or fallback disabled): record the frozen
+    # `on_failure` rule of whatever is still unresolved; the same rules
+    # decide the market's readiness below.
     skip_priority = len(sources) + 1
     last_step = sources[-1] if sources else None
     for fact_type in sorted(remaining):
@@ -532,7 +533,9 @@ def _resolve_market(
             )
         )
 
-    readiness, readiness_detail = _derive_market_readiness(accepted, remaining)
+    readiness, readiness_detail = _derive_market_readiness(
+        accepted, remaining, on_failure_by_type
+    )
 
     if accepted:
         market_valid_until = min(f.valid_until for f in accepted.values())
@@ -551,8 +554,12 @@ def _resolve_market(
 
 
 def _derive_market_readiness(
-    accepted: dict[str, _AcceptedFactDraft], remaining: set[str]
+    accepted: dict[str, _AcceptedFactDraft],
+    remaining: set[str],
+    on_failure_by_type: Mapping[str, str],
 ) -> tuple[str, dict]:
+    """`truth-rule-v2` (contract §7.3): an available=false fact wins, then
+    any unresolved `block` fact, then price, then the permitted rest."""
     availability = accepted.get("availability")
     if availability is not None:
         value = availability.raw_fact.value
@@ -561,6 +568,12 @@ def _derive_market_readiness(
 
     if not remaining:
         return _READY, {"resolved_fact_types": sorted(accepted.keys())}
+
+    blocked = sorted(ft for ft in remaining if on_failure_by_type[ft] == "block")
+    if blocked:
+        # `block` stops the market whatever the fact is, price included:
+        # this reason never takes batch.py's price-omission exception.
+        return _FAILED, {"reason": "fact_missing_blocked", "blocked": blocked, "missing": sorted(remaining)}
 
     if "price" in remaining:
         # Price forbids `on_failure=degrade`; a `skip`ped price still makes
@@ -1258,7 +1271,7 @@ def prepare_truth_resolution_command(
         truth_resolution_policy_version_id=truth_resolution_policy_version_id,
         truth_data_mode=truth_data_mode,
         max_staleness_seconds=max_staleness_seconds,
-        resolution_rule_version="truth-rule-v1",
+        resolution_rule_version="truth-rule-v2",
         markets=tuple(market_commands),
         now=now,
     )
