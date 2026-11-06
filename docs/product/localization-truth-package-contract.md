@@ -164,6 +164,19 @@ TruthPackage 区分原始事实和派生事实。
 
 `available=false` 是有效事实，对应 Item 记录 `skipped_market_unavailable`；关闭运费展示不能绕过商品不可销售门禁。
 
+TruthResolutionPolicyVersion 为每个事实类型冻结一条 `on_failure`。已配置来源用尽（或不允许 fallback）后，仍未解析的事实按下表决定该市场的 readiness：
+
+| `on_failure` | 非价格事实缺失 | 价格缺失 |
+|---|---|---|
+| `block` | 该市场 `failed`（`fact_missing_blocked`），条目不执行 | 同左，不适用价格例外 |
+| `degrade` | 该市场 `degraded`（`fact_missing_permitted`），依赖它的声明只能删除 | 发布和解析时都拒绝 |
+| `skip` | 同 `degrade` | 该市场 `failed`（`price_unresolved`）；只有 MarketPolicy 不要求本地价、并且全部价格声明都删除时，条目才执行 |
+
+- 先后顺序：`available=false` 优先于缺失规则，其次是 `block`，再次是价格。缺失的事实里只要有一个是 `block`，该市场就是 `failed`；`readiness_detail` 的 `blocked` 列出这些 `block` 事实，`missing` 列出全部缺失事实。
+- `block` 不看来源图里是否有声明用到这个事实。想要「用到才阻断」，用 `skip` 加声明审核。
+- 非价格事实的 `degrade` 和 `skip` 效果相同，二者只在价格上不同。
+- readiness 在解析时按冻结的策略算一次，随 TruthPackage 冻结；规则改了不回溯。已冻结的包，以及已绑定它的批次，仍按冻结的 readiness 处置。解析规则版本（当前为 `truth-rule-v2`）记在每条来源尝试上。
+
 ### 7.4 新鲜度与失效
 
 TruthPackage 的 `valid_until` 取全部依赖事实的最短有效期。Beta 默认策略：

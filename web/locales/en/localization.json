@@ -79,7 +79,7 @@
     "failures": "Source failures / skips",
     "failure-line": "{{fact}} via {{adapter}}: {{reason}}",
     "skip": {
-      "on_failure_block": "no source resolved it (policy: block)",
+      "on_failure_block": "no source resolved it (policy: block, so this market does not run)",
       "on_failure_degrade": "no source resolved it (policy: continue degraded)",
       "on_failure_skip": "no source resolved it (policy: skip)"
     }
@@ -111,6 +111,7 @@
       "skipped_market_unavailable": "Skipped: Truth says the product is not available in this market.",
       "truth_price_unresolved": "Not run: this market's price could not be resolved, and the market requires a local price or a price claim was not removed.",
       "truth_market_failed": "Not run: this market's Truth failed.",
+      "truth_fact_missing_blocked": "Not run: a fact this market's Truth policy requires could not be resolved (policy: block).",
       "ineligible_before_dispatch": "Paused before the edit call: the source, Truth or approved copy is no longer current.",
       "ineligible_after_dispatch": "Paused after the edit call: the source or Truth changed meanwhile. The output stays isolated and was not published.",
       "ineligible_before_publish": "Paused before publishing: the source, Truth or approved copy is no longer current. The output stays isolated and was not published.",

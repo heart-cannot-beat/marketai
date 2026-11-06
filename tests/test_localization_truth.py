@@ -9,8 +9,10 @@ interface.
 """
 from __future__ import annotations
 
+import dataclasses
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -23,6 +25,7 @@ from app.adapters.persistence.models import (
     MarketPolicyRecord,
     MarketPolicyVersionRecord,
     TruthPackageMarketRecord,
+    TruthPackageRecord,
     TruthSourceAttemptRecord,
     WorkspaceRecord,
     new_id,
@@ -219,6 +222,11 @@ _COMPLETE_FACTS = {
 _UNAVAILABLE_FACTS = {
     "price": {"amount": "19.99", "currency": "EUR"},
     "availability": {"available": False},
+}
+
+_COMPLETE_WITH_DISCOUNT_FACTS = {
+    **_COMPLETE_FACTS,
+    "discount": {"discount_type": "fixed", "amount": "2.00", "currency": "EUR", "conditions": "fixture"},
 }
 
 
@@ -627,6 +635,279 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
                 markets=(MarketResolutionInput(market_policy_version_id=market_policy_version.id),),
                 manual_fact_set_version_id="lv_unused",
             )
+
+
+def _truth_rule_v1_readiness(accepted, remaining, *_):
+    """How `truth-rule-v1` derived readiness: it never read `on_failure`.
+
+    Only used to freeze a package the way v1 did, so the test can check that
+    a v2 resolution leaves it alone.
+    """
+    availability = accepted.get("availability")
+    if availability is not None and availability.raw_fact.value.available is False:
+        return "unavailable", {"reason": "skipped_unavailable"}
+    if not remaining:
+        return "ready", {"resolved_fact_types": sorted(accepted.keys())}
+    if "price" in remaining:
+        return "failed", {"reason": "price_unresolved", "missing": sorted(remaining)}
+    return "degraded", {"reason": "fact_missing_permitted", "missing": sorted(remaining)}
+
+
+class TestOnFailureReadiness(_TruthTestCase):
+    """The frozen `on_failure` rule of each unresolved fact decides the
+    market's readiness (#401, contract §7.3, spec §3D)."""
+
+    def _resolve(self, *markets: MarketResolutionCommand) -> TruthResolutionResult:
+        # Different `on_failure` rules are different policy versions, so each
+        # case gets its own and never reuses another case's package.
+        command = self._command(
+            markets,
+            truth_resolution_policy_version_id=_make_version(
+                self.session, WS_ID, "truth_resolution_policy"
+            ),
+        )
+        result = resolve_or_reuse_truth_package(self.session, self.ctx, command)
+        self.session.commit()
+        return result
+
+    def _market_row(self, result: TruthResolutionResult, market: str) -> TruthPackageMarketRecord:
+        return (
+            self.session.query(TruthPackageMarketRecord)
+            .filter_by(truth_package_id=result.truth_package_id, market=market)
+            .one()
+        )
+
+    def _skip_codes(self, result: TruthResolutionResult) -> dict[str, str]:
+        return {
+            attempt.fact_type: attempt.skip_code
+            for attempt in self.session.query(TruthSourceAttemptRecord)
+            .filter_by(truth_package_id=result.truth_package_id, outcome="skipped")
+            .all()
+        }
+
+    def test_missing_non_price_fact_follows_its_on_failure_rule(self):
+        for fact_type in ("tax", "discount", "shipping_availability"):
+            for on_failure, readiness, detail in (
+                (
+                    "block",
+                    "failed",
+                    {"reason": "fact_missing_blocked", "blocked": [fact_type], "missing": [fact_type]},
+                ),
+                ("degrade", "degraded", {"reason": "fact_missing_permitted", "missing": [fact_type]}),
+                ("skip", "degraded", {"reason": "fact_missing_permitted", "missing": [fact_type]}),
+            ):
+                with self.subTest(fact_type=fact_type, on_failure=on_failure):
+                    result = self._resolve(
+                        self._manual_market_command(
+                            "en-GB",
+                            facts=_COMPLETE_FACTS,
+                            fact_policies=(
+                                FactPolicy("price", on_failure="block"),
+                                FactPolicy("availability", on_failure="block"),
+                                FactPolicy(fact_type, on_failure=on_failure),
+                            ),
+                        )
+                    )
+
+                    row = self._market_row(result, "en-GB")
+                    self.assertEqual(row.readiness, readiness)
+                    self.assertEqual(row.readiness_detail_json, detail)
+                    # A lone market that cannot run fails the whole package.
+                    self.assertEqual(result.status, readiness)
+                    self.assertEqual(
+                        self._skip_codes(result), {fact_type: f"on_failure_{on_failure}"}
+                    )
+
+    def test_missing_price_blocks_or_falls_to_the_price_rule(self):
+        for on_failure, detail in (
+            ("block", {"reason": "fact_missing_blocked", "blocked": ["price"], "missing": ["price"]}),
+            ("skip", {"reason": "price_unresolved", "missing": ["price"]}),
+        ):
+            with self.subTest(on_failure=on_failure):
+                result = self._resolve(
+                    self._manual_market_command(
+                        "en-GB",
+                        facts={"availability": {"available": True}},
+                        fact_policies=(
+                            FactPolicy("price", on_failure=on_failure),
+                            FactPolicy("availability", on_failure="block"),
+                        ),
+                    )
+                )
+
+                row = self._market_row(result, "en-GB")
+                self.assertEqual(row.readiness, "failed")
+                self.assertEqual(row.readiness_detail_json, detail)
+                self.assertEqual(self._skip_codes(result), {"price": f"on_failure_{on_failure}"})
+
+    def test_blocked_market_leaves_its_sibling_ready(self):
+        fact_policies = (
+            FactPolicy("price", on_failure="block"),
+            FactPolicy("availability", on_failure="block"),
+            FactPolicy("discount", on_failure="block"),
+        )
+        result = self._resolve(
+            self._manual_market_command("en-GB", facts=_COMPLETE_FACTS, fact_policies=fact_policies),
+            self._manual_market_command(
+                "en-AU", facts=_COMPLETE_WITH_DISCOUNT_FACTS, fact_policies=fact_policies
+            ),
+        )
+
+        self.assertEqual(result.status, "degraded")
+        self.assertEqual(result.market_readiness, {"en-GB": "failed", "en-AU": "ready"})
+
+    def test_unavailable_outranks_a_blocked_missing_fact(self):
+        result = self._resolve(
+            self._manual_market_command(
+                "en-GB",
+                facts=_UNAVAILABLE_FACTS,
+                fact_policies=(
+                    FactPolicy("price", on_failure="block"),
+                    FactPolicy("availability", on_failure="block"),
+                    FactPolicy("tax", on_failure="block"),
+                ),
+            )
+        )
+
+        row = self._market_row(result, "en-GB")
+        self.assertEqual(row.readiness, "unavailable")
+        self.assertEqual(row.readiness_detail_json, {"reason": "skipped_unavailable"})
+
+    def test_block_outranks_skip_and_names_only_the_blocked_facts(self):
+        for facts, fact_policies, detail in (
+            (
+                {"availability": {"available": True}},
+                (
+                    FactPolicy("price", on_failure="skip"),
+                    FactPolicy("availability", on_failure="block"),
+                    FactPolicy("tax", on_failure="block"),
+                ),
+                {"reason": "fact_missing_blocked", "blocked": ["tax"], "missing": ["price", "tax"]},
+            ),
+            (
+                _COMPLETE_FACTS,
+                (
+                    FactPolicy("price", on_failure="block"),
+                    FactPolicy("availability", on_failure="block"),
+                    FactPolicy("tax", on_failure="skip"),
+                    FactPolicy("discount", on_failure="block"),
+                ),
+                {"reason": "fact_missing_blocked", "blocked": ["discount"], "missing": ["discount", "tax"]},
+            ),
+        ):
+            with self.subTest(detail=detail):
+                result = self._resolve(
+                    self._manual_market_command("en-GB", facts=facts, fact_policies=fact_policies)
+                )
+
+                row = self._market_row(result, "en-GB")
+                self.assertEqual(row.readiness, "failed")
+                self.assertEqual(row.readiness_detail_json, detail)
+
+
+class TestTruthRuleVersion(_TruthTestCase):
+    """Packages record which resolution rule froze them; a package frozen
+    under `truth-rule-v1` keeps its readiness (#401)."""
+
+    def _blocked_discount_command(self) -> TruthResolutionCommand:
+        policy_version_id = _make_version(
+            self.session,
+            WS_ID,
+            "truth_resolution_policy",
+            content={
+                "rules": [
+                    {
+                        "fact_type": fact_type,
+                        "source_priority": ["mock"],
+                        "max_staleness_seconds": 86400,
+                        "on_failure": "block",
+                    }
+                    for fact_type in ("price", "availability", "discount")
+                ]
+            },
+        )
+        data_source_version_id = _make_version(
+            self.session,
+            WS_ID,
+            "data_source",
+            # `standard_9_market` has price and availability but no discount.
+            content=_data_source_content(
+                "mock", execution_mode="mock", config={"mock_scenario": "standard_9_market"}
+            ),
+        )
+        _, market_policy_version = self._market_policy("en-GB")
+        return prepare_truth_resolution_command(
+            self.session,
+            self.ctx,
+            product_version_id=self.product_version_id,
+            offer_version_id=self.offer_version_id,
+            truth_resolution_policy_version_id=policy_version_id,
+            data_source_version_ids=(data_source_version_id,),
+            markets=(MarketResolutionInput(market_policy_version_id=market_policy_version.id),),
+        )
+
+    def test_policy_resolution_records_truth_rule_v2(self):
+        command = self._blocked_discount_command()
+        self.assertEqual(command.resolution_rule_version, "truth-rule-v2")
+
+        result = resolve_or_reuse_truth_package(self.session, self.ctx, command)
+        self.session.commit()
+
+        self.assertEqual(result.market_readiness, {"en-GB": "failed"})
+        attempts = (
+            self.session.query(TruthSourceAttemptRecord)
+            .filter_by(truth_package_id=result.truth_package_id)
+            .all()
+        )
+        self.assertEqual({a.resolution_rule_version for a in attempts}, {"truth-rule-v2"})
+        skipped = [a for a in attempts if a.outcome == "skipped"]
+        self.assertEqual(
+            [(a.fact_type, a.skip_code, a.adapter_kind, a.adapter_version) for a in skipped],
+            [("discount", "on_failure_block", "policy", "truth-rule-v2")],
+        )
+
+    def test_v1_package_is_neither_rewritten_nor_reused(self):
+        command = self._blocked_discount_command()
+        with mock.patch(
+            "app.localization.truth._derive_market_readiness", _truth_rule_v1_readiness
+        ):
+            legacy = resolve_or_reuse_truth_package(
+                self.session,
+                self.ctx,
+                dataclasses.replace(command, resolution_rule_version="truth-rule-v1"),
+            )
+        self.session.commit()
+        self.assertEqual(legacy.status, "degraded")
+
+        current = resolve_or_reuse_truth_package(self.session, self.ctx, command)
+        self.session.commit()
+
+        self.assertFalse(current.reused)
+        self.assertNotEqual(current.truth_package_id, legacy.truth_package_id)
+        self.assertEqual(current.status, "failed")
+        self.assertEqual(current.market_readiness, {"en-GB": "failed"})
+
+        self.session.expire_all()
+        self.assertEqual(self.session.get(TruthPackageRecord, legacy.truth_package_id).status, "degraded")
+        legacy_market = (
+            self.session.query(TruthPackageMarketRecord)
+            .filter_by(truth_package_id=legacy.truth_package_id)
+            .one()
+        )
+        self.assertEqual(legacy_market.readiness, "degraded")
+        self.assertEqual(
+            legacy_market.readiness_detail_json,
+            {"reason": "fact_missing_permitted", "missing": ["discount"]},
+        )
+        legacy_skip = (
+            self.session.query(TruthSourceAttemptRecord)
+            .filter_by(truth_package_id=legacy.truth_package_id, outcome="skipped")
+            .one()
+        )
+        self.assertEqual(
+            (legacy_skip.skip_code, legacy_skip.resolution_rule_version),
+            ("on_failure_block", "truth-rule-v1"),
+        )
 
 
 class TestAssessTruthFreshness(_TruthTestCase):

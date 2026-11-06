@@ -186,6 +186,7 @@ export const ITEM_REASONS: ReadonlySet<string> = new Set([
   'skipped_market_unavailable',
   'truth_price_unresolved',
   'truth_market_failed',
+  'truth_fact_missing_blocked',
   'ineligible_before_dispatch',
   'ineligible_after_dispatch',
   'ineligible_before_publish',

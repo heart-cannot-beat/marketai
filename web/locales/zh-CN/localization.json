@@ -79,7 +79,7 @@
     "failures": "来源失败 / 跳过",
     "failure-line": "{{fact}}（经 {{adapter}}）：{{reason}}",
     "skip": {
-      "on_failure_block": "没有来源解析出这个事实（策略：阻断）",
+      "on_failure_block": "没有来源解析出这个事实（策略：阻断，这个市场不执行）",
       "on_failure_degrade": "没有来源解析出这个事实（策略：降级继续）",
       "on_failure_skip": "没有来源解析出这个事实（策略：跳过）"
     }
@@ -111,6 +111,7 @@
       "skipped_market_unavailable": "已跳过：真值显示商品在这个市场不可销售。",
       "truth_price_unresolved": "未执行：这个市场的价格没有解析出来，而该市场要求本地价格，或者还有价格声明没有删除。",
       "truth_market_failed": "未执行：这个市场的真值解析失败。",
+      "truth_fact_missing_blocked": "未执行：这个市场的真值策略要求的事实没有解析出来（策略：阻断）。",
       "ineligible_before_dispatch": "编辑调用前已暂停：源素材、真值或已批准的文案已不是最新。",
       "ineligible_after_dispatch": "编辑调用后已暂停：期间源素材或真值有变化。输出已隔离，没有发布。",
       "ineligible_before_publish": "发布前已暂停：源素材、真值或已批准的文案已不是最新。输出已隔离，没有发布。",

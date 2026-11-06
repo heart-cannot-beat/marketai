@@ -112,6 +112,7 @@ test('reads every reason the server writes', () => {
       'skipped_market_unavailable',
       'truth_price_unresolved',
       'truth_market_failed',
+      'truth_fact_missing_blocked',
       'ineligible_on_resume',
       'qc_exhausted',
       'adopted_isolated_output',
