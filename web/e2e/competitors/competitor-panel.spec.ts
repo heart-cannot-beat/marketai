@@ -69,7 +69,9 @@ async function buildList(
     'ad_library'
   );
   await area.getByRole('button', { name: 'Add', exact: true }).click();
-  const brightvolt = area.getByTestId('competitor-row').filter({ hasText: 'Brightvolt' });
+  const brightvolt = area
+    .getByTestId('competitor-row')
+    .filter({ hasText: 'Brightvolt' });
   await expect(brightvolt).toHaveAttribute('data-confirmation', 'confirmed');
   await expect(brightvolt.getByText('Confirmed by link')).toBeVisible();
   await expect(brightvolt.getByText('Not scanned yet')).toBeVisible();

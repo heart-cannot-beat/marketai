@@ -50,8 +50,12 @@ test('real C-13 backend in Controlled Mock: link confirmation, quoted resolve an
   // Scenario 2 on the real backend: the quote (page_search × 1 + probe × 3)
   // before the paid resolve; the recorded search and the domain probe
   // settle on `acmecharge`.
-  await area.getByLabel('Page link, Ad Library link or name').fill('Acme Charge');
-  await area.getByLabel('Official website (optional)').fill('acme-charge.example');
+  await area
+    .getByLabel('Page link, Ad Library link or name')
+    .fill('Acme Charge');
+  await area
+    .getByLabel('Official website (optional)')
+    .fill('acme-charge.example');
   await area.getByRole('button', { name: 'Add', exact: true }).click();
   const panel = area.getByTestId('competitor-resolve-panel');
   const cost = panel.getByTestId('competitor-resolve-cost');
@@ -84,9 +88,9 @@ test('real C-13 backend in Controlled Mock: link confirmation, quoted resolve an
     .getByTestId('competitor-row')
     .filter({ hasText: 'acme-charge.example' });
   if (await panel.getByText(/^Confirmed automatically/).isVisible()) {
-    await expect(
-      acme.getByTestId('competitor-confirmation-status')
-    ).toHaveText('Confirmed automatically');
+    await expect(acme.getByTestId('competitor-confirmation-status')).toHaveText(
+      'Confirmed automatically'
+    );
   } else {
     await panel.getByRole('button', { name: 'Confirm this page' }).click();
   }

@@ -119,7 +119,9 @@ describe('CompetitorDiscovery', () => {
     expect(
       within(northpeak).getByText('5 ads found by keyword')
     ).toBeInTheDocument();
-    expect(within(northpeak).getByText('northpeak.example')).toBeInTheDocument();
+    expect(
+      within(northpeak).getByText('northpeak.example')
+    ).toBeInTheDocument();
     expect(
       within(northpeak).getByText('Why: Sells CCS1 to NACS adapters.')
     ).toBeInTheDocument();
