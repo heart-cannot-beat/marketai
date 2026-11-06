@@ -45,11 +45,16 @@ const RESPONSE_HEALTH = Array.from(
   (m) => m[1]
 );
 
-/** `ADAPTER_KINDS = frozenset({"manual", ...})`. */
+/**
+ * `ADAPTER_KINDS = frozenset(ADAPTER_EXECUTION_MODES)`: the source types are
+ * the keys of `ADAPTER_EXECUTION_MODES: dict[str, str] = {"manual": ..., ...}`
+ * (`data-source-adapters.spec.ts` guards that derivation).
+ */
 const ADAPTER_KINDS = Array.from(
-  read('contracts.py')
-    .match(/^ADAPTER_KINDS = frozenset\(\{([^}]+)\}\)/m)![1]
-    .matchAll(/"([a-z_]+)"/g),
+  block(
+    read('contracts.py'),
+    /^ADAPTER_EXECUTION_MODES: dict\[str, str\] = \{/m
+  ).matchAll(/^\s+"([a-z_]+)": /gm),
   (m) => m[1]
 );
 
