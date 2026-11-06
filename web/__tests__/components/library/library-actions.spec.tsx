@@ -121,7 +121,7 @@ describe('EntryActions', () => {
       {
         command: 'publish',
         allowed: false,
-        reason_code: 'draft_not_validated',
+        reason_code: 'no_draft',
       },
     ];
 
@@ -139,13 +139,13 @@ describe('EntryActions', () => {
     expect(handlers.onPublish).not.toHaveBeenCalled();
   });
 
-  it('shows aria-disabled and reason_code title on denied action', () => {
+  it('keeps a denied action focusable with aria-disabled and its reason', () => {
     const handlers = makeEntryHandlers();
     const allowedActions: AllowedAction[] = [
       {
         command: 'archive',
         allowed: false,
-        reason_code: 'insufficient_permission',
+        reason_code: 'owner_required',
       },
     ];
 
@@ -160,12 +160,13 @@ describe('EntryActions', () => {
     );
 
     const btn = screen.getByText('library:commands.archive');
-    expect(btn).toBeDisabled();
+    expect(btn).not.toBeDisabled();
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute(
       'title',
-      'library:commands.denied.insufficient_permission'
+      'library:commands.denied.owner_required'
     );
+    expect(btn).toHaveAccessibleDescription('library:commands.denied-line');
   });
 
   it('returns null when no actions in allowedActions', () => {
@@ -315,7 +316,7 @@ describe('VersionActions', () => {
       {
         command: 'withdraw',
         allowed: false,
-        reason_code: 'version_superseded',
+        reason_code: 'invalid_state',
       },
     ];
 
@@ -333,7 +334,7 @@ describe('VersionActions', () => {
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute(
       'title',
-      'library:commands.denied.version_superseded'
+      'library:commands.denied.invalid_state'
     );
   });
 

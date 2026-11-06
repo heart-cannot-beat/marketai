@@ -1,5 +1,5 @@
 import { useTranslation } from 'next-i18next';
-import type { AllowedAction } from './EntryActions';
+import { deniedReason, type AllowedAction } from './EntryActions';
 
 interface VersionActionsProps {
   versionId: string;
@@ -56,13 +56,7 @@ export function VersionActions({
               cmd === 'withdraw' ? 'btn-warning' : ''
             }`}
             aria-disabled={denied || undefined}
-            title={
-              denied && action.reason_code
-                ? t(`commands.denied.${action.reason_code}`, {
-                    defaultValue: action.reason_code,
-                  })
-                : undefined
-            }
+            title={denied ? deniedReason(t, action.reason_code) : undefined}
             onClick={(e) => {
               if (denied) {
                 e.preventDefault();

@@ -234,13 +234,16 @@
       "not-applied": "The server confirmed this action was not applied. You can safely retry."
     },
     "denied": {
-      "insufficient_permission": "You don't have permission for this action",
       "entry_archived": "This entry is archived",
-      "no_published_version": "No published version exists",
-      "draft_not_validated": "Draft has not been validated",
-      "version_withdrawn": "This version has been withdrawn",
-      "version_superseded": "This version has been superseded"
+      "no_draft": "This entry has no draft",
+      "owner_required": "Only the Workspace Owner can do this",
+      "entry_type_not_bindable": "Only Product and Person entries can bind references",
+      "invalid_state": "This version has been withdrawn",
+      "entry_type_mismatch": "Only Product entries can be cloned"
     },
+    "denied-default": "This action isn't available right now",
+    "denied-line": "{{actions}}: {{reason}}",
+    "action-separator": ", ",
     "bind-reference-pick": "Pick a published reference",
     "bind-reference-loading": "Loading published references…",
     "bind-reference-load-failed": "Failed to load published references",
