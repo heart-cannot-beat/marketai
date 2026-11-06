@@ -720,6 +720,25 @@ class ProjectionStore:
         return True
 
 
+class PerWorkspaceSyncer:
+    """Fails `sync()` for the Workspaces in `failing` and repairs any other one
+    into `reader`, so two new Workspaces can take different paths through the
+    same middleware instance.
+    """
+
+    def __init__(self, reader: FakeAdmissionReader, *, failing: set[str]):
+        self.calls: list[str] = []
+        self._reader = reader
+        self._failing = failing
+
+    async def sync(self, workspace_id: str) -> bool:
+        self.calls.append(workspace_id)
+        if workspace_id in self._failing:
+            raise ProjectionUpstreamUnavailableError("upstream down")
+        self._reader.set(workspace_id, admitted(workspace_id=workspace_id))
+        return True
+
+
 def log_fields(message: str) -> dict[str, str]:
     """The `key=value` pairs after the `projection_sync` event name."""
     event, *pairs = message.split(" ")
@@ -861,6 +880,69 @@ class ProjectionSyncLoggingTests(unittest.TestCase):
         self.assertEqual(lines[0]["rate_limited_since_last"], "0")
         self.assertEqual(lines[2]["rate_limited_since_last"], "4")
         self.assertEqual(syncer.calls, ["ws_1", "ws_1"])
+
+    def test_one_workspace_in_its_limiter_window_does_not_hold_back_another(self) -> None:
+        # ws_1's fetch keeps failing; ws_2, a second new Workspace, arrives
+        # inside ws_1's window. The window, the refusal count and the repaired
+        # row each stay with the Workspace they belong to.
+        reader = FakeAdmissionReader()
+        syncer = PerWorkspaceSyncer(reader, failing={"ws_1"})
+        clock = [1000.0]
+        with (
+            patch("app.platform.delegated_identity.time.monotonic", side_effect=lambda: clock[0]),
+            self.assertLogs(LOGGER, level="WARNING") as captured,
+            self._client(reader, syncer) as client,
+        ):
+            ws_1_statuses = [self._request(client).status_code for _ in range(3)]
+            ws_2 = self._request(client, workspace_id="ws_2", membership_id="mem_2")
+            ws_1_statuses.append(self._request(client).status_code)
+            clock[0] += DEFAULT_CONFIG.projection_repair_interval_seconds + 1
+            ws_1_statuses.append(self._request(client).status_code)
+
+        self.assertEqual(ws_2.status_code, 200)
+        self.assertEqual(ws_2.json()["workspace_id"], "ws_2")
+        # ws_2's repaired row admits ws_2 only.
+        self.assertEqual(ws_1_statuses, [503] * 5)
+        self.assertEqual(syncer.calls, ["ws_1", "ws_2", "ws_1"])
+        lines = [log_fields(record.getMessage()) for record in captured.records]
+        self.assertEqual(
+            [(line["workspace_id"], line["result"], line.get("rate_limited_since_last")) for line in lines],
+            [
+                ("ws_1", "upstream_unavailable", "0"),
+                ("ws_1", "rate_limited", None),
+                ("ws_2", "synced", "0"),
+                ("ws_1", "upstream_unavailable", "3"),
+            ],
+        )
+
+    def test_request_headers_cannot_retarget_the_sync_or_forge_its_log_line(self) -> None:
+        # The sync target and the logged workspace_id come from the verified
+        # claim only. A header naming another Workspace changes neither, and a
+        # correlation id shaped like log fields is not trusted into the line.
+        forged = "x workspace_id=ws_2 result=synced"
+        syncer = FakeProjectionSyncer(outcome="unavailable")
+        token = sign(self.private_key, base_claims())
+        with (
+            self.assertLogs(LOGGER, level="WARNING") as captured,
+            self._client(FakeAdmissionReader(), syncer) as client,
+        ):
+            response = client.get(
+                "/api/v1/echo",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-Workspace-Id": "ws_2",
+                    "X-Request-Id": forged,
+                    "X-Trace-Id": forged,
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(syncer.calls, ["ws_1"])
+        message = self._only_message(captured)
+        self.assertNotIn("ws_2", message)
+        fields = log_fields(message)
+        self.assertEqual((fields["workspace_id"], fields["result"]), ("ws_1", "upstream_unavailable"))
+        self.assertEqual(fields["trace_id"], response.json()["trace_id"])
 
     def test_an_upstream_status_is_logged_without_the_token_url_or_body(self) -> None:
         sent: list[str] = []
