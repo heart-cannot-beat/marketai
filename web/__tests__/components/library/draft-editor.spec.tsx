@@ -473,6 +473,38 @@ describe('DraftEditor', () => {
     });
   });
 
+  it('mounts the data source form and keeps the JSON editor behind a toggle', () => {
+    const session = makeSession({
+      buffer: {
+        fields: { adapter_kind: '', execution_mode: '', config: {} },
+        _unknown: {},
+      },
+    });
+    render(
+      createElement(DraftEditor, {
+        entryId: 'e1',
+        entryType: 'data_source',
+        schemaVersion: 1,
+        session,
+      })
+    );
+
+    expect(
+      screen.getByLabelText('library:fields.data-source.adapter-kind')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/library:draft\.json-only-hint/)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('library:draft.json-label')
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('library:draft.show-json'));
+    expect(
+      screen.getByLabelText('library:draft.json-label')
+    ).toBeInTheDocument();
+  });
+
   it('edits entry types without an aligned form as JSON only', () => {
     const session = makeSession({
       buffer: {
