@@ -25,7 +25,12 @@ from sqlalchemy.orm import Session
 from app.adapters.persistence.database import Base
 from app.adapters.persistence.models import WorkspaceRecord, new_id, utcnow
 from app.platform.tenancy import TenantContext
-from app.scale.models import ScaleEnrollmentRecord, ScaleEpisodeRecord
+from app.scale.models import (
+    ScaleEnrollmentRecord,
+    ScaleEpisodeRecord,
+    ScaleTargetLifecycleEventRecord,
+    ScaleTargetVersionRecord,
+)
 from app.scale.targets import (
     TargetLifecycleError,
     TargetNotFoundError,
@@ -467,6 +472,17 @@ class TestResolveTargetContexts:
         contexts = resolve_target_contexts(session, ctx)
         assert contexts[0]["has_active_target"] is True
 
+    def test_an_active_target_in_another_currency_is_not_this_contexts(self, session, ws_id):
+        """#398: the flag reads the same key as the one-active-Target rule,
+        currency included."""
+        _seed_enrollment_with_episode(session, ws_id, currency="USD")
+        ctx = _owner_context(ws_id)
+        _publish(session, ctx, cpa="15.00", key="ctx-3", currency="EUR")
+
+        assert resolve_target_contexts(session, ctx)[0]["has_active_target"] is False
+        _publish(session, ctx, cpa="15.00", key="ctx-4", currency="USD")
+        assert resolve_target_contexts(session, ctx)[0]["has_active_target"] is True
+
 
 class TestTargetActions:
     # ``target_actions`` only reads ``lifecycle_state``, so a lightweight
@@ -496,3 +512,181 @@ class TestTargetActions:
         system = _owner_context("ws-actions").for_system_execution()
         withdraw = self._withdraw("active", system)
         assert (withdraw["allowed"], withdraw["reason_code"]) == (True, None)
+
+
+def _publish(session, ctx, *, cpa: str, key: str, currency: str = "USD"):
+    preview = create_publication_preview(
+        session, ctx,
+        product_version_id="pv-1",
+        offer_version_id="ov-1",
+        market_code="US",
+        currency=currency,
+        target_cpa=Decimal(cpa),
+        minimum_economic_spend=Decimal("100.00"),
+        idempotency_key=f"{key}-preview",
+    )
+    return publish_target(session, ctx, preview_id=preview.id, idempotency_key=f"{key}-publish")
+
+
+def _events(session, target_id: str) -> list[tuple]:
+    return [
+        (e.event_type, e.previous_lifecycle_state, e.current_lifecycle_state, e.reason,
+         e.semantic_event_sequence, e.revision_at_event)
+        for e in session.query(ScaleTargetLifecycleEventRecord)
+        .filter_by(target_version_id=target_id)
+        .order_by(ScaleTargetLifecycleEventRecord.semantic_event_sequence)
+    ]
+
+
+def _active(session, ctx, currency: str = "USD") -> list[str]:
+    return [t.id for t in list_targets(session, ctx, lifecycle_state="active") if t.currency == currency]
+
+
+class TestReplaceActiveTarget:
+    """#398: publishing into a context that has an active Target replaces it
+    in one transaction. SQLite has no partial unique index, so the
+    application check alone keeps one active Target per context."""
+
+    def test_publishing_again_withdraws_the_previous_target(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        old = _publish(session, ctx, cpa="20.00", key="rep-1")
+        published_at = old.published_at
+
+        new = _publish(session, ctx, cpa="25.00", key="rep-2")
+
+        assert (new.lifecycle_state, new.revision, new.target_cpa) == ("active", 1, Decimal("25.00"))
+        assert (old.lifecycle_state, old.revision) == ("withdrawn", 2)
+        assert old.withdrawn_at is not None
+        assert (old.target_cpa, old.minimum_economic_spend, old.published_at) == (
+            Decimal("20.00"), Decimal("100.00"), published_at,
+        )
+        assert _events(session, old.id) == [
+            ("publish", None, "active", "publication_confirmed", 1, 1),
+            ("withdraw", "active", "withdrawn", f"replaced_by:{new.id}", 2, 2),
+        ]
+        assert _events(session, new.id) == [("publish", None, "active", "publication_confirmed", 1, 1)]
+        assert _active(session, ctx) == [new.id]
+
+    def test_a_retry_of_a_replacement_returns_the_same_target(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        old = _publish(session, ctx, cpa="20.00", key="rep-3")
+        preview = create_publication_preview(
+            session, ctx, product_version_id="pv-1", offer_version_id="ov-1", market_code="US",
+            currency="USD", target_cpa=Decimal("25.00"), idempotency_key="rep-4",
+        )
+        first = publish_target(session, ctx, preview_id=preview.id, idempotency_key="rep-5")
+        again = publish_target(session, ctx, preview_id=preview.id, idempotency_key="rep-5")
+
+        assert again.id == first.id
+        assert len(_events(session, old.id)) == 2
+        assert _active(session, ctx) == [first.id]
+
+    def test_a_preview_made_before_another_publication_is_refused(self, session, ws_id):
+        for replacing in (False, True):
+            ctx = _owner_context(ws_id)
+            currency = "EUR" if replacing else "USD"
+            if replacing:
+                _publish(session, ctx, cpa="20.00", key="rep-6", currency=currency)
+            previews = [
+                create_publication_preview(
+                    session, ctx, product_version_id="pv-1", offer_version_id="ov-1",
+                    market_code="US", currency=currency, target_cpa=Decimal(cpa),
+                    idempotency_key=f"rep-7-{replacing}-{cpa}",
+                )
+                for cpa in ("25.00", "30.00")
+            ]
+            winner = publish_target(session, ctx, preview_id=previews[0].id, idempotency_key=f"rep-8-{replacing}")
+
+            with pytest.raises(TargetLifecycleError, match="preview_hash_mismatch"):
+                publish_target(session, ctx, preview_id=previews[1].id, idempotency_key=f"rep-9-{replacing}")
+            assert previews[1].consumed_at is None
+            assert _active(session, ctx, currency) == [winner.id]
+
+    def test_an_enrollment_change_after_the_preview_is_refused(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        preview = create_publication_preview(
+            session, ctx, product_version_id="pv-1", offer_version_id="ov-1", market_code="US",
+            currency="USD", target_cpa=Decimal("20.00"), idempotency_key="rep-10",
+        )
+        assert preview.affected_enrollment_count == 0
+        _seed_enrollment_with_episode(session, ws_id)
+
+        with pytest.raises(TargetLifecycleError, match="preview_hash_mismatch"):
+            publish_target(session, ctx, preview_id=preview.id, idempotency_key="rep-11")
+        assert _active(session, ctx) == []
+
+    def test_another_currency_keeps_its_own_active_target(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        dollars = _publish(session, ctx, cpa="20.00", key="rep-12", currency="USD")
+        euros = _publish(session, ctx, cpa="18.00", key="rep-13", currency="EUR")
+        assert (_active(session, ctx, "USD"), _active(session, ctx, "EUR")) == ([dollars.id], [euros.id])
+
+        replacement = _publish(session, ctx, cpa="22.00", key="rep-14", currency="USD")
+        assert (_active(session, ctx, "USD"), _active(session, ctx, "EUR")) == ([replacement.id], [euros.id])
+        assert len(_events(session, euros.id)) == 1
+
+    def test_another_workspace_neither_replaces_nor_publishes_a_preview(self, session, ws_id):
+        other = WorkspaceRecord(id=new_id("ws"), name="Another Workspace")
+        session.add(other)
+        session.flush()
+        mine, theirs = _owner_context(ws_id), _owner_context(other.id)
+        target = _publish(session, mine, cpa="20.00", key="rep-15")
+
+        their_target = _publish(session, theirs, cpa="25.00", key="rep-16")
+        assert (target.lifecycle_state, _active(session, theirs)) == ("active", [their_target.id])
+
+        preview = create_publication_preview(
+            session, theirs, product_version_id="pv-1", offer_version_id="ov-1", market_code="US",
+            currency="USD", target_cpa=Decimal("30.00"), idempotency_key="rep-17",
+        )
+        with pytest.raises(TargetNotFoundError):
+            publish_target(session, mine, preview_id=preview.id, idempotency_key="rep-18")
+        assert preview.consumed_at is None
+        assert (_active(session, mine), _active(session, theirs)) == ([target.id], [their_target.id])
+
+    def test_a_member_cannot_publish_a_replacement(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        target = _publish(session, ctx, cpa="20.00", key="rep-19")
+        preview = create_publication_preview(
+            session, ctx, product_version_id="pv-1", offer_version_id="ov-1", market_code="US",
+            currency="USD", target_cpa=Decimal("25.00"), idempotency_key="rep-20",
+        )
+        with pytest.raises(TargetLifecycleError, match="owner_required"):
+            publish_target(session, _member_context(ws_id), preview_id=preview.id, idempotency_key="rep-21")
+        assert (target.lifecycle_state, preview.consumed_at) == ("active", None)
+
+    def test_a_replaced_target_is_not_withdrawable(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        old = _publish(session, ctx, cpa="20.00", key="rep-22")
+        new = _publish(session, ctx, cpa="25.00", key="rep-23")
+
+        assert [a["allowed"] for a in target_actions(old, ctx)] == [False]
+        with pytest.raises(TargetLifecycleError, match="invalid_lifecycle"):
+            create_withdrawal_preview(session, ctx, target_id=old.id, reason="again", idempotency_key="rep-24")
+        preview = create_withdrawal_preview(
+            session, ctx, target_id=new.id, reason="done", idempotency_key="rep-25",
+        )
+        assert withdraw_target(session, ctx, preview_id=preview.id, idempotency_key="rep-26").lifecycle_state == (
+            "withdrawn"
+        )
+        assert _active(session, ctx) == []
+
+    def test_a_local_database_with_two_active_targets_converges_to_one(self, session, ws_id):
+        """A SQLite database written before #398 may hold two active Targets
+        in one context; the next publication replaces both."""
+        ctx = _owner_context(ws_id)
+        first = _publish(session, ctx, cpa="20.00", key="rep-27")
+        duplicate = ScaleTargetVersionRecord(
+            id=new_id("stgt"), workspace_id=ws_id, product_version_id="pv-1", offer_version_id="ov-1",
+            market_code="US", currency="USD", target_cpa=Decimal("21.00"), lifecycle_state="active",
+            creator_id="user-owner", revision=1, published_at=utcnow(),
+        )
+        session.add(duplicate)
+        session.flush()
+
+        new = _publish(session, ctx, cpa="25.00", key="rep-28")
+        assert _active(session, ctx) == [new.id]
+        for old in (first, duplicate):
+            assert _events(session, old.id)[-1][:4] == (
+                "withdraw", "active", "withdrawn", f"replaced_by:{new.id}",
+            )

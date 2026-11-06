@@ -13,6 +13,15 @@ established by ``app.scale.activation_preview``: create an expiring preview
 (validates, computes impact), then consume it atomically. Both confirm
 commands are Owner-only; MFA is checked only at login (ADR 0015).
 
+One exact context has at most one active Target (PostgreSQL's partial unique
+index ``ix_stgt_active_target``; SQLite relies on the checks here alone).
+Publishing into a context that already has one replaces it in the same
+transaction (#398): the old Target is withdrawn with a ``withdraw`` event
+whose reason is ``replaced_by:<new Target id>``, then the new one is
+published. The preview's impact hash names the Target it replaces, and
+publish recomputes it, so a context that changed since the preview is
+refused with ``preview_hash_mismatch``.
+
 Currency is not a column on ``ScaleEnrollmentRecord`` -- it lives on
 ``ScaleEpisodeRecord`` (one row per observation interval, spec §1.5).
 ``resolve_target_contexts`` therefore joins each distinct enrollment context
@@ -28,6 +37,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.adapters.persistence.models import new_id
@@ -102,6 +112,19 @@ def _require_owner(context: TenantContext) -> None:
         raise TargetLifecycleError("owner_required")
 
 
+def _for_update(session: Session, stmt):
+    """PostgreSQL row locking; SQLite (tests, bounded local path) is a no-op."""
+    if session.get_bind().dialect.name == "postgresql":
+        return stmt.with_for_update()
+    return stmt
+
+
+def _amount(value: Decimal | None) -> str | None:
+    """One spelling per amount: the request's ``20.00`` and the column's
+    ``20.000000000000`` must hash alike when publish recomputes the hash."""
+    return format(value.normalize(), "f") if value is not None else None
+
+
 def _impact_hash(
     product_version_id: str,
     offer_version_id: str,
@@ -111,6 +134,7 @@ def _impact_hash(
     breakeven_roas: Decimal | None,
     minimum_economic_spend: Decimal | None,
     affected_count: int,
+    replaced_target_ids: list[str] | tuple[str, ...] = (),
 ) -> str:
     payload = json.dumps(
         {
@@ -118,12 +142,11 @@ def _impact_hash(
             "offer_version_id": offer_version_id,
             "market_code": market_code,
             "currency": currency,
-            "target_cpa": str(target_cpa) if target_cpa is not None else None,
-            "breakeven_roas": str(breakeven_roas) if breakeven_roas is not None else None,
-            "minimum_economic_spend": (
-                str(minimum_economic_spend) if minimum_economic_spend is not None else None
-            ),
+            "target_cpa": _amount(target_cpa),
+            "breakeven_roas": _amount(breakeven_roas),
+            "minimum_economic_spend": _amount(minimum_economic_spend),
             "affected_enrollment_count": affected_count,
+            "replaced_target_version_ids": sorted(replaced_target_ids),
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -147,6 +170,33 @@ def _count_affected_enrollments(
             ScaleEnrollmentRecord.lifecycle.in_(_ACTIVE_ENROLLMENT_LIFECYCLES),
         )
     ).scalar_one()
+
+
+def _active_targets(
+    session: Session,
+    workspace_id: str,
+    product_version_id: str,
+    offer_version_id: str,
+    market_code: str,
+    currency: str,
+    *,
+    lock: bool = False,
+) -> list[ScaleTargetVersionRecord]:
+    """The active Targets of one exact context, keyed exactly like
+    ``ix_stgt_active_target``. At most one on PostgreSQL; a SQLite database
+    written before #398 may hold more, and the next publication replaces
+    them all."""
+    stmt = select(ScaleTargetVersionRecord).filter_by(
+        workspace_id=workspace_id,
+        product_version_id=product_version_id,
+        offer_version_id=offer_version_id,
+        market_code=market_code,
+        currency=currency,
+        lifecycle_state="active",
+    ).order_by(ScaleTargetVersionRecord.id)
+    if lock:
+        stmt = _for_update(session, stmt)
+    return list(session.execute(stmt).scalars().all())
 
 
 def resolve_target_contexts(session: Session, context: TenantContext) -> list[dict]:
@@ -173,16 +223,6 @@ def resolve_target_contexts(session: Session, context: TenantContext) -> list[di
 
     contexts: list[dict] = []
     for row in rows:
-        active_target = session.execute(
-            select(ScaleTargetVersionRecord.id).filter_by(
-                workspace_id=context.workspace_id,
-                product_version_id=row.product_version_id,
-                offer_version_id=row.offer_version_id,
-                market_code=row.market_code,
-                lifecycle_state="active",
-            ).limit(1)
-        ).scalar_one_or_none()
-
         currency = session.execute(
             select(ScaleEpisodeRecord.currency)
             .filter(
@@ -198,12 +238,16 @@ def resolve_target_contexts(session: Session, context: TenantContext) -> list[di
         if currency is None:
             continue
 
+        active_targets = _active_targets(
+            session, context.workspace_id,
+            row.product_version_id, row.offer_version_id, row.market_code, currency,
+        )
         contexts.append({
             "product_version_id": row.product_version_id,
             "offer_version_id": row.offer_version_id,
             "market_code": row.market_code,
             "currency": currency,
-            "has_active_target": active_target is not None,
+            "has_active_target": bool(active_targets),
         })
     return contexts
 
@@ -223,7 +267,8 @@ def create_publication_preview(
 ) -> ScaleTargetPublicationPreviewRecord:
     """Owner-only. Freeze the impact of publishing a new Target for one
     exact (ProductVersion, OfferVersion, market, currency) context: how many
-    active/paused Enrollments would be affected, as of now."""
+    active/paused Enrollments would be affected, and which active Target it
+    would replace, as of now."""
     _require_owner(context)
     if target_cpa is None and breakeven_roas is None:
         raise TargetLifecycleError("at_least_one_target")
@@ -232,9 +277,14 @@ def create_publication_preview(
         session, context.workspace_id,
         product_version_id, offer_version_id, market_code,
     )
+    replaced = _active_targets(
+        session, context.workspace_id,
+        product_version_id, offer_version_id, market_code, currency,
+    )
     impact_hash = _impact_hash(
         product_version_id, offer_version_id, market_code, currency,
         target_cpa, breakeven_roas, minimum_economic_spend, affected,
+        [t.id for t in replaced],
     )
 
     preview_id = new_id("stpp")
@@ -297,7 +347,14 @@ def publish_target(
     idempotency_key: str,
 ) -> ScaleTargetVersionRecord:
     """Owner-only. Consume a publication preview and create the active
-    Target it described."""
+    Target it described, withdrawing the context's active Target in the
+    same transaction (#398).
+
+    The impact is recomputed under row locks and must match the preview's
+    hash; otherwise, or when a concurrent first publication of the same
+    context wins the unique index, this raises ``preview_hash_mismatch``
+    and writes nothing. A replay of a committed publication returns its
+    Target before any of these checks."""
     _require_owner(context)
 
     target_id = new_id("stgt")
@@ -318,8 +375,16 @@ def publish_target(
             )
         return existing
 
-    preview = session.get(ScaleTargetPublicationPreviewRecord, preview_id)
-    if preview is None or preview.workspace_id != context.workspace_id:
+    # Lock order after the journal claim: the preview, then the context's
+    # active Target. A second publication of this preview waits on the
+    # first lock, of this context on the second (or, with no active Target
+    # yet, on the unique index below), and then sees what the first did.
+    preview = session.execute(
+        _for_update(session, select(ScaleTargetPublicationPreviewRecord).filter_by(
+            workspace_id=context.workspace_id, id=preview_id,
+        ))
+    ).scalar_one_or_none()
+    if preview is None:
         raise TargetNotFoundError(preview_id)
     if preview.consumed_at is not None:
         raise TargetPreviewConsumedError(preview_id)
@@ -330,8 +395,26 @@ def publish_target(
     if expires_at < now:
         raise TargetPreviewExpiredError(preview_id)
 
-    preview.consumed_at = now
-    preview.result_target_version_id = target_id
+    replaced = _active_targets(
+        session, context.workspace_id,
+        preview.product_version_id, preview.offer_version_id,
+        preview.market_code, preview.currency,
+        lock=True,
+    )
+    affected = _count_affected_enrollments(
+        session, context.workspace_id,
+        preview.product_version_id, preview.offer_version_id, preview.market_code,
+    )
+    impact_hash = _impact_hash(
+        preview.product_version_id, preview.offer_version_id,
+        preview.market_code, preview.currency,
+        preview.target_cpa, preview.breakeven_roas, preview.minimum_economic_spend,
+        affected, [t.id for t in replaced],
+    )
+    if impact_hash != preview.impact_hash:
+        raise TargetLifecycleError(
+            "preview_hash_mismatch", f"the context changed since preview {preview_id}",
+        )
 
     target = ScaleTargetVersionRecord(
         id=target_id,
@@ -348,15 +431,6 @@ def publish_target(
         revision=1,
         published_at=now,
     )
-    # Two flush stages, not one: SQLAlchemy's automatic flush-ordering
-    # across mapped classes with no ORM ``relationship()`` does not
-    # reliably topo-sort composite, non-primary-key ``ForeignKeyConstraint``s
-    # (every Scale table uses this shape) -- the event's FK into this Target
-    # row requires the Target's own INSERT to commit first (mirrors
-    # ``app.scale.enrollment.create_draft_enrollment``'s identical note).
-    session.add(target)
-    session.flush()
-
     event = ScaleTargetLifecycleEventRecord(
         id=new_id("stge"),
         target_version_id=target_id,
@@ -370,8 +444,51 @@ def publish_target(
         original_initiator_id=context.initiator_id or context.executor,
         revision_at_event=1,
     )
-    session.add(event)
-    session.flush()
+
+    # One savepoint, like ``app.scale.enrollment._commit_transition``: a
+    # concurrent first publication of this context that committed after
+    # the check above fails the partial unique index here, which is the
+    # same refusal as a hash mismatch, not a 500.
+    try:
+        with session.begin_nested():
+            preview.consumed_at = now
+            preview.result_target_version_id = target_id
+            for old in replaced:
+                old.lifecycle_state = "withdrawn"
+                old.withdrawn_at = now
+                old.revision += 1
+                session.add(ScaleTargetLifecycleEventRecord(
+                    id=new_id("stge"),
+                    target_version_id=old.id,
+                    workspace_id=context.workspace_id,
+                    event_type="withdraw",
+                    previous_lifecycle_state="active",
+                    current_lifecycle_state="withdrawn",
+                    reason=f"replaced_by:{target_id}",
+                    semantic_event_sequence=old.revision,
+                    executor_id=context.executor,
+                    original_initiator_id=context.initiator_id or context.executor,
+                    revision_at_event=old.revision,
+                ))
+            # Flush stages: the withdrawals before the new Target, so the
+            # unique index never sees two active Targets in one context;
+            # the new Target before its event, because SQLAlchemy's
+            # automatic flush-ordering across mapped classes with no ORM
+            # ``relationship()`` does not reliably topo-sort composite,
+            # non-primary-key ``ForeignKeyConstraint``s (every Scale table
+            # uses this shape; mirrors
+            # ``app.scale.enrollment.create_draft_enrollment``'s note).
+            session.flush()
+            session.add(target)
+            session.flush()
+            session.add(event)
+            session.flush()
+    except IntegrityError:
+        for obj in (preview, *replaced):
+            session.expire(obj)
+        raise TargetLifecycleError(
+            "preview_hash_mismatch", f"another publication of this context won over preview {preview_id}",
+        )
     return target
 
 
@@ -499,10 +616,12 @@ def withdraw_target(
     if expires_at < now:
         raise TargetPreviewExpiredError(preview_id)
 
+    # Locked: a publication replacing this Target withdraws it too (#398),
+    # and only one of the two may.
     target = session.execute(
-        select(ScaleTargetVersionRecord).filter_by(
+        _for_update(session, select(ScaleTargetVersionRecord).filter_by(
             workspace_id=context.workspace_id, id=preview.target_version_id,
-        )
+        ))
     ).scalar_one_or_none()
     if target is None:
         raise TargetNotFoundError(preview.target_version_id)

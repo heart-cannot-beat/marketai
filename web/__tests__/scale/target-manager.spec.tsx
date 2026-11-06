@@ -20,6 +20,7 @@ const mockPublishRun = jest.fn();
 const mockWithdrawPreviewRun = jest.fn();
 const mockWithdrawRun = jest.fn();
 const mockRefresh = jest.fn();
+const mockRefreshContexts = jest.fn();
 let mockRole = 'OWNER';
 let mockContexts: object[] = [];
 let mockTargets: object[] = [];
@@ -54,7 +55,11 @@ jest.mock('@/hooks/scale/useScaleTargets', () => ({
     loadMore: jest.fn(),
     refresh: mockRefresh,
   }),
-  useScaleTargetContexts: () => ({ contexts: mockContexts, isLoading: false }),
+  useScaleTargetContexts: () => ({
+    contexts: mockContexts,
+    isLoading: false,
+    refresh: mockRefreshContexts,
+  }),
   useCreateScaleTargetPublicationPreview: () => useMockCommand(mockPreviewRun),
   usePublishScaleTarget: () => useMockCommand(mockPublishRun),
   useCreateScaleTargetWithdrawalPreview: () =>
@@ -184,6 +189,9 @@ const COPY = {
     confirmWithdraw: 'Confirm withdrawal',
     refresh: 'Create a new preview',
     expired: 'The preview expired. Create a new one.',
+    changed: 'The preview changed. Create a new preview.',
+    hasActive: 'already has an active target',
+    replaces: 'Publishing withdraws the active target this context has now.',
     affected: 'Affected enrollments',
     cpaReason: 'Enter a number greater than 0.',
     roasReason: 'This number has too many digits before the decimal point.',
@@ -205,6 +213,9 @@ const COPY = {
     confirmWithdraw: '确认撤回',
     refresh: '重新生成预览',
     expired: '预览已过期，请重新生成。',
+    changed: '预览内容已变化，请重新生成预览。',
+    hasActive: '已有一个有效的目标',
+    replaces: '发布后，这个上下文当前有效的目标会被撤回。',
     affected: '受影响的监控',
     cpaReason: '请填写大于 0 的数字。',
     roasReason: '整数部分位数太多。',
@@ -404,6 +415,127 @@ describe('a publication preview that expired before confirming', () => {
       /owner_required|validation_error|greater_than|body\./
     );
   });
+});
+
+describe('a context that already has an active target (#398)', () => {
+  const withActiveTarget = (n: number) => ({
+    ...context(n),
+    has_active_target: true,
+  });
+
+  test.each(['en', 'zh-CN'] as const)(
+    'stays selectable and the confirm step says it is replaced in %s',
+    async (locale) => {
+      const copy = COPY[locale];
+      mockContexts = [context(0), withActiveTarget(1)];
+      mockPreviewRun.mockResolvedValueOnce(
+        success(publicationPreview('stpp_1', 1, 3))
+      );
+      mockPublishRun.mockResolvedValueOnce(success(target({ allowed: true })));
+      renderIn(locale);
+
+      fireEvent.click(screen.getByRole('button', { name: copy.newTarget }));
+      const option = within(screen.getByRole('dialog')).getByRole('option', {
+        name: new RegExp(`^pv_1 / ov_1 / US \\(USD\\) — ${copy.hasActive}$`),
+      });
+      expect(option).not.toBeDisabled();
+
+      const dialog = await previewPublication(copy);
+      expect(within(dialog).getByText(copy.replaces)).toBeInTheDocument();
+      expect(within(dialog).queryByRole('alert')).toBeNull();
+
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: copy.confirmPublish })
+      );
+      await screen.findByRole('button', { name: copy.newTarget });
+      expect(mockPublishRun).toHaveBeenCalledWith({
+        metaMode: 'customer_sandbox',
+        publicationPreviewId: 'stpp_1',
+      });
+      expect(mockRefresh).toHaveBeenCalled();
+    }
+  );
+
+  test('a target published after the dialog opened is announced', async () => {
+    const copy = COPY.en;
+    mockPreviewRun.mockResolvedValueOnce(
+      success(publicationPreview('stpp_1', 1, 3))
+    );
+    mockRefreshContexts.mockImplementation(() => {
+      mockContexts = [context(0), withActiveTarget(1)];
+    });
+    renderIn('en');
+
+    const dialog = await previewPublication(copy);
+    expect(mockRefreshContexts).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getByText(copy.replaces)).toBeInTheDocument();
+  });
+
+  test('a context without one says nothing about replacing', async () => {
+    const copy = COPY.en;
+    mockContexts = [withActiveTarget(0), context(1)];
+    mockPreviewRun.mockResolvedValueOnce(
+      success(publicationPreview('stpp_1', 1, 3))
+    );
+    renderIn('en');
+
+    const dialog = await previewPublication(copy);
+    expect(within(dialog).queryByText(copy.replaces)).toBeNull();
+  });
+
+  test.each(['en', 'zh-CN'] as const)(
+    'a preview the context outran is renewed in place in %s',
+    async (locale) => {
+      const copy = COPY[locale];
+      mockPreviewRun
+        .mockResolvedValueOnce(success(publicationPreview('stpp_1', 1, 3)))
+        .mockResolvedValueOnce(success(publicationPreview('stpp_2', 1, 3)));
+      mockPublishRun
+        .mockResolvedValueOnce(problem('preview_hash_mismatch', 409))
+        .mockResolvedValueOnce(success(target({ allowed: true })));
+      // Another Owner published into this context after the first preview.
+      mockRefreshContexts
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+          mockContexts = [context(0), withActiveTarget(1)];
+        });
+      renderIn(locale);
+
+      const dialog = await previewPublication(copy);
+      expect(within(dialog).queryByText(copy.replaces)).toBeNull();
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: copy.confirmPublish })
+      );
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        copy.changed
+      );
+      expect(
+        within(dialog).queryByRole('button', { name: copy.confirmPublish })
+      ).toBeNull();
+
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: copy.refresh })
+      );
+      await within(dialog).findByRole('button', { name: copy.confirmPublish });
+      expect(mockRefreshContexts).toHaveBeenCalledTimes(2);
+      expect(mockPreviewRun.mock.calls[1][0]).toEqual(
+        mockPreviewRun.mock.calls[0][0]
+      );
+      expect(within(dialog).getByText(copy.replaces)).toBeInTheDocument();
+      expect(within(dialog).queryByRole('alert')).toBeNull();
+      expect(mockPublishRun).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: copy.confirmPublish })
+      );
+      await screen.findByRole('button', { name: copy.newTarget });
+      expect(mockPublishRun.mock.calls[1][0]).toEqual({
+        metaMode: 'customer_sandbox',
+        publicationPreviewId: 'stpp_2',
+      });
+      expect(document.body).not.toHaveTextContent('preview_hash_mismatch');
+    }
+  );
 });
 
 test('an already-consumed publication preview is not renewed', async () => {
