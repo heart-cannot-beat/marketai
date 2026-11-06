@@ -1,0 +1,1441 @@
+{
+  "get_identity_probe": {
+    "bffPattern": "/api/domain/v1/w/:slug/identity",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "get_operation": {
+    "bffPattern": "/api/domain/v1/w/:slug/operations/:operation_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": true
+  },
+  "create_upload_intent": {
+    "bffPattern": "/api/domain/v1/w/:slug/upload-intents",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "finalize_upload": {
+    "bffPattern": "/api/domain/v1/w/:slug/upload-intents/:intent_id/finalize",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "create_download_intent": {
+    "bffPattern": "/api/domain/v1/w/:slug/download-intents",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "list_library_entry_types": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entry-types",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "list_library_entries": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_library_entry": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "list_library_entry_versions": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/versions",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_library_entry_events": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/events",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_library_version": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:version_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "get_library_version_impact": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:version_id/impact",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_library_version_bindings": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:version_id/bindings",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_library_entry": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "save_library_draft": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/draft",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "validate_library_draft": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/validate",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "publish_library_entry": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/publish",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "archive_library_entry": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/archive",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "bind_library_reference": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/bind",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "withdraw_library_version": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:version_id/withdraw",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "fork_library_version": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:version_id/fork",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "clone_library_product": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:version_id/clone-product",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "apply_library_template": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:template_version_id/apply",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "get_library_command_outcome": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/command-outcomes/:command_identity",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "reconcile_library_command_outcome": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/command-outcomes/:command_identity/reconcile",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "preview_library_publish_impact": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/publish-impact",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "preview_library_archive_impact": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:entry_id/archive-impact",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "list_library_internal_entries": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:root_entry_id/internal",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_library_internal_entry": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:root_entry_id/internal",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "get_library_internal_entry_context": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:root_entry_id/internal/:entry_type/:entry_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_library_internal_entry": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/internal/:entry_type/:entry_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_library_data_source_credential_binding": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:data_source_entry_id/credential-binding",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "bind_library_data_source_credential": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:data_source_entry_id/credential-binding",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "check_library_data_source_connection": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:data_source_entry_id/connection-checks",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "import_library_manual_facts": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/entries/:data_source_entry_id/manual-fact-imports",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "preview_library_withdraw_impact": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:version_id/withdraw-impact",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "preview_library_template_reapply": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:template_version_id/reapply-preview",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_library_reference_object": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/reference-objects",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_library_reference_download_intent": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/versions/:version_id/download-intent",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "get_library_reference_object": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/reference-objects/:object_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "promote_library_reference_object": {
+    "bffPattern": "/api/domain/v1/w/:slug/library/reference-objects/:object_id/promote",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_products": {
+    "bffPattern": "/api/domain/v1/w/:slug/products",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_product_intake": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/intake",
+    "maxRequestBytes": 131072,
+    "maxResponseBytes": 16384,
+    "forwardConditionalHeaders": false
+  },
+  "get_product_intake": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/intake/:intake_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "confirm_product_intake": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/intake/:intake_id/confirm",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_product_intake_image_download_intent": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/intake/:intake_id/images/:image_id/download-intent",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 16384,
+    "forwardConditionalHeaders": false
+  },
+  "create_test_plan": {
+    "bffPattern": "/api/domain/v1/w/:slug/test-plans",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 16384,
+    "forwardConditionalHeaders": false
+  },
+  "list_test_plans": {
+    "bffPattern": "/api/domain/v1/w/:slug/test-plans",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 262144,
+    "forwardConditionalHeaders": false
+  },
+  "get_test_plan": {
+    "bffPattern": "/api/domain/v1/w/:slug/test-plans/:plan_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": true
+  },
+  "revise_test_plan": {
+    "bffPattern": "/api/domain/v1/w/:slug/test-plans/:plan_id/revise",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": true
+  },
+  "create_test_plan_run": {
+    "bffPattern": "/api/domain/v1/w/:slug/test-plans/:plan_id/runs",
+    "maxRequestBytes": 1024,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "get_generation_defaults": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/defaults",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 16384,
+    "forwardConditionalHeaders": true
+  },
+  "update_generation_defaults": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/defaults",
+    "maxRequestBytes": 4096,
+    "maxResponseBytes": 16384,
+    "forwardConditionalHeaders": true
+  },
+  "create_results_import": {
+    "bffPattern": "/api/domain/v1/w/:slug/results/imports",
+    "maxRequestBytes": 1048576,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "get_results_import": {
+    "bffPattern": "/api/domain/v1/w/:slug/results/imports/:import_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "commit_results_import": {
+    "bffPattern": "/api/domain/v1/w/:slug/results/imports/:import_id/commit",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "get_product_learnings": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/:product_id/learnings",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": false
+  },
+  "get_results_template": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/:product_id/results/template",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "get_test_plan_results": {
+    "bffPattern": "/api/domain/v1/w/:slug/test-plans/:plan_id/results",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "create_external_creatives": {
+    "bffPattern": "/api/domain/v1/w/:slug/external-creatives",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "list_external_creatives": {
+    "bffPattern": "/api/domain/v1/w/:slug/external-creatives",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 4194304,
+    "forwardConditionalHeaders": false
+  },
+  "get_external_creative": {
+    "bffPattern": "/api/domain/v1/w/:slug/external-creatives/:external_creative_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "confirm_external_creative": {
+    "bffPattern": "/api/domain/v1/w/:slug/external-creatives/:external_creative_id/confirm",
+    "maxRequestBytes": 32768,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_generation_capabilities": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/capabilities",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_generation_drafts": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/drafts",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_generation_draft": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/drafts/:draft_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "get_generation_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/previews/:preview_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_generation_runs": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_generation_run": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs/:run_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "list_generation_run_items": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs/:run_id/items",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_generation_run_item": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs/:run_id/items/:run_item_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_generation_assets": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/assets",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_generation_asset_version": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/asset-versions/:version_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_generation_export_manifest": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/exports/:export_package_id/manifest",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_generation_export_package": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/exports/:export_package_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_generation_draft": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/drafts",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "update_generation_draft": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/drafts/:draft_id",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "create_generation_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/drafts/:draft_id/previews",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "submit_generation_run": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "create_generation_run_recovery_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs/:run_id/recovery-previews",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "cancel_generation_run": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs/:run_id/cancel",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "retry_generation_run_failed_items": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs/:run_id/retry-failed-items",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "resume_generation_run_paused_items": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs/:run_id/resume-paused-items",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "reconcile_generation_run": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/runs/:run_id/reconcile",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "create_generation_asset_review": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/asset-versions/:version_id/reviews",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_generation_regeneration_draft": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/asset-versions/:version_id/regeneration-drafts",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_generation_asset_version_download_intent": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/asset-versions/:version_id/download-intent",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_generation_export_package": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/exports",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false,
+    "locationShapes": {
+      "202": [
+        {
+          "pattern": "new RegExp('^/api/v1/operations/(?<operation_id>[^/?#]+)$')",
+          "targetOperationId": "get_operation",
+          "extractParams": [
+            "operation_id"
+          ]
+        }
+      ]
+    }
+  },
+  "create_generation_export_download_intent": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/exports/:export_package_id/download-intent",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_generation_review_summary_regeneration": {
+    "bffPattern": "/api/domain/v1/w/:slug/generation/regeneration-draft-batches",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_audit_events": {
+    "bffPattern": "/api/domain/v1/w/:slug/audit",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "recover_meta_launch_operation": {
+    "bffPattern": "/api/domain/v1/w/:slug/launch/operations/:operation_id/recovery",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "get_meta_launch_provisioning": {
+    "bffPattern": "/api/domain/v1/w/:slug/launch/operations/:provisioning_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_meta_launch_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/launch/previews",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "get_meta_launch_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/launch/previews/:preview_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "confirm_meta_launch_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/launch/previews/:preview_id/confirm",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "execute_meta_launch_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/launch/previews/:preview_id/execute",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_meta_connection": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/connections",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_meta_connections": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/connections",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_meta_connection": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/connections/:connection_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_meta_bindings": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/connections/:connection_id/bindings",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_meta_binding": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/connections/:connection_id/bindings",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "supersede_meta_binding": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/connections/:connection_id/bindings/:binding_id/supersede",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "retire_meta_connection": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/connections/:connection_id/retire",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_meta_contracts": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/contracts",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_meta_contract": {
+    "bffPattern": "/api/domain/v1/w/:slug/meta/contracts",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_credentials": {
+    "bffPattern": "/api/domain/v1/w/:slug/credentials",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "create_credential": {
+    "bffPattern": "/api/domain/v1/w/:slug/credentials",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "rotate_credential": {
+    "bffPattern": "/api/domain/v1/w/:slug/credentials/:credential_key/rotate",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "bind_credential": {
+    "bffPattern": "/api/domain/v1/w/:slug/credentials/:credential_version_id/bindings/:scope",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "revoke_credential": {
+    "bffPattern": "/api/domain/v1/w/:slug/credentials/:credential_version_id/revoke",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "get_spend_guardrail": {
+    "bffPattern": "/api/domain/v1/w/:slug/spend-guardrail",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "preview_spend_guardrail": {
+    "bffPattern": "/api/domain/v1/w/:slug/spend-guardrail/preview",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "confirm_spend_guardrail": {
+    "bffPattern": "/api/domain/v1/w/:slug/spend-guardrail/confirm",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "get_usage": {
+    "bffPattern": "/api/domain/v1/w/:slug/usage",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "get_localization_workspace": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/workspace",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_localization_batches": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_localization_batch": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": true
+  },
+  "get_localization_item": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/items/:item_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": true
+  },
+  "get_localization_batch_outcome": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/outcome",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_localization_batch": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "start_localization_preparation": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/start-preparation",
+    "maxRequestBytes": 131072,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "submit_localization_claim_decisions": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/claim-decisions",
+    "maxRequestBytes": 131072,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "approve_localization_copy": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/approve-copy",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "confirm_localization_batch": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/confirm",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "retry_localization_item": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/items/:item_id/retry",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "resume_localization_item": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/items/:item_id/resume",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "authorize_localization_isolated_qc": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/items/:item_id/attempts/:attempt_id/authorize-isolated-qc",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "adopt_localization_isolated_output": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/items/:item_id/attempts/:attempt_id/adopt",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "cancel_localization_batch": {
+    "bffPattern": "/api/domain/v1/w/:slug/localization/batches/:batch_id/cancel",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "get_cost_summary": {
+    "bffPattern": "/api/domain/v1/w/:slug/cost-summary",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "list_experiments": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_enrollment": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_scale_enrollments": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_experiment": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_experiment": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "get_experiment_timeline": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/timeline",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_scale_enrollment": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "activate_scale_enrollment": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id/activate",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "pause_scale_enrollment": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id/pause",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "resume_scale_enrollment": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id/resume",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "close_scale_enrollment": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id/close",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "get_scale_episode": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id/episodes/:episode_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "add_experiment_entry": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/entries",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "update_experiment_entry": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/entries/:entry_id",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "update_experiment_context": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/context",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "analyze_experiment_duplicates": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/duplicate-analysis",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "freeze_experiment": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/freeze",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "bind_experiment_candidate": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/candidates/:candidate_id/bind",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "start_experiment": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/start",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "judge_experiment": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/judgements",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "confirm_experiment_proposal": {
+    "bffPattern": "/api/domain/v1/w/:slug/experiments/:experiment_id/proposals/:proposal_id/confirm",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_scale_enrollment_evidence": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id/evidence",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_scale_enrollment_breakdowns": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id/breakdowns",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_scale_advice_threads": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/advice-threads",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_advice_disposition": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/advice-threads/:thread_id/disposition",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_advice_snooze": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/advice-threads/:thread_id/snooze",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "convert_scale_advice_occurrence": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/advice-occurrences/:occurrence_id/convert",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_scale_targets": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/targets",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_target": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/targets",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "withdraw_scale_target": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/targets/:target_id/withdraw",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "get_scale_command_outcome": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/command-outcomes/:identity",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_export": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/exports",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_scale_target_contexts": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/target-contexts/current",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_scale_target": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/targets/:target_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": true
+  },
+  "create_scale_target_publication_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/target-publication-previews",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_target_withdrawal_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/targets/:target_id/withdrawal-previews",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_export_download_intent": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/exports/:export_id/download-intents",
+    "maxRequestBytes": 1024,
+    "maxResponseBytes": 8192,
+    "forwardConditionalHeaders": false
+  },
+  "list_scale_enrollment_candidates": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollment-candidates",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_activation_preview": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollments/:enrollment_id/activation-previews",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_enrollment_candidate": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/enrollment-candidates",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "list_scale_available_modes": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/available-meta-modes",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 8192,
+    "forwardConditionalHeaders": false
+  },
+  "get_marketing_capabilities": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/capabilities",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_marketing_projects": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/projects",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_marketing_project": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/projects/:project_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "create_marketing_project": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/projects",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "edit_marketing_project": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/projects/:project_id",
+    "maxRequestBytes": 131072,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "start_marketing_planning": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/projects/:project_id/planning",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "prepare_marketing_generation": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/projects/:project_id/generation-drafts",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "list_marketing_brand_kits": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/brand-kits",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_product_brand_kit": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/products/:product_id/brand-kit",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": true
+  },
+  "save_product_brand_kit": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/products/:product_id/brand-kit",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": true
+  },
+  "get_marketing_workflow": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/projects/:project_id/workflow",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": false
+  },
+  "freeze_marketing_round": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/projects/:project_id/rounds",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "review_marketing_creative": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/reviews",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "reuse_marketing_creative": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/creatives/reuse",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "create_marketing_handoff": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/handoff",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "bind_marketing_delivery": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/bindings",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "preview_marketing_metrics": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/metrics/preview",
+    "maxRequestBytes": 1600000,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "confirm_marketing_metrics": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/metrics/confirm",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "evaluate_marketing_round": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/evaluate",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "close_marketing_round": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/close",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "download_marketing_handoff": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/download-intent",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": false
+  },
+  "retry_marketing_handoff": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/handoff/retry",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "get_marketing_round": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "get_marketing_ai_qc_quote": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/ai-qc/quote",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": false
+  },
+  "start_marketing_ai_qc": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/ai-qc",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "confirm_marketing_ai_qc": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/ai-qc/confirm",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "prepare_marketing_feedback": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/feedback-drafts",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "start_marketing_explanation": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/explanation",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "get_marketing_evidence_handoff": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/evidence-handoff",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "create_marketing_evidence_handoff": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/evidence-handoff",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 8388608,
+    "forwardConditionalHeaders": true
+  },
+  "resolve_marketing_call": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/calls/:call_id/resolve",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": false
+  },
+  "create_marketing_image_edit": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/image-edits",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": true
+  },
+  "get_product_references": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/:product_id/references",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "add_product_reference": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/:product_id/references",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": true
+  },
+  "update_product_reference": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/:product_id/references/:item_id",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": true
+  },
+  "delete_product_reference": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/:product_id/references/:item_id",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": true
+  },
+  "create_competitor": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitors",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "list_competitors": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitors",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": false
+  },
+  "get_competitor": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitors/:competitor_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "quote_competitor_resolve": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitors/:competitor_id/resolve-quote",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 16384,
+    "forwardConditionalHeaders": false
+  },
+  "resolve_competitor": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitors/:competitor_id/resolve",
+    "maxRequestBytes": 4096,
+    "maxResponseBytes": 262144,
+    "forwardConditionalHeaders": false
+  },
+  "get_competitor_resolution": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitors/:competitor_id/resolutions/:resolve_job_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 262144,
+    "forwardConditionalHeaders": false
+  },
+  "confirm_competitor": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitors/:competitor_id/confirm",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "archive_competitor": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitors/:competitor_id/archive",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
+  "preview_competitor_scan": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/preview",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "create_competitor_scan": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_competitor_scans": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "get_competitor_scan": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "quote_competitor_scan_resume": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/resume-quote",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "resume_competitor_scan": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/resume",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "reconcile_competitor_scan": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/reconcile",
+    "maxRequestBytes": 4096,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "list_competitor_scan_ads": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/ads",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": false
+  },
+  "flip_competitor_ad_relevance": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/ads/:ad_id/relevance",
+    "maxRequestBytes": 4096,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "list_competitor_ad_assessments": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/ads/:ad_id/assessments",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 262144,
+    "forwardConditionalHeaders": false
+  },
+  "confirm_competitor_ad_tags": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/ads/:ad_id/tags",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "list_competitor_ad_tags": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/ads/:ad_id/tags",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 262144,
+    "forwardConditionalHeaders": false
+  },
+  "refreeze_competitor_scan": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/snapshots",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": false
+  },
+  "list_competitor_scan_snapshots": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/snapshots",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 262144,
+    "forwardConditionalHeaders": false
+  },
+  "get_competitor_scan_snapshot": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/snapshots/:snapshot_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": false
+  },
+  "get_competitor_scan_summary": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/summary",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 1048576,
+    "forwardConditionalHeaders": false
+  },
+  "quote_competitor_scan_recluster": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/recluster-quote",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "recluster_competitor_scan": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/recluster",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_product_competitor_settings": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/:product_id/competitor-settings",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 8192,
+    "forwardConditionalHeaders": false
+  },
+  "update_product_competitor_settings": {
+    "bffPattern": "/api/domain/v1/w/:slug/products/:product_id/competitor-settings",
+    "maxRequestBytes": 1024,
+    "maxResponseBytes": 8192,
+    "forwardConditionalHeaders": false
+  },
+  "list_competitor_scan_discoveries": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/discoveries",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 262144,
+    "forwardConditionalHeaders": false
+  },
+  "decide_competitor_discovery": {
+    "bffPattern": "/api/domain/v1/w/:slug/competitor-scans/:scan_id/discoveries/:advertiser_page_id/decision",
+    "maxRequestBytes": 4096,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  }
+}

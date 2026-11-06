@@ -1,0 +1,36 @@
+name: customer-denylist
+
+# Keeps customer and partner names out of the public repository. The term list
+# exists only in the CUSTOMER_DENYLIST secret; the scan prints file:line and a
+# rule number, never the matched text. This is a separate workflow so ci.yml
+# keeps its job contract (scripts/ci/__tests__/test_runner_budget.py).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Scan added lines for customer names
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan added lines and new file names
+        env:
+          CUSTOMER_DENYLIST: ${{ secrets.CUSTOMER_DENYLIST }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          # Pull requests from forks never receive secrets, so they alone may
+          # run without the list; anywhere else an empty list fails the job.
+          REQUIRE_DENYLIST: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          require=()
+          if [ "$REQUIRE_DENYLIST" = "true" ]; then require=(--require-denylist); fi
+          python3 scripts/ci/customer_denylist.py --base "$BASE_SHA" --head "$HEAD_SHA" "${require[@]}"

@@ -1,0 +1,147 @@
+# Production-like harness for integration testing.
+# Usage: docker compose up -d --build --wait
+#
+# Services boot in order:
+#   postgres → init-domain → init-control → web → api
+#                └──────────────────────────────→ worker
+#
+# All passwords are compose-only dev values from deploy/docker/.env.compose.
+
+services:
+  # ---------------------------------------------------------------- storage ---
+  postgres:
+    image: postgres:16
+    env_file: deploy/docker/.env.compose
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  # --------------------------------------------------------- initialization ---
+  init-domain:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.python
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["bash", "deploy/docker/init-domain.sh"]
+    env_file: deploy/docker/.env.compose
+    environment:
+      MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:compose_domain_owner@postgres:5432/marketai_domain
+
+  init-control:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.web
+    depends_on:
+      init-domain:
+        condition: service_completed_successfully
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "npx prisma migrate deploy && npm run ops:bootstrap-delegated-signing-key",
+      ]
+    env_file: deploy/docker/.env.compose
+    environment:
+      DATABASE_URL: postgresql://marketai_control_owner:compose_control_owner@postgres:5432/marketai_control
+      MIGRATION_DATABASE_URL: postgresql://marketai_control_owner:compose_control_owner@postgres:5432/marketai_control
+
+  # --------------------------------------------------------------- services ---
+  web:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_MARKETAI_STORAGE_ORIGINS: http://localhost:9000
+        NEXT_PUBLIC_MARKETAI_ALLOW_INSECURE_LOOPBACK_STORAGE: "true"
+    depends_on:
+      init-control:
+        condition: service_completed_successfully
+      blob-transfer:
+        condition: service_healthy
+    ports:
+      - "4002:4002"
+    env_file: deploy/docker/.env.compose
+    environment:
+      DATABASE_URL: postgresql://marketai_control_app:compose_control_app@postgres:5432/marketai_control
+      APP_URL: http://localhost:4002
+      NEXTAUTH_URL: http://localhost:4002
+      NEXTAUTH_SECRET: compose-nextauth-secret-not-for-production
+      NEXT_PUBLIC_MARKETAI_STORAGE_ORIGINS: http://localhost:9000
+      NEXT_PUBLIC_MARKETAI_ALLOW_INSECURE_LOOPBACK_STORAGE: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4002/api/auth/providers"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+  blob-transfer:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.python
+    command: ["python", "-m", "worker.local_blob_transfer"]
+    env_file: deploy/docker/.env.compose
+    environment:
+      MARKETAI_DATABASE_URL: sqlite+pysqlite:////tmp/blob-transfer-boundary.db
+      MARKETAI_BLOB_STORE_LOCAL_HOST: 0.0.0.0
+    ports:
+      - "9000:9000"
+    volumes:
+      - blobdata:/data/blob_store
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.python
+    depends_on:
+      init-domain:
+        condition: service_completed_successfully
+      web:
+        condition: service_healthy
+    ports:
+      - "8787:8787"
+    env_file: deploy/docker/.env.compose
+    environment:
+      MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_api:compose_domain_api@postgres:5432/marketai_domain
+      DELEGATED_JWKS_URL: http://web:4002/.well-known/jwks.json
+    volumes:
+      - blobdata:/data/blob_store
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8787/api/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.python
+    depends_on:
+      init-domain:
+        condition: service_completed_successfully
+    command: ["python", "-m", "worker.main"]
+    env_file: deploy/docker/.env.compose
+    environment:
+      MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:compose_domain_worker@postgres:5432/marketai_domain
+    volumes:
+      - blobdata:/data/blob_store
+
+volumes:
+  pgdata:
+  blobdata:

@@ -1,0 +1,27 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+httpx>=0.27
+python-dotenv>=1.0
+Pillow>=10.0
+python-multipart>=0.0.9
+SQLAlchemy>=2.0,<2.1
+alembic>=1.13,<2.0
+# PostgreSQL driver. Required by the control-plane/domain database-role
+# isolation test; the local SQLite path does not use it.
+psycopg[binary]>=3.1,<4
+# ES256 verification of delegated BFF identity tokens (spec §3.4).
+PyJWT[crypto]>=2.13,<3
+# Offloads the synchronous WorkspaceAdmissionReader/ProjectionStore SQLAlchemy
+# calls to a worker thread from the delegated identity middleware's async path.
+anyio>=4.0
+# S3-compatible production adapters, including Railway Bucket.  Imported
+# lazily by the adapters so local-only modules remain importable in minimal
+# environments, but installed in every deploy image.
+boto3>=1.35,<2
+# Ticket #18 adds pytest-native fixtures and parametrized acceptance tests.
+# Keep the test runner explicit because `make verify` and CI execute them.
+pytest>=8.3,<10
+# Ticket #20 constraint solver: property-based tests assert solver output
+# agrees with brute-force expansion across randomized dimension/value counts.
+hypothesis>=6.100,<7

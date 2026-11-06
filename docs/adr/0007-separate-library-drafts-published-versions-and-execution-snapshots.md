@@ -1,0 +1,3 @@
+# Separate library drafts, published versions, and execution snapshots
+
+Creative Library entries use stable identities with optimistic-lock Drafts and immutable Published Versions, while every paid or externally visible workflow atomically resolves a hash-bound preview into its own immutable execution snapshot. We accept explicit Bind, Fork, Apply, Clone, Supersede, and Withdraw semantics because live references and generic updates are convenient but would let a later product, person, template, Prompt, data-source, or rights edit change an already quoted or historical operation; therefore Workers may check current eligibility to stop unsafe work, but they never substitute current library content for the frozen snapshot.

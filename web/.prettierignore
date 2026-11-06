@@ -1,0 +1,14 @@
+check-locale.js
+find-dupe-locale.js
+node_modules
+.next
+.pytest_cache
+.ops
+out
+eslint.config.cjs
+# Generated inventories (written by scripts/license-inventory.mjs)
+THIRD-PARTY-LICENSES.md
+dependency-inventory.json
+
+# Reviewed SQL migrations are kept byte-for-byte as generated/reviewed
+prisma/migrations

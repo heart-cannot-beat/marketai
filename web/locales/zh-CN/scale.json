@@ -1,0 +1,384 @@
+{
+  "title": "放量",
+  "not-implemented": "{{feature}}暂未开放。",
+  "advisory-boundary": {
+    "title": "只读的建议工作区。",
+    "description": "放量永远不会在 Meta 中启用、暂停、删除广告，也不会修改预算或投放设置。转换只会创建未提交的草稿，它们仍须经过下游的预览、费用、质检、实验和确认环节。"
+  },
+  "meta-mode": {
+    "label": "Meta 模式",
+    "customer_sandbox": "客户 Sandbox",
+    "controlled_mock": "受控 Mock",
+    "internal_validation": "内部只读验证"
+  },
+  "lifecycle": {
+    "enrollment": {
+      "draft": "草稿",
+      "active": "监控中",
+      "paused": "已暂停",
+      "closed": "已关闭"
+    },
+    "episode": {
+      "collecting": "收集中",
+      "evaluating": "评估中",
+      "closed": "已关闭"
+    },
+    "advice": {
+      "active": "有效",
+      "resolved": "已解决",
+      "superseded": "已被取代",
+      "expired": "已过期"
+    }
+  },
+  "health": {
+    "no-evidence": "暂无证据",
+    "unclassified": "未判定",
+    "healthy": "健康",
+    "fatigue_watch": "疲劳观察",
+    "creative_fatigue": "素材疲劳",
+    "economics_decline": "经济指标下滑",
+    "delivery_anomaly": "投放异常",
+    "not_delivering": "未在投放"
+  },
+  "maturity": {
+    "warming": "预热中",
+    "monitorable": "可监控",
+    "economics_ready": "经济指标可判断",
+    "insufficient": "不足"
+  },
+  "severity": {
+    "info": "提示",
+    "warning": "警告",
+    "critical": "严重"
+  },
+  "advice-type": {
+    "refresh_creative": "更新素材",
+    "review_offer_or_landing_page": "检查 Offer 或落地页",
+    "review_delivery_mix": "检查投放组合",
+    "investigate_delivery_anomaly": "排查投放异常",
+    "consider_scale_test": "考虑放量测试"
+  },
+  "action-denied": {
+    "invalid_lifecycle": "当前生命周期状态下不允许此操作",
+    "owner_required": "只有工作区 Owner 可以执行这个操作。",
+    "thread_not_active": "这条建议已不再有效",
+    "advice_type_not_convertible": "这类建议不能转换"
+  },
+  "list": {
+    "targets-link": "目标",
+    "new-enrollment": "新建监控",
+    "filter-all": "全部",
+    "refreshing": "正在刷新…",
+    "error": "监控列表没能加载。",
+    "retry": "重试",
+    "empty-title": "还没有监控",
+    "empty-description": "把一个 Winner 加入监控，开始跟踪它的放量证据。",
+    "column-enrollment": "监控",
+    "column-lifecycle": "生命周期",
+    "column-market": "市场",
+    "column-updated": "更新时间",
+    "loading": "正在加载…",
+    "load-more": "加载更多",
+    "end": "已加载全部监控"
+  },
+  "candidate-selector": {
+    "title": "新建监控",
+    "description": "选择一个符合条件的 Winner 判定，再指定要监控的投放目标。",
+    "empty": "这个 Meta 模式下没有符合条件的 Winner 判定。",
+    "asset-version": "素材版本：{{id}}",
+    "manual-entry-description": "输入要加入监控的 Winner 判定的标识。在服务端能计算候选资格之前，这里暂时需要手动填写。",
+    "field": {
+      "meta_connection_id": "Meta 连接 ID",
+      "ad_account_id": "广告账户 ID",
+      "delivery_target_id": "投放目标 ID",
+      "scenario_scope_key": "场景范围键",
+      "winner_decision_id": "Winner 判定 ID",
+      "winner_confirmation_id": "Winner 确认 ID",
+      "asset_version_id": "素材版本 ID",
+      "product_version_id": "产品版本 ID",
+      "offer_version_id": "销售方案版本 ID",
+      "market_code": "市场代码",
+      "creator_id": "创建者 ID"
+    },
+    "cancel": "取消",
+    "creating": "正在创建…",
+    "create": "创建",
+    "marketing-origin": "营销测试：在记录的条件下确认的组合",
+    "marketing-boundary": "这个组合只在记录的条件和用户提供的投放证据下得到支持。请选择一个当前兼容的已观察投放目标。这里只准备监控，永远不会创建、启用或修改广告。",
+    "match-delivery": "匹配已观察到的投放",
+    "choose-delivery": "选择对应的 Meta 广告",
+    "delivery-not-ready": "请先补全当前的源市场真值和素材准备情况，再通过已授权的只读连接同步对应的实际投放。目前还没有可用的兼容投放目标，无法创建监控。"
+  },
+  "detail": {
+    "not-found": "找不到这个监控",
+    "back-to-list": "返回监控列表",
+    "back-to-enrollment": "返回监控",
+    "activate": "启用",
+    "pause": "暂停",
+    "resume": "恢复",
+    "close": "关闭",
+    "view-evidence": "查看证据",
+    "view-breakdowns": "查看细分",
+    "market": "市场",
+    "meta-mode": "Meta 模式",
+    "revision": "修订号",
+    "updated-at": "更新时间",
+    "advice-heading": "建议",
+    "pause-dialog-title": "暂停监控",
+    "close-dialog-title": "关闭监控"
+  },
+  "lifecycle-dialog": {
+    "reason-label": "原因",
+    "cancel": "取消",
+    "pending": "正在提交…"
+  },
+  "activate-dialog": {
+    "title": "启用监控",
+    "description": "启用后会开始第一个观察段。投放配置和观察段上下文通常来自同步的 Meta 读取；在自动预填上线之前，这里暂时需要手动填写。",
+    "preview-description": "开始第一个观察段前，请先创建启用预览。",
+    "previewing": "正在创建预览…",
+    "preview": "创建预览",
+    "confirm-description": "检查启用预览的引用，然后确认启用。",
+    "preview-id": "启用预览 ID",
+    "delivery-config-heading": "投放配置基线",
+    "episode-context-heading": "观察段上下文",
+    "reconciliation-required": "上一次尝试的结果不明确，请重试以完成核对。",
+    "cancel": "取消",
+    "activating": "正在启用…",
+    "confirm": "启用",
+    "field": {
+      "contract_generation_id": "合同代次 ID",
+      "ad_creative_id": "广告创意 ID",
+      "campaign_status": "广告系列状态",
+      "ad_set_status": "广告组状态",
+      "ad_status": "广告状态",
+      "budget_source": "预算来源",
+      "budget_amount": "预算金额",
+      "optimization_goal": "优化目标",
+      "bid_strategy": "竞价策略",
+      "attribution_setting": "归因设置",
+      "targeting_safety_hash": "定向安全哈希",
+      "evidence_hash": "证据哈希",
+      "comparability_hash": "可比性哈希",
+      "raw_response_hash": "原始响应哈希",
+      "sync_run_id": "同步运行 ID",
+      "occurrence_id": "事件 ID",
+      "call_intent_id": "调用意图 ID",
+      "observed_at": "观察时间",
+      "metric_semantic_contract_set_id": "指标语义合同集 ID",
+      "timezone_name": "时区",
+      "currency": "币种",
+      "attribution_semantics_hash": "归因语义哈希",
+      "started_local_day": "开始日期（本地）"
+    }
+  },
+  "episode": {
+    "heading": "观察段",
+    "no-active-episode": "没有进行中的观察段",
+    "unavailable": "观察段数据不可用",
+    "started-local-day": "开始",
+    "timezone": "时区",
+    "currency": "币种",
+    "closure-reason": "已关闭：{{reason}}"
+  },
+  "evidence": {
+    "heading": "证据",
+    "no-evidence-yet": "这个观察段还没有证据",
+    "unavailable": "证据不可用",
+    "as-of": "截至 {{day}}",
+    "refresh": "刷新",
+    "refresh-stale": "刷新过时的证据",
+    "quality": {
+      "pass": "数据质量通过",
+      "warning": "数据质量警告",
+      "blocked": "数据质量阻塞"
+    },
+    "healthy-evaluations": "健康评估次数",
+    "cursor-revision": "游标修订号",
+    "watermark": "安全水位",
+    "updated-at": "更新时间",
+    "windows-heading": "确切的证据窗口",
+    "window": {
+      "current_7d": "最近 7 天",
+      "baseline_7d": "基线 7 天",
+      "rolling_14d": "滚动 14 天"
+    },
+    "end-exclusive": "结束日期不包含在内",
+    "policy-version": "策略版本",
+    "target-version": "目标版本",
+    "no-target-version": "没有已发布的目标",
+    "algorithm-version": "算法版本",
+    "metric-contract": "指标合同哈希",
+    "delivery-days": "有投放 / 完整天数",
+    "last-sync": "最近一次成功同步",
+    "quality-issues-heading": "数据质量发现",
+    "quality-issue": {
+      "daily_slot_missing": "缺少某一天的日数据",
+      "exact_window_value_unavailable": "这个窗口的覆盖人数和频次不可用",
+      "breakdown_segment_unknown": "有细分数据不完整",
+      "delivery_configuration_incompatible": "投放设置有变化，无法对比",
+      "delivery_diagnostic_unknown": "投放诊断状态未知",
+      "freshness_slo_exceeded": "数据超过了新鲜度时限",
+      "source_pagination_incomplete": "来源数据分页没有取全",
+      "source_contract_mismatch": "来源数据与指标合同不一致",
+      "source_timezone_mismatch": "来源时区不一致",
+      "source_currency_mismatch": "来源币种不一致",
+      "source_binding_incomplete": "来源绑定不完整",
+      "source_reconcile_pending": "来源数据等待对账",
+      "source_mode_mismatch": "来源模式不一致"
+    },
+    "quality-severity": {
+      "blocking": "阻塞",
+      "warning": "警告"
+    },
+    "technical-details": "技术信息",
+    "recovery-action": "恢复措施：{{action}}",
+    "signals-heading": "确定性信号与区间",
+    "signal": "信号",
+    "signal-state": "状态",
+    "signal-states": {
+      "hit": "命中",
+      "miss": "未命中",
+      "unavailable": "不可用",
+      "blocked": "已阻断"
+    },
+    "observed": "观察值",
+    "interval": "区间",
+    "threshold": "阈值",
+    "reason": "原因",
+    "health-reason": {
+      "conflicting_signals": "未判定健康状态：点击率下降，但 CPA 或 ROAS 明显改善，信号方向相反。",
+      "partial_adverse_signals": "未判定健康状态：部分信号不利，但不符合任何一种健康类型。",
+      "signal_unavailable": "未判定健康状态：有必需的信号无法计算。",
+      "quality_blocked": "未判定健康状态：数据质量阻塞。"
+    },
+    "signal-reason": {
+      "frequency_unavailable": "没有频次数据",
+      "unavailable_baseline": "没有可用的基线",
+      "explained_by_pause": "投放暂停可以解释，不计为命中",
+      "bootstrap_unavailable": "有效抽样不足，无法计算区间",
+      "data_quality_blocked": "数据质量阻塞，未计算"
+    },
+    "streak-counters": "连续计数",
+    "unknown-signal": "未知信号"
+  },
+  "breakdowns": {
+    "heading": "细分",
+    "type": {
+      "placement": "版位",
+      "country": "国家",
+      "age_gender": "年龄与性别"
+    },
+    "column": {
+      "segment": "细分项",
+      "spend-share": "花费占比",
+      "impressions": "展示次数",
+      "link-clicks": "链接点击",
+      "purchases": "购买次数",
+      "cpa": "CPA",
+      "roas": "ROAS"
+    },
+    "suppressed": "因隐私限制不显示",
+    "suppression-reason": {
+      "below_privacy_threshold": "低于 Meta 的隐私报告阈值"
+    },
+    "no-metric": "—",
+    "insufficient-reason": {
+      "descriptive_only": "这种细分类型不报告 CPA/ROAS"
+    },
+    "no-snapshot": "这个观察段还没有证据快照",
+    "error": "细分数据没能加载。",
+    "empty": "这种细分类型还没有观察到细分项。",
+    "window": "窗口 {{start}} – {{end}}",
+    "loading": "正在加载…",
+    "load-more": "加载更多"
+  },
+  "advice-list": {
+    "error": "建议没能加载。",
+    "retry": "重试",
+    "empty": "这个范围内没有建议。",
+    "loading": "正在加载…",
+    "load-more": "加载更多",
+    "end": "已加载全部建议"
+  },
+  "advice-card": {
+    "disposition": "处理方式：{{kind}}",
+    "snoozed-until": "已推迟到 {{until}}",
+    "acknowledge": "知悉",
+    "dismiss": "忽略",
+    "snooze": "推迟",
+    "convert": "转换",
+    "conversion-created": "已创建未提交的草稿",
+    "conversion-unsubmitted": "没有提交任何生成、实验或 Meta 操作。",
+    "snooze-until-label": "推迟到",
+    "snooze-confirm": "确认",
+    "snooze-cancel": "取消"
+  },
+  "targets": {
+    "title": "目标",
+    "new-target": "新建目标",
+    "owner-only": "只有工作区 Owner 可以发布或撤回目标。",
+    "error": "目标没能加载。",
+    "retry": "重试",
+    "empty": "还没有已发布的目标。",
+    "loading": "正在加载…",
+    "load-more": "加载更多",
+    "withdraw": "撤回",
+    "column": {
+      "context": "上下文",
+      "currency": "币种",
+      "target-cpa": "目标 CPA",
+      "breakeven-roas": "盈亏平衡 ROAS",
+      "lifecycle": "生命周期",
+      "actions": "操作"
+    },
+    "field": {
+      "product_version_id": "产品版本 ID",
+      "offer_version_id": "销售方案版本 ID",
+      "market_code": "市场代码",
+      "currency": "币种",
+      "target_cpa": "目标 CPA",
+      "breakeven_roas": "盈亏平衡 ROAS",
+      "minimum_economic_spend": "最低经济花费"
+    },
+    "publish-dialog": {
+      "title": "发布目标",
+      "context-label": "上下文",
+      "context-placeholder": "选择上下文…",
+      "has-active-target": "已有一个有效的目标",
+      "no-contexts": "没有符合条件的上下文。上下文至少需要一个处于监控中或已暂停、且有已观察到的观察段币种的监控。",
+      "affected-enrollments": "受影响的监控",
+      "policy-floor-check": "策略下限检查",
+      "policy-floor-passed": "通过",
+      "policy-floor-failed": "未通过",
+      "cancel": "取消",
+      "previewing": "正在创建预览…",
+      "preview": "创建预览",
+      "publishing": "正在发布…",
+      "confirm": "确认发布",
+      "refresh-preview": "重新生成预览"
+    },
+    "withdraw-dialog": {
+      "title": "撤回目标",
+      "reason-label": "原因",
+      "affected-enrollments": "受影响的监控",
+      "dependent-advice-threads": "相关的建议",
+      "cancel": "取消",
+      "previewing": "正在创建预览…",
+      "preview": "创建预览",
+      "withdrawing": "正在撤回…",
+      "confirm": "确认撤回",
+      "refresh-preview": "重新生成预览"
+    }
+  },
+  "export": {
+    "heading": "导出",
+    "action": "导出证据",
+    "creating": "正在开始导出…",
+    "processing": "正在处理导出…",
+    "failed": "导出失败。",
+    "get-download": "获取下载链接",
+    "requesting-download": "正在申请…",
+    "download-ready": "下载已就绪（{{expiresAt}} 过期）"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact-allowlist.schema.json",
+  "title": "Golden Path Artifact Allowlist",
+  "description": "Defines which files may appear in golden-path artifacts.",
+  "type": "object",
+  "required": ["schema_version", "allowed_patterns", "required_files", "max_file_size_mb", "max_total_size_mb", "allowed_extensions"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "allowed_patterns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Regex patterns matching allowed relative file paths."
+    },
+    "required_files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Files that must be present in the artifact bundle."
+    },
+    "max_file_size_mb": { "type": "number", "minimum": 1 },
+    "max_total_size_mb": { "type": "number", "minimum": 1 },
+    "allowed_extensions": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^\\." }
+    },
+    "forbidden_patterns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Secret patterns that must not appear in any text artifact."
+    }
+  },
+  "additionalProperties": false
+}

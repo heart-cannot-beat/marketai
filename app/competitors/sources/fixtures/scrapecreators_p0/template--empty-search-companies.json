@@ -1,0 +1,18 @@
+{
+ "provenance": {
+  "kind": "synthesized",
+  "reason": "P0 recorded no empty page; keys follow the recorded first pages of this endpoint",
+  "built_by": "scripts/build_competitor_mock_fixtures.py"
+ },
+ "template": {
+  "path": "/v1/facebook/adLibrary/search/companies",
+  "use": "empty"
+ },
+ "status": 200,
+ "body": {
+  "success": true,
+  "credits_remaining": 0,
+  "credits_charged": 1,
+  "searchResults": []
+ }
+}

@@ -1,0 +1,26 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2022",
+    "moduleResolution": "node",
+    "isolatedModules": false,
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node"],
+    "rootDir": "..",
+    "outDir": "../.ops",
+    "paths": {}
+  },
+  "include": [
+    "bootstrap-delegated-signing-key.ts",
+    "dispatch-entitlements.ts",
+    "mfa-reset.ts",
+    "prune-sessions.ts",
+    "provision-workspace.ts",
+    "reconcile-workspace-provisioning.ts",
+    "reissue-first-owner.ts",
+    "loadEnv.ts"
+  ]
+}

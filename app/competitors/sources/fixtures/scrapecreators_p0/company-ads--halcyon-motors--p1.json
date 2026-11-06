@@ -1,0 +1,2916 @@
+{
+ "provenance": {
+  "kind": "recorded",
+  "run": "p0-scrapecreators/20261026-163158",
+  "raw_file": "009-*.json",
+  "captured_at": "2026-10-26T08:31:58+00:00",
+  "latency_ms": 3083,
+  "sanitized_by": "scripts/build_competitor_mock_fixtures.py"
+ },
+ "request": {
+  "path": "/v1/facebook/adLibrary/company/ads",
+  "params": {
+   "pageId": "100000000010002",
+   "country": "US",
+   "status": "ACTIVE"
+  }
+ },
+ "status": 200,
+ "body": {
+  "success": true,
+  "credits_remaining": 92,
+  "credits_charged": 1,
+  "results": [
+   {
+    "ad_archive_id": "1000000000000293",
+    "collation_count": 20,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/29923daf38acda8b.png?oe=6AE4F9BE",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/7eb7df43b0d48d27.png?oe=6AE4E9B5",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/7eb7df43b0d48d27.png?oe=6AE4E9B5",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f70fd889b7443a0d.png?oe=6AE4CEAC",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/f70fd889b7443a0d.png?oe=6AE4CEAC",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/2a5fa69224eefa82.png?oe=6AE4DF1E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/2a5fa69224eefa82.png?oe=6AE4DF1E",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788505200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000293",
+    "start_date_string": "2026-09-04T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000351",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/9b0afb96be5a6657.png?oe=6AE4EA28",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d3c0b546621ec177.png?oe=6AE4E154",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/d3c0b546621ec177.png?oe=6AE4E154",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/2b8be3fec20ec61a.png?oe=6AE4C84D",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/2b8be3fec20ec61a.png?oe=6AE4C84D",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/4daac1d416060b5e.png?oe=6AE4D2D9",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/4daac1d416060b5e.png?oe=6AE4D2D9",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1c94a2d0d6867ae9.png?oe=6AE4FB4C",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/1c94a2d0d6867ae9.png?oe=6AE4FB4C",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b22c2a81b3141c18.png?oe=6AE4FA4C",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/b22c2a81b3141c18.png?oe=6AE4FA4C",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/527c3256c4ecd5ea.png?oe=6AE4DB26",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/527c3256c4ecd5ea.png?oe=6AE4DB26",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1e917a39df1f3694.png?oe=6AE4FAA8",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/1e917a39df1f3694.png?oe=6AE4FAA8",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788418800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000351",
+    "start_date_string": "2026-09-03T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100024",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/52b521135958157e.png?oe=6AE4EE2B",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f5f091c7f17cd385.png?oe=6AE4F7C1",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/f5f091c7f17cd385.png?oe=6AE4F7C1",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1c24ab1b994212de.png?oe=6AE4F2F9",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/1c24ab1b994212de.png?oe=6AE4F2F9",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b7f232c2de08fa84.png?oe=6AE4E34B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/b7f232c2de08fa84.png?oe=6AE4E34B",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788418800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100024",
+    "start_date_string": "2026-09-03T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000377",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/f330768faa6c2fa8.png?oe=6AE4D953",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3de305ccd3faddec.png?oe=6AE4F72E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3de305ccd3faddec.png?oe=6AE4F72E",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/5e89feab9d58680b.png?oe=6AE4D389",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/5e89feab9d58680b.png?oe=6AE4D389",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e3dd31edccf9bd7a.png?oe=6AE4DEAE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e3dd31edccf9bd7a.png?oe=6AE4DEAE",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788418800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000377",
+    "start_date_string": "2026-09-03T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100017",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/95fc58104fd6c7f2.png?oe=6AE4F982",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/651a1cac116ee07d.png?oe=6AE4CE78",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/651a1cac116ee07d.png?oe=6AE4CE78",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3adc8846801926ed.png?oe=6AE4D5EE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3adc8846801926ed.png?oe=6AE4D5EE",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/c60265a2f3f341eb.png?oe=6AE4E36B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/c60265a2f3f341eb.png?oe=6AE4E36B",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788505200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100017",
+    "start_date_string": "2026-09-04T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000249",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/dc68b3f602b81c0e.png?oe=6AE4CF36",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b0138eb426fa8743.png?oe=6AE4D9E9",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/b0138eb426fa8743.png?oe=6AE4D9E9",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/c64d3a54b6ceaf4c.png?oe=6AE4FE5C",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/c64d3a54b6ceaf4c.png?oe=6AE4FE5C",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e508ce27df8b1ce8.png?oe=6AE4C938",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e508ce27df8b1ce8.png?oe=6AE4C938",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000249",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000315",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/aad1fa184089d08d.png?oe=6AE4F2C1",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3fde350b609cddbf.png?oe=6AE4D4E4",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3fde350b609cddbf.png?oe=6AE4D4E4",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d0021f43e1b498df.png?oe=6AE4EA11",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/d0021f43e1b498df.png?oe=6AE4EA11",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/9417926c053b5568.png?oe=6AE4CC16",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9417926c053b5568.png?oe=6AE4CC16",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/06d9f7f9d64dd300.png?oe=6AE4F9B8",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/06d9f7f9d64dd300.png?oe=6AE4F9B8",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/01594c0cc4de7a09.png?oe=6AE4F677",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/01594c0cc4de7a09.png?oe=6AE4F677",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e3d921dac074f9f7.png?oe=6AE4EFF7",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e3d921dac074f9f7.png?oe=6AE4EFF7",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/9fd41f06eb6e90a6.png?oe=6AE4CDCF",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9fd41f06eb6e90a6.png?oe=6AE4CDCF",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788505200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000315",
+    "start_date_string": "2026-09-04T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000292",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/5faa244756bdf2ea.png?oe=6AE4F1A2",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/08f6a594c30af007.png?oe=6AE4D1D2",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/08f6a594c30af007.png?oe=6AE4D1D2",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/abb15a5466394644.png?oe=6AE4CE7B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/abb15a5466394644.png?oe=6AE4CE7B",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a67881b726514b05.png?oe=6AE4FB37",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a67881b726514b05.png?oe=6AE4FB37",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e0cfda68305037db.png?oe=6AE4E6F1",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e0cfda68305037db.png?oe=6AE4E6F1",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/7f96d65e82349396.png?oe=6AE4CAAF",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/7f96d65e82349396.png?oe=6AE4CAAF",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/2b82ac026057f311.png?oe=6AE4F9E4",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/2b82ac026057f311.png?oe=6AE4F9E4",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ed76d31990cb6887.png?oe=6AE4F599",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ed76d31990cb6887.png?oe=6AE4F599",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792825200,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788418800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000292",
+    "start_date_string": "2026-09-03T07:00:00.000Z",
+    "end_date_string": "2026-10-24T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000349",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/458c554fe5bd1a30.png?oe=6AE4DFC2",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/be1a604279eef43d.png?oe=6AE4DFA8",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/be1a604279eef43d.png?oe=6AE4DFA8",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1274ae50fb93d70b.png?oe=6AE4F730",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/1274ae50fb93d70b.png?oe=6AE4F730",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/9e8e31715283cbdc.png?oe=6AE4EBA6",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9e8e31715283cbdc.png?oe=6AE4EBA6",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/4180429b2aed8146.png?oe=6AE4D814",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/4180429b2aed8146.png?oe=6AE4D814",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f80a80b175ee3020.png?oe=6AE4E318",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/f80a80b175ee3020.png?oe=6AE4E318",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a5af637d38499bb5.png?oe=6AE4D9BB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a5af637d38499bb5.png?oe=6AE4D9BB",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ff1c6e2307150e39.png?oe=6AE4E40E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ff1c6e2307150e39.png?oe=6AE4E40E",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792738800,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000349",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-23T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000110003",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/9fef41bd40b33f34.png?oe=6AE4E62F",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a78f13a7d6d97ab1.png?oe=6AE4E6A2",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a78f13a7d6d97ab1.png?oe=6AE4E6A2",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f7868b33470833b6.png?oe=6AE4C81A",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/f7868b33470833b6.png?oe=6AE4C81A",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/dcaf50b5c140df83.png?oe=6AE4CFAE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/dcaf50b5c140df83.png?oe=6AE4CFAE",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000110003",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100012",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/458c554fe5bd1a30.png?oe=6AE4DFC2",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/be1a604279eef43d.png?oe=6AE4DFA8",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/be1a604279eef43d.png?oe=6AE4DFA8",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1274ae50fb93d70b.png?oe=6AE4F730",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/1274ae50fb93d70b.png?oe=6AE4F730",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/9e8e31715283cbdc.png?oe=6AE4EBA6",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9e8e31715283cbdc.png?oe=6AE4EBA6",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/4180429b2aed8146.png?oe=6AE4D814",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/4180429b2aed8146.png?oe=6AE4D814",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f80a80b175ee3020.png?oe=6AE4E318",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/f80a80b175ee3020.png?oe=6AE4E318",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a5af637d38499bb5.png?oe=6AE4D9BB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a5af637d38499bb5.png?oe=6AE4D9BB",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ff1c6e2307150e39.png?oe=6AE4E40E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ff1c6e2307150e39.png?oe=6AE4E40E",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100012",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000146",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/40819f0dbc535319.png?oe=6AE4F376",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/754daef43c5cd763.png?oe=6AE4F0A6",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/754daef43c5cd763.png?oe=6AE4F0A6",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/5b781128321142bc.png?oe=6AE4F76B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/5b781128321142bc.png?oe=6AE4F76B",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/712410713154e15f.png?oe=6AE4E810",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/712410713154e15f.png?oe=6AE4E810",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/8d1bfb4ee9a6427c.png?oe=6AE4D94B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/8d1bfb4ee9a6427c.png?oe=6AE4D94B",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b4b9af00b7ca2de8.png?oe=6AE4D3E7",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/b4b9af00b7ca2de8.png?oe=6AE4D3E7",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/8273cca3ffa62cd6.png?oe=6AE4D7CF",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/8273cca3ffa62cd6.png?oe=6AE4D7CF",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/9a8fbc4bfe1014c3.png?oe=6AE4D75F",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9a8fbc4bfe1014c3.png?oe=6AE4D75F",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000146",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000267",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/ca35705cb78262ac.png?oe=6AE4E089",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ffd3f97a31edde72.png?oe=6AE4F2BB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ffd3f97a31edde72.png?oe=6AE4F2BB",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/6801afd74325e760.png?oe=6AE4FE7E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/6801afd74325e760.png?oe=6AE4FE7E",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/28e5745b10ede0a9.png?oe=6AE4DAAF",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/28e5745b10ede0a9.png?oe=6AE4DAAF",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/0b4a52eb48c51d4f.png?oe=6AE4F4DA",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/0b4a52eb48c51d4f.png?oe=6AE4F4DA",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d46a4eee20ed305e.png?oe=6AE4D9EB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/d46a4eee20ed305e.png?oe=6AE4D9EB",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/267b598dcb40f86a.png?oe=6AE4EF5F",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/267b598dcb40f86a.png?oe=6AE4EF5F",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e1724270a56bbaa4.png?oe=6AE4E806",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e1724270a56bbaa4.png?oe=6AE4E806",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792825200,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000267",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-24T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000142",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/dc68b3f602b81c0e.png?oe=6AE4CF36",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b0138eb426fa8743.png?oe=6AE4D9E9",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/b0138eb426fa8743.png?oe=6AE4D9E9",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/c64d3a54b6ceaf4c.png?oe=6AE4FE5C",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/c64d3a54b6ceaf4c.png?oe=6AE4FE5C",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e508ce27df8b1ce8.png?oe=6AE4C938",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e508ce27df8b1ce8.png?oe=6AE4C938",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000142",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000152",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/9fef41bd40b33f34.png?oe=6AE4E62F",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a78f13a7d6d97ab1.png?oe=6AE4E6A2",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a78f13a7d6d97ab1.png?oe=6AE4E6A2",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f7868b33470833b6.png?oe=6AE4C81A",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/f7868b33470833b6.png?oe=6AE4C81A",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/dcaf50b5c140df83.png?oe=6AE4CFAE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/dcaf50b5c140df83.png?oe=6AE4CFAE",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000152",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000331",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/6a45a8ed96f397f1.png?oe=6AE4FD89",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/2c15c2ea41512c89.png?oe=6AE4ECD3",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/2c15c2ea41512c89.png?oe=6AE4ECD3",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3e58840659a33e5d.png?oe=6AE4C711",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3e58840659a33e5d.png?oe=6AE4C711",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/72ba72ee9fbea94b.png?oe=6AE4DF29",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/72ba72ee9fbea94b.png?oe=6AE4DF29",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/bc0b7cf81627f780.png?oe=6AE4CEE3",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/bc0b7cf81627f780.png?oe=6AE4CEE3",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/012ab02567cba678.png?oe=6AE4EDCD",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/012ab02567cba678.png?oe=6AE4EDCD",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/11e29f11a32e8a09.png?oe=6AE4E7E0",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/11e29f11a32e8a09.png?oe=6AE4E7E0",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e7b89a6b16a584c0.png?oe=6AE4DD55",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e7b89a6b16a584c0.png?oe=6AE4DD55",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792738800,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788418800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000331",
+    "start_date_string": "2026-09-03T07:00:00.000Z",
+    "end_date_string": "2026-10-23T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000380",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/ca35705cb78262ac.png?oe=6AE4E089",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ffd3f97a31edde72.png?oe=6AE4F2BB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ffd3f97a31edde72.png?oe=6AE4F2BB",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/6801afd74325e760.png?oe=6AE4FE7E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/6801afd74325e760.png?oe=6AE4FE7E",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/28e5745b10ede0a9.png?oe=6AE4DAAF",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/28e5745b10ede0a9.png?oe=6AE4DAAF",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/0b4a52eb48c51d4f.png?oe=6AE4F4DA",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/0b4a52eb48c51d4f.png?oe=6AE4F4DA",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d46a4eee20ed305e.png?oe=6AE4D9EB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/d46a4eee20ed305e.png?oe=6AE4D9EB",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/267b598dcb40f86a.png?oe=6AE4EF5F",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/267b598dcb40f86a.png?oe=6AE4EF5F",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e1724270a56bbaa4.png?oe=6AE4E806",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e1724270a56bbaa4.png?oe=6AE4E806",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000380",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100003",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/10000000001000233",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e69a9a4ab078fe7f.mp4?oe=6AE4D922",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/aba86a922ab874ab.png?oe=6AE4DF00",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/141b1be861c3a30e.mp4?oe=6AE4D790",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1a64f4d4e35ad11a.png?oe=6AE4DD0D",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/1a64f4d4e35ad11a.png?oe=6AE4DD0D",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/86dd4225bb4f19ab.png?oe=6AE4DCBF",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/86dd4225bb4f19ab.png?oe=6AE4DCBF",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3e5af79bd17c3e68.png?oe=6AE4DCAC",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3e5af79bd17c3e68.png?oe=6AE4DCAC",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/9b413f36dffd286e.png?oe=6AE4FB41",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9b413f36dffd286e.png?oe=6AE4FB41",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a31789fbb9b2b764.png?oe=6AE4EDC6",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a31789fbb9b2b764.png?oe=6AE4EDC6",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/bdfacd34fe9261b6.png?oe=6AE4CE2B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/bdfacd34fe9261b6.png?oe=6AE4CE2B",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e080ca31c9622c28.png?oe=6AE4D168",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e080ca31c9622c28.png?oe=6AE4D168",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/46d9dc3691c7424c.mp4?oe=6AE4FBFD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/b2ad03e96cc2b114.mp4?oe=6AE4F0AC"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/436959b4694ad4a1.mp4?oe=6AE4E77D",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/6ead83045e5cacb3.mp4?oe=6AE4D386"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100003",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000182",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/2003979eae3f6cb9.png?oe=6AE4DF93",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3048d41e2f45c73c.png?oe=6AE4D515",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3048d41e2f45c73c.png?oe=6AE4D515",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e53442ffe1cc9af2.png?oe=6AE4F5D2",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e53442ffe1cc9af2.png?oe=6AE4F5D2",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/bc0f85343979c7e8.png?oe=6AE4E271",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/bc0f85343979c7e8.png?oe=6AE4E271",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000182",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000248",
+    "collation_count": null,
+    "collation_id": "1000000000000276",
+    "is_active": true,
+    "page_id": "100000000010002",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000010002",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/halcyonmotors/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Halcyon Motors",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "fb.com",
+     "cta_text": "Learn more",
+     "cards": [],
+     "body": {
+      "text": "Experience where driving is headed. Halcyon Full Self-Driving (Attended) is making journeys calmer and smarter around the world.\nTap to open the full experience below."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "VIDEO",
+     "link_description": "Experience more than acceleration. Halcyon engineering means a car that keeps improving, powered by software.",
+     "link_url": "https://fb.com/canvas_doc/1000000000000358",
+     "images": [],
+     "page_categories": [
+      "Tech"
+     ],
+     "page_like_count": 114032,
+     "title": "Explore Full Self-Driving",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/f6ccdc3729e0701f.mp4?oe=6AE4FEAC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/2003979eae3f6cb9.png?oe=6AE4DF93",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4c0abda6710cfa2e.mp4?oe=6AE4E45C",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [
+      "https://www.halcyon-motors.example/",
+      "https://www.halcyon-motors.example/self-driving",
+      "https://www.halcyon-motors.example/compare"
+     ],
+     "extra_texts": [],
+     "extra_images": [
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3048d41e2f45c73c.png?oe=6AE4D515",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3048d41e2f45c73c.png?oe=6AE4D515",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e53442ffe1cc9af2.png?oe=6AE4F5D2",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e53442ffe1cc9af2.png?oe=6AE4F5D2",
+       "image_crops": []
+      },
+      {
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/bc0f85343979c7e8.png?oe=6AE4E271",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/bc0f85343979c7e8.png?oe=6AE4E271",
+       "image_crops": []
+      }
+     ],
+     "extra_videos": [
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/b74b4a8938e041eb.mp4?oe=6AE4E231",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/0dd58280e17a2c87.mp4?oe=6AE4FA14"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/c5966867453ecfc2.mp4?oe=6AE4ECCD",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/04cf76120e6a29dd.mp4?oe=6AE4EA0D"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/efa1d5a4ced9854e.mp4?oe=6AE4FE67",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/ecd8842c3545b7ad.mp4?oe=6AE4F6A2"
+      },
+      {
+       "video_hd_handle": "https://media.mock.invalid/competitor-media/video/9d90de08eaa07005.mp4?oe=6AE4F38A",
+       "video_sd_handle": "https://media.mock.invalid/competitor-media/video/fcd85773de8540fb.mp4?oe=6AE4D6DF"
+      }
+     ],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Halcyon Motors",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "CREDIT"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000248",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   }
+  ],
+  "searchResultsCount": 20,
+  "cursor": ""
+ }
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "recovery-matrix-v1",
+  "generated": "2026-09-03",
+  "issue": "#59",
+  "operation_states": {
+    "terminal": ["succeeded", "failed", "partially_succeeded", "cancelled"],
+    "non_terminal": ["queued", "running", "uncertain"],
+    "note": "uncertain is the crash-ambiguity state for paid/non-idempotent work"
+  },
+  "job_families": {
+    "generate_asset": {
+      "description": "Generate a creative asset via AI provider",
+      "module": "app/store.py",
+      "external_side_effects": ["AI provider API call", "blob store write"],
+      "crash_to_state": "uncertain",
+      "safe_to_retry_after_crash": false,
+      "idempotent": false,
+      "automatic_recovery": "If asset.status == 'ok' when lease expires, the job is automatically recovered to 'succeeded' by recover_expired_jobs(). Otherwise it enters 'uncertain' and requires manual review.",
+      "manual_intervention": "Inspect the asset record. If the AI provider delivered a result, mark succeeded. If no result exists, cancel and re-enqueue with a new idempotency key.",
+      "cost_exposure": "One AI generation call per uncertain job"
+    },
+    "generation.run_item": {
+      "description": "Execute a single generation run item within a batch",
+      "module": "app/generation/submission.py",
+      "external_side_effects": ["AI provider API call"],
+      "crash_to_state": "uncertain",
+      "safe_to_retry_after_crash": false,
+      "idempotent": false,
+      "automatic_recovery": "Lease expiry recovery checks asset status, same as generate_asset.",
+      "manual_intervention": "Check generation run state. Retry only if the AI provider confirms no work was started.",
+      "cost_exposure": "One AI generation call per uncertain job"
+    },
+    "generation.qc_asset_version": {
+      "description": "Quality-check an asset version after generation",
+      "module": "app/generation/worker.py",
+      "external_side_effects": ["AI provider API call (review)"],
+      "crash_to_state": "uncertain",
+      "safe_to_retry_after_crash": false,
+      "idempotent": false,
+      "automatic_recovery": "None — enters uncertain on crash.",
+      "manual_intervention": "Re-run QC manually. QC is a read-only evaluation so cost exposure is limited to the review API call.",
+      "cost_exposure": "One AI review call per uncertain job"
+    },
+    "launch_canary": {
+      "description": "Canary launch to Meta Ads API",
+      "module": "app/launch/service.py",
+      "external_side_effects": ["Meta Ads API write (when META_WRITE_ENABLED=true)"],
+      "crash_to_state": "uncertain",
+      "safe_to_retry_after_crash": false,
+      "idempotent": false,
+      "automatic_recovery": "None — enters uncertain on crash.",
+      "manual_intervention": "Check Meta Ads Manager for whether the ad was created. If created, mark succeeded. If not, cancel and re-enqueue. NEVER retry blindly — may create duplicate ads.",
+      "cost_exposure": "Potential duplicate ad creation if retried without checking",
+      "human_gate": "META_WRITE_ENABLED must be true (disabled in dev); production Meta write requires manual accreditation"
+    },
+    "verify_upload_intent": {
+      "description": "Verify a file upload intent was fulfilled",
+      "module": "app/main.py",
+      "external_side_effects": ["blob store read (verification only)"],
+      "crash_to_state": "queued",
+      "safe_to_retry_after_crash": true,
+      "idempotent": true,
+      "automatic_recovery": "Re-queued automatically on lease expiry — verification is idempotent.",
+      "manual_intervention": "None expected. If stuck in retry loop, check blob store connectivity.",
+      "cost_exposure": "None (read-only verification)"
+    },
+    "meta_read_ingestion": {
+      "description": "Ingest data from Meta Marketing API (read-only)",
+      "module": "app/meta/service.py",
+      "external_side_effects": ["Meta Marketing API read"],
+      "crash_to_state": "queued",
+      "safe_to_retry_after_crash": true,
+      "idempotent": true,
+      "automatic_recovery": "Re-queued automatically on lease expiry — ingestion is idempotent (upsert semantics).",
+      "manual_intervention": "None expected. If stuck, check Meta API rate limits and token validity.",
+      "cost_exposure": "None (read-only API calls, no billing)"
+    }
+  },
+  "human_only_gates": [
+    {
+      "gate": "Meta write access",
+      "description": "META_WRITE_ENABLED=false in development. Production Meta write requires manual accreditation and the access token to be set by an operator.",
+      "affected_families": ["launch_canary"]
+    },
+    {
+      "gate": "Production database credentials",
+      "description": "SUPERUSER_DATABASE_URL and role passwords are operator-managed secrets. No automated test uses production credentials.",
+      "affected_families": ["all"]
+    },
+    {
+      "gate": "Uncertain job reconciliation",
+      "description": "Jobs in 'uncertain' state after crash require manual inspection of external side effects before resolution. No automated process may resolve uncertain jobs.",
+      "affected_families": ["generate_asset", "generation.run_item", "generation.qc_asset_version", "launch_canary"]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+.env
+.env.bak*
+.env.railway.setup
+deploy/railway/.generated/
+data/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+venv/
+
+# Local git worktrees created by tooling
+.claude/worktrees/
+
+# Issue review artifacts
+.claude/issue22-*
+
+# Railway deployment secrets and generated files
+.env.railway.*
+deploy/railway/.generated/

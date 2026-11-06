@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "acceptance-manifest.schema.json",
+  "title": "Golden Path Acceptance Manifest",
+  "description": "Durable record outliving the 90-day diagnostic bundle.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "commit_sha",
+    "release_tag",
+    "started_at",
+    "completed_at",
+    "completion_status",
+    "report_digest",
+    "evidence_digest",
+    "topology_attestation_digest",
+    "step_outcomes"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "release_tag": { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "completion_status": { "enum": ["passed", "failed", "interrupted"] },
+    "report_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "evidence_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "topology_attestation_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "step_outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "label", "outcome"],
+        "properties": {
+          "step": { "type": "integer", "minimum": 0 },
+          "label": { "type": "string" },
+          "outcome": { "enum": ["passed", "failed", "skipped"] }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

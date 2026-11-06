@@ -1,0 +1,3 @@
+# Separate scale evidence, advice, and delivery control
+
+Every ScaleEnrollment is split into immutable configuration-stable ScaleEpisodes and evaluated by a pure function over versioned, hash-bound evidence snapshots; Scale may persist health, advice, user dispositions, generation drafts, and test checklists, but it never owns or calls a Meta delivery or budget mutation. We accept conservative maturity, composite fatigue, confidence, mode isolation, and episode-reset gates because a convenient always-on “autopilot” would mix incomparable delivery periods, mistake auction or attribution noise for creative fatigue, and turn observational data into unauditable advertising side effects.

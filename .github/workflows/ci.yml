@@ -1,0 +1,753 @@
+name: ci
+
+# `push` is limited to the default branch so a pull request does not run the
+# whole matrix twice: once for the branch push and once for the PR.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Only a newer PR push supersedes a running PR run. A running main run is kept
+# so every merge gets a result; newer main pushes queue (one pending at most).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  runner-budget:
+    name: Select runners within the Blacksmith free tier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      provider: ${{ steps.select.outputs.provider }}
+      linux_2: ${{ steps.select.outputs.linux_2 }}
+      linux_4: ${{ steps.select.outputs.linux_4 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test the budget admission rules
+        run: python3 -m unittest discover -s scripts/ci/__tests__ -p test_runner_budget.py
+      - name: Select safe runners before starting CI
+        id: select
+        env:
+          BLACKSMITH_USAGE_TOKEN: ${{ secrets.BLACKSMITH_USAGE_TOKEN }}
+          BLACKSMITH_FORCE_GITHUB: ${{ vars.BLACKSMITH_FORCE_GITHUB }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/runner_budget.py
+
+  # ---------------------------------------------------------------- backend --
+  verify:
+    name: FastAPI / Worker (make verify)
+    needs: runner-budget
+    runs-on: ${{ needs.runner-budget.outputs.linux_2 || 'ubuntu-24.04' }}
+    # On Blacksmith 2 vCPU (2026-11) the suite takes ~12–13 minutes on an idle
+    # host and ~20 minutes on a slow one; migrations, smoke and setup add
+    # under a minute. Allow the GitHub fallback more time on its hardware.
+    timeout-minutes: ${{ needs.runner-budget.outputs.provider == 'blacksmith' && 30 || 40 }}
+    env:
+      PYTHON: python
+      ALEMBIC: python -m alembic
+      MARKETAI_DATA_DIR: .ci-data
+      MARKETAI_DATABASE_URL: sqlite:///./.ci-data/marketai.db
+      MARKETAI_WORKSPACE_ID: ws_ci
+      MARKETAI_CURRENCY: USD
+      META_API_VERSION: v26.0
+      META_AD_ACCOUNT_ID: act_ci_only
+      META_SYNC_ENABLED: "false"
+      META_WRITE_ENABLED: "false"
+      LAUNCH_CONFIRMATION_SECRET: ci-only-confirmation-secret-not-for-production
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Record runner hardware
+        run: |
+          echo "nproc: $(nproc)"
+          grep -m1 'model name' /proc/cpuinfo || true
+      - name: Run unit and integration tests
+        run: python -m pytest -q --durations=30 --ignore=tests/test_experiment_decisions_pg.py
+      - name: Apply and verify migrations
+        run: make migration-check
+      - name: Run isolated business smoke
+        env:
+          MARKETAI_DATA_DIR: .ci-smoke-data
+          MARKETAI_DATABASE_URL: sqlite:///./.ci-smoke.db
+        run: |
+          python -m alembic upgrade head
+          python -m scripts.smoke_business_flow
+      - name: Assert write path stayed disabled
+        run: python -c "from app import config; assert not config.META_WRITE_ENABLED; assert not config.META_WRITE_ACCESS_TOKEN"
+
+  # ------------------------------------------------------------ control plane --
+  web:
+    name: Control plane (build, lint, types, tests)
+    needs: runner-budget
+    runs-on: ${{ needs.runner-budget.outputs.linux_2 || 'ubuntu-24.04' }}
+    timeout-minutes: ${{ needs.runner-budget.outputs.provider == 'blacksmith' && 20 || 40 }}
+    defaults:
+      run:
+        working-directory: web
+    env:
+      # Build-time only; no database is reachable in this job.
+      DATABASE_URL: postgresql://build:build@localhost:5432/build
+      APP_URL: http://localhost:4002
+      NEXTAUTH_URL: http://localhost:4002
+      NEXTAUTH_SECRET: ci-only-not-a-real-secret-value-000000000000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: No critical npm advisories in production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Generate Prisma client
+        run: npm run db:generate
+      - name: Check formatting
+        run: npm run check-format
+      - name: Lint
+        run: npm run check-lint
+      - name: Typecheck
+        run: npm run check-types
+      - name: Typecheck E2E
+        run: npm run check-types:e2e
+      - name: Unit and hardening tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+
+      - name: Prerendered pages are CSP-compatible
+        run: npm run check-static-csp
+      - name: Dependency and licence inventory is current
+        run: npm run inventory:licenses:check
+      - name: Assert the release path never pushes the schema
+        run: |
+          if grep -R "prisma db push" --include=package.json . ; then
+            echo "prisma db push must not appear in any script" >&2
+            exit 1
+          fi
+
+      - name: BFF route loads with production dependencies only
+        run: |
+          npm prune --omit=dev
+          node -e "require('./.next/server/pages/api/domain/v1/w/[slug]/[...path].js'); console.log('BFF route module initialized')"
+
+  # ------------------------------------------------ domain tenant isolation --
+  domain-rls:
+    name: Domain PostgreSQL RLS and least-privilege roles
+    needs: runner-budget
+    runs-on: ${{ needs.runner-budget.outputs.linux_2 || 'ubuntu-24.04' }}
+    timeout-minutes: ${{ needs.runner-budget.outputs.provider == 'blacksmith' && 15 || 30 }}
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      # A second, unprepared cluster. Converging roles on one cluster and
+      # migrating another is a silent, severe failure, and it takes two
+      # clusters to prove the release refuses it.
+      other:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGPASSWORD: postgres
+      SUPERUSER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      CONTROL_OWNER_PASSWORD: ci_control_owner
+      CONTROL_APP_PASSWORD: ci_control_app
+      DOMAIN_OWNER_PASSWORD: ci_domain_owner
+      DOMAIN_APP_PASSWORD: ci_domain_app
+      DOMAIN_API_PASSWORD: ci_domain_api
+      DOMAIN_WORKER_PASSWORD: ci_domain_worker
+      DOMAIN_READONLY_PASSWORD: ci_domain_readonly
+      MARKETAI_TENANT_CONTEXT_SECRET: ci-tenant-context-secret-32-bytes-minimum
+      MARKETAI_PG_TEST_URL: postgresql://postgres:postgres@localhost:5432/marketai_domain
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      # The entry points operators actually run, in the order they run them.
+      # A release path CI spells out step by step, while operators are told to
+      # run something else, is a release path that breaks in production.
+      # Bootstrap covers the whole topology and needs the control-plane
+      # passwords; a domain release must not.
+      - name: Bootstrap the topology
+        run: make db-roles
+
+      - name: Release the domain database through the supported entry point
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          PYTHON: python
+          ALEMBIC: python -m alembic
+        run: make db-release
+
+      # The control-plane passwords are removed from the environment: a domain
+      # release that still needs them is coupled to the other unit's secrets,
+      # and would re-set them on every deploy.
+      - name: Releasing again needs no control-plane credentials
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          PYTHON: python
+          ALEMBIC: python -m alembic
+          CONTROL_OWNER_PASSWORD: ""
+          CONTROL_APP_PASSWORD: ""
+          DOMAIN_OWNER_PASSWORD: ""
+          DOMAIN_APP_PASSWORD: ""
+        run: make db-release
+
+      # Roles converge on the cluster in SUPERUSER_DATABASE_URL; the migration
+      # is pointed at the other one. It must refuse, and leave no schema behind.
+      - name: A release cannot converge one cluster and migrate an unprepared one
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5433/postgres
+          PYTHON: python
+          ALEMBIC: python -m alembic
+        run: |
+          set -euo pipefail
+          if make db-release; then
+            echo "release migrated a cluster its roles were never applied to" >&2
+            exit 1
+          fi
+          tables=$(psql "postgresql://postgres:postgres@localhost:5433/postgres" -At \
+            -c "SELECT count(*) FROM pg_tables WHERE tablename = 'alembic_version'")
+          if [ "$tables" != "0" ]; then
+            echo "the unprepared cluster was migrated anyway" >&2
+            exit 1
+          fi
+
+      # A domain-only cluster: the domain database and its owner exist, the
+      # control-plane database does not. `apply-domain-roles.sh` must not need
+      # it -- a release that names marketai_control fails here, and rewrites
+      # the other unit's ACLs everywhere else.
+      - name: A domain release needs no control-plane database
+        env:
+          SUPERUSER_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/postgres
+        run: |
+          set -euo pipefail
+          psql "$SUPERUSER_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
+            "CREATE ROLE marketai_domain_owner LOGIN PASSWORD 'ci_domain_owner'" -c \
+            "CREATE ROLE marketai_domain_app LOGIN PASSWORD 'ci_domain_app'" -c \
+            "CREATE DATABASE marketai_domain OWNER marketai_domain_owner"
+          ./deploy/postgres/apply-domain-roles.sh
+          psql "postgresql://postgres:postgres@localhost:5433/postgres" -At \
+            -c "SELECT 'control-plane database present: ' || count(*)
+                FROM pg_database WHERE datname = 'marketai_control'"
+
+      # Both clusters are now prepared: same database name, same roles, same
+      # bridge state. Only the release nonce tells them apart, which is the
+      # whole reason it exists.
+      - name: A release cannot migrate an identically prepared second cluster
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5433/marketai_domain
+          PYTHON: python
+          ALEMBIC: python -m alembic
+        run: |
+          set -euo pipefail
+          if make db-release; then
+            echo "release migrated a cluster it did not converge" >&2
+            exit 1
+          fi
+          tables=$(psql "postgresql://postgres:postgres@localhost:5433/marketai_domain" -At \
+            -c "SELECT count(*) FROM pg_tables WHERE tablename = 'alembic_version'")
+          if [ "$tables" != "0" ]; then
+            echo "the second cluster was migrated anyway" >&2
+            exit 1
+          fi
+
+      - name: One head, no drift
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+        run: |
+          python -m alembic current
+          python -m alembic check
+
+      # Provisioning a fresh cluster proves nothing about the upgrade that
+      # actually matters: one already running, whose roles predate this release.
+      # rolbypassrls is persistent state, so the release path has to converge it
+      # in both directions rather than assume it.
+      - name: Releasing again converges an already-provisioned cluster
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          PYTHON: python
+          ALEMBIC: python -m alembic
+        run: |
+          set -euo pipefail
+          expected=$(python -c "from scripts.domain_bridge import expected_rolbypassrls; print('t' if expected_rolbypassrls() else 'f')")
+          echo "declared: rolbypassrls=$expected"
+
+          for wrong in t f; do
+            psql "$SUPERUSER_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
+              "ALTER ROLE marketai_domain_app $([ "$wrong" = t ] && echo BYPASSRLS || echo NOBYPASSRLS)"
+            make db-release
+            actual=$(psql "$SUPERUSER_DATABASE_URL" -At -c \
+              "SELECT rolbypassrls FROM pg_roles WHERE rolname = 'marketai_domain_app'")
+            if [ "$actual" != "$expected" ]; then
+              echo "release left rolbypassrls=$actual, declared $expected" >&2
+              exit 1
+            fi
+          done
+
+      - name: Row Level Security holds for every runtime role
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_postgres_rls -v
+
+      # This rehearsal requires an empty target.  Run it before evidence suites
+      # that intentionally persist immutable rows for their later assertions.
+      - name: SQLite snapshot migrates with count, money and hash equality
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_sqlite_postgres_migration -v
+
+      - name: Immutable contextual experiment decisions hold in PostgreSQL
+        run: python -m unittest tests.test_experiment_decisions_pg -v
+
+      - name: API and Worker use distinct roles and frozen job identity
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_postgres_runtime_wiring -v
+
+      - name: Marketing API and Worker preserve PostgreSQL evidence constraints
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_postgres_architecture -v
+
+      # SQLite cannot see a missing grant (#284): every competitor write
+      # command runs here as the role that serves it in production.
+      - name: Competitor API and Worker writes hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_competitors_pg -v
+
+      # The same for competitor scans (#270): admission, resume and the
+      # Owner's reconciliation as the API, fetch, media and settlement as the
+      # Worker, plus the append-only observations.
+      - name: Competitor scan API and Worker writes hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_competitor_scans_pg -v
+
+      # Relevance judgments (#271): the Worker appends a scan's rule and AI
+      # judgments, the API appends Member and Owner flips, all append-only.
+      - name: Competitor relevance judgments and flips hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_competitor_relevance_pg -v
+
+      # Tags, clusters and snapshots (#272): the Worker appends tag and
+      # clusters revisions and freezes; the API confirms tags, refreezes,
+      # admits a paid recluster and switches the product's drafting flag.
+      - name: Competitor tags, clusters and snapshots hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_competitor_snapshots_pg -v
+
+      # Drafting with a competitor snapshot (#273): the API admits the draft
+      # reading the switch, scans and snapshot; the Worker cites the snapshot.
+      - name: Plan drafts cite competitor snapshots under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_marketing_competitor_review_pg -v
+
+      # Competitor discovery (#276): the Worker answers discover:<i> reading the
+      # product's competitors and decisions, the API appends Member and Owner
+      # accepts and rejects (an accept adds the competitor), all append-only.
+      - name: Competitor discovery and its decisions hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_competitor_discovery_pg -v
+
+      # The frozen legacy test-plan commands (#337, #343): create, revise and
+      # runs answer 410 as the API role for a Member, an Owner and another
+      # Workspace, and write nothing anywhere; the plan and its Run stay
+      # readable.
+      - name: Frozen legacy test-plan commands write nothing under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_test_plans_frozen_pg -v
+
+      # Draft experiment entries (#284): edit and remove run as the API role,
+      # remove is a soft delete through UPDATE (no role has DELETE), a stale
+      # revision is a 409, a frozen experiment refuses both, and another
+      # Workspace changes nothing. The draft commands' hardening (#340): a
+      # live duplicate AssetVersion is a 409, two commands on one revision
+      # race on two real connections and exactly one commits, and each
+      # accepted command appends exactly one audit event.
+      - name: Draft experiment entry commands hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_experiment_entries_pg -v
+
+      # Usage (#347): GET /api/v1/usage reads usage_events as the API role, for
+      # a Member and an Owner, scoped to the caller's Workspace; the events are
+      # recorded through UsageRecorder as the Worker and the API. Then the
+      # privilege matrix, and the migration's downgrade and upgrade again.
+      - name: Usage reads hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_usage_pg -v
+
+      # Spend guardrail previews (#386): a preview is a stored row the API
+      # role confirms once, after a restart too; another Workspace can neither
+      # confirm, see, consume nor forge it; racing confirms let one change
+      # through. Then the privilege matrix, and the migration's downgrade and
+      # upgrade again.
+      - name: Spend guardrail previews hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_spend_guardrail_preview_pg -v
+
+      # An already-provisioned cluster may still carry the former shared role's
+      # persistent BYPASSRLS bit. Prove the release revokes it and the retired
+      # role fails closed.
+      - name: The former shared application role is retired
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_APP_DATABASE_URL: postgresql+psycopg://marketai_domain_app:ci_domain_app@localhost:5432/marketai_domain
+          # Only a superuser may change BYPASSRLS, so the revocation drill needs
+          # one. Without it those tests skip rather than pretend to pass.
+          DOMAIN_SUPERUSER_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_domain_app_transition -v
+
+      - name: The release target check refuses anything else
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_APP_DATABASE_URL: postgresql+psycopg://marketai_domain_app:ci_domain_app@localhost:5432/marketai_domain
+          DOMAIN_SUPERUSER_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/marketai_domain
+          # A database this release did not prepare.
+          DOMAIN_WRONG_TARGET_URL: postgresql+psycopg://postgres:postgres@localhost:5433/postgres
+        run: python -m unittest tests.test_release_target -v
+
+      - name: Health readiness stats function
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_health_readiness -v
+
+      # A release converges the roles while FastAPI and the Worker keep
+      # serving. The revoke and the re-grant must reach other sessions
+      # together, or a live query in between is refused and the Worker exits.
+      - name: Converging the roles never strips a live runtime connection
+        env:
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_postgres_role_convergence -v
+
+  # -------------------------------------------------- database role isolation --
+  database-role-isolation:
+    name: Control-plane / domain database role isolation
+    needs: runner-budget
+    runs-on: ${{ needs.runner-budget.outputs.linux_2 || 'ubuntu-24.04' }}
+    timeout-minutes: ${{ needs.runner-budget.outputs.provider == 'blacksmith' && 15 || 30 }}
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGPASSWORD: postgres
+      SUPERUSER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      CONTROL_OWNER_PASSWORD: ci_control_owner
+      CONTROL_APP_PASSWORD: ci_control_app
+      DOMAIN_OWNER_PASSWORD: ci_domain_owner
+      DOMAIN_APP_PASSWORD: ci_domain_app
+      DOMAIN_API_PASSWORD: ci_domain_api
+      DOMAIN_WORKER_PASSWORD: ci_domain_worker
+      DOMAIN_READONLY_PASSWORD: ci_domain_readonly
+      MARKETAI_TENANT_CONTEXT_SECRET: ci-tenant-context-secret-32-bytes-minimum
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Provision control-plane and domain roles
+        run: ./deploy/postgres/apply-roles.sh
+
+      - name: Install control-plane dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Apply control-plane migrations as the schema-owner role
+        working-directory: web
+        env:
+          # The runtime role has no DDL privileges; the wrapper refuses to run
+          # without this and never falls back to DATABASE_URL.
+          MIGRATION_DATABASE_URL: postgresql://marketai_control_owner:ci_control_owner@localhost:5432/marketai_control
+        run: npm run db:migrate:deploy
+
+      - name: Role isolation, single-use invitations and session revocation
+        working-directory: web
+        env:
+          CONTROL_PLANE_DATABASE_URL: postgresql://marketai_control_app:ci_control_app@localhost:5432/marketai_control
+          CONTROL_ROLE_ON_DOMAIN_DB_URL: postgresql://marketai_control_app:ci_control_app@localhost:5432/marketai_domain
+          DOMAIN_ROLE_ON_CONTROL_DB_URL: postgresql://marketai_domain_app:ci_domain_app@localhost:5432/marketai_control
+        run: npm run test:db-isolation
+
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: SQLAlchemy cannot cross the boundary
+        env:
+          DOMAIN_DATABASE_URL: postgresql+psycopg://marketai_domain_app:ci_domain_app@localhost:5432/marketai_domain
+          DOMAIN_ROLE_ON_CONTROL_DB_URL: postgresql+psycopg://marketai_domain_app:ci_domain_app@localhost:5432/marketai_control
+          CONTROL_ROLE_ON_DOMAIN_DB_URL: postgresql+psycopg://marketai_control_app:ci_control_app@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_database_role_isolation -v
+
+  # ------------------------------------------------ compose integration ---
+  compose-integration:
+    name: Compose integration smoke
+    runs-on: ${{ needs.runner-budget.outputs.linux_2 || 'ubuntu-24.04' }}
+    timeout-minutes: ${{ needs.runner-budget.outputs.provider == 'blacksmith' && 20 || 40 }}
+    needs: [runner-budget, verify, web]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start compose stack
+        run: docker compose --env-file deploy/docker/.env.compose up -d --build
+
+      - name: Wait for all services
+        run: scripts/compose-wait.sh 180
+
+      - name: Run integration smoke
+        run: scripts/compose-smoke.sh
+
+      - name: Run security suite
+        run: scripts/compose-security.sh
+
+      - name: Run migration rehearsal
+        run: scripts/compose-migration-rehearsal.sh
+
+      - name: Run redaction audit
+        run: scripts/compose-redaction-audit.sh
+
+      - name: Collect compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color > compose-logs.txt 2>&1
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-logs
+          path: compose-logs.txt
+          retention-days: 3
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # ----------------------------------------- golden-path E2E certification ---
+  golden-path-e2e:
+    name: Deterministic golden-path Playwright scenario
+    runs-on: ${{ needs.runner-budget.outputs.linux_4 || 'ubuntu-24.04' }}
+    timeout-minutes: ${{ needs.runner-budget.outputs.provider == 'blacksmith' && 30 || 60 }}
+    needs: [runner-budget, verify, web]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Install control-plane dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install chromium --with-deps
+
+      - name: Build and start compose stack
+        run: >
+          docker compose -p golden-path
+          --env-file deploy/docker/.env.compose
+          up -d --build
+
+      - name: Wait for all services
+        run: scripts/compose-wait.sh 180 golden-path
+
+      - name: Run golden-path Playwright scenario
+        working-directory: web
+        env:
+          CI: "true"
+          E2E_STANDARD_GITHUB_RUNNER: ${{ needs.runner-budget.outputs.provider != 'blacksmith' }}
+          E2E_BASE_URL: http://localhost:4002
+          E2E_DOMAIN_BASE_URL: http://localhost:8787
+          E2E_COMPOSE_PROJECT: golden-path
+          E2E_COMPOSE_FILE: ${{ github.workspace }}/docker-compose.yml
+          CONTROL_PLANE_DATABASE_URL: postgresql://marketai_control_owner:compose_control_owner@localhost:5432/marketai_control
+          DOMAIN_OWNER_DATABASE_URL: postgresql://marketai_domain_owner:compose_domain_owner@localhost:5432/marketai_domain
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:compose_domain_owner@localhost:5432/marketai_domain
+          CONTROL_PLANE_TO_DOMAIN_ENTITLEMENT_TOKEN: compose-entitlement-inbox-token
+          ENTITLEMENT_SNAPSHOT_SIGNING_KEY: compose-entitlement-signing-key-32-bytes-minimum
+          ENTITLEMENT_SNAPSHOT_SIGNING_KEY_ID: compose-beta-v1
+          MFA_ENCRYPTION_KEY: Y29tcG9zZS1tZmEtZW5jcnlwdGlvbi1rZXktMzJiISE=
+          MARKETAI_TENANT_CONTEXT_SECRET: compose-tenant-context-secret-32-bytes-min
+          E2E_GOLDEN_PATH_ALLOW_MUTATIONS: "1"
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/golden-path-report.json
+        run: >
+          npx playwright test
+          --project golden-path
+          --workers 1
+          --reporter=html,json,github
+          --output=test-results
+
+      - name: Upload test results
+        if: '!cancelled()'
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-path-results
+          path: |
+            web/test-results/
+            web/playwright-report/
+          retention-days: ${{ github.ref == 'refs/heads/main' && 14 || 3 }}
+
+      - name: Collect compose logs on failure
+        if: failure()
+        run: docker compose -p golden-path logs --no-color > golden-path-compose-logs.txt 2>&1
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-path-compose-logs
+          path: golden-path-compose-logs.txt
+          retention-days: 3
+
+      - name: Tear down
+        if: always()
+        run: docker compose -p golden-path down -v
+
+  # ---------------------------------------------------- secret scan ---
+  gitleaks:
+    name: Secret scan (gitleaks)
+    needs: runner-budget
+    runs-on: ${{ needs.runner-budget.outputs.linux_2 || 'ubuntu-24.04' }}
+    timeout-minutes: ${{ needs.runner-budget.outputs.provider == 'blacksmith' && 5 || 10 }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        env:
+          # A repository's first push has no "before" commit (40 zeros).
+          GITLEAKS_LOG_OPTS: >-
+            ${{ github.event_name == 'pull_request'
+              && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha)
+              || (github.event.before == '0000000000000000000000000000000000000000'
+                  && github.sha
+                  || format('{0}..{1}', github.event.before, github.sha)) }}
+        run: >
+          docker run --rm
+          -v "$PWD:/repo:ro"
+          -w /repo
+          zricethezav/gitleaks:v8.22.1
+          detect --source /repo --redact -v
+          --log-opts="$GITLEAKS_LOG_OPTS"

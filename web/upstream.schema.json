@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/Raybbish/marketai/main/web/upstream.schema.json",
+  "title": "MarketAI vendored upstream pin",
+  "type": "object",
+  "required": [
+    "component",
+    "relationship",
+    "upstream",
+    "updatePolicy",
+    "import"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "component": { "type": "string" },
+    "relationship": { "const": "hardened-fork" },
+    "upstream": {
+      "type": "object",
+      "required": [
+        "name",
+        "repository",
+        "license",
+        "pinnedCommit",
+        "pinnedVersion"
+      ],
+      "properties": {
+        "name": { "type": "string" },
+        "repository": { "type": "string", "format": "uri" },
+        "remote": { "type": "string" },
+        "license": { "type": "string" },
+        "licenseFile": { "type": "string" },
+        "pinnedCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "pinnedCommitDate": { "type": "string" },
+        "pinnedVersion": { "type": "string" },
+        "importedAt": { "type": "string" },
+        "importedBy": { "type": "string" }
+      }
+    },
+    "updatePolicy": {
+      "type": "object",
+      "required": [
+        "automaticRebase",
+        "automaticDependencyUpdates",
+        "procedure"
+      ],
+      "properties": {
+        "automaticRebase": { "const": false },
+        "automaticDependencyUpdates": { "const": false },
+        "reviewCadence": { "type": "string" },
+        "procedure": { "type": "string" },
+        "gateCommand": { "type": "string" }
+      }
+    },
+    "import": {
+      "type": "object",
+      "required": ["mode", "manifest"],
+      "properties": {
+        "mode": { "type": "string" },
+        "importedFileCount": { "type": "integer" },
+        "upstreamTrackedFileCount": { "type": "integer" },
+        "manifest": { "type": "string" }
+      }
+    }
+  }
+}

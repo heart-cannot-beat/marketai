@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "golden-path-evidence.schema.json",
+  "title": "Golden Path E2E Evidence",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "entity_aliases",
+    "provider_effects",
+    "provider_request_attempts",
+    "cost_consistency",
+    "meta_call_evidence",
+    "canonical_snapshot_match"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "entity_aliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["kind", "area"],
+        "properties": {
+          "kind": { "type": "string" },
+          "area": { "enum": ["library", "generation", "assets", "experiments", "localization", "scale"] }
+        }
+      }
+    },
+    "provider_effects": {
+      "type": "object",
+      "required": ["total_count", "unique_idempotency_key_hashes", "duplicate_successful_effects"],
+      "properties": {
+        "total_count": { "type": "integer", "minimum": 0 },
+        "unique_idempotency_key_hashes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "duplicate_successful_effects": { "const": 0 }
+      }
+    },
+    "provider_request_attempts": {
+      "type": "object",
+      "required": ["target_idempotency_key_hash", "generate_count", "reconcile_count", "results_truncated"],
+      "properties": {
+        "target_idempotency_key_hash": { "type": "string" },
+        "generate_count": { "type": "integer", "minimum": 0 },
+        "reconcile_count": { "type": "integer", "minimum": 0 },
+        "results_truncated": { "type": "boolean" }
+      }
+    },
+    "cost_consistency": {
+      "type": "object",
+      "required": ["reservation_count", "settlement_count", "release_count", "classification"],
+      "properties": {
+        "reservation_count": { "type": "integer", "minimum": 0 },
+        "settlement_count": { "type": "integer", "minimum": 0 },
+        "release_count": { "type": "integer", "minimum": 0 },
+        "classification": { "enum": ["consistent", "inconsistent"] }
+      }
+    },
+    "meta_call_evidence": {
+      "type": "object",
+      "required": [
+        "provenance",
+        "total_intents",
+        "real_write_intents",
+        "simulated_write_intents",
+        "campaign_intents",
+        "adset_intents",
+        "ad_intents",
+        "observation_scenarios_applied",
+        "credential_use_records",
+        "http_adapter_attempts",
+        "non_vacuous"
+      ],
+      "properties": {
+        "provenance": { "const": "customer_sandbox" },
+        "total_intents": { "type": "integer", "minimum": 1 },
+        "real_write_intents": { "const": 0 },
+        "simulated_write_intents": { "type": "integer", "minimum": 1 },
+        "campaign_intents": { "type": "integer", "minimum": 1 },
+        "adset_intents": { "type": "integer", "minimum": 1 },
+        "ad_intents": { "type": "integer", "minimum": 1 },
+        "observation_scenarios_applied": {
+          "type": "array",
+          "items": {
+            "enum": ["insufficient_metrics", "decisive_winner", "scale_warming", "scale_declining"]
+          }
+        },
+        "credential_use_records": { "const": 0 },
+        "http_adapter_attempts": { "const": 0 },
+        "non_vacuous": { "const": true }
+      }
+    },
+    "canonical_snapshot_match": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

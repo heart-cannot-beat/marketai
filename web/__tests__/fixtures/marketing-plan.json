@@ -1,0 +1,265 @@
+{
+  "understanding": {
+    "product_name": "Alpha 充电器",
+    "category_need": "待核对：客户希望解决产品资料描述的问题。",
+    "product_choice_reason": "待核对：资料中的差异是否构成有证据的购买理由。",
+    "audience": "待确认的目标客户",
+    "situations": ["待确认的使用情境"],
+    "objections": ["购买前需要哪些可信依据？"],
+    "facts": [
+      {
+        "id": "f1",
+        "statement": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+        "source_quote": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+        "confirmation": "unconfirmed"
+      }
+    ],
+    "inferences": [
+      {
+        "id": "i1",
+        "statement": "清楚展示产品如何解决问题可能有助于理解。",
+        "rationale": "示例假设，尚无投放证据。",
+        "fact_ids": ["f1"]
+      }
+    ],
+    "unknowns": ["这是受控 Mock 示例，请使用正式 AI 起草产品专属建议。"]
+  },
+  "plan": {
+    "stage": "screen_angles",
+    "question": "哪套购买主张与表达组合值得进一步探索？",
+    "comparison_kind": "whole_combinations",
+    "changed": ["购买主张与表达"],
+    "allowed_changes": ["文案和布局随表达调整"],
+    "held_constant": ["同一产品、Offer、受众与投放时期"],
+    "limitations": [
+      "同时改变主张与表达，不能归因为角度独立效果。",
+      "受控 Mock 无真实效果证据。"
+    ],
+    "conclusion_scope": "combination",
+    "audience": "待确认的目标客户",
+    "market": "待确认",
+    "placement": "Meta 信息流，待确认",
+    "offer": "待确认销售方案",
+    "landing_page": "待确认落地页",
+    "baseline": "无基准，按预先确认的业务目标评估",
+    "currency": "USD",
+    "media_budget": "300",
+    "small_round_budget": "100",
+    "duration_days": 7,
+    "allocation": "计划分配相同媒体预算；实际分配在回传时核对。",
+    "rules": {
+      "business_metric": "cpa",
+      "threshold": "30",
+      "business_goal": "待确认：CPA 不超过 30 美元。",
+      "evidence_requirements": "待确认最低投放、购买量与区间规则；不足不判胜负。",
+      "evaluation_schedule": "周期结束并等待归因成熟后评估。",
+      "stop_rule": "达到本小轮预算或七天时停止新增花费；数据不足可结束。",
+      "max_small_rounds": 3
+    },
+    "angles": [
+      {
+        "id": "a1",
+        "proposition": "清楚理解产品价值",
+        "rationale": "仅用于验证流程的示例假设。",
+        "fact_ids": ["f1"],
+        "expressions": [
+          {
+            "id": "e1_1",
+            "name": "使用情境演示",
+            "description": "用使用情境演示讲清主张。",
+            "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+            "required_evidence": [],
+            "how_to_tell": "逐步展示一次真实使用，让好处被看见而不是被宣称。",
+            "visual_mechanism": "live_connection_demo",
+            "evidence_basis": {
+              "fact_ids": ["f1"],
+              "gap": ""
+            }
+          },
+          {
+            "id": "e1_2",
+            "name": "问题与解决过程",
+            "description": "用问题与解决过程讲清主张。",
+            "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+            "required_evidence": [],
+            "how_to_tell": "讲一个问题出现、产品解决问题的具体情境。",
+            "visual_mechanism": "scenario_story",
+            "evidence_basis": {
+              "fact_ids": ["f1"],
+              "gap": ""
+            }
+          }
+        ]
+      },
+      {
+        "id": "a2",
+        "proposition": "减少购买顾虑",
+        "rationale": "仅用于验证流程的示例假设。",
+        "fact_ids": ["f1"],
+        "expressions": [
+          {
+            "id": "e2_1",
+            "name": "疑问问答",
+            "description": "用疑问问答讲清主张。",
+            "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+            "required_evidence": [],
+            "how_to_tell": "把购买前的疑虑写成问题，用资料中的事实回答。",
+            "visual_mechanism": "qa_objection",
+            "evidence_basis": {
+              "fact_ids": ["f1"],
+              "gap": "制作前需核对资料中的回答与适用限制。"
+            }
+          },
+          {
+            "id": "e2_2",
+            "name": "产品细节说明",
+            "description": "用产品细节说明讲清主张。",
+            "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+            "required_evidence": [],
+            "how_to_tell": "放大实现好处的部位，每处只标注一条有依据的事实。",
+            "visual_mechanism": "feature_closeup",
+            "evidence_basis": {
+              "fact_ids": ["f1"],
+              "gap": "制作前需核对资料中的回答与适用限制。"
+            }
+          },
+          {
+            "id": "e2_3",
+            "name": "适用边界解读",
+            "description": "用适用边界解读讲清主张。",
+            "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+            "required_evidence": [],
+            "how_to_tell": "说明适合谁、适合什么情境，以及不适合的情况。",
+            "visual_mechanism": "fit_guide",
+            "evidence_basis": {
+              "fact_ids": ["f1"],
+              "gap": "制作前需核对资料中的回答与适用限制。"
+            }
+          }
+        ]
+      }
+    ],
+    "combinations": [
+      {
+        "id": "c1_1",
+        "angle_id": "a1",
+        "expression_id": "e1_1",
+        "elements": {
+          "scene": "Actual product usage environment"
+        },
+        "headline": "清楚理解产品价值",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "visual_brief": "Show the product clearly in its actual usage environment.",
+        "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"],
+        "image_brief": {
+          "proposition": "Explain the product value",
+          "expression": "Demonstrate actual use",
+          "hold_constant": ["Same product and offer"],
+          "checks": ["Accurate product appearance"]
+        }
+      },
+      {
+        "id": "c1_2",
+        "angle_id": "a1",
+        "expression_id": "e1_2",
+        "elements": {
+          "scene": "Actual product usage environment"
+        },
+        "headline": "清楚理解产品价值",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "visual_brief": "Show the product clearly in its actual usage environment.",
+        "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"],
+        "image_brief": {
+          "proposition": "Explain the product value",
+          "expression": "Demonstrate actual use",
+          "hold_constant": ["Same product and offer"],
+          "checks": ["Accurate product appearance"]
+        }
+      },
+      {
+        "id": "c2_1",
+        "angle_id": "a2",
+        "expression_id": "e2_1",
+        "elements": {
+          "scene": "Actual product usage environment"
+        },
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "visual_brief": "Show the product clearly in its actual usage environment.",
+        "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"],
+        "image_brief": {
+          "proposition": "Explain the product value",
+          "expression": "Demonstrate actual use",
+          "hold_constant": ["Same product and offer"],
+          "checks": ["Accurate product appearance"]
+        }
+      },
+      {
+        "id": "c2_2",
+        "angle_id": "a2",
+        "expression_id": "e2_2",
+        "elements": {
+          "scene": "Actual product usage environment"
+        },
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "visual_brief": "Show the product clearly in its actual usage environment.",
+        "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"],
+        "image_brief": {
+          "proposition": "Explain the product value",
+          "expression": "Demonstrate actual use",
+          "hold_constant": ["Same product and offer"],
+          "checks": ["Accurate product appearance"]
+        }
+      },
+      {
+        "id": "c2_3",
+        "angle_id": "a2",
+        "expression_id": "e2_3",
+        "elements": {
+          "scene": "Actual product usage environment"
+        },
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "visual_brief": "Show the product clearly in its actual usage environment.",
+        "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"],
+        "image_brief": {
+          "proposition": "Explain the product value",
+          "expression": "Demonstrate actual use",
+          "hold_constant": ["Same product and offer"],
+          "checks": ["Accurate product appearance"]
+        }
+      }
+    ],
+    "groups": [
+      {
+        "id": "g1",
+        "name": "清楚理解产品价值",
+        "combination_ids": ["c1_1", "c1_2"],
+        "rationale": "按主张组织候选，多表达避免单图决定。"
+      },
+      {
+        "id": "g2",
+        "name": "减少购买顾虑",
+        "combination_ids": ["c2_1", "c2_2", "c2_3"],
+        "rationale": "按主张组织候选，多表达避免单图决定。"
+      }
+    ],
+    "ad_language": "zh-CN",
+    "strategy_language": "zh-CN",
+    "language_confirmation_required": false,
+    "plan_review": [
+      {
+        "id": "r1",
+        "kind": "evidence_gap",
+        "severity": "advisory",
+        "target_ids": ["a2"],
+        "finding": "购买顾虑来自示例推测，尚无已记录的客户问题。",
+        "suggestion": "生成前核对最常见的购买疑问，或把该角度保留为探索。",
+        "source": "ai",
+        "resolved": false
+      }
+    ],
+    "guiding_questions": []
+  }
+}

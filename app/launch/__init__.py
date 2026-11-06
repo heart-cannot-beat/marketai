@@ -1,0 +1,1 @@
+"""Safe Meta launch canary."""

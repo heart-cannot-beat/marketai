@@ -1,0 +1,24 @@
+MarketAI Control Plane
+Copyright 2026 MarketAI
+
+This product includes software developed as part of the BoxyHQ SaaS Starter Kit
+(https://github.com/boxyhq/saas-starter-kit), licensed under the Apache License,
+Version 2.0. A copy of that licence is distributed with this component in
+web/LICENSE.
+
+Derivation
+----------
+The source under `web/` is a hardened, curated fork of the upstream project at
+commit abc9b686823cbfb4973c79bc36fea37a3244be6c (upstream version 1.6.0, dated
+2026-05-08). The fork removes and modifies significant parts of the original
+work; changes made by MarketAI are described in web/HARDENING.md and are
+themselves distributed under the Apache License, Version 2.0.
+
+The upstream project's own NOTICE obligations, trademarks and branding are not
+transferred by this derivation. "BoxyHQ" is used here only to identify the
+origin of the code.
+
+The pinned upstream identity is recorded in machine-readable form in
+web/UPSTREAM.json. There is no automatic upstream rebase; the controlled update
+procedure is documented in
+docs/architecture/control-plane-fork-boundary.md.

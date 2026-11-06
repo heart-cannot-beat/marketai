@@ -1,0 +1,3911 @@
+{
+ "provenance": {
+  "kind": "recorded",
+  "run": "p0-scrapecreators/20261026-163158",
+  "raw_file": "003-*.json",
+  "captured_at": "2026-10-26T08:31:58+00:00",
+  "latency_ms": 4669,
+  "sanitized_by": "scripts/build_competitor_mock_fixtures.py"
+ },
+ "request": {
+  "path": "/v1/facebook/adLibrary/company/ads",
+  "params": {
+   "pageId": "100000000000010",
+   "country": "US",
+   "status": "ACTIVE"
+  }
+ },
+ "status": 200,
+ "body": {
+  "success": true,
+  "credits_remaining": 98,
+  "credits_charged": 1,
+  "results": [
+   {
+    "ad_archive_id": "920000000000004",
+    "collation_count": 1,
+    "collation_id": "1000000000100013",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Quit worrying about compatibility. \n\nThis Acme Charge bundle packs the two adapters every EV driver needs. \n\nOpen up Halcyon AC and Supercharger networks with one kit. \n\nCharge anywhere and save $95.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-nacs-to-ccs-adapter-with-interlock-500a-1000v-and-j1772-adapter-80a-250v-bundle",
+       "title": "One Kit. Every Charger.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/97b9732366ee3958.png?oe=6AE4F716",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a690b2ecdc7b2e47.png?oe=6AE4D0C6",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Quit worrying about compatibility. \n\nThis Acme Charge bundle packs the two adapters every EV driver needs. \n\nOpen up Halcyon AC and Supercharger networks with one kit. \n\nCharge anywhere and save $95.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-nacs-to-ccs-adapter-with-interlock-500a-1000v-and-j1772-adapter-80a-250v-bundle",
+       "title": "One Kit. Every Charger.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/72408748c554ecbe.png?oe=6AE4CC8B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/fba9c3af70d1f245.png?oe=6AE4ED96",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Quit worrying about compatibility. \n\nThis Acme Charge bundle packs the two adapters every EV driver needs. \n\nOpen up Halcyon AC and Supercharger networks with one kit. \n\nCharge anywhere and save $95."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-nacs-to-ccs-adapter-with-interlock-500a-1000v-and-j1772-adapter-80a-250v-bundle",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "One Kit. Every Charger.",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1773990000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=920000000000004",
+    "start_date_string": "2026-03-20T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "950000000000019",
+    "collation_count": 1,
+    "collation_id": "950000000000022",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Safety comes first when you charge. \n\nAcme Charge is the first to certify its whole NACS, CCS1, and J1772 adapter range to UL 2252 — the benchmark for EV charging adapters. \n\nCharge with confidence. \n\nShop certified adapters now.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "The Only UL 2252-Certified EV Adapter Range You Can Buy",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/83b49743c0574fcc.png?oe=6AE4F02C",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/68e8d9374afa30c2.png?oe=6AE4F624",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Safety comes first when you charge. \n\nAcme Charge is the first to certify its whole NACS, CCS1, and J1772 adapter range to UL 2252 — the benchmark for EV charging adapters. \n\nCharge with confidence. \n\nShop certified adapters now.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "The Only UL 2252-Certified EV Adapter Range You Can Buy",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d845489f1c267afd.png?oe=6AE4DE55",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/69d6b1c986d8508c.png?oe=6AE4E22F",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Safety comes first when you charge. \n\nAcme Charge is the first to certify its whole NACS, CCS1, and J1772 adapter range to UL 2252 — the benchmark for EV charging adapters. \n\nCharge with confidence. \n\nShop certified adapters now."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/collections/ev-adapters",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "The Only UL 2252-Certified EV Adapter Range You Can Buy",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1779865200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=950000000000019",
+    "start_date_string": "2026-05-27T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000225",
+    "collation_count": 1,
+    "collation_id": "1000000000000268",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Keep the same smooth compatibility without the premium price. \n\nAcme Charge adapters bring dependable performance and build quality. \n\nOften a better value than carmaker-branded options.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+       "title": "A Sharper Choice Than OEM",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/78ecf702b058d03a.png?oe=6AE4F90E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/53fff815ce990c09.png?oe=6AE4D76A",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Keep the same smooth compatibility without the premium price. \n\nAcme Charge adapters bring dependable performance and build quality. \n\nOften a better value than carmaker-branded options.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+       "title": "A Sharper Choice Than OEM",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/5cc1f9b4dfa8bb47.png?oe=6AE4F430",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/c0fb638c51b22b27.png?oe=6AE4FDE3",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Keep the same smooth compatibility without the premium price. \n\nAcme Charge adapters bring dependable performance and build quality. \n\nOften a better value than carmaker-branded options."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "A Sharper Choice Than OEM",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1773990000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000225",
+    "start_date_string": "2026-03-20T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "10000000001000231",
+    "collation_count": 1,
+    "collation_id": "1000000000000279",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Range worries? Compatibility headaches? Not here.\n\n⚡ Acme Charge builds affordable, sturdy, and dependable EV charging solutions: powerful home charging stations, portable chargers & adapters for electric vehicles.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a167cd595444805e.png?oe=6AE4F3E3",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/56ed5db3c1f5b5ab.png?oe=6AE4CA3D",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Range worries? Compatibility headaches? Not here.\n\n⚡ Acme Charge builds affordable, sturdy, and dependable EV charging solutions: powerful home charging stations, portable chargers & adapters for electric vehicles.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ad17043535fdba87.png?oe=6AE4F4CF",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9a2e2004ef0a00a6.png?oe=6AE4E2E8",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Range worries? Compatibility headaches? Not here.\n\n⚡ Acme Charge builds affordable, sturdy, and dependable EV charging solutions: powerful home charging stations, portable chargers & adapters for electric vehicles."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Quick and affordable EV charging gear",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1780556400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=10000000001000231",
+    "start_date_string": "2026-06-04T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000101",
+    "collation_count": 1,
+    "collation_id": "1000000000000132",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "No more 'Will this charger work?' moments. \n\nPlug into any station with Acme Charge's full range of EV chargers and adapters. \n\nDon't get stuck. Get plugged in. ⚡🔋",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/level-2-ev-chargers",
+       "title": "Tired of Compatibility Headaches? Not Anymore.",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/074eef3251b7c28f.mp4?oe=6AE4E61D",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/aa1496ec426ae439.png?oe=6AE4E5F7",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/23523b8138481405.mp4?oe=6AE4EDDE",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "No more 'Will this charger work?' moments. \n\nPlug into any station with Acme Charge's full range of EV chargers and adapters. \n\nDon't get stuck. Get plugged in. ⚡🔋",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/level-2-ev-chargers",
+       "title": "Tired of Compatibility Headaches? Not Anymore.",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/efff67cf2ede34fd.mp4?oe=6AE4D19F",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/b0b44222bbe7ba80.png?oe=6AE4EC15",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/b2f990fe01789b96.mp4?oe=6AE4E0FD",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "No more 'Will this charger work?' moments. \n\nPlug into any station with Acme Charge's full range of EV chargers and adapters. \n\nDon't get stuck. Get plugged in. ⚡🔋"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/collections/level-2-ev-chargers",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Tired of Compatibility Headaches? Not Anymore.",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM"
+    ],
+    "start_date": 1785740400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000101",
+    "start_date_string": "2026-08-03T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000284",
+    "collation_count": 1,
+    "collation_id": "100000000011042",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Long ago, one brave knight set out to charge faster. His secret? A pocket-sized Acme Charge adapter.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plug-nacs-to-ccs-adapter",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/ec5ed467156782ea.mp4?oe=6AE4DAF4",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/7da8e8a143892b33.png?oe=6AE4FDF7",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/84fd50758489688d.mp4?oe=6AE4F59E",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "Long ago, one brave knight set out to charge faster. His secret? A pocket-sized Acme Charge adapter.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plug-nacs-to-ccs-adapter",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/63f5b5662ff1f871.mp4?oe=6AE4D2CC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/07faf64bb6a7d5dc.png?oe=6AE4E39C",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/152a47083dcb9f07.mp4?oe=6AE4FDBC",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "Long ago, one brave knight set out to charge faster. His secret? A pocket-sized Acme Charge adapter.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plug-nacs-to-ccs-adapter",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/63f5b5662ff1f871.mp4?oe=6AE4D2CC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/97478528133f8ab4.png?oe=6AE4E4D1",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/152a47083dcb9f07.mp4?oe=6AE4FDBC",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "Long ago, one brave knight set out to charge faster. His secret? A pocket-sized Acme Charge adapter."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-volt-plug-nacs-to-ccs-adapter",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Quick and affordable EV charging gear",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM"
+    ],
+    "start_date": 1785740400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000284",
+    "start_date_string": "2026-08-03T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000357",
+    "collation_count": 1,
+    "collation_id": "1000000000000266",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-homebase-level-2-nacs-ev-charging-station-240v-40-amp-23ft-cable",
+       "title": "Smarter EV Charging Gear ⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/96ecb3da264e3354.png?oe=6AE4EDB0",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/0eeec3c9b1a00396.png?oe=6AE4D003",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-homebase-level-2-nacs-ev-charging-station-240v-40-amp-23ft-cable",
+       "title": "Smarter EV Charging Gear ⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/105f49891be6edb1.png?oe=6AE4D00D",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/6ca1b13f750d2534.png?oe=6AE4EF79",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-homebase-level-2-nacs-ev-charging-station-240v-40-amp-23ft-cable",
+       "title": "Smarter EV Charging Gear ⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/105f49891be6edb1.png?oe=6AE4D00D",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/6ca1b13f750d2534.png?oe=6AE4EF79",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-homebase-level-2-nacs-ev-charging-station-240v-40-amp-23ft-cable",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Smarter EV Charging Gear ⚡",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1780297200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000357",
+    "start_date_string": "2026-06-01T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000121",
+    "collation_count": 1,
+    "collation_id": "1000000000000174",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Impact-tested, crush-tested, and weather-sealed. The Acme Charge CCS to NACS Adapter brings certified protection in any weather.\n\nIP67 Waterproof: Keeps working in rain, snow, or mud\nTemperature Tested: Runs from -22°F to 122°F\nUL 2252 Certified: Full protection at 12,000+ CCS stations",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "Tested in the Extremes: Charging Protection 🌊⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/b9141657810722b2.mp4?oe=6AE4E5F0",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/2f06402f583768ab.png?oe=6AE4FD10",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/edc6405a5a214aab.mp4?oe=6AE4F508",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "Impact-tested, crush-tested, and weather-sealed. The Acme Charge CCS to NACS Adapter brings certified protection in any weather.\n\nIP67 Waterproof: Keeps working in rain, snow, or mud\nTemperature Tested: Runs from -22°F to 122°F\nUL 2252 Certified: Full protection at 12,000+ CCS stations",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "Tested in the Extremes: Charging Protection 🌊⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/99df7d9de10590a6.mp4?oe=6AE4CF54",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/bf6a02c7f115b1e9.png?oe=6AE4FCD1",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/324b8ea2e365503d.mp4?oe=6AE4E2B4",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "Impact-tested, crush-tested, and weather-sealed. The Acme Charge CCS to NACS Adapter brings certified protection in any weather.\n\nIP67 Waterproof: Keeps working in rain, snow, or mud\nTemperature Tested: Runs from -22°F to 122°F\nUL 2252 Certified: Full protection at 12,000+ CCS stations"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Tested in the Extremes: Charging Protection 🌊⚡",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM"
+    ],
+    "start_date": 1787641200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000121",
+    "start_date_string": "2026-08-25T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "100000000011050",
+    "collation_count": 1,
+    "collation_id": "1000000000000299",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Drop-tested, run over by a truck, and checked in a thermal chamber. The Acme Charge J1772 to NACS Adapter shrugs off daily wear while protecting your battery.\n\nIP67 Rated: Sealed against rain, snow, and dust\nStress-Tested: Shrugs off impacts and crushing loads\nCertified Protection: Meets carmaker-approved UL 2252 standards",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-j1772-to-nacs-ev-adapter-ul-2252-certified-240v-80-amp",
+       "title": "Made for Harsh Conditions ⚡🛡️",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/5ca14dbcb3195138.mp4?oe=6AE4F668",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/026d8b649ce0242f.png?oe=6AE4E674",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/7659ffea130b9264.mp4?oe=6AE4CA59",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "Drop-tested, run over by a truck, and checked in a thermal chamber. The Acme Charge J1772 to NACS Adapter shrugs off daily wear while protecting your battery.\n\nIP67 Rated: Sealed against rain, snow, and dust\nStress-Tested: Shrugs off impacts and crushing loads\nCertified Protection: Meets carmaker-approved UL 2252 standards",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-j1772-to-nacs-ev-adapter-ul-2252-certified-240v-80-amp",
+       "title": "Made for Harsh Conditions ⚡🛡️",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/625900ffa95365d9.mp4?oe=6AE4D170",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/09329006507325ff.png?oe=6AE4ED8B",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/ec9cbca66724cc85.mp4?oe=6AE4CDD8",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "Drop-tested, run over by a truck, and checked in a thermal chamber. The Acme Charge J1772 to NACS Adapter shrugs off daily wear while protecting your battery.\n\nIP67 Rated: Sealed against rain, snow, and dust\nStress-Tested: Shrugs off impacts and crushing loads\nCertified Protection: Meets carmaker-approved UL 2252 standards"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-j1772-to-nacs-ev-adapter-ul-2252-certified-240v-80-amp",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Made for Harsh Conditions ⚡🛡️",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM"
+    ],
+    "start_date": 1787641200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=100000000011050",
+    "start_date_string": "2026-08-25T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "10000000001000211",
+    "collation_count": 1,
+    "collation_id": "1000000000000361",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Drive with confidence on long trips. \n\nThe Acme Charge adapter gives non-Halcyon EV drivers dependable access to Halcyon Superchargers, with a firm fit and steady performance for road trips.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+       "title": "Unlock Halcyon Supercharging for Non-Halcyon EVs",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/eeff3dcce634b13a.png?oe=6AE4D5AE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/8d13894427e6fc86.png?oe=6AE4F8BB",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Drive with confidence on long trips. \n\nThe Acme Charge adapter gives non-Halcyon EV drivers dependable access to Halcyon Superchargers, with a firm fit and steady performance for road trips.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+       "title": "Unlock Halcyon Supercharging for Non-Halcyon EVs",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f6372f34784451bf.png?oe=6AE4CDDE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/0dce07ddb55913ed.png?oe=6AE4D916",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Drive with confidence on long trips. \n\nThe Acme Charge adapter gives non-Halcyon EV drivers dependable access to Halcyon Superchargers, with a firm fit and steady performance for road trips.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+       "title": "Unlock Halcyon Supercharging for Non-Halcyon EVs",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1ab1c431f92cc3da.png?oe=6AE4F279",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/19b1c8160e000074.png?oe=6AE4DB73",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Drive with confidence on long trips. \n\nThe Acme Charge adapter gives non-Halcyon EV drivers dependable access to Halcyon Superchargers, with a firm fit and steady performance for road trips."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Unlock Halcyon Supercharging for Non-Halcyon EVs",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1773990000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=10000000001000211",
+    "start_date_string": "2026-03-20T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000222",
+    "collation_count": 1,
+    "collation_id": "1000000000000348",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+       "title": "Smarter EV Charging Gear ⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/edeab7efe588ca8b.mp4?oe=6AE4FCE0",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/52b2bdc660412036.png?oe=6AE4E847",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/74c3fd61b31d6fdc.mp4?oe=6AE4E27F",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+       "title": "Smarter EV Charging Gear ⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/613fbe4199f9bca8.mp4?oe=6AE4EB7E",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/ffe49f1fe3ea11f4.png?oe=6AE4D555",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/740d72747a0b2af6.mp4?oe=6AE4DBB4",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-volt-plus-nacs-to-ccs-adapter-with-interlock-500a-1-000v",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Smarter EV Charging Gear ⚡",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM"
+    ],
+    "start_date": 1785740400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000222",
+    "start_date_string": "2026-08-03T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000336",
+    "collation_count": 1,
+    "collation_id": "1000000000000324",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Range worries? \nCompatibility headaches? \nNot here. ⚡ \n\nAcme Charge builds affordable, sturdy, and dependable EV charging solutions: powerful home charging stations, portable chargers & adapters for electric vehicles.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/pages/stratford",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b7bf28f3b66169b5.png?oe=6AE4C824",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/2ae3b3d812d4de25.png?oe=6AE4F751",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Range worries? \nCompatibility headaches? \nNot here. ⚡ \n\nAcme Charge builds affordable, sturdy, and dependable EV charging solutions: powerful home charging stations, portable chargers & adapters for electric vehicles.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/pages/stratford",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3dabc54e67cdbf45.png?oe=6AE4E16A",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/4f4cdf5096af9576.png?oe=6AE4DB66",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Range worries? \nCompatibility headaches? \nNot here. ⚡ \n\nAcme Charge builds affordable, sturdy, and dependable EV charging solutions: powerful home charging stations, portable chargers & adapters for electric vehicles."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/pages/stratford",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Quick and affordable EV charging gear",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787727600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000336",
+    "start_date_string": "2026-08-26T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000379",
+    "collation_count": 2,
+    "collation_id": "1000000000000123",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "The boxes are taped.\n\nThe price just dropped.\n\nYour trunk is still empty. 📦⚡\n\nGet the JX4 for $149.99:\n\n⚡ Up to 3,500A peak current\n🔋 18,000mAh power bank\n🔌 Up to 45W USB-C PD\n\nWas $209.99. Save $60.\n\nIf you were waiting for the right price, this is it.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "Final Hours: Save $60 on JX4",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a4a663a12faf139f.png?oe=6AE4DDBE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9a58a94af728a1d6.png?oe=6AE4EBAD",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "The boxes are taped.\n\nThe price just dropped.\n\nYour trunk is still empty. 📦⚡\n\nGet the JX4 for $149.99:\n\n⚡ Up to 3,500A peak current\n🔋 18,000mAh power bank\n🔌 Up to 45W USB-C PD\n\nWas $209.99. Save $60.\n\nIf you were waiting for the right price, this is it.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "Final Hours: Save $60 on JX4",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/197a128616315663.png?oe=6AE4DDFE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/91ea59601b70811c.png?oe=6AE4DC55",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "The boxes are taped.\n\nThe price just dropped.\n\nYour trunk is still empty. 📦⚡\n\nGet the JX4 for $149.99:\n\n⚡ Up to 3,500A peak current\n🔋 18,000mAh power bank\n🔌 Up to 45W USB-C PD\n\nWas $209.99. Save $60.\n\nIf you were waiting for the right price, this is it.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "Final Hours: Save $60 on JX4",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/c27cee7e2f571753.png?oe=6AE4DC55",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/0ce302629c6963c5.png?oe=6AE4C7B7",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "The boxes are taped.\n\nThe price just dropped.\n\nYour trunk is still empty. 📦⚡\n\nGet the JX4 for $149.99:\n\n⚡ Up to 3,500A peak current\n🔋 18,000mAh power bank\n🔌 Up to 45W USB-C PD\n\nWas $209.99. Save $60.\n\nIf you were waiting for the right price, this is it."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Final Hours: Save $60 on JX4",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792652400,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788332400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000379",
+    "start_date_string": "2026-09-02T07:00:00.000Z",
+    "end_date_string": "2026-10-22T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000241",
+    "collation_count": 1,
+    "collation_id": "1000000000000271",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "The lion never settles for less. He charges up with Acme Charge. Smart, solid, and quick."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/collections/ev-chargers",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Quick and affordable EV charging gear",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/cb076cae1086011f.mp4?oe=6AE4C8B4",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/ae7678ea0ed8dc29.png?oe=6AE4ECF8",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/00f6d2dfa1bd81b3.mp4?oe=6AE4F2FD",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM"
+    ],
+    "start_date": 1785740400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000241",
+    "start_date_string": "2026-08-03T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000261",
+    "collation_count": 2,
+    "collation_id": "1000000000000247",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": {
+      "page_id": "100000000000010",
+      "page_is_deleted": false,
+      "page_profile_uri": "https://www.facebook.com/acmecharge/",
+      "page_name": "Acme Charge"
+     },
+     "page_id": "950000000000001",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/creator.example.1/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Creator Example 1",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Still hauling around heavy, knotted jumper cables? The Acme Charge JX4 Jump Starter is the fix. \n\n🔋 3500A Peak Power: Starts cars and trucks on its own \n\n🔦 Built-in Torch: Light for roadside emergencies \n\n📱 USB-C Charging: Top up phones and devices on the go \n\n💼Slim & Compact: Slides right under your back seat \n\nUpgrade your car kit today!"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+     "images": [],
+     "page_categories": [
+      "Community"
+     ],
+     "page_like_count": 14317,
+     "title": "Leave the Bulky Jumper Cables Behind 🚗⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/e9b33446a3dbabbd.mp4?oe=6AE4E4F4",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/293b9bb54b7be5c0.png?oe=6AE4E077",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/fa2dece57c85d9a2.mp4?oe=6AE4F04E",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1786950000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000261",
+    "start_date_string": "2026-08-17T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "950000000000023",
+    "collation_count": 1,
+    "collation_id": "1000000000000376",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/level-2-ev-chargers",
+       "title": "Smarter EV Charging Gear ⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/719fad5d17ad8ead.png?oe=6AE4CB7E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/040f1df0ca985e15.png?oe=6AE4DBE0",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/level-2-ev-chargers",
+       "title": "Smarter EV Charging Gear ⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f17e750e742f0d29.png?oe=6AE4D517",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/d977dabb8e4dcd2a.png?oe=6AE4C839",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/level-2-ev-chargers",
+       "title": "Smarter EV Charging Gear ⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f17e750e742f0d29.png?oe=6AE4D517",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/d977dabb8e4dcd2a.png?oe=6AE4C839",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Tired of EV charging headaches? \n\nAcme Charge offers reliable and convenient solutions for all your charging needs. \n\nShop now and enjoy worry-free charging."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/collections/level-2-ev-chargers",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Smarter EV Charging Gear ⚡",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1783926000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=950000000000023",
+    "start_date_string": "2026-07-13T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000333",
+    "collation_count": 1,
+    "collation_id": "1000000000000263",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Learn more",
+     "cards": [
+      {
+       "body": "Safety-first jump starter guide: 💡 Avoid heat damage, internal faults, and safety shutoffs by charging before you jump. Read our full safety guide!",
+       "cta_type": "LEARN_MORE",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/blogs/blog/can-you-use-a-jump-starter-while-plugged-in",
+       "title": "Can You Use a Jump Starter While It's Plugged In?",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/8a2095617c632df1.png?oe=6AE4DC4A",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ce9bb365fbdb1053.png?oe=6AE4CCE8",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Safety-first jump starter guide: 💡 Avoid heat damage, internal faults, and safety shutoffs by charging before you jump. Read our full safety guide!",
+       "cta_type": "LEARN_MORE",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/blogs/blog/can-you-use-a-jump-starter-while-plugged-in",
+       "title": "Can You Use a Jump Starter While It's Plugged In?",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/174d51186db75af8.png?oe=6AE4F0EE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/c090150add8d5989.png?oe=6AE4E527",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Safety-first jump starter guide: 💡 Avoid heat damage, internal faults, and safety shutoffs by charging before you jump. Read our full safety guide!",
+       "cta_type": "LEARN_MORE",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/blogs/blog/can-you-use-a-jump-starter-while-plugged-in",
+       "title": "Can You Use a Jump Starter While It's Plugged In?",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/5fa2a8c60a0d0b34.png?oe=6AE4E8CE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/23bab4b562100c24.png?oe=6AE4F63D",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Safety-first jump starter guide: 💡 Avoid heat damage, internal faults, and safety shutoffs by charging before you jump. Read our full safety guide!"
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/blogs/blog/can-you-use-a-jump-starter-while-plugged-in",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Can You Use a Jump Starter While It's Plugged In?",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787122800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000333",
+    "start_date_string": "2026-08-19T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000356",
+    "collation_count": 2,
+    "collation_id": "1000000000000329",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "The Acme Charge 3500A Jump Starter wakes up zero-volt batteries that ordinary jump starters can't sense. \n\nTrue 0V Mode: Wakes flat-dead 12V batteries \n\n3500A Peak Current: Starts gas and diesel engines \n\n45W Power Bank: Quick-charges phones and laptops (18,000mAh) \n\nSmart Display: Live battery % with 8-way safety protection \n\n3-Mode Torch: Steady, SOS, and strobe modes",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "Wake Up Fully Drained 0V Batteries in Seconds 🚗⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/dde24fdfd991e338.mp4?oe=6AE4EEDC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/9017e8f83b6b5da4.png?oe=6AE4ED6F",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/454d254cad310127.mp4?oe=6AE4C8C5",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "The Acme Charge 3500A Jump Starter wakes up zero-volt batteries that ordinary jump starters can't sense. \n\nTrue 0V Mode: Wakes flat-dead 12V batteries \n\n3500A Peak Current: Starts gas and diesel engines \n\n45W Power Bank: Quick-charges phones and laptops (18,000mAh) \n\nSmart Display: Live battery % with 8-way safety protection \n\n3-Mode Torch: Steady, SOS, and strobe modes",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "Wake Up Fully Drained 0V Batteries in Seconds 🚗⚡",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/dde24fdfd991e338.mp4?oe=6AE4EEDC",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/9017e8f83b6b5da4.png?oe=6AE4ED6F",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/454d254cad310127.mp4?oe=6AE4C8C5",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "The Acme Charge 3500A Jump Starter wakes up zero-volt batteries that ordinary jump starters can't sense. \n\nTrue 0V Mode: Wakes flat-dead 12V batteries \n\n3500A Peak Current: Starts gas and diesel engines \n\n45W Power Bank: Quick-charges phones and laptops (18,000mAh) \n\nSmart Display: Live battery % with 8-way safety protection \n\n3-Mode Torch: Steady, SOS, and strobe modes"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Wake Up Fully Drained 0V Batteries in Seconds 🚗⚡",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1786431600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000356",
+    "start_date_string": "2026-08-11T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100014",
+    "collation_count": 1,
+    "collation_id": "1000000000000332",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "As featured in Daily Drive, Acme Charge is a go-to for EV owners for a reason: it is simple and it works. \n\nFrom smart EV chargers to heavy-duty adapters, we've got what you need to charge with confidence. \n\nShop the whole range now.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "The EV Gear Every Driver Wants in 2026",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/4e105afa15db9f47.png?oe=6AE4F9D0",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/f4d590cfb03ee874.png?oe=6AE4EB6F",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "As featured in Daily Drive, Acme Charge is a go-to for EV owners for a reason: it is simple and it works. \n\nFrom smart EV chargers to heavy-duty adapters, we've got what you need to charge with confidence. \n\nShop the whole range now.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "The EV Gear Every Driver Wants in 2026",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b4c37541f170ea63.png?oe=6AE4EFEC",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/95cfa861596a7138.png?oe=6AE4FB26",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "As featured in Daily Drive, Acme Charge is a go-to for EV owners for a reason: it is simple and it works. \n\nFrom smart EV chargers to heavy-duty adapters, we've got what you need to charge with confidence. \n\nShop the whole range now."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/collections/ev-adapters",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "The EV Gear Every Driver Wants in 2026",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1779778800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100014",
+    "start_date_string": "2026-05-26T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000294",
+    "collation_count": 1,
+    "collation_id": "1000000000000347",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": {
+      "page_id": "950000000000002",
+      "page_is_deleted": false,
+      "page_profile_uri": "https://www.facebook.com/creator.example.2/",
+      "page_name": "Creator Example 2"
+     },
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Stop putting up with the slow trickle charger that shipped with your EV. \n\nWith the Acme Homebase, you plug in, power up quickly at home, and wake up to a full battery each morning—no stress, no detours, and no waiting around."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/collections/homebase",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Add Up to 36 Miles of Range per Hour at Home ⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/fe8d8f4596871200.mp4?oe=6AE4DF13",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/8cd34dc48359fbb5.png?oe=6AE4E839",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/67b76f601ab864f5.mp4?oe=6AE4CDFD",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787814000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000294",
+    "start_date_string": "2026-08-27T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000141",
+    "collation_count": 1,
+    "collation_id": "100000000011046",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": {
+      "page_id": "100000000000010",
+      "page_is_deleted": false,
+      "page_profile_uri": "https://www.facebook.com/acmecharge/",
+      "page_name": "Acme Charge"
+     },
+     "page_id": "950000000000003",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/creator.example.3/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Creator Example 3",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Driving a Halcyon or another NACS EV? Give yourself more places to fast charge. \n\nThe Acme Charge CCS to NACS Adapter opens thousands of extra CCS fast chargers across North America: \n\n🔌 12,000+ More Fast Chargers: Use Voltway, Gridline, and other CCS charging networks \n\n⚡ High-Power Charging: Handles up to 500A / 1,000V for DC fast charging \n\n🛡️ UL 2252 Certified: Independently certified to strict EV adapter safety standards \n\n🔌 Plug & Play: Connect the adapter and start your session \n\nSkip the bottleneck. Widen your charging options. 👇"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Digital creator"
+     ],
+     "page_like_count": 1477,
+     "title": "Tired of Queuing at Busy Superchargers? Unlock 12,000+ More Fast Chargers. ⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/617f50880329ab0c.mp4?oe=6AE4F4B7",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/c51b9c76337937b8.png?oe=6AE4D387",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/309052958a0772b1.mp4?oe=6AE4DAE5",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1789628400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000141",
+    "start_date_string": "2026-09-17T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100021",
+    "collation_count": 1,
+    "collation_id": "1000000000100023",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "In a land of shadows, one knight set out to widen his charging kingdom. His sword? The compact, tireless Acme Volt Plug.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/66b2f4d09a26f706.mp4?oe=6AE4E838",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/fdbd13a83b39e313.png?oe=6AE4CCA2",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/51e8fc3eedfe29c0.mp4?oe=6AE4ED66",
+       "watermarked_video_hd_url": "",
+       "watermarked_video_sd_url": "",
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "In a land of shadows, one knight set out to widen his charging kingdom. His sword? The compact, tireless Acme Volt Plug.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/46ddd80f49800510.png?oe=6AE4FB2E",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/f19f2060a616928f.mp4?oe=6AE4E318",
+       "watermarked_video_hd_url": "",
+       "watermarked_video_sd_url": "",
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "In a land of shadows, one knight set out to widen his charging kingdom. His sword? The compact, tireless Acme Volt Plug.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "Quick and affordable EV charging gear",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/66b2f4d09a26f706.mp4?oe=6AE4E838",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/fdbd13a83b39e313.png?oe=6AE4CCA2",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/51e8fc3eedfe29c0.mp4?oe=6AE4ED66",
+       "watermarked_video_hd_url": "",
+       "watermarked_video_sd_url": "",
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "In a land of shadows, one knight set out to widen his charging kingdom. His sword? The compact, tireless Acme Volt Plug."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/collections/ev-adapters",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Quick and affordable EV charging gear",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM"
+    ],
+    "start_date": 1785740400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100021",
+    "start_date_string": "2026-08-03T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "10000000001000234",
+    "collation_count": 2,
+    "collation_id": "1000000000000359",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "A real user noticed the change: 'The cables reach a lot further, and the clamps open much more easily.' ✅ Longer Reach & Easier Grip for effortless jump starts.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "Clever design beats raw power",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/fdd6d64937850678.png?oe=6AE4D7F0",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/62041935356b370b.png?oe=6AE4ED33",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "A real user noticed the change: 'The cables reach a lot further, and the clamps open much more easily.' ✅ Longer Reach & Easier Grip for effortless jump starts.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "Clever design beats raw power",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/56182221b0d8331b.png?oe=6AE4E313",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a64dd9addf499df5.png?oe=6AE4EDC0",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "A real user noticed the change: 'The cables reach a lot further, and the clamps open much more easily.' ✅ Longer Reach & Easier Grip for effortless jump starts.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "Clever design beats raw power",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/56182221b0d8331b.png?oe=6AE4E313",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a64dd9addf499df5.png?oe=6AE4EDC0",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "A real user noticed the change: 'The cables reach a lot further, and the clamps open much more easily.' ✅ Longer Reach & Easier Grip for effortless jump starts."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Clever design beats raw power",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792566000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1788332400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=10000000001000234",
+    "start_date_string": "2026-09-02T07:00:00.000Z",
+    "end_date_string": "2026-10-21T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000283",
+    "collation_count": 2,
+    "collation_id": "1000000000000375",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Even when your battery reads 0V, the Acme Charge JX4 has your back. This compact powerhouse starts 12V vehicles at up to 3,500A and tucks neatly into your trunk.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "It starts even at a 0V battery reading",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/699eaaee5af23d5a.png?oe=6AE4DCC4",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/5f3058d234eda71b.png?oe=6AE4D1E9",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Even when your battery reads 0V, the Acme Charge JX4 has your back. This compact powerhouse starts 12V vehicles at up to 3,500A and tucks neatly into your trunk.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "It starts even at a 0V battery reading",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a59f0c35655d5d17.png?oe=6AE4D609",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/89bd784cd09fbc27.png?oe=6AE4FD82",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Even when your battery reads 0V, the Acme Charge JX4 has your back. This compact powerhouse starts 12V vehicles at up to 3,500A and tucks neatly into your trunk.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "It starts even at a 0V battery reading",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/3307698c11278e4c.png?oe=6AE4E182",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/7384d9f074c55ac4.png?oe=6AE4FB4B",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Even when your battery reads 0V, the Acme Charge JX4 has your back. This compact powerhouse starts 12V vehicles at up to 3,500A and tucks neatly into your trunk."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "It starts even at a 0V battery reading",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787727600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000283",
+    "start_date_string": "2026-08-26T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000303",
+    "collation_count": 1,
+    "collation_id": "1000000000000171",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": {
+      "page_id": "100000000000010",
+      "page_is_deleted": false,
+      "page_profile_uri": "https://www.facebook.com/acmecharge/",
+      "page_name": "Acme Charge"
+     },
+     "page_id": "950000000000004",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/creator.example.4/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Creator Example 4",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Skip Supercharger lines and long detours. The Acme Charge CCS to NACS Adapter gives your Halcyon or NACS EV access to thousands of extra public fast chargers nationwide: \n\n⚡ More Charging Options: Plug into Gridline, Plugpoint, and Voltway stations \n\n🛡️ UL 2252 Certified: Independently tested to strict safety standards \n\n🔌 Trunk-Ready: Simple plug-and-play design for easy road trips \n\nWiden your fast-charging options today 👇"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Electronics"
+     ],
+     "page_like_count": 131,
+     "title": "Unlock 12,000+ Fast Chargers for Halcyon & NACS EVs ⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/ef3cd785192280f7.mp4?oe=6AE4DF40",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/889c1386c986ef40.png?oe=6AE4E3E6",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/82b3b7a9cd4d2832.mp4?oe=6AE4F074",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1789628400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000303",
+    "start_date_string": "2026-09-17T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000302",
+    "collation_count": 1,
+    "collation_id": "1000000000000334",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": {
+      "page_id": "100000000000010",
+      "page_is_deleted": false,
+      "page_profile_uri": "https://www.facebook.com/acmecharge/",
+      "page_name": "Acme Charge"
+     },
+     "page_id": "950000000000005",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.instagram.com/_u/creator.example.5",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "creator.example.5",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Driving a Halcyon or another NACS EV? Open up thousands of extra fast-charging options on the road. \n\nThe Acme Charge CCS to NACS Adapter lets compatible NACS EVs charge at CCS fast-charging stations: \n\n🔌 12,000+ More Fast Chargers: Use Voltway, Gridline, and other CCS charging networks \n\n⚡ Built for DC Fast Charging: High-power capability gets you back on the road sooner \n\n🛡️ UL 2252 Certified: Independently certified to strict EV adapter safety standards \n\n🚗 Trunk Essential: Small, easy to carry, and ready whenever you want another charging option \n\nMore chargers. More choices. More road freedom. 👇"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Profile"
+     ],
+     "page_like_count": 0,
+     "title": "Halcyon or NACS Driver? Unlock 12,000+ More Fast Chargers. ⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/8f3823f882092b0c.mp4?oe=6AE4F80E",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/990c8b9c3c36a96c.png?oe=6AE4D6E2",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/2ba3ae1270e5fb99.mp4?oe=6AE4D3EA",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1789023600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000302",
+    "start_date_string": "2026-09-10T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000091",
+    "collation_count": 1,
+    "collation_id": "1000000000100071",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": {
+      "page_id": "100000000000010",
+      "page_is_deleted": false,
+      "page_profile_uri": "https://www.facebook.com/acmecharge/",
+      "page_name": "Acme Charge"
+     },
+     "page_id": "950000000000006",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.instagram.com/_u/creator.example.6",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "creator.example.6",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Dead battery = trunk won't open. If your jump starter lives back there, you're stranded. \n\nThe Acme Charge JX4 Jump Starter packs 3500A of peak starting power into a tiny body that slips right into your glovebox. \n\n🚗 Universal 12V Power: Starts cars, trucks, and SUVs \n\n🛠️ Self-Reliant: No second car needed \n\n🔋 Glovebox Ready: Sits where you can actually reach it \n\nNever be locked out of your emergency kit again!"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+     "images": [],
+     "page_categories": [
+      "Profile"
+     ],
+     "page_like_count": 0,
+     "title": "Keep the Jump Starter Where You Can Reach It 🚗⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/b5ff8b7aa797b4e7.mp4?oe=6AE4E985",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/2e4f79c5c143ffa9.png?oe=6AE4D2FB",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/5913a65df66bc23a.mp4?oe=6AE4F197",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787468400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000091",
+    "start_date_string": "2026-08-23T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100016",
+    "collation_count": 1,
+    "collation_id": "10000000001000232",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Learn more",
+     "cards": [
+      {
+       "body": "Nothing is worse than grabbing your emergency jump starter only to find it's completely flat. 🙃 \n\nLearn how long your unit really takes to charge (hint: 2–8 hours for lithium, up to 24 for older models) and the 3-month rule every driver should follow. \n\nTap to read the full charging & care guide.",
+       "cta_type": "LEARN_MORE",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/blogs/blog/how-long-does-a-jump-starter-take-to-charge",
+       "title": "How Long Should a Jump Starter Charge?",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d7769fe9549406c3.png?oe=6AE4F8B9",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/c866d5788ebbf693.png?oe=6AE4DC40",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Nothing is worse than grabbing your emergency jump starter only to find it's completely flat. 🙃 \n\nLearn how long your unit really takes to charge (hint: 2–8 hours for lithium, up to 24 for older models) and the 3-month rule every driver should follow. \n\nTap to read the full charging & care guide.",
+       "cta_type": "LEARN_MORE",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/blogs/blog/how-long-does-a-jump-starter-take-to-charge",
+       "title": "How Long Should a Jump Starter Charge?",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/8d53779fe93d17dd.png?oe=6AE4EDE1",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/384922bff2596583.png?oe=6AE4E280",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Nothing is worse than grabbing your emergency jump starter only to find it's completely flat. 🙃 \n\nLearn how long your unit really takes to charge (hint: 2–8 hours for lithium, up to 24 for older models) and the 3-month rule every driver should follow. \n\nTap to read the full charging & care guide.",
+       "cta_type": "LEARN_MORE",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/blogs/blog/how-long-does-a-jump-starter-take-to-charge",
+       "title": "How Long Should a Jump Starter Charge?",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b485c418e2cca26d.png?oe=6AE4F201",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/08b81beac8eb3290.png?oe=6AE4D3A6",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Nothing is worse than grabbing your emergency jump starter only to find it's completely flat. 🙃 \n\nLearn how long your unit really takes to charge (hint: 2–8 hours for lithium, up to 24 for older models) and the 3-month rule every driver should follow. \n\nTap to read the full charging & care guide."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/blogs/blog/how-long-does-a-jump-starter-take-to-charge",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "How Long Should a Jump Starter Charge?",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1786431600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100016",
+    "start_date_string": "2026-08-11T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000274",
+    "collation_count": 1,
+    "collation_id": "1000000000000275",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "CCS1? NACS? J1772? \n\nEV charging standards can be confusing, but they don't have to be. \n\nAcme Charge makes the adapters that keep you charging wherever you are. \n\nDon't get stranded. \n\nShop Acme Charge adapters today.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "Adapters, Sorted. We've Got You Covered.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/fa0e2b32b5556666.png?oe=6AE4CED1",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3ba8a3f9f93d3a59.png?oe=6AE4F7A5",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "CCS1? NACS? J1772? \n\nEV charging standards can be confusing, but they don't have to be. \n\nAcme Charge makes the adapters that keep you charging wherever you are. \n\nDon't get stranded. \n\nShop Acme Charge adapters today.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/collections/ev-adapters",
+       "title": "Adapters, Sorted. We've Got You Covered.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/470a58a1144d0800.png?oe=6AE4FC27",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/7a9d0e5682defa7f.png?oe=6AE4F74F",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "CCS1? NACS? J1772? \n\nEV charging standards can be confusing, but they don't have to be. \n\nAcme Charge makes the adapters that keep you charging wherever you are. \n\nDon't get stranded. \n\nShop Acme Charge adapters today."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/collections/ev-adapters",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Adapters, Sorted. We've Got You Covered.",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1779778800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000274",
+    "start_date_string": "2026-05-26T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000326",
+    "collation_count": 1,
+    "collation_id": "1000000000000113",
+    "is_active": true,
+    "page_id": "100000000000010",
+    "page_is_deleted": false,
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://www.facebook.com/acmecharge/",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Up to 3,500A of peak current — enough for 12V engines up to 9.0L gas and 7.0L diesel — in a body that fits in your hand.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "3,500A.\nFROM THIS.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/f628fc2ab898e6ee.png?oe=6AE4D4BF",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/15cb84d1fd11bb3c.png?oe=6AE4E340",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Up to 3,500A of peak current — enough for 12V engines up to 9.0L gas and 7.0L diesel — in a body that fits in your hand.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "3,500A.\nFROM THIS.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/8a9f3bbde5327ae3.png?oe=6AE4D991",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ce645023e21a825b.png?oe=6AE4E8A5",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Up to 3,500A of peak current — enough for 12V engines up to 9.0L gas and 7.0L diesel — in a body that fits in your hand.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+       "title": "3,500A.\nFROM THIS.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d67483ef964d4b0f.png?oe=6AE4E9EB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/c27598d1aae69db5.png?oe=6AE4D798",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Up to 3,500A of peak current — enough for 12V engines up to 9.0L gas and 7.0L diesel — in a body that fits in your hand."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-portable-jump-starter-jx4-for-12v-vehicles-3500a",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "3,500A.\nFROM THIS.",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787814000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000326",
+    "start_date_string": "2026-08-27T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   }
+  ],
+  "searchResultsCount": 222,
+  "cursor": "mock-cursor--acme-charge--p2"
+ }
+}

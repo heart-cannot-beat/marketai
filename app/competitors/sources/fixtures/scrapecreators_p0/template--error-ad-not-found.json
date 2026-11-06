@@ -1,0 +1,16 @@
+{
+ "provenance": {
+  "kind": "synthesized",
+  "reason": "P0 made no /ad call; the docs list a 404, its body is not verified",
+  "built_by": "scripts/build_competitor_mock_fixtures.py"
+ },
+ "template": {
+  "path": "/v1/facebook/adLibrary/ad",
+  "use": "not_found"
+ },
+ "status": 404,
+ "body": {
+  "success": false,
+  "message": "Ad not found."
+ }
+}

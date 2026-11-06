@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "golden-path-report.schema.json",
+  "title": "Golden Path E2E Report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "commit_sha",
+    "started_at",
+    "completed_at",
+    "completion_status",
+    "last_completed_step",
+    "failure_code",
+    "steps",
+    "config_attestations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "completion_status": { "enum": ["passed", "failed", "interrupted"] },
+    "last_completed_step": { "type": "integer", "minimum": -1 },
+    "failure_code": { "type": ["string", "null"] },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "label", "outcome", "duration_ms", "failure_code", "assertions"],
+        "properties": {
+          "step": { "type": "integer", "minimum": 0 },
+          "label": { "type": "string", "minLength": 1 },
+          "outcome": { "enum": ["passed", "failed", "skipped"] },
+          "duration_ms": { "type": "number", "minimum": 0 },
+          "failure_code": { "type": ["string", "null"] },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["code", "passed", "observed", "expected"],
+              "properties": {
+                "code": { "type": "string" },
+                "passed": { "type": "boolean" },
+                "observed": {},
+                "expected": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "config_attestations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "service",
+          "captured_after_step",
+          "generation_adapter",
+          "meta_adapter",
+          "meta_write_enabled",
+          "meta_write_token_present",
+          "meta_write_ready"
+        ],
+        "properties": {
+          "service": { "type": "string" },
+          "captured_after_step": { "type": "integer" },
+          "generation_adapter": { "type": "string" },
+          "meta_adapter": { "type": "string" },
+          "meta_write_enabled": { "type": "boolean" },
+          "meta_write_token_present": { "type": "boolean" },
+          "meta_write_ready": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

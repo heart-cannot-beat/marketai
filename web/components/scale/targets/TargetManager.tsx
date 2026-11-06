@@ -1,0 +1,732 @@
+import { useEffect, useId, useRef, useState } from 'react';
+import { useTranslation } from 'next-i18next';
+import {
+  useScaleTargets,
+  useScaleTargetContexts,
+  useCreateScaleTargetPublicationPreview,
+  usePublishScaleTarget,
+  useCreateScaleTargetWithdrawalPreview,
+  useWithdrawScaleTarget,
+  type ScaleTarget,
+  type ScaleTargetPublicationPreview,
+  type ScaleTargetWithdrawalPreview,
+} from '@/hooks/scale/useScaleTargets';
+import { useScaleMetaMode, type ScaleMetaMode } from '@/lib/scale/meta-mode';
+import { MetaModeSelect } from '@/components/scale/shared/MetaModeSelect';
+import { LifecycleBadge } from '@/components/scale/shared/LifecycleBadge';
+import { AllowedActionButton } from '@/components/scale/shared/AllowedActionButton';
+import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
+import {
+  errorMessage,
+  fieldErrorMessage,
+  fieldPath,
+} from '@/lib/i18n/domain-errors';
+
+const MONEY_FIELDS = [
+  'target_cpa',
+  'breakeven_roas',
+  'minimum_economic_spend',
+] as const;
+
+type MoneyField = (typeof MONEY_FIELDS)[number];
+
+type MoneyForm = Record<MoneyField, string>;
+
+const EMPTY_MONEY_FORM: MoneyForm = MONEY_FIELDS.reduce(
+  (acc, field) => ({ ...acc, [field]: '' }),
+  {} as MoneyForm
+);
+
+interface PublishTargetDialogProps {
+  open: boolean;
+  metaMode: ScaleMetaMode;
+  onClose: () => void;
+  onPublished: () => void;
+}
+
+/** Publish flow (spec §10, §21): context selector -> enter target
+ * CPA/ROAS/minimum spend -> preview -> confirm. A confirm the server refuses
+ * with `preview_expired` offers a new preview in place (#382); the user
+ * confirms again after seeing its impact. */
+function PublishTargetDialog({
+  open,
+  metaMode,
+  onClose,
+  onPublished,
+}: PublishTargetDialogProps) {
+  const { t } = useTranslation('scale');
+  const { contexts, isLoading: contextsLoading } =
+    useScaleTargetContexts(metaMode);
+  const [contextIndex, setContextIndex] = useState<number | null>(null);
+  const [form, setForm] = useState<MoneyForm>(EMPTY_MONEY_FORM);
+  const [preview, setPreview] = useState<ScaleTargetPublicationPreview | null>(
+    null
+  );
+  const previewCmd = useCreateScaleTargetPublicationPreview();
+  const publishCmd = usePublishScaleTarget();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const fieldId = useId();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open && typeof dialog.showModal === 'function') {
+      try {
+        dialog.showModal();
+      } catch {
+        // jsdom
+      }
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const context = contextIndex !== null ? contexts[contextIndex] : undefined;
+
+  /** The server's reasons for one amount (#381); the summary below the
+   * fields still reads the first of them. */
+  const fieldMessages = (field: MoneyField) =>
+    previewCmd.problem?.code === 'validation_error'
+      ? (previewCmd.problem.field_errors ?? [])
+          .filter((error) => fieldPath(error.field) === field)
+          .map((error) => fieldErrorMessage(t, error))
+      : [];
+
+  const reset = () => {
+    setContextIndex(null);
+    setForm(EMPTY_MONEY_FORM);
+    setPreview(null);
+    previewCmd.reset();
+    publishCmd.reset();
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  /** The amounts both previews send, trimmed (#381) so a renewed preview
+   * reads the form exactly as the first one did. */
+  const amounts = () => ({
+    targetCpa: form.target_cpa.trim(),
+    breakevenRoas: form.breakeven_roas.trim(),
+    minimumEconomicSpend: form.minimum_economic_spend.trim(),
+  });
+
+  const handleCreatePreview = async () => {
+    if (!context) return;
+    const outcome = await previewCmd.run({
+      metaMode,
+      productVersionId: context.product_version_id,
+      offerVersionId: context.offer_version_id,
+      marketCode: context.market_code,
+      currency: context.currency,
+      ...amounts(),
+    });
+    if (outcome.kind === 'success') {
+      setPreview(outcome.data as ScaleTargetPublicationPreview);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!preview) return;
+    const outcome = await publishCmd.run({
+      metaMode,
+      publicationPreviewId: preview.id,
+    });
+    if (outcome.kind === 'success') {
+      reset();
+      onPublished();
+    }
+  };
+
+  // The context comes from the expired preview itself, not
+  // `contexts[contextIndex]`: the list refetches on focus in no stable
+  // order. The amounts are the user's own strings, never the echoed ones.
+  const handleRefreshPreview = async () => {
+    if (!preview) return;
+    const outcome = await previewCmd.run({
+      metaMode,
+      productVersionId: preview.product_version_id,
+      offerVersionId: preview.offer_version_id,
+      marketCode: preview.market_code,
+      currency: preview.currency,
+      ...amounts(),
+    });
+    if (outcome.kind === 'success') {
+      publishCmd.reset();
+      setPreview(outcome.data as ScaleTargetPublicationPreview);
+    }
+  };
+
+  const previewExpired = publishCmd.problem?.code === 'preview_expired';
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="modal modal-open"
+      aria-labelledby="publish-target-title"
+      onClose={handleClose}
+    >
+      <div className="modal-box max-w-lg">
+        <h3 id="publish-target-title" className="text-lg font-bold">
+          {t('targets.publish-dialog.title')}
+        </h3>
+
+        {!preview && (
+          <>
+            {contextsLoading ? (
+              <div className="mt-4 flex justify-center" aria-busy="true">
+                <span className="loading loading-spinner loading-sm" />
+              </div>
+            ) : contexts.length === 0 ? (
+              <p className="mt-4 text-sm text-base-content/60">
+                {t('targets.publish-dialog.no-contexts')}
+              </p>
+            ) : (
+              <>
+                <label className="form-control mt-4">
+                  <span className="label-text text-xs">
+                    {t('targets.publish-dialog.context-label')}
+                  </span>
+                  <select
+                    className="select select-bordered select-sm"
+                    value={contextIndex ?? ''}
+                    onChange={(e) =>
+                      setContextIndex(
+                        e.target.value === '' ? null : Number(e.target.value)
+                      )
+                    }
+                  >
+                    <option value="">
+                      {t('targets.publish-dialog.context-placeholder')}
+                    </option>
+                    {contexts.map((c, i) => (
+                      <option key={i} value={i}>
+                        {c.product_version_id} / {c.offer_version_id} /{' '}
+                        {c.market_code} ({c.currency})
+                        {c.has_active_target
+                          ? ` — ${t('targets.publish-dialog.has-active-target')}`
+                          : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {MONEY_FIELDS.map((field) => {
+                    const errors = fieldMessages(field);
+                    const inputId = `${fieldId}-${field}`;
+                    return (
+                      <div key={field} className="form-control">
+                        <label htmlFor={inputId} className="label-text text-xs">
+                          {t(`targets.field.${field}`)}
+                        </label>
+                        <input
+                          id={inputId}
+                          type="text"
+                          inputMode="decimal"
+                          className={`input input-bordered input-sm${
+                            errors.length > 0 ? ' input-error' : ''
+                          }`}
+                          aria-invalid={errors.length > 0 || undefined}
+                          aria-describedby={
+                            errors.length > 0 ? `${inputId}-errors` : undefined
+                          }
+                          value={form[field]}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              [field]: e.target.value,
+                            }))
+                          }
+                        />
+                        {errors.length > 0 && (
+                          <p
+                            id={`${inputId}-errors`}
+                            className="mt-1 text-xs text-error"
+                          >
+                            {errors.join(' ')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {previewCmd.problem && (
+                  <p className="mt-2 text-sm text-error" role="alert">
+                    {errorMessage(t, previewCmd.problem)}
+                  </p>
+                )}
+
+                <div className="modal-action mt-4">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleClose}
+                  >
+                    {t('targets.publish-dialog.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={!context || previewCmd.isPending}
+                    onClick={handleCreatePreview}
+                  >
+                    {previewCmd.isPending
+                      ? t('targets.publish-dialog.previewing')
+                      : t('targets.publish-dialog.preview')}
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {preview && (
+          <>
+            <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <dt className="text-xs text-base-content/60">
+                  {t('targets.publish-dialog.affected-enrollments')}
+                </dt>
+                <dd>{preview.affected_enrollment_count}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/60">
+                  {t('targets.publish-dialog.policy-floor-check')}
+                </dt>
+                <dd>
+                  {preview.policy_floor_check_passed
+                    ? t('targets.publish-dialog.policy-floor-passed')
+                    : t('targets.publish-dialog.policy-floor-failed')}
+                </dd>
+              </div>
+            </dl>
+
+            {publishCmd.problem && (
+              <p className="mt-2 text-sm text-error" role="alert">
+                {errorMessage(t, publishCmd.problem)}
+              </p>
+            )}
+            {previewCmd.problem && (
+              <p className="mt-2 text-sm text-error" role="alert">
+                {errorMessage(t, previewCmd.problem)}
+              </p>
+            )}
+
+            <div className="modal-action mt-4">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={handleClose}
+              >
+                {t('targets.publish-dialog.cancel')}
+              </button>
+              {previewExpired ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={previewCmd.isPending}
+                  onClick={handleRefreshPreview}
+                >
+                  {previewCmd.isPending
+                    ? t('targets.publish-dialog.previewing')
+                    : t('targets.publish-dialog.refresh-preview')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={publishCmd.isPending}
+                  onClick={handleConfirm}
+                >
+                  {publishCmd.isPending
+                    ? t('targets.publish-dialog.publishing')
+                    : t('targets.publish-dialog.confirm')}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <form method="dialog" className="modal-backdrop">
+        <button type="button" onClick={handleClose}>
+          {t('targets.publish-dialog.cancel')}
+        </button>
+      </form>
+    </dialog>
+  );
+}
+
+interface WithdrawTargetDialogProps {
+  target: ScaleTarget;
+  metaMode: ScaleMetaMode;
+  onClose: () => void;
+  onWithdrawn: () => void;
+}
+
+/** Withdraw flow (spec §10, §21): reason -> preview -> confirm. Only
+ * rendered for a Target `allowed_actions` already marks
+ * `withdraw` on (the caller gates the trigger button). An expired preview
+ * is renewed in place, like publishing (#382). */
+function WithdrawTargetDialog({
+  target,
+  metaMode,
+  onClose,
+  onWithdrawn,
+}: WithdrawTargetDialogProps) {
+  const { t } = useTranslation('scale');
+  const [reason, setReason] = useState('');
+  const [preview, setPreview] = useState<ScaleTargetWithdrawalPreview | null>(
+    null
+  );
+  const previewCmd = useCreateScaleTargetWithdrawalPreview();
+  const withdrawCmd = useWithdrawScaleTarget();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (!dialog.open && typeof dialog.showModal === 'function') {
+      try {
+        dialog.showModal();
+      } catch {
+        // jsdom
+      }
+    }
+  }, []);
+
+  const reset = () => {
+    setReason('');
+    setPreview(null);
+    previewCmd.reset();
+    withdrawCmd.reset();
+  };
+
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
+  const handleCreatePreview = async () => {
+    const outcome = await previewCmd.run({
+      targetId: target.id,
+      metaMode,
+      reason,
+    });
+    if (outcome.kind === 'success') {
+      setPreview(outcome.data as ScaleTargetWithdrawalPreview);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!preview) return;
+    const outcome = await withdrawCmd.run({
+      targetId: target.id,
+      metaMode,
+      withdrawalPreviewId: preview.id,
+    });
+    if (outcome.kind === 'success') {
+      reset();
+      onWithdrawn();
+    }
+  };
+
+  const handleRefreshPreview = async () => {
+    const outcome = await previewCmd.run({
+      targetId: target.id,
+      metaMode,
+      reason,
+    });
+    if (outcome.kind === 'success') {
+      withdrawCmd.reset();
+      setPreview(outcome.data as ScaleTargetWithdrawalPreview);
+    }
+  };
+
+  const previewExpired = withdrawCmd.problem?.code === 'preview_expired';
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="modal modal-open"
+      aria-labelledby="withdraw-target-title"
+      onClose={handleClose}
+    >
+      <div className="modal-box max-w-md">
+        <h3 id="withdraw-target-title" className="text-lg font-bold">
+          {t('targets.withdraw-dialog.title')}
+        </h3>
+
+        {!preview && (
+          <>
+            <label className="form-control mt-4">
+              <span className="label-text text-xs">
+                {t('targets.withdraw-dialog.reason-label')}
+              </span>
+              <textarea
+                className="textarea textarea-bordered textarea-sm"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </label>
+
+            {previewCmd.problem && (
+              <p className="mt-2 text-sm text-error" role="alert">
+                {errorMessage(t, previewCmd.problem)}
+              </p>
+            )}
+
+            <div className="modal-action mt-4">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={handleClose}
+              >
+                {t('targets.withdraw-dialog.cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-error btn-sm"
+                disabled={!reason.trim() || previewCmd.isPending}
+                onClick={handleCreatePreview}
+              >
+                {previewCmd.isPending
+                  ? t('targets.withdraw-dialog.previewing')
+                  : t('targets.withdraw-dialog.preview')}
+              </button>
+            </div>
+          </>
+        )}
+
+        {preview && (
+          <>
+            <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <dt className="text-xs text-base-content/60">
+                  {t('targets.withdraw-dialog.affected-enrollments')}
+                </dt>
+                <dd>{preview.affected_enrollment_count}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/60">
+                  {t('targets.withdraw-dialog.dependent-advice-threads')}
+                </dt>
+                <dd>{preview.dependent_advice_thread_count}</dd>
+              </div>
+            </dl>
+
+            {withdrawCmd.problem && (
+              <p className="mt-2 text-sm text-error" role="alert">
+                {errorMessage(t, withdrawCmd.problem)}
+              </p>
+            )}
+            {previewCmd.problem && (
+              <p className="mt-2 text-sm text-error" role="alert">
+                {errorMessage(t, previewCmd.problem)}
+              </p>
+            )}
+
+            <div className="modal-action mt-4">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={handleClose}
+              >
+                {t('targets.withdraw-dialog.cancel')}
+              </button>
+              {previewExpired ? (
+                <button
+                  type="button"
+                  className="btn btn-error btn-sm"
+                  disabled={previewCmd.isPending}
+                  onClick={handleRefreshPreview}
+                >
+                  {previewCmd.isPending
+                    ? t('targets.withdraw-dialog.previewing')
+                    : t('targets.withdraw-dialog.refresh-preview')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-error btn-sm"
+                  disabled={withdrawCmd.isPending}
+                  onClick={handleConfirm}
+                >
+                  {withdrawCmd.isPending
+                    ? t('targets.withdraw-dialog.withdrawing')
+                    : t('targets.withdraw-dialog.confirm')}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      <form method="dialog" className="modal-backdrop">
+        <button type="button" onClick={handleClose}>
+          {t('targets.withdraw-dialog.cancel')}
+        </button>
+      </form>
+    </dialog>
+  );
+}
+
+/**
+ * Target management (spec §10, §21, Issue #87 Tasks 2/6/7). Every action is
+ * server-gated: the "New target" trigger reads `list_scale_target_contexts`
+ * (never lets the caller free-type a product/offer/market/currency
+ * combination), and each row's "Withdraw" button only renders when that
+ * Target's own `allowed_actions` already lists `withdraw` (spec §4.4:
+ * "server-driven allowed_actions ... never inferred client-side") --
+ * mirroring `EnrollmentDetail`'s `AllowedActionButton` gating. "New target"
+ * belongs to no aggregate, so it alone reads the Workspace role: a Member
+ * sees a line saying only the Owner publishes or withdraws (#382).
+ */
+export function TargetManager() {
+  const { t } = useTranslation('scale');
+  const { current } = useWorkspace();
+  const isOwner = current.role === 'OWNER';
+  const { metaMode, setMetaMode } = useScaleMetaMode();
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [withdrawTarget, setWithdrawTarget] = useState<ScaleTarget | null>(
+    null
+  );
+  const {
+    items: targets,
+    hasMore,
+    isLoading,
+    isLoadingMore,
+    problem,
+    loadMore,
+    refresh,
+  } = useScaleTargets(metaMode);
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold outline-none">
+          {t('targets.title')}
+        </h1>
+        <div className="flex items-center gap-2">
+          <MetaModeSelect value={metaMode} onChange={setMetaMode} />
+          {isOwner ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setPublishOpen(true)}
+            >
+              {t('targets.new-target')}
+            </button>
+          ) : (
+            <p className="text-sm text-base-content/60">
+              {t('targets.owner-only')}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="mt-8 flex justify-center" aria-busy="true">
+          <span className="loading loading-spinner" />
+        </div>
+      ) : problem && targets.length === 0 ? (
+        <div className="alert alert-error mt-4" role="alert">
+          <span>{t('targets.error')}</span>
+          <button type="button" className="btn btn-sm" onClick={refresh}>
+            {t('targets.retry')}
+          </button>
+        </div>
+      ) : targets.length === 0 ? (
+        <p className="mt-6 text-sm text-base-content/60">
+          {t('targets.empty')}
+        </p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="table table-sm">
+            <thead>
+              <tr>
+                <th>{t('targets.column.context')}</th>
+                <th>{t('targets.column.currency')}</th>
+                <th>{t('targets.column.target-cpa')}</th>
+                <th>{t('targets.column.breakeven-roas')}</th>
+                <th>{t('targets.column.lifecycle')}</th>
+                <th>{t('targets.column.actions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {targets.map((target) => {
+                const actionMap = new Map(
+                  target.allowed_actions.map((a) => [a.action, a])
+                );
+                return (
+                  <tr key={target.id}>
+                    <td>
+                      <div className="text-xs">
+                        {target.product_version_id} / {target.offer_version_id}{' '}
+                        / {target.market_code}
+                      </div>
+                    </td>
+                    <td>{target.currency}</td>
+                    <td>{target.target_cpa ?? '—'}</td>
+                    <td>{target.breakeven_roas ?? '—'}</td>
+                    <td>
+                      <LifecycleBadge
+                        scope="target"
+                        value={target.lifecycle_state}
+                      />
+                    </td>
+                    <td>
+                      <AllowedActionButton
+                        action={actionMap.get('withdraw')}
+                        label={t('targets.withdraw')}
+                        onClick={() => setWithdrawTarget(target)}
+                        variant="error"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="mt-3 text-center">
+            {hasMore && (
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost w-full"
+                onClick={loadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? t('targets.loading') : t('targets.load-more')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <PublishTargetDialog
+        open={publishOpen}
+        metaMode={metaMode}
+        onClose={() => setPublishOpen(false)}
+        onPublished={() => {
+          setPublishOpen(false);
+          void refresh();
+        }}
+      />
+
+      {withdrawTarget && (
+        <WithdrawTargetDialog
+          target={withdrawTarget}
+          metaMode={metaMode}
+          onClose={() => setWithdrawTarget(null)}
+          onWithdrawn={() => {
+            setWithdrawTarget(null);
+            void refresh();
+          }}
+        />
+      )}
+    </>
+  );
+}

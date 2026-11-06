@@ -1,0 +1,22 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Compose-only dev values, CI and test fixtures, and prose (not real secrets)"
+regexes = [
+  '''compose-[\w-]+-(?:not-for-production|secret|token|key)[\w-]*''',
+  '''compose_(?:control|domain)_\w+''',
+  '''Y29tcG9zZS1[\w+=]+''',
+  '''correct horse battery staple''',
+  '''ci[_-]only[_-][\w-]+''',
+  '''ci[_-](?:control|domain)_\w+''',
+  # Word pairs after "key," / "config," in design docs (docs/superpowers).
+  '''^(?:privacy/suppression|capability/market)$''',
+  # Idempotency keys and the keyword argument name in Python tests.
+  '''^(?:idempotency_key=|idem-fp-mismatch-001|idem-durable-reservation-001|v1-precondition-approval)$''',
+  # Sample JWT in web/__tests__/lib/logger.spec.ts: {"sub":"user"}, signature "signature-value".
+  '''^eyJhbGciOiJFUzI1NiJ9\.eyJzdWIiOiJ1c2VyIn0\.c2lnbmF0dXJlLXZhbHVl$''',
+  # Fake PEM in web/__tests__/delegated-identity/key-protector.spec.ts; gitleaks
+  # 8.22.1 (the CI version) reports it, newer releases do not.
+  '''^-----BEGIN EC PRIVATE KEY-----\\nfake\\n-----END EC PRIVATE KEY-----$''',
+]

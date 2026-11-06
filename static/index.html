@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MarketAI Studio · 创意组合生图工作台</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+/* v9 双状态补充样式：✎ Needs Changes 态 */
+.gcard.needschanges { outline: 2px solid rgba(251, 191, 36, .5); }
+.iconbtn.on-nc { background: rgba(251, 191, 36, .16); color: var(--warn); border-color: var(--warn); }
+</style>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%237c5cff'/><rect x='20' y='20' width='60' height='60' rx='14' fill='%2322d3ee'/></svg>">
+</head>
+<body>
+<header>
+  <div class="logo"><div class="dot"></div>MarketAI <small>Studio · 前期生图</small></div>
+  <select id="productSelect" style="width:220px"></select>
+  <button class="btn mini" id="btnNewProduct">＋ 新建产品</button>
+  <div class="spacer"></div>
+  <div class="prov-dots" id="provDots"></div>
+</header>
+
+<div class="wrap">
+  <!-- ============ 左侧参数面板 ============ -->
+  <aside id="sidebar">
+    <!-- ① 产品 -->
+    <div class="section open" id="sec-product">
+      <div class="sec-head" data-toggle="sec-product"><div class="step">1</div><h3>产品信息</h3><span class="chev">▶</span></div>
+      <div class="sec-body">
+        <label class="f">产品名称 *</label>
+        <input type="text" id="p_name" placeholder="例：便携式电动车充电机">
+        <label class="f">产品描述</label>
+        <textarea id="p_desc" placeholder="是什么、长什么样、给谁用（会进入生图 prompt）"></textarea>
+        <label class="f">核心卖点（逗号分隔）</label>
+        <input type="text" id="p_points" placeholder="30分钟快充, IP65防水, 便携手提">
+        <label class="f">目标人群</label>
+        <input type="text" id="p_aud" placeholder="例：欧美家用电动车车主">
+        <label class="f">品牌约束（可选）</label>
+        <input type="text" id="p_brand" placeholder="例：主色调深蓝，极简风格">
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="btnSaveProduct">保存产品</button>
+        </div>
+        <label class="f" style="margin-top:14px">产品参考图（用于保真生成，强烈建议上传实拍图）</label>
+        <div class="refs" id="refThumbs"></div>
+        <div class="upload-box" id="uploadBox">点击上传产品图（可多张）</div>
+        <input type="file" id="refInput" accept="image/*" multiple hidden>
+      </div>
+    </div>
+
+    <!-- ② 角度维度 -->
+    <div class="section" id="sec-angles">
+      <div class="sec-head" data-toggle="sec-angles"><div class="step">2</div><h3>角度维度</h3><span id="angleSrc"></span><span class="chev">▶</span></div>
+      <div class="sec-body">
+        <p class="hint">维度 = 测试变量（人物 / 场景 / 汽车…），取值会拼进生图 prompt。AI 生成后可自由增删改。</p>
+        <div class="row">
+          <button class="btn primary" id="btnGenAngles">✨ AI 生成维度</button>
+          <button class="btn" id="btnAddDim">＋ 手动加维度</button>
+        </div>
+        <div id="dimList" style="margin-top:12px"></div>
+        <label class="f">全局风格说明（英文，附加到每条 prompt）</label>
+        <textarea id="styleNotes" placeholder="clean commercial photography, soft light..."></textarea>
+        <button class="btn big" id="btnSaveAngles">保存维度</button>
+      </div>
+    </div>
+
+    <!-- ③ 组合 -->
+    <div class="section" id="sec-combos">
+      <div class="sec-head" data-toggle="sec-combos"><div class="step">3</div><h3>排列组合</h3><span class="chev">▶</span></div>
+      <div class="sec-body">
+        <p class="hint">勾选每个维度参与测试的取值。组合太多时用「覆盖采样」压到预算内——保证每个取值都出现、组合间差异最大。</p>
+        <div id="comboDims"></div>
+        <div class="row" style="margin-top:10px">
+          <select id="planMode">
+            <option value="full">全组合</option>
+            <option value="coverage">覆盖采样（推荐）</option>
+          </select>
+          <input type="number" id="planCap" min="2" max="99" value="12" title="采样上限">
+        </div>
+        <div class="combo-count" id="comboCount">—</div>
+        <button class="btn primary big" id="btnBuildPlan">生成组合方案</button>
+        <div class="combo-list" id="comboList"></div>
+      </div>
+    </div>
+
+    <!-- ④ 生成 -->
+    <div class="section" id="sec-gen">
+      <div class="sec-head" data-toggle="sec-gen"><div class="step">4</div><h3>批量生成</h3><span class="chev">▶</span></div>
+      <div class="sec-body">
+        <label class="f">生图模型</label>
+        <div class="prov-grid" id="provGrid"></div>
+        <label class="f">模型版本</label>
+        <select id="modelSelect"></select>
+        <label class="f">画幅比例（Meta：信息流 1:1 / 4:5，Stories 9:16）</label>
+        <div class="seg" id="arSeg">
+          <button data-ar="1:1" class="on">1:1</button>
+          <button data-ar="4:5">4:5</button>
+          <button data-ar="9:16">9:16</button>
+          <button data-ar="16:9">16:9</button>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div>
+            <label class="f" style="margin-top:0">分辨率</label>
+            <select id="sizeSelect"><option value="1K">1K（测试够用）</option><option value="2K">2K</option></select>
+          </div>
+          <div>
+            <label class="f" style="margin-top:0">每组合张数</label>
+            <select id="variantSelect"><option>1</option><option>2</option><option>3</option></select>
+          </div>
+        </div>
+        <div class="switch-row">
+          <span>用产品参考图保真生成<br><small style="color:var(--muted)">锁定产品外观，只换场景</small></span>
+          <div class="switch on" id="refSwitch"></div>
+        </div>
+        <div class="est" id="estLine">—</div>
+        <button class="btn primary big" id="btnGenerate">🚀 开始生成</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ 右侧内容区 ============ -->
+  <main>
+    <div class="tabs">
+      <div class="tab on" data-tab="runs">生成任务</div>
+      <div class="tab" data-tab="gallery">素材画廊<span class="badge" id="galCount" style="display:none"></span></div>
+      <span class="hint" style="margin:0 0 0 8px;align-self:center">质量审核判"能不能用"（✅/✎/⛔）；"好不好卖"由 Meta 投放数据回写（🏆/🎓/❌）</span>
+    </div>
+    <div id="view-runs"></div>
+    <div id="view-gallery" style="display:none">
+      <div id="galleryFilters"></div>
+      <div class="gal-grid" id="galGrid"></div>
+      <div id="galEmpty"></div>
+    </div>
+  </main>
+</div>
+
+<div class="export-bar" id="exportBar" style="display:none">
+  <span>✅ Approved <b id="approvedCount">0</b> 张</span>
+  <select id="exportScope" style="width:170px">
+    <option value="approved">仅 ✅ Approved</option>
+    <option value="winner">仅投放 🏆 Winner</option>
+    <option value="all">全部成功</option>
+  </select>
+  <button class="btn primary" id="btnExport">导出 zip + manifest</button>
+</div>
+
+<div id="toast"></div>
+<div id="modalRoot"></div>
+<div id="lightboxRoot"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

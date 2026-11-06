@@ -1,0 +1,317 @@
+import unittest
+from app.library.contracts import (
+    validate_content, extract_dependencies, canonical_hash,
+    ENTRY_DIMENSION_TEMPLATE, ENTRY_DIMENSION_SCHEMA,
+    ENTRY_PROMPT_POLICY, ENTRY_DATA_SOURCE,
+    ENTRY_MANUAL_FACT_SET, ENTRY_TRUTH_RESOLUTION_POLICY,
+)
+
+
+class TestDimensionTemplateValidation(unittest.TestCase):
+
+    def _template_content(self, **overrides):
+        base = {
+            "dimensions": [
+                {
+                    "id": "dim-color",
+                    "name": "Color",
+                    "values": [
+                        {"id": "val-red", "name": "Red",
+                         "positive_fragments": ["vibrant red"], "negative_fragments": []},
+                        {"id": "val-blue", "name": "Blue",
+                         "positive_fragments": ["deep blue"], "negative_fragments": []},
+                    ],
+                }
+            ],
+            "constraints": [],
+            "concept_key_mappings": [],
+            "combination_cardinality": "one_per_dimension",
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_template_passes(self):
+        report = validate_content(ENTRY_DIMENSION_TEMPLATE, self._template_content())
+        self.assertTrue(report.ok, report.blocking)
+
+    def test_missing_dimensions_is_blocking(self):
+        report = validate_content(ENTRY_DIMENSION_TEMPLATE, {"constraints": []})
+        self.assertFalse(report.ok)
+        codes = {f.code for f in report.blocking}
+        self.assertIn("template_dimensions_required", codes)
+
+    def test_empty_dimensions_is_blocking(self):
+        report = validate_content(ENTRY_DIMENSION_TEMPLATE, self._template_content(dimensions=[]))
+        self.assertFalse(report.ok)
+
+    def test_duplicate_dimension_ids_blocking(self):
+        dims = [
+            {"id": "dim-a", "name": "A", "values": [{"id": "v1", "name": "V1",
+             "positive_fragments": [], "negative_fragments": []}]},
+            {"id": "dim-a", "name": "B", "values": [{"id": "v2", "name": "V2",
+             "positive_fragments": [], "negative_fragments": []}]},
+        ]
+        report = validate_content(ENTRY_DIMENSION_TEMPLATE, self._template_content(dimensions=dims))
+        self.assertFalse(report.ok)
+        codes = {f.code for f in report.blocking}
+        self.assertIn("template_duplicate_dimension_id", codes)
+
+    def test_duplicate_value_ids_blocking(self):
+        dims = [{
+            "id": "dim-a", "name": "A",
+            "values": [
+                {"id": "same", "name": "V1", "positive_fragments": [], "negative_fragments": []},
+                {"id": "same", "name": "V2", "positive_fragments": [], "negative_fragments": []},
+            ],
+        }]
+        report = validate_content(ENTRY_DIMENSION_TEMPLATE, self._template_content(dimensions=dims))
+        self.assertFalse(report.ok)
+
+    def test_constraint_references_unknown_dim_blocking(self):
+        content = self._template_content(constraints=[
+            {"type": "requires", "from_dimension_id": "dim-color", "from_value_id": "val-red",
+             "to_dimension_id": "nonexistent", "to_value_id": "v1"},
+        ])
+        report = validate_content(ENTRY_DIMENSION_TEMPLATE, content)
+        self.assertFalse(report.ok)
+
+    def test_invalid_combination_cardinality_blocking(self):
+        report = validate_content(ENTRY_DIMENSION_TEMPLATE,
+                                  self._template_content(combination_cardinality="invalid"))
+        self.assertFalse(report.ok)
+
+
+class TestDimensionSchemaValidation(unittest.TestCase):
+
+    def _schema_content(self, **overrides):
+        base = {
+            "product_entry_id": "lib_abc123",
+            "derived_from_template_version_id": "lib_tmpl_v1",
+            "dimensions": [
+                {
+                    "id": "local-dim-1",
+                    "name": "Color",
+                    "source_dimension_id": "dim-color",
+                    "values": [
+                        {"id": "local-val-1", "name": "Red", "source_value_id": "val-red",
+                         "positive_fragments": ["vibrant red"], "negative_fragments": []},
+                    ],
+                }
+            ],
+            "constraints": [],
+            "combination_cardinality": "one_per_dimension",
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_schema_passes(self):
+        report = validate_content(ENTRY_DIMENSION_SCHEMA, self._schema_content())
+        self.assertTrue(report.ok, report.blocking)
+
+    def test_missing_product_entry_id_blocking(self):
+        report = validate_content(ENTRY_DIMENSION_SCHEMA, self._schema_content(product_entry_id=""))
+        self.assertFalse(report.ok)
+        codes = {f.code for f in report.blocking}
+        self.assertIn("schema_product_entry_required", codes)
+
+
+class TestPromptPolicyValidation(unittest.TestCase):
+
+    def _policy_content(self, **overrides):
+        base = {
+            "registered_tokens": [
+                {"name": "product_name", "description": "Product name", "required": True}
+            ],
+            "locked_phrases": [],
+            "brand_tone": {"style": "professional"},
+            "allowed_template_entry_ids": [],
+            "optional_clauses": [],
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_policy_passes(self):
+        report = validate_content(ENTRY_PROMPT_POLICY, self._policy_content())
+        self.assertTrue(report.ok, report.blocking)
+
+    def test_duplicate_token_names_blocking(self):
+        tokens = [
+            {"name": "x", "description": "X", "required": True},
+            {"name": "x", "description": "Y", "required": False},
+        ]
+        report = validate_content(ENTRY_PROMPT_POLICY, self._policy_content(registered_tokens=tokens))
+        self.assertFalse(report.ok)
+
+    def test_single_pass_no_recursion(self):
+        tokens = [
+            {"name": "a", "description": "A", "required": False, "default": "{{b}}"},
+            {"name": "b", "description": "B", "required": False, "default": "plain"},
+        ]
+        report = validate_content(ENTRY_PROMPT_POLICY, self._policy_content(registered_tokens=tokens))
+        self.assertFalse(report.ok)
+        codes = {f.code for f in report.blocking}
+        self.assertIn("policy_recursive_token", codes)
+
+
+class TestDataSourceValidation(unittest.TestCase):
+
+    def _ds_content(self, **overrides):
+        base = {
+            "adapter_kind": "manual",
+            "capabilities": ["price", "shipping"],
+            "market_context": ["US"],
+            "config": {},
+            "config_schema_version": "manual/1.0",
+            "execution_mode": "real",
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_manual_source_passes(self):
+        report = validate_content(ENTRY_DATA_SOURCE, self._ds_content())
+        self.assertTrue(report.ok, report.blocking)
+
+    def test_invalid_adapter_kind_blocking(self):
+        report = validate_content(ENTRY_DATA_SOURCE, self._ds_content(adapter_kind="unknown"))
+        self.assertFalse(report.ok)
+
+    def test_invalid_execution_mode_blocking(self):
+        report = validate_content(ENTRY_DATA_SOURCE, self._ds_content(execution_mode="invalid"))
+        self.assertFalse(report.ok)
+
+
+class TestManualFactSetValidation(unittest.TestCase):
+
+    def _fact_content(self, **overrides):
+        base = {
+            "data_source_entry_id": "lib_ds_001",
+            "facts": [
+                {
+                    "fact_id": "fact-001",
+                    "fact_type": "price",
+                    "offer_version_id": "lib_offer_v1",
+                    "country_code": "US",
+                    "amount": "29.99",
+                    "currency": "USD",
+                    "valid_from": "2026-09-01",
+                    "valid_to": "2026-12-31",
+                    "evidence_source": "manual_entry",
+                    "evidence_note": "Q4 pricing",
+                }
+            ],
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_price_fact_passes(self):
+        report = validate_content(ENTRY_MANUAL_FACT_SET, self._fact_content())
+        self.assertTrue(report.ok, report.blocking)
+
+    def test_float_amount_blocking(self):
+        facts = [{**self._fact_content()["facts"][0], "amount": 29.99}]
+        report = validate_content(ENTRY_MANUAL_FACT_SET, self._fact_content(facts=facts))
+        self.assertFalse(report.ok)
+        codes = {f.code for f in report.blocking}
+        self.assertIn("fact_amount_not_string", codes)
+
+    def test_nan_amount_blocking(self):
+        facts = [{**self._fact_content()["facts"][0], "amount": "NaN"}]
+        report = validate_content(ENTRY_MANUAL_FACT_SET, self._fact_content(facts=facts))
+        self.assertFalse(report.ok)
+
+    def test_lowercase_currency_blocking(self):
+        facts = [{**self._fact_content()["facts"][0], "currency": "usd"}]
+        report = validate_content(ENTRY_MANUAL_FACT_SET, self._fact_content(facts=facts))
+        self.assertFalse(report.ok)
+
+    def test_missing_valid_to_blocking(self):
+        fact = {k: v for k, v in self._fact_content()["facts"][0].items() if k != "valid_to"}
+        report = validate_content(ENTRY_MANUAL_FACT_SET, self._fact_content(facts=[fact]))
+        self.assertFalse(report.ok)
+
+
+class TestTruthResolutionPolicyValidation(unittest.TestCase):
+
+    def _policy_content(self, **overrides):
+        base = {
+            "rules": [
+                {
+                    "fact_type": "price",
+                    "source_priority": ["lib_ds_001"],
+                    "allow_fallback": False,
+                    "max_staleness_seconds": 86400,
+                    "on_failure": "block",
+                }
+            ],
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_policy_passes(self):
+        report = validate_content(ENTRY_TRUTH_RESOLUTION_POLICY, self._policy_content())
+        self.assertTrue(report.ok, report.blocking)
+
+    def test_duplicate_fact_type_blocking(self):
+        rules = [
+            {"fact_type": "price", "source_priority": ["ds1"],
+             "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "block"},
+            {"fact_type": "price", "source_priority": ["ds2"],
+             "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "block"},
+        ]
+        report = validate_content(ENTRY_TRUTH_RESOLUTION_POLICY, self._policy_content(rules=rules))
+        self.assertFalse(report.ok)
+
+    def test_price_cannot_degrade(self):
+        rules = [{"fact_type": "price", "source_priority": ["ds1"],
+                  "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "degrade"}]
+        report = validate_content(ENTRY_TRUTH_RESOLUTION_POLICY, self._policy_content(rules=rules))
+        self.assertFalse(report.ok)
+
+
+class TestDependencyExtraction(unittest.TestCase):
+
+    def test_dimension_schema_dependencies(self):
+        content = {
+            "product_entry_id": "lib_abc123",
+            "derived_from_template_version_id": "lib_tmpl_v1",
+            "dimensions": [],
+        }
+        edges = extract_dependencies(ENTRY_DIMENSION_SCHEMA, content)
+        relations = {e.relation for e in edges}
+        self.assertIn("schema_template", relations)
+        self.assertIn("schema_product", relations)
+
+    def test_manual_fact_set_dependencies(self):
+        content = {
+            "data_source_entry_id": "lib_ds_001",
+            "facts": [],
+        }
+        edges = extract_dependencies(ENTRY_MANUAL_FACT_SET, content)
+        relations = {e.relation for e in edges}
+        self.assertIn("fact_set_data_source", relations)
+
+    def test_truth_resolution_policy_dependencies(self):
+        content = {
+            "rules": [
+                {"fact_type": "price", "source_priority": ["lib_ds_001", "lib_ds_002"],
+                 "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "block"},
+            ],
+        }
+        edges = extract_dependencies(ENTRY_TRUTH_RESOLUTION_POLICY, content)
+        relations = {e.relation for e in edges}
+        self.assertIn("truth_policy_data_source", relations)
+        self.assertEqual(len([e for e in edges if e.relation == "truth_policy_data_source"]), 2)
+
+    def test_prompt_policy_dependencies(self):
+        content = {
+            "registered_tokens": [],
+            "allowed_template_entry_ids": ["lib_tmpl_1", "lib_tmpl_2"],
+        }
+        edges = extract_dependencies(ENTRY_PROMPT_POLICY, content)
+        relations = {e.relation for e in edges}
+        self.assertIn("policy_template", relations)
+        self.assertEqual(len([e for e in edges if e.relation == "policy_template"]), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

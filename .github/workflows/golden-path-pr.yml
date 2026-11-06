@@ -1,0 +1,203 @@
+name: Golden Path PR Validation
+on:
+  pull_request:
+    paths:
+      - 'web/e2e/golden-path/**'
+      - 'web/e2e/*/suite-contract.ts'
+      - 'web/lib/control-plane-provisioning/**'
+      - 'web/lib/onboarding.ts'
+      - 'web/lib/entitlements/**'
+      - 'web/scripts/golden-path-provisioning.ts'
+      - 'test-support/**'
+      - 'app/meta/**'
+      - 'app/providers/**'
+      - 'app/entitlements/**'
+      - 'docker-compose.yml'
+      - 'docker-compose.golden-path.yml'
+      - 'deploy/docker/**'
+      - 'scripts/ci/validate_topology.py'
+      - 'scripts/ci/redact_compose_logs.py'
+      - 'scripts/ci/verify_golden_artifacts.py'
+      - 'web/components/workspace/**'
+      - 'web/components/shared/shell/**'
+      - 'web/pages/w/**'
+      - 'contracts/e2e/**'
+      - 'docs/architecture/**'
+      - 'docs/product/**'
+      - 'alembic/versions/**'
+      - '.github/workflows/golden-path-*.yml'
+      - 'Makefile'
+      - 'web/package.json'
+      - 'web/package-lock.json'
+      - 'requirements*.txt'
+
+concurrency:
+  group: golden-path-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  COMPOSE_PROJECT: gp-ci-${{ github.run_id }}
+  BROKER_SOCKET_DIR: /var/run/lifecycle-broker
+  TOPOLOGY_ATTESTATION_DIR: /var/run/topology
+  ARTIFACT_DIR: /tmp/gp-artifacts
+  MAIL_SINK_TOKEN_FILE: ${{ github.workspace }}/secrets/mail_sink_token.txt
+
+jobs:
+  golden-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: test-support/lifecycle-broker/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Build lifecycle broker
+        run: |
+          npm ci --prefix test-support/lifecycle-broker
+          npm run build --prefix test-support/lifecycle-broker
+
+      - name: Generate ephemeral keypair
+        run: |
+          sudo install -d -m 0777 "$TOPOLOGY_ATTESTATION_DIR" "$BROKER_SOCKET_DIR" "$ARTIFACT_DIR"
+          openssl genpkey -algorithm Ed25519 \
+            -out "$TOPOLOGY_ATTESTATION_DIR/private.pem" 2>/dev/null
+          openssl pkey -in "$TOPOLOGY_ATTESTATION_DIR/private.pem" \
+            -pubout -out "$TOPOLOGY_ATTESTATION_DIR/public.pem" 2>/dev/null
+
+      - name: Generate mail-sink token
+        run: |
+          mkdir -p secrets
+          head -c 32 /dev/urandom | base64 -w0 > secrets/mail_sink_token.txt
+
+      - name: Start lifecycle broker
+        run: |
+          BROKER_SOCKET="$BROKER_SOCKET_DIR/broker.sock" \
+            node test-support/lifecycle-broker/dist/broker.js &
+          timeout 10 bash -c 'until [ -S "$BROKER_SOCKET_DIR/broker.sock" ]; do sleep 0.2; done'
+
+      - name: Build and validate topology (Pass 1 — config)
+        run: |
+          python3 scripts/ci/validate_topology.py \
+            --phase config \
+            --project-name "$COMPOSE_PROJECT" \
+            --compose-file docker-compose.yml \
+            --compose-file docker-compose.golden-path.yml
+
+      - name: Compose up
+        run: |
+          docker compose \
+            -p "$COMPOSE_PROJECT" \
+            -f docker-compose.yml \
+            -f docker-compose.golden-path.yml \
+            up -d --build --wait
+        timeout-minutes: 10
+
+      - name: Wait for service readiness
+        run: |
+          for svc in web api worker controlled-provider mail-sink; do
+            deadline=$((SECONDS + 120))
+            while true; do
+              container_id="$(docker compose \
+                -p "$COMPOSE_PROJECT" \
+                -f docker-compose.yml \
+                -f docker-compose.golden-path.yml \
+                ps -q "$svc")"
+              state="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
+              if [[ "$state" == "healthy" ]] || [[ "$svc" == "worker" && "$state" == "running" ]]; then
+                echo "$svc is $state"
+                break
+              fi
+              if (( SECONDS >= deadline )); then
+                echo "$svc did not become ready (state=${state:-missing})" >&2
+                docker compose \
+                  -p "$COMPOSE_PROJECT" \
+                  -f docker-compose.yml \
+                  -f docker-compose.golden-path.yml \
+                  ps
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
+      - name: Validate topology (Pass 2 — live) and sign attestation
+        run: |
+          python3 scripts/ci/validate_topology.py \
+            --phase live \
+            --project-name "$COMPOSE_PROJECT" \
+            --compose-file docker-compose.yml \
+            --compose-file docker-compose.golden-path.yml \
+            --private-key "$TOPOLOGY_ATTESTATION_DIR/private.pem" \
+            --write-signed-attestation "$TOPOLOGY_ATTESTATION_DIR/attestation.json"
+
+      - name: Run golden-path test
+        run: |
+          mkdir -p "$ARTIFACT_DIR"
+          docker compose \
+            -p "$COMPOSE_PROJECT" \
+            -f docker-compose.yml \
+            -f docker-compose.golden-path.yml \
+            run --rm --no-deps \
+            -e ARTIFACT_DIR=/results \
+            -e COMMIT_SHA=${{ github.sha }} \
+            -e COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT" \
+            playwright \
+            npx playwright test \
+              --config=e2e/golden-path/playwright.config.golden.ts
+        timeout-minutes: 40
+
+      - name: Redact compose logs
+        if: always()
+        run: |
+          docker compose \
+            -p "$COMPOSE_PROJECT" \
+            -f docker-compose.yml \
+            -f docker-compose.golden-path.yml \
+            logs --no-color > /tmp/raw-compose-logs.txt 2>&1 || true
+          python3 scripts/ci/redact_compose_logs.py \
+            --project-name "$COMPOSE_PROJECT" \
+            --raw-input /tmp/raw-compose-logs.txt \
+            --output "$ARTIFACT_DIR/logs/compose-logs-redacted.txt"
+
+      - name: Verify artifacts
+        if: always()
+        id: verify
+        run: |
+          python3 scripts/ci/verify_golden_artifacts.py \
+            --artifact-dir "$ARTIFACT_DIR"
+
+      - name: Upload artifacts
+        if: always() && steps.verify.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-path-results
+          path: ${{ env.ARTIFACT_DIR }}
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker compose \
+            -p "$COMPOSE_PROJECT" \
+            -f docker-compose.yml \
+            -f docker-compose.golden-path.yml \
+            down -v --remove-orphans || true
+          sudo rm -rf "$TOPOLOGY_ATTESTATION_DIR" "$BROKER_SOCKET_DIR"
+          rm -rf secrets/

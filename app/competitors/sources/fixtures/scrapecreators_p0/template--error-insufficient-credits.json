@@ -1,0 +1,16 @@
+{
+ "provenance": {
+  "kind": "synthesized",
+  "reason": "P0 never ran out of credits; 402 means out of credits, the body shape is not verified",
+  "built_by": "scripts/build_competitor_mock_fixtures.py"
+ },
+ "template": {
+  "path": "*",
+  "use": "insufficient_credits"
+ },
+ "status": 402,
+ "body": {
+  "success": false,
+  "message": "Out of credits. Buy more credits to continue."
+ }
+}

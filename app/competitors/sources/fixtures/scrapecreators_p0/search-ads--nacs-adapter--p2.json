@@ -1,0 +1,1326 @@
+{
+ "provenance": {
+  "kind": "recorded",
+  "run": "p0-scrapecreators/20261026-163158",
+  "raw_file": "011-*.json",
+  "captured_at": "2026-10-26T08:31:58+00:00",
+  "latency_ms": 2246,
+  "sanitized_by": "scripts/build_competitor_mock_fixtures.py"
+ },
+ "request": {
+  "path": "/v1/facebook/adLibrary/search/ads",
+  "params": {
+   "query": "NACS adapter",
+   "country": "US",
+   "status": "ACTIVE",
+   "cursor": "mock-cursor--nacs-adapter--p2"
+  }
+ },
+ "status": 200,
+ "body": {
+  "success": true,
+  "credits_remaining": 90,
+  "credits_charged": 1,
+  "searchResults": [
+   {
+    "ad_archive_id": "1000000000110005",
+    "collation_count": 1,
+    "collation_id": "1000000000000178",
+    "page_id": "100000000000010",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/acmecharge",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Why wait for an open NACS charger when a compatible CCS fast charger is free?  \n\nThe Acme Charge CCS1 to NACS DC Adapter gives your NACS-ready EV access to 12,000+ fast-charging options when you need them."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Skip the Wait and Charge at CCS.",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/929c2bb04b1e1d46.mp4?oe=6AE4FABE",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/9668b2450d6844d7.png?oe=6AE4D623",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/788e23e505f9081c.mp4?oe=6AE4F1EB",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "WHATSAPP",
+     "THREADS"
+    ],
+    "start_date": 1790924400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000110005",
+    "start_date_string": "2026-10-02T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000161",
+    "collation_count": 1,
+    "collation_id": "1000000000000144",
+    "page_id": "100000000000010",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/acmecharge",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Why wait for an open Supercharger stall when CCS fast chargers nearby have free stalls? Unlock 12,000+ public CCS stations nationwide with the Acme Charge CCS to NACS Adapter.  \n\n📉 Final Days – Autumn Sale: $229.99 ➔ $169.99",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "Charge Fast, Wait Less",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d190fe86b409d8fd.png?oe=6AE4FD2D",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ae66a4a43c100374.png?oe=6AE4ED02",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Why wait for an open Supercharger stall when CCS fast chargers nearby have free stalls? Unlock 12,000+ public CCS stations nationwide with the Acme Charge CCS to NACS Adapter.  \n\n📉 Final Days – Autumn Sale: $229.99 ➔ $169.99",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "Charge Fast, Wait Less",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/4264d5620aae4eff.png?oe=6AE4FA6E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/03f506863d99b283.png?oe=6AE4F110",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Why wait for an open Supercharger stall when CCS fast chargers nearby have free stalls? Unlock 12,000+ public CCS stations nationwide with the Acme Charge CCS to NACS Adapter.  \n\n📉 Final Days – Autumn Sale: $229.99 ➔ $169.99",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "Charge Fast, Wait Less",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/302bf7ca751353e8.png?oe=6AE4C9DB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ea6396fa4fd5cf48.png?oe=6AE4EE45",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Why wait for an open Supercharger stall when CCS fast chargers nearby have free stalls? Unlock 12,000+ public CCS stations nationwide with the Acme Charge CCS to NACS Adapter.  \n\n📉 Final Days – Autumn Sale: $229.99 ➔ $169.99"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Charge Fast, Wait Less",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "WHATSAPP",
+     "THREADS"
+    ],
+    "start_date": 1791961200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000161",
+    "start_date_string": "2026-10-14T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "100000000011043",
+    "collation_count": 1,
+    "collation_id": "950000000000018",
+    "page_id": "100000000000010",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/acmecharge",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Charge anywhere, anytime. \n\nThis Acme Charge bundle pairs a portable Level 1 & 2 Halcyon charger with a high-speed CCS adapter—so you can use standard home outlets and 12,000+ fast-charging stations nationwide. \n\nComplete your kit and save $60.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-level-1-2-nacs-ev-charger-and-ccs-to-nacs-adapter-bundle",
+       "title": "Charging Without Limits",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/cbe3267e0fd02f7b.png?oe=6AE4E39C",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/eea47b99870423cc.png?oe=6AE4D23E",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Charge anywhere, anytime. \n\nThis Acme Charge bundle pairs a portable Level 1 & 2 Halcyon charger with a high-speed CCS adapter—so you can use standard home outlets and 12,000+ fast-charging stations nationwide. \n\nComplete your kit and save $60.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-level-1-2-nacs-ev-charger-and-ccs-to-nacs-adapter-bundle",
+       "title": "Charging Without Limits",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1d461e75b28aabb0.png?oe=6AE4E32D",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/cfd2aa8e1e3eea2f.png?oe=6AE4F23D",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Charge anywhere, anytime. \n\nThis Acme Charge bundle pairs a portable Level 1 & 2 Halcyon charger with a high-speed CCS adapter—so you can use standard home outlets and 12,000+ fast-charging stations nationwide. \n\nComplete your kit and save $60.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-portable-level-1-2-nacs-ev-charger-and-ccs-to-nacs-adapter-bundle",
+       "title": "Charging Without Limits",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/cbe3267e0fd02f7b.png?oe=6AE4E39C",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/eea47b99870423cc.png?oe=6AE4D23E",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Charge anywhere, anytime. \n\nThis Acme Charge bundle pairs a portable Level 1 & 2 Halcyon charger with a high-speed CCS adapter—so you can use standard home outlets and 12,000+ fast-charging stations nationwide. \n\nComplete your kit and save $60."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-portable-level-1-2-nacs-ev-charger-and-ccs-to-nacs-adapter-bundle",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Charging Without Limits",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1791874800,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1773990000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=100000000011043",
+    "start_date_string": "2026-03-20T07:00:00.000Z",
+    "end_date_string": "2026-10-13T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100011",
+    "collation_count": null,
+    "collation_id": null,
+    "page_id": "10000000001",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "10000000001",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/BazaarWholesaleGlobal",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Bazaar Wholesale",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "m.bazaar-wholesale.example",
+     "cta_text": "Learn more",
+     "cards": [
+      {
+       "body": "Source Vehicle Parts & Accessories on Bazaar Wholesale. Bazaar Wholesale - the B2B Marketplace for Every Trade.",
+       "cta_type": "LEARN_MORE",
+       "caption": "m.bazaar-wholesale.example",
+       "link_description": "from $30.50",
+       "link_url": "https://www.bazaar-wholesale.example/product-detail/goodhaul_1600000000019.html",
+       "title": "New 16A Type 2 Electric Vehicle Charging Cable with Plug and Connector",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b39079e633a94628.png?oe=6AE4CFB1",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/b39079e633a94628.png?oe=6AE4CFB1",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Source Vehicle Parts & Accessories on Bazaar Wholesale. Bazaar Wholesale - the B2B Marketplace for Every Trade.",
+       "cta_type": "LEARN_MORE",
+       "caption": "m.bazaar-wholesale.example",
+       "link_description": "from $52.50",
+       "link_url": "https://www.bazaar-wholesale.example/product-detail/goodhaul_1600000000020.html",
+       "title": "Hot Sale Type2 to Type1 32A 7KW EV Charging Cable, 5m, Double-headed EV Connector Plug",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/dc2e70dde0d00686.png?oe=6AE4FC9F",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/dc2e70dde0d00686.png?oe=6AE4FC9F",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Source Vehicle Parts & Accessories on Bazaar Wholesale. Bazaar Wholesale - the B2B Marketplace for Every Trade.",
+       "cta_type": "LEARN_MORE",
+       "caption": "m.bazaar-wholesale.example",
+       "link_description": "from $29",
+       "link_url": "https://www.bazaar-wholesale.example/product-detail/goodhaul_1600000000021.html",
+       "title": "Factory 32A GB/T to Type 1 AC EV Adapter, EVSE Charger Converter for New Energy Vehicles",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/331ef3c53003c920.png?oe=6AE4D8D0",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/331ef3c53003c920.png?oe=6AE4D8D0",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Source Vehicle Parts & Accessories on Bazaar Wholesale. Bazaar Wholesale - the B2B Marketplace for Every Trade.",
+       "cta_type": "LEARN_MORE",
+       "caption": "m.bazaar-wholesale.example",
+       "link_description": "from $46.60",
+       "link_url": "https://www.bazaar-wholesale.example/product-detail/goodhaul_1600000000022.html",
+       "title": "16A 11KW Type 2 to Type 2 EV Charging Cable 5m, Dual Plug for Home and Public Charging Stations",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ab55be14a3fcf747.png?oe=6AE4CD46",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ab55be14a3fcf747.png?oe=6AE4CD46",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Source Vehicle Parts & Accessories on Bazaar Wholesale. Bazaar Wholesale - the B2B Marketplace for Every Trade.",
+       "cta_type": "LEARN_MORE",
+       "caption": "m.bazaar-wholesale.example",
+       "link_description": "from $24",
+       "link_url": "https://www.bazaar-wholesale.example/product-detail/goodhaul_1600000000023.html",
+       "title": "NEMA Adapter NACS EU 16A Schuko Adapter Gen 2 Universal Mobile Connector with TPE Cable Halcyon Aria Vale Crest-EV Connectors",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/082c84f1e4ede29a.png?oe=6AE4CE67",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/082c84f1e4ede29a.png?oe=6AE4CE67",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Source Vehicle Parts & Accessories on Bazaar Wholesale. Bazaar Wholesale - the B2B Marketplace for Every Trade.",
+       "cta_type": "LEARN_MORE",
+       "caption": "m.bazaar-wholesale.example",
+       "link_description": "from $27.30",
+       "link_url": "https://www.bazaar-wholesale.example/product-detail/goodhaul_1600000000024.html",
+       "title": "Factory Hot Selling 16A Charging Cables, Suitable for Halcyon EV Connector NACS Charging Guns with 5m Cable",
+       "cta_text": "Learn More",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/e29a95c48d0b420c.png?oe=6AE4E52B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e29a95c48d0b420c.png?oe=6AE4E52B",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Source Vehicle Parts & Accessories on Bazaar Wholesale. Bazaar Wholesale - the B2B Marketplace for Every Trade."
+     },
+     "cta_type": "LEARN_MORE",
+     "display_format": "DPA",
+     "link_description": "from $30.50",
+     "link_url": "https://m.bazaar-wholesale.example/lp/group",
+     "images": [],
+     "page_categories": [
+      "Product/service"
+     ],
+     "page_like_count": 28900800,
+     "title": "New 16A Type 2 Electric Vehicle Charging Cable with Plug and Connector",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Bazaar Wholesale",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": true,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "WHATSAPP",
+     "THREADS"
+    ],
+    "start_date": 1792738800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100011",
+    "start_date_string": "2026-10-23T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000264",
+    "collation_count": null,
+    "collation_id": null,
+    "page_id": "100000000000018",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000018",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/wrenfield",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Wrenfield",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "wrenfield-life.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Take your Halcyon further with accessories made by Halcyon drivers, for Halcyon drivers. Designed in-house for a precise fit and function, these upgrades bring smarter storage, better charging, and a more refined drive.",
+       "cta_type": "SHOP_NOW",
+       "caption": "wrenfield-life.example",
+       "link_description": "Discover Wrenfield, the premium brand for Halcyon accessories. From phone mounts to smart USB hubs, our in-house designs upgrade your Halcyon with thoughtful solutions.",
+       "link_url": "https://www.wrenfield-life.example/products/hpc-to-ccs2-ac-adapter",
+       "title": "HPC(NACS) to CCS2-AC (TYPE2) Adapter",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b7debc49e4575053.png?oe=6AE4FBE7",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/b7debc49e4575053.png?oe=6AE4FBE7",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Take your Halcyon further with accessories made by Halcyon drivers, for Halcyon drivers. Designed in-house for a precise fit and function, these upgrades bring smarter storage, better charging, and a more refined drive.",
+       "cta_type": "SHOP_NOW",
+       "caption": "wrenfield-life.example",
+       "link_description": "Discover Wrenfield, the premium brand for Halcyon accessories. From phone mounts to smart USB hubs, our in-house designs upgrade your Halcyon with thoughtful solutions.",
+       "link_url": "https://www.wrenfield-life.example/products/microsd-memory-card-256g",
+       "title": "MicroSD Memory Card 256G for Halcyon",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1c770fe09d24a39c.png?oe=6AE4CFDE",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/1c770fe09d24a39c.png?oe=6AE4CFDE",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Take your Halcyon further with accessories made by Halcyon drivers, for Halcyon drivers. Designed in-house for a precise fit and function, these upgrades bring smarter storage, better charging, and a more refined drive.",
+       "cta_type": "SHOP_NOW",
+       "caption": "wrenfield-life.example",
+       "link_description": "Discover Wrenfield, the premium brand for Halcyon accessories. From phone mounts to smart USB hubs, our in-house designs upgrade your Halcyon with thoughtful solutions.",
+       "link_url": "https://www.wrenfield-life.example/products/aria-glass-roof-sunshade",
+       "title": "Aria / Refreshed Aria Glass Roof Sunshade (US Version)",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/78dac16155929ea5.png?oe=6AE4CD9B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/78dac16155929ea5.png?oe=6AE4CD9B",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Take your Halcyon further with accessories made by Halcyon drivers, for Halcyon drivers. Designed in-house for a precise fit and function, these upgrades bring smarter storage, better charging, and a more refined drive.",
+       "cta_type": "SHOP_NOW",
+       "caption": "wrenfield-life.example",
+       "link_description": "Discover Wrenfield, the premium brand for Halcyon accessories. From phone mounts to smart USB hubs, our in-house designs upgrade your Halcyon with thoughtful solutions.",
+       "link_url": "https://www.wrenfield-life.example/products/j1772-to-hpc-adapter",
+       "title": "J1772 to HPC(NACS) Adapter",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/6182cc4c8bd45a08.png?oe=6AE4D7E7",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/6182cc4c8bd45a08.png?oe=6AE4D7E7",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Take your Halcyon further with accessories made by Halcyon drivers, for Halcyon drivers. Designed in-house for a precise fit and function, these upgrades bring smarter storage, better charging, and a more refined drive.",
+       "cta_type": "SHOP_NOW",
+       "caption": "wrenfield-life.example",
+       "link_description": "Discover Wrenfield, the premium brand for Halcyon accessories. From phone mounts to smart USB hubs, our in-house designs upgrade your Halcyon with thoughtful solutions.",
+       "link_url": "https://www.wrenfield-life.example/products/aria-glass-roof-sunshade",
+       "title": "Aria / Refreshed Aria Glass Roof Sunshade (US Version)",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d53f518623d9c7b8.png?oe=6AE4DFF5",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/d53f518623d9c7b8.png?oe=6AE4DFF5",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Take your Halcyon further with accessories made by Halcyon drivers, for Halcyon drivers. Designed in-house for a precise fit and function, these upgrades bring smarter storage, better charging, and a more refined drive.",
+       "cta_type": "SHOP_NOW",
+       "caption": "wrenfield-life.example",
+       "link_description": "Discover Wrenfield, the premium brand for Halcyon accessories. From phone mounts to smart USB hubs, our in-house designs upgrade your Halcyon with thoughtful solutions.",
+       "link_url": "https://www.wrenfield-life.example/products/ccs2-ac-to-hpc-adapter",
+       "title": "CCS2-AC (TYPE2) to HPC(NACS) Adapter",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/c80fc7de1e94ee44.png?oe=6AE4F947",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/c80fc7de1e94ee44.png?oe=6AE4F947",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Take your Halcyon further with accessories made by Halcyon drivers, for Halcyon drivers. Designed in-house for a precise fit and function, these upgrades bring smarter storage, better charging, and a more refined drive."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DPA",
+     "link_description": "Discover Wrenfield, the premium brand for Halcyon accessories. From phone mounts to smart USB hubs, our in-house designs upgrade your Halcyon with thoughtful solutions.",
+     "link_url": "https://www.wrenfield-life.example/",
+     "images": [],
+     "page_categories": [
+      "Electronics"
+     ],
+     "page_like_count": 2736,
+     "title": "HPC(NACS) to CCS2-AC (TYPE2) Adapter",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Wrenfield",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "WHATSAPP",
+     "THREADS"
+    ],
+    "start_date": 1792134000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000264",
+    "start_date_string": "2026-10-16T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000314",
+    "collation_count": 1,
+    "collation_id": "1000000000000362",
+    "page_id": "100000000000010",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/acmecharge",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "See details",
+     "cards": [],
+     "body": {
+      "text": "The Acme Charge CCS to NACS Adapter opens 12,000+ extra fast chargers nationwide:  \n\n⚡ Huge Coverage: Use Voltway, Gridline, and every CCS station  \n\n⚡ Built-In Safety: Automatic heat monitoring guards your battery  \n\n⚡ All-Weather Tough: Works in deep cold and high heat (-22°F to 122°F)  \n\n⚡ Plug & Play: No setup or app needed—just connect and charge  \n\nDon't plan a road trip without it 👇"
+     },
+     "cta_type": "SEE_DETAILS",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Halcyon and NACS EV Owners: Stop Limiting Your Charging Options ⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/c1d056dd7b036984.mp4?oe=6AE4C9DA",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/e2c97fdb7a5947aa.png?oe=6AE4CE96",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/8f48a075fc2715ec.mp4?oe=6AE4F04A",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1791183600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000314",
+    "start_date_string": "2026-10-05T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "950000000000020",
+    "collation_count": 1,
+    "collation_id": "100000000011048",
+    "page_id": "100000000000010",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/acmecharge",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "The Acme Charge CCS to NACS Adapter opens 12,000+ extra fast chargers nationwide:  \n\n⚡ Huge Coverage: Use Voltway, Gridline, and every CCS station  \n\n⚡ Built-In Safety: Automatic heat monitoring guards your battery  \n\n⚡ All-Weather Tough: Works in deep cold and high heat (-22°F to 122°F)  \n\n⚡ Plug & Play: No setup or app needed—just connect and charge  \n\nDon't plan a road trip without it 👇"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Halcyon and NACS EV Owners: Stop Limiting Your Charging Options ⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/01e0fe766c7cf259.mp4?oe=6AE4EDD1",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/0705981ce234e61a.png?oe=6AE4DFC5",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/4642c8348751d9aa.mp4?oe=6AE4F915",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1791183600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=950000000000020",
+    "start_date_string": "2026-10-05T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000345",
+    "collation_count": 1,
+    "collation_id": "1000000000000311",
+    "page_id": "100000000000023",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000023",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/Corvaneenergystore",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Corvane Energy Store - North America",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "store.corvane-energy.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Picking a home charger for one car is simple.\nBuying one that still fits after the next car is harder.\n\nCorvane HomeCharger 80A works with J1772-equipped EVs and PHEVs across North America. Supported NACS vehicles can charge with a compatible J1772-to-NACS AC adapter, sold separately.\n\nConfirm vehicle and adapter compatibility before use."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "IMAGE",
+     "link_description": "Broad EV/PHEV compatibility for home charging.",
+     "link_url": "https://store.corvane-energy.example/products/corvane-homecharger-ac-home-80a-19-2kw-ev-charger",
+     "images": [
+      {
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/1b4426df21899130.png?oe=6AE4F886",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/6d7a451506849dd9.png?oe=6AE4E322",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "page_categories": [
+      "Motor vehicle company"
+     ],
+     "page_like_count": 2371,
+     "title": "Made for This Car, and the Next.",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Corvane Energy Store - North America",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1792652400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000345",
+    "start_date_string": "2026-10-22T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000262",
+    "collation_count": 1,
+    "collation_id": "1000000000000105",
+    "page_id": "100000000000010",
+    "snapshot": {
+     "branded_content": {
+      "page_id": "950000000000015",
+      "page_is_deleted": false,
+      "page_profile_uri": "https://www.instagram.com/_u/creator.example.15",
+      "page_name": "creator.example.15"
+     },
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/acmecharge",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "Not every Halcyon Supercharger delivers the same power. Sometimes a nearby CCS fast charger is the better pick. \n\nThe Acme Charge CCS to NACS Adapter gives you access to 12,000+ extra CCS fast chargers, so you're not tied to the Halcyon Supercharger network. \n\n⚡ More High-Power Options: Use CCS fast chargers when Supercharger speeds are limited \n\n⚡ Skip the Lines: Avoid crowded Superchargers and find other charging stations nearby \n\n⚡ More Charging Freedom: Widen your fast-charging options wherever the road goes \n\nDon't let a single charging network limit you. 👇"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "Superchargers Slow or Crowded? Switch to CCS ⚡",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/437d928bf9be0226.mp4?oe=6AE4E239",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/96a20abd09722a5f.png?oe=6AE4F69D",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/8afd2a3174cb791f.mp4?oe=6AE4F7FC",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "WHATSAPP",
+     "THREADS"
+    ],
+    "start_date": 1791961200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000262",
+    "start_date_string": "2026-10-14T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "10000000001000235",
+    "collation_count": 1,
+    "collation_id": "1000000000000131",
+    "page_id": "100000000011001",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000011001",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/10000000001102",
+     "root_reshared_post": null,
+     "byline": "",
+     "disclaimer_label": null,
+     "page_name": "Kestrel Power",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "backerhub.example/kestrelpower",
+     "cta_text": "Book now",
+     "cards": [],
+     "body": {
+      "text": "No built-in V2L in your Halcyon? The Kestrel K2 NACS adapter brings 3,600W of AC power to older H1/H2/H3/H4. Run high-wattage gear straight from your battery anytime, anywhere."
+     },
+     "cta_type": "BOOK_TRAVEL",
+     "display_format": "VIDEO",
+     "link_description": "3.6kW output • Safe and dependable",
+     "link_url": "https://www.backerhub.example/projects/kestrelpower/kestrel-k2-v2l-adapter-nacs-ccs1",
+     "images": [],
+     "page_categories": [
+      "Electronics"
+     ],
+     "page_like_count": 103,
+     "title": "3,600W Heavy-Duty V2L for Older Halcyons",
+     "videos": [
+      {
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/0cd96f4854cc34eb.mp4?oe=6AE4FC2D",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/3ffd511e5a5bb1b9.png?oe=6AE4DA35",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/c8615c52ab87daca.mp4?oe=6AE4CA2A",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Kestrel Power",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787382000,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=10000000001000235",
+    "start_date_string": "2026-08-22T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   }
+  ],
+  "cursor": "mock-cursor--nacs-adapter--p3"
+ }
+}

@@ -1,0 +1,3563 @@
+{
+  "project": {
+    "id": "mp_7f9b6ff1de214ebcb92850e6a572b1de",
+    "revision": 7,
+    "state": "plan_confirmed",
+    "source_text": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+    "product_id": "prod_b544861839dd49bf8d624a5a3cab3de7",
+    "understanding": {
+      "product_name": "Alpha 充电器",
+      "category_need": "待核对：客户希望解决产品资料描述的问题。",
+      "product_choice_reason": "待核对：资料中的差异是否构成有证据的购买理由。",
+      "audience": "待确认的目标客户",
+      "situations": ["待确认的使用情境"],
+      "objections": ["购买前需要哪些可信依据？"],
+      "facts": [
+        {
+          "id": "f1",
+          "statement": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+          "source_quote": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+          "confirmation": "confirmed"
+        }
+      ],
+      "inferences": [
+        {
+          "id": "i1",
+          "statement": "清楚展示产品如何解决问题可能有助于理解。",
+          "rationale": "示例假设，尚无投放证据。",
+          "fact_ids": ["f1"]
+        }
+      ],
+      "unknowns": ["这是受控 Mock 示例，请使用正式 AI 起草产品专属建议。"]
+    },
+    "plan": {
+      "stage": "screen_angles",
+      "question": "哪套购买主张与表达组合值得进一步探索？",
+      "comparison_kind": "whole_combinations",
+      "changed": ["购买主张与表达"],
+      "allowed_changes": ["文案和布局随表达调整"],
+      "held_constant": ["同一产品、Offer、受众与投放时期"],
+      "limitations": [
+        "同时改变主张与表达，不能归因为角度独立效果。",
+        "受控 Mock 无真实效果证据。"
+      ],
+      "limited_expression_coverage": false,
+      "conclusion_scope": "combination",
+      "audience": "待确认的目标客户",
+      "market": "待确认",
+      "placement": "Meta 信息流，待确认",
+      "offer": "待确认销售方案",
+      "landing_page": "待确认落地页",
+      "baseline": "无基准，按预先确认的业务目标评估",
+      "currency": "USD",
+      "media_budget": "300",
+      "small_round_budget": "100",
+      "duration_days": 7,
+      "allocation": "计划分配相同媒体预算；实际分配在回传时核对。",
+      "executions_per_combination": 1,
+      "rules": {
+        "business_metric": "cpa",
+        "threshold": "30",
+        "business_goal": "待确认：CPA 不超过 30 美元。",
+        "evidence_requirements": "待确认最低投放、购买量与区间规则；不足不判胜负。",
+        "evaluation_schedule": "周期结束并等待归因成熟后评估。",
+        "stop_rule": "达到本小轮预算或七天时停止新增花费；数据不足可结束。",
+        "max_small_rounds": 3
+      },
+      "angles": [
+        {
+          "id": "a1",
+          "proposition": "清楚理解产品价值",
+          "rationale": "仅用于验证流程的示例假设。",
+          "fact_ids": ["f1"],
+          "inference_ids": [],
+          "expressions": [
+            {
+              "id": "e1_1",
+              "name": "使用情境演示",
+              "description": "用使用情境演示讲清主张。",
+              "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+              "required_evidence": []
+            },
+            {
+              "id": "e1_2",
+              "name": "问题与解决过程",
+              "description": "用问题与解决过程讲清主张。",
+              "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+              "required_evidence": []
+            }
+          ]
+        },
+        {
+          "id": "a2",
+          "proposition": "减少购买顾虑",
+          "rationale": "仅用于验证流程的示例假设。",
+          "fact_ids": ["f1"],
+          "inference_ids": [],
+          "expressions": [
+            {
+              "id": "e2_1",
+              "name": "疑问问答",
+              "description": "用疑问问答讲清主张。",
+              "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+              "required_evidence": []
+            },
+            {
+              "id": "e2_2",
+              "name": "产品细节说明",
+              "description": "用产品细节说明讲清主张。",
+              "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+              "required_evidence": []
+            },
+            {
+              "id": "e2_3",
+              "name": "适用边界解读",
+              "description": "用适用边界解读讲清主张。",
+              "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+              "required_evidence": []
+            }
+          ]
+        }
+      ],
+      "combinations": [
+        {
+          "id": "c1_1",
+          "angle_id": "a1",
+          "expression_id": "e1_1",
+          "elements": {
+            "场景": "产品实际使用环境"
+          },
+          "headline": "清楚理解产品价值",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "visual_brief": "产品主体清晰，通过使用情境演示传达清楚理解产品价值。",
+          "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"]
+        },
+        {
+          "id": "c1_2",
+          "angle_id": "a1",
+          "expression_id": "e1_2",
+          "elements": {
+            "场景": "产品实际使用环境"
+          },
+          "headline": "清楚理解产品价值",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "visual_brief": "产品主体清晰，通过问题与解决过程传达清楚理解产品价值。",
+          "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"]
+        },
+        {
+          "id": "c2_1",
+          "angle_id": "a2",
+          "expression_id": "e2_1",
+          "elements": {
+            "场景": "产品实际使用环境"
+          },
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "visual_brief": "产品主体清晰，通过疑问问答传达减少购买顾虑。",
+          "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+        },
+        {
+          "id": "c2_2",
+          "angle_id": "a2",
+          "expression_id": "e2_2",
+          "elements": {
+            "场景": "产品实际使用环境"
+          },
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "visual_brief": "产品主体清晰，通过产品细节说明传达减少购买顾虑。",
+          "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+        },
+        {
+          "id": "c2_3",
+          "angle_id": "a2",
+          "expression_id": "e2_3",
+          "elements": {
+            "场景": "产品实际使用环境"
+          },
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "visual_brief": "产品主体清晰，通过适用边界解读传达减少购买顾虑。",
+          "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+        }
+      ],
+      "groups": [
+        {
+          "id": "g1",
+          "name": "清楚理解产品价值",
+          "combination_ids": ["c1_1", "c1_2"],
+          "rationale": "按主张组织候选，多表达避免单图决定。"
+        },
+        {
+          "id": "g2",
+          "name": "减少购买顾虑",
+          "combination_ids": ["c2_1", "c2_2", "c2_3"],
+          "rationale": "按主张组织候选，多表达避免单图决定。"
+        }
+      ],
+      "ad_language": "zh-CN",
+      "strategy_language": "zh-CN",
+      "language_confirmation_required": false
+    },
+    "evidence_status": "unvalidated",
+    "latest_call": {
+      "id": "pc_bad3c73102314ce0a9e97df9ddc0b607",
+      "operation_id": "op_8f8b7f89caca4922ace761c6104fa1d5",
+      "kind": "plan",
+      "state": "succeeded",
+      "execution_mode": "mock",
+      "error_code": null,
+      "maximum_cost": "0"
+    },
+    "generation_draft_ids": [],
+    "product_references": {
+      "reference_version_ids": [],
+      "source": "",
+      "confirms_real_product": false
+    },
+    "language_support": "v1"
+  },
+  "bound": {
+    "id": "mround_31c20f2d11774c31b7310f442949269a",
+    "ordinal": 1,
+    "state": "awaiting_data",
+    "close": null,
+    "continuation": null,
+    "revision": 12,
+    "plan_revision": 7,
+    "execution_mode": "mock",
+    "snapshot": {
+      "version": 1,
+      "plan": {
+        "stage": "screen_angles",
+        "question": "哪套购买主张与表达组合值得进一步探索？",
+        "comparison_kind": "whole_combinations",
+        "changed": ["购买主张与表达"],
+        "allowed_changes": ["文案和布局随表达调整"],
+        "held_constant": ["同一产品、Offer、受众与投放时期"],
+        "limitations": [
+          "同时改变主张与表达，不能归因为角度独立效果。",
+          "受控 Mock 无真实效果证据。"
+        ],
+        "limited_expression_coverage": false,
+        "conclusion_scope": "combination",
+        "audience": "待确认的目标客户",
+        "market": "待确认",
+        "placement": "Meta 信息流，待确认",
+        "offer": "待确认销售方案",
+        "landing_page": "待确认落地页",
+        "baseline": "无基准，按预先确认的业务目标评估",
+        "currency": "USD",
+        "media_budget": "300",
+        "small_round_budget": "100",
+        "duration_days": 7,
+        "allocation": "计划分配相同媒体预算；实际分配在回传时核对。",
+        "rules": {
+          "business_metric": "cpa",
+          "threshold": "30",
+          "business_goal": "待确认：CPA 不超过 30 美元。",
+          "evidence_requirements": "待确认最低投放、购买量与区间规则；不足不判胜负。",
+          "evaluation_schedule": "周期结束并等待归因成熟后评估。",
+          "stop_rule": "达到本小轮预算或七天时停止新增花费；数据不足可结束。",
+          "max_small_rounds": 3
+        },
+        "angles": [
+          {
+            "id": "a1",
+            "proposition": "清楚理解产品价值",
+            "rationale": "仅用于验证流程的示例假设。",
+            "fact_ids": ["f1"],
+            "inference_ids": [],
+            "expressions": [
+              {
+                "id": "e1_1",
+                "name": "使用情境演示",
+                "description": "用使用情境演示讲清主张。",
+                "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e1_2",
+                "name": "问题与解决过程",
+                "description": "用问题与解决过程讲清主张。",
+                "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              }
+            ]
+          },
+          {
+            "id": "a2",
+            "proposition": "减少购买顾虑",
+            "rationale": "仅用于验证流程的示例假设。",
+            "fact_ids": ["f1"],
+            "inference_ids": [],
+            "expressions": [
+              {
+                "id": "e2_1",
+                "name": "疑问问答",
+                "description": "用疑问问答讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e2_2",
+                "name": "产品细节说明",
+                "description": "用产品细节说明讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e2_3",
+                "name": "适用边界解读",
+                "description": "用适用边界解读讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              }
+            ]
+          }
+        ],
+        "combinations": [
+          {
+            "id": "c1_1",
+            "angle_id": "a1",
+            "expression_id": "e1_1",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "清楚理解产品价值",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过使用情境演示传达清楚理解产品价值。",
+            "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"]
+          },
+          {
+            "id": "c1_2",
+            "angle_id": "a1",
+            "expression_id": "e1_2",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "清楚理解产品价值",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过问题与解决过程传达清楚理解产品价值。",
+            "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"]
+          },
+          {
+            "id": "c2_1",
+            "angle_id": "a2",
+            "expression_id": "e2_1",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过疑问问答传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          },
+          {
+            "id": "c2_2",
+            "angle_id": "a2",
+            "expression_id": "e2_2",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过产品细节说明传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          },
+          {
+            "id": "c2_3",
+            "angle_id": "a2",
+            "expression_id": "e2_3",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过适用边界解读传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          }
+        ],
+        "groups": [
+          {
+            "id": "g1",
+            "name": "清楚理解产品价值",
+            "combination_ids": ["c1_1", "c1_2"],
+            "rationale": "按主张组织候选，多表达避免单图决定。"
+          },
+          {
+            "id": "g2",
+            "name": "减少购买顾虑",
+            "combination_ids": ["c2_1", "c2_2", "c2_3"],
+            "rationale": "按主张组织候选，多表达避免单图决定。"
+          }
+        ]
+      },
+      "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+      "understanding": {
+        "product_name": "Alpha 充电器",
+        "category_need": "待核对：客户希望解决产品资料描述的问题。",
+        "product_choice_reason": "待核对：资料中的差异是否构成有证据的购买理由。",
+        "audience": "待确认的目标客户",
+        "situations": ["待确认的使用情境"],
+        "objections": ["购买前需要哪些可信依据？"],
+        "facts": [
+          {
+            "id": "f1",
+            "statement": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+            "source_quote": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+            "confirmation": "confirmed"
+          }
+        ],
+        "inferences": [
+          {
+            "id": "i1",
+            "statement": "清楚展示产品如何解决问题可能有助于理解。",
+            "rationale": "示例假设，尚无投放证据。",
+            "fact_ids": ["f1"]
+          }
+        ],
+        "unknowns": ["这是受控 Mock 示例，请使用正式 AI 起草产品专属建议。"]
+      },
+      "protocol": {
+        "version": "marketing-eval-v1",
+        "min_days": 7,
+        "min_impressions": 1000,
+        "min_clicks": 20,
+        "min_purchases": 20,
+        "min_spend": "20",
+        "alpha": "0.05",
+        "attribution_lag_days": 8,
+        "allocation": "equal_budget",
+        "max_spend_ratio": "2",
+        "checkpoint": "end_of_window"
+      },
+      "currency": "USD",
+      "attribution_window": "7d_click_1d_view"
+    },
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-07",
+    "timezone": "UTC",
+    "assets": [
+      {
+        "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+        "combination_id": "c1_1",
+        "headline": "清楚理解产品价值",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：清楚理解产品价值"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：清楚理解产品价值"
+          },
+          "recipe_hash": "c8f0a39294a17bb1c369ffc77861a59ac8786aed2f681094b05f0cb3e1236baa",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+        "combination_id": "c1_2",
+        "headline": "清楚理解产品价值",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：清楚理解产品价值"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：清楚理解产品价值"
+          },
+          "recipe_hash": "2d7358922b89dad1ec2ae52a17d05364311bf24daa46806509f041b1be214de9",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+        "combination_id": "c2_1",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "ab2d6e459a67c020aa7fbf86801af264b49b7f981f25c69001a0a8da7e5aa865",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+        "combination_id": "c2_2",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "3b0f2d27ad4ac845067761050edfcd3f9b34669d18cacb075bf7b7953db6dd36",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+        "combination_id": "c2_3",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "4763bc9b9be5d6300c39b3c9bccc90473ee1c7a7715a533e75eadb2a563fd3f9",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      }
+    ],
+    "handoff": {
+      "quality_current": true,
+      "id": "mh_7ee37a63ea9049b3b012557f04e374a3",
+      "state": "ready",
+      "error_code": null,
+      "manifest_hash": "9e21fabbef46bc8bda8deca439ca88fdc8def39c07ccca13c234509619a790c6",
+      "entries": [
+        {
+          "entry_id": "e5e8535311130908381c53b4",
+          "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_1",
+          "angle_id": "a2",
+          "expression_id": "e2_1",
+          "proposition": "减少购买顾虑",
+          "expression_name": "疑问问答",
+          "ad_name": "MA-e5e853531113 减少购买顾虑 / 疑问问答",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "ab2d6e459a67c020aa7fbf86801af264b49b7f981f25c69001a0a8da7e5aa865",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "500c9a9f5443f7a5fbe4da04",
+          "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+          "group_id": "g1",
+          "group_name": "清楚理解产品价值",
+          "combination_id": "c1_1",
+          "angle_id": "a1",
+          "expression_id": "e1_1",
+          "proposition": "清楚理解产品价值",
+          "expression_name": "使用情境演示",
+          "ad_name": "MA-500c9a9f5443 清楚理解产品价值 / 使用情境演示",
+          "headline": "清楚理解产品价值",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "c8f0a39294a17bb1c369ffc77861a59ac8786aed2f681094b05f0cb3e1236baa",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "48361d85503fa284dcb5eb60",
+          "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_2",
+          "angle_id": "a2",
+          "expression_id": "e2_2",
+          "proposition": "减少购买顾虑",
+          "expression_name": "产品细节说明",
+          "ad_name": "MA-48361d85503f 减少购买顾虑 / 产品细节说明",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "3b0f2d27ad4ac845067761050edfcd3f9b34669d18cacb075bf7b7953db6dd36",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "ea11ec40ad5e81fec38b4d86",
+          "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+          "group_id": "g1",
+          "group_name": "清楚理解产品价值",
+          "combination_id": "c1_2",
+          "angle_id": "a1",
+          "expression_id": "e1_2",
+          "proposition": "清楚理解产品价值",
+          "expression_name": "问题与解决过程",
+          "ad_name": "MA-ea11ec40ad5e 清楚理解产品价值 / 问题与解决过程",
+          "headline": "清楚理解产品价值",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "2d7358922b89dad1ec2ae52a17d05364311bf24daa46806509f041b1be214de9",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "be75b2ccb253ee4b1c6b6157",
+          "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_3",
+          "angle_id": "a2",
+          "expression_id": "e2_3",
+          "proposition": "减少购买顾虑",
+          "expression_name": "适用边界解读",
+          "ad_name": "MA-be75b2ccb253 减少购买顾虑 / 适用边界解读",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "4763bc9b9be5d6300c39b3c9bccc90473ee1c7a7715a533e75eadb2a563fd3f9",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        }
+      ]
+    },
+    "bindings": [
+      {
+        "entry_id": "e5e8535311130908381c53b4",
+        "ad_account_id": "123",
+        "ad_id": "1000",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_9241e67c76f84554b94075d8e88fa76e"
+      },
+      {
+        "entry_id": "500c9a9f5443f7a5fbe4da04",
+        "ad_account_id": "123",
+        "ad_id": "1001",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_c51cf3bd5ab449b8845758da775ce2e0"
+      },
+      {
+        "entry_id": "48361d85503fa284dcb5eb60",
+        "ad_account_id": "123",
+        "ad_id": "1002",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_042a6600705444e4afa024e9f55bb7bd"
+      },
+      {
+        "entry_id": "ea11ec40ad5e81fec38b4d86",
+        "ad_account_id": "123",
+        "ad_id": "1003",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_c8bc7e19ed6142f0936e9f9e2980c608"
+      },
+      {
+        "entry_id": "be75b2ccb253ee4b1c6b6157",
+        "ad_account_id": "123",
+        "ad_id": "1004",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_db37937b5b5a41dfa5c92eb12443ceb1"
+      }
+    ],
+    "batches": [],
+    "evaluation": null,
+    "explanation": null,
+    "feedback_drafts": [],
+    "board": {
+      "version": "marketing-board-v1",
+      "question": "哪套购买主张与表达组合值得进一步探索？",
+      "stage": "screen_angles",
+      "comparison_kind": "whole_combinations",
+      "primary_comparison": {
+        "kind": "between_groups",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "清楚理解产品价值",
+            "angle_ids": ["a1"],
+            "combination_ids": ["c1_1", "c1_2"]
+          },
+          {
+            "id": "g2",
+            "name": "减少购买顾虑",
+            "angle_ids": ["a2"],
+            "combination_ids": ["c2_1", "c2_2", "c2_3"]
+          }
+        ]
+      },
+      "secondary_observation": {
+        "kind": "expression_coverage",
+        "angle_id": null
+      },
+      "tree": {
+        "angles": [
+          {
+            "angle_id": "a1",
+            "proposition": "清楚理解产品价值",
+            "group_ids": ["g1"],
+            "expressions": [
+              {
+                "expression_id": "e1_1",
+                "name": "使用情境演示",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c1_1",
+                    "group_id": "g1",
+                    "group_name": "清楚理解产品价值",
+                    "headline": "清楚理解产品价值",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a1",
+                        "expression_id": "e1_1",
+                        "combination_id": "c1_1",
+                        "group_id": "g1",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "500c9a9f5443f7a5fbe4da04",
+                          "ad_ids": ["1001"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_35473a8b76ee46c388f37988c68cae20",
+                          "av_dc08cade1e12479190d3d25ae0eb9adc",
+                          "av_f78c4a1b97a14bbeba3c06518ac48f28"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e1_2",
+                "name": "问题与解决过程",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c1_2",
+                    "group_id": "g1",
+                    "group_name": "清楚理解产品价值",
+                    "headline": "清楚理解产品价值",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a1",
+                        "expression_id": "e1_2",
+                        "combination_id": "c1_2",
+                        "group_id": "g1",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "ea11ec40ad5e81fec38b4d86",
+                          "ad_ids": ["1003"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_35473a8b76ee46c388f37988c68cae20",
+                          "av_dc08cade1e12479190d3d25ae0eb9adc",
+                          "av_f78c4a1b97a14bbeba3c06518ac48f28"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "angle_id": "a2",
+            "proposition": "减少购买顾虑",
+            "group_ids": ["g2"],
+            "expressions": [
+              {
+                "expression_id": "e2_1",
+                "name": "疑问问答",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_1",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_1",
+                        "combination_id": "c2_1",
+                        "group_id": "g2",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "e5e8535311130908381c53b4",
+                          "ad_ids": ["1000"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e2_2",
+                "name": "产品细节说明",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_2",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_2",
+                        "combination_id": "c2_2",
+                        "group_id": "g2",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "48361d85503fa284dcb5eb60",
+                          "ad_ids": ["1002"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e2_3",
+                "name": "适用边界解读",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_3",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_3",
+                        "combination_id": "c2_3",
+                        "group_id": "g2",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "be75b2ccb253ee4b1c6b6157",
+                          "ad_ids": ["1004"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "matrix": {
+        "rows": [
+          {
+            "expression_id": "e1_1",
+            "name": "使用情境演示",
+            "visual_mechanism": null,
+            "angle_ids": ["a1"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e1_2",
+            "name": "问题与解决过程",
+            "visual_mechanism": null,
+            "angle_ids": ["a1"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_1",
+            "name": "疑问问答",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_2",
+            "name": "产品细节说明",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_3",
+            "name": "适用边界解读",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          }
+        ],
+        "cols": [
+          {
+            "angle_id": "a1",
+            "proposition": "清楚理解产品价值"
+          },
+          {
+            "angle_id": "a2",
+            "proposition": "减少购买顾虑"
+          }
+        ],
+        "cells": [
+          [["c1_1"], null],
+          [["c1_2"], null],
+          [null, ["c2_1"]],
+          [null, ["c2_2"]],
+          [null, ["c2_3"]]
+        ]
+      },
+      "product_appearance": {
+        "status": "pending_verification",
+        "reference_version_ids": [],
+        "pending_combination_ids": ["c1_1", "c1_2", "c2_1", "c2_2", "c2_3"]
+      }
+    }
+  },
+  "preview": {
+    "id": "mround_31c20f2d11774c31b7310f442949269a",
+    "ordinal": 1,
+    "state": "awaiting_data",
+    "close": null,
+    "continuation": null,
+    "revision": 13,
+    "plan_revision": 7,
+    "execution_mode": "mock",
+    "snapshot": {
+      "version": 1,
+      "plan": {
+        "stage": "screen_angles",
+        "question": "哪套购买主张与表达组合值得进一步探索？",
+        "comparison_kind": "whole_combinations",
+        "changed": ["购买主张与表达"],
+        "allowed_changes": ["文案和布局随表达调整"],
+        "held_constant": ["同一产品、Offer、受众与投放时期"],
+        "limitations": [
+          "同时改变主张与表达，不能归因为角度独立效果。",
+          "受控 Mock 无真实效果证据。"
+        ],
+        "limited_expression_coverage": false,
+        "conclusion_scope": "combination",
+        "audience": "待确认的目标客户",
+        "market": "待确认",
+        "placement": "Meta 信息流，待确认",
+        "offer": "待确认销售方案",
+        "landing_page": "待确认落地页",
+        "baseline": "无基准，按预先确认的业务目标评估",
+        "currency": "USD",
+        "media_budget": "300",
+        "small_round_budget": "100",
+        "duration_days": 7,
+        "allocation": "计划分配相同媒体预算；实际分配在回传时核对。",
+        "rules": {
+          "business_metric": "cpa",
+          "threshold": "30",
+          "business_goal": "待确认：CPA 不超过 30 美元。",
+          "evidence_requirements": "待确认最低投放、购买量与区间规则；不足不判胜负。",
+          "evaluation_schedule": "周期结束并等待归因成熟后评估。",
+          "stop_rule": "达到本小轮预算或七天时停止新增花费；数据不足可结束。",
+          "max_small_rounds": 3
+        },
+        "angles": [
+          {
+            "id": "a1",
+            "proposition": "清楚理解产品价值",
+            "rationale": "仅用于验证流程的示例假设。",
+            "fact_ids": ["f1"],
+            "inference_ids": [],
+            "expressions": [
+              {
+                "id": "e1_1",
+                "name": "使用情境演示",
+                "description": "用使用情境演示讲清主张。",
+                "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e1_2",
+                "name": "问题与解决过程",
+                "description": "用问题与解决过程讲清主张。",
+                "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              }
+            ]
+          },
+          {
+            "id": "a2",
+            "proposition": "减少购买顾虑",
+            "rationale": "仅用于验证流程的示例假设。",
+            "fact_ids": ["f1"],
+            "inference_ids": [],
+            "expressions": [
+              {
+                "id": "e2_1",
+                "name": "疑问问答",
+                "description": "用疑问问答讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e2_2",
+                "name": "产品细节说明",
+                "description": "用产品细节说明讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e2_3",
+                "name": "适用边界解读",
+                "description": "用适用边界解读讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              }
+            ]
+          }
+        ],
+        "combinations": [
+          {
+            "id": "c1_1",
+            "angle_id": "a1",
+            "expression_id": "e1_1",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "清楚理解产品价值",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过使用情境演示传达清楚理解产品价值。",
+            "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"]
+          },
+          {
+            "id": "c1_2",
+            "angle_id": "a1",
+            "expression_id": "e1_2",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "清楚理解产品价值",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过问题与解决过程传达清楚理解产品价值。",
+            "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"]
+          },
+          {
+            "id": "c2_1",
+            "angle_id": "a2",
+            "expression_id": "e2_1",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过疑问问答传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          },
+          {
+            "id": "c2_2",
+            "angle_id": "a2",
+            "expression_id": "e2_2",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过产品细节说明传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          },
+          {
+            "id": "c2_3",
+            "angle_id": "a2",
+            "expression_id": "e2_3",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过适用边界解读传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          }
+        ],
+        "groups": [
+          {
+            "id": "g1",
+            "name": "清楚理解产品价值",
+            "combination_ids": ["c1_1", "c1_2"],
+            "rationale": "按主张组织候选，多表达避免单图决定。"
+          },
+          {
+            "id": "g2",
+            "name": "减少购买顾虑",
+            "combination_ids": ["c2_1", "c2_2", "c2_3"],
+            "rationale": "按主张组织候选，多表达避免单图决定。"
+          }
+        ]
+      },
+      "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+      "understanding": {
+        "product_name": "Alpha 充电器",
+        "category_need": "待核对：客户希望解决产品资料描述的问题。",
+        "product_choice_reason": "待核对：资料中的差异是否构成有证据的购买理由。",
+        "audience": "待确认的目标客户",
+        "situations": ["待确认的使用情境"],
+        "objections": ["购买前需要哪些可信依据？"],
+        "facts": [
+          {
+            "id": "f1",
+            "statement": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+            "source_quote": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+            "confirmation": "confirmed"
+          }
+        ],
+        "inferences": [
+          {
+            "id": "i1",
+            "statement": "清楚展示产品如何解决问题可能有助于理解。",
+            "rationale": "示例假设，尚无投放证据。",
+            "fact_ids": ["f1"]
+          }
+        ],
+        "unknowns": ["这是受控 Mock 示例，请使用正式 AI 起草产品专属建议。"]
+      },
+      "protocol": {
+        "version": "marketing-eval-v1",
+        "min_days": 7,
+        "min_impressions": 1000,
+        "min_clicks": 20,
+        "min_purchases": 20,
+        "min_spend": "20",
+        "alpha": "0.05",
+        "attribution_lag_days": 8,
+        "allocation": "equal_budget",
+        "max_spend_ratio": "2",
+        "checkpoint": "end_of_window"
+      },
+      "currency": "USD",
+      "attribution_window": "7d_click_1d_view"
+    },
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-07",
+    "timezone": "UTC",
+    "assets": [
+      {
+        "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+        "combination_id": "c1_1",
+        "headline": "清楚理解产品价值",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：清楚理解产品价值"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：清楚理解产品价值"
+          },
+          "recipe_hash": "c8f0a39294a17bb1c369ffc77861a59ac8786aed2f681094b05f0cb3e1236baa",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+        "combination_id": "c1_2",
+        "headline": "清楚理解产品价值",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：清楚理解产品价值"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：清楚理解产品价值"
+          },
+          "recipe_hash": "2d7358922b89dad1ec2ae52a17d05364311bf24daa46806509f041b1be214de9",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+        "combination_id": "c2_1",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "ab2d6e459a67c020aa7fbf86801af264b49b7f981f25c69001a0a8da7e5aa865",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+        "combination_id": "c2_2",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "3b0f2d27ad4ac845067761050edfcd3f9b34669d18cacb075bf7b7953db6dd36",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+        "combination_id": "c2_3",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "4763bc9b9be5d6300c39b3c9bccc90473ee1c7a7715a533e75eadb2a563fd3f9",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      }
+    ],
+    "handoff": {
+      "quality_current": true,
+      "id": "mh_7ee37a63ea9049b3b012557f04e374a3",
+      "state": "ready",
+      "error_code": null,
+      "manifest_hash": "9e21fabbef46bc8bda8deca439ca88fdc8def39c07ccca13c234509619a790c6",
+      "entries": [
+        {
+          "entry_id": "e5e8535311130908381c53b4",
+          "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_1",
+          "angle_id": "a2",
+          "expression_id": "e2_1",
+          "proposition": "减少购买顾虑",
+          "expression_name": "疑问问答",
+          "ad_name": "MA-e5e853531113 减少购买顾虑 / 疑问问答",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "ab2d6e459a67c020aa7fbf86801af264b49b7f981f25c69001a0a8da7e5aa865",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "500c9a9f5443f7a5fbe4da04",
+          "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+          "group_id": "g1",
+          "group_name": "清楚理解产品价值",
+          "combination_id": "c1_1",
+          "angle_id": "a1",
+          "expression_id": "e1_1",
+          "proposition": "清楚理解产品价值",
+          "expression_name": "使用情境演示",
+          "ad_name": "MA-500c9a9f5443 清楚理解产品价值 / 使用情境演示",
+          "headline": "清楚理解产品价值",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "c8f0a39294a17bb1c369ffc77861a59ac8786aed2f681094b05f0cb3e1236baa",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "48361d85503fa284dcb5eb60",
+          "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_2",
+          "angle_id": "a2",
+          "expression_id": "e2_2",
+          "proposition": "减少购买顾虑",
+          "expression_name": "产品细节说明",
+          "ad_name": "MA-48361d85503f 减少购买顾虑 / 产品细节说明",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "3b0f2d27ad4ac845067761050edfcd3f9b34669d18cacb075bf7b7953db6dd36",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "ea11ec40ad5e81fec38b4d86",
+          "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+          "group_id": "g1",
+          "group_name": "清楚理解产品价值",
+          "combination_id": "c1_2",
+          "angle_id": "a1",
+          "expression_id": "e1_2",
+          "proposition": "清楚理解产品价值",
+          "expression_name": "问题与解决过程",
+          "ad_name": "MA-ea11ec40ad5e 清楚理解产品价值 / 问题与解决过程",
+          "headline": "清楚理解产品价值",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "2d7358922b89dad1ec2ae52a17d05364311bf24daa46806509f041b1be214de9",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "be75b2ccb253ee4b1c6b6157",
+          "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_3",
+          "angle_id": "a2",
+          "expression_id": "e2_3",
+          "proposition": "减少购买顾虑",
+          "expression_name": "适用边界解读",
+          "ad_name": "MA-be75b2ccb253 减少购买顾虑 / 适用边界解读",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "4763bc9b9be5d6300c39b3c9bccc90473ee1c7a7715a533e75eadb2a563fd3f9",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        }
+      ]
+    },
+    "bindings": [
+      {
+        "entry_id": "e5e8535311130908381c53b4",
+        "ad_account_id": "123",
+        "ad_id": "1000",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_9241e67c76f84554b94075d8e88fa76e"
+      },
+      {
+        "entry_id": "500c9a9f5443f7a5fbe4da04",
+        "ad_account_id": "123",
+        "ad_id": "1001",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_c51cf3bd5ab449b8845758da775ce2e0"
+      },
+      {
+        "entry_id": "48361d85503fa284dcb5eb60",
+        "ad_account_id": "123",
+        "ad_id": "1002",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_042a6600705444e4afa024e9f55bb7bd"
+      },
+      {
+        "entry_id": "ea11ec40ad5e81fec38b4d86",
+        "ad_account_id": "123",
+        "ad_id": "1003",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_c8bc7e19ed6142f0936e9f9e2980c608"
+      },
+      {
+        "entry_id": "be75b2ccb253ee4b1c6b6157",
+        "ad_account_id": "123",
+        "ad_id": "1004",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_db37937b5b5a41dfa5c92eb12443ceb1"
+      }
+    ],
+    "batches": [
+      {
+        "id": "mmb_d14213e3823f47f1b4bbae41d1354ad4",
+        "state": "preview",
+        "raw_hash": "e5907f91f9f0c78617c92b9cde452595b1ce0c379215d89d51fe503f0ceeb57b",
+        "metadata": {
+          "filename": "meta.csv",
+          "ad_account_id": "123",
+          "account_timezone": "UTC",
+          "currency": "USD",
+          "attribution_window": "7d_click_1d_view",
+          "source_mode": "controlled_mock",
+          "field_mapping": {},
+          "resolved_mapping": {
+            "date": "date",
+            "ad_id": "ad_id",
+            "spend": "spend",
+            "impressions": "impressions",
+            "clicks": "clicks",
+            "purchases": "purchases",
+            "purchase_value": "purchase_value"
+          }
+        },
+        "row_count": 35,
+        "issues": [],
+        "replaces_batch_id": null
+      }
+    ],
+    "evaluation": null,
+    "explanation": null,
+    "feedback_drafts": [],
+    "board": {
+      "version": "marketing-board-v1",
+      "question": "哪套购买主张与表达组合值得进一步探索？",
+      "stage": "screen_angles",
+      "comparison_kind": "whole_combinations",
+      "primary_comparison": {
+        "kind": "between_groups",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "清楚理解产品价值",
+            "angle_ids": ["a1"],
+            "combination_ids": ["c1_1", "c1_2"]
+          },
+          {
+            "id": "g2",
+            "name": "减少购买顾虑",
+            "angle_ids": ["a2"],
+            "combination_ids": ["c2_1", "c2_2", "c2_3"]
+          }
+        ]
+      },
+      "secondary_observation": {
+        "kind": "expression_coverage",
+        "angle_id": null
+      },
+      "tree": {
+        "angles": [
+          {
+            "angle_id": "a1",
+            "proposition": "清楚理解产品价值",
+            "group_ids": ["g1"],
+            "expressions": [
+              {
+                "expression_id": "e1_1",
+                "name": "使用情境演示",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c1_1",
+                    "group_id": "g1",
+                    "group_name": "清楚理解产品价值",
+                    "headline": "清楚理解产品价值",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a1",
+                        "expression_id": "e1_1",
+                        "combination_id": "c1_1",
+                        "group_id": "g1",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "500c9a9f5443f7a5fbe4da04",
+                          "ad_ids": ["1001"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_35473a8b76ee46c388f37988c68cae20",
+                          "av_dc08cade1e12479190d3d25ae0eb9adc",
+                          "av_f78c4a1b97a14bbeba3c06518ac48f28"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e1_2",
+                "name": "问题与解决过程",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c1_2",
+                    "group_id": "g1",
+                    "group_name": "清楚理解产品价值",
+                    "headline": "清楚理解产品价值",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a1",
+                        "expression_id": "e1_2",
+                        "combination_id": "c1_2",
+                        "group_id": "g1",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "ea11ec40ad5e81fec38b4d86",
+                          "ad_ids": ["1003"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_35473a8b76ee46c388f37988c68cae20",
+                          "av_dc08cade1e12479190d3d25ae0eb9adc",
+                          "av_f78c4a1b97a14bbeba3c06518ac48f28"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "angle_id": "a2",
+            "proposition": "减少购买顾虑",
+            "group_ids": ["g2"],
+            "expressions": [
+              {
+                "expression_id": "e2_1",
+                "name": "疑问问答",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_1",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_1",
+                        "combination_id": "c2_1",
+                        "group_id": "g2",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "e5e8535311130908381c53b4",
+                          "ad_ids": ["1000"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e2_2",
+                "name": "产品细节说明",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_2",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_2",
+                        "combination_id": "c2_2",
+                        "group_id": "g2",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "48361d85503fa284dcb5eb60",
+                          "ad_ids": ["1002"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e2_3",
+                "name": "适用边界解读",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_3",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_3",
+                        "combination_id": "c2_3",
+                        "group_id": "g2",
+                        "stage": "bound",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "be75b2ccb253ee4b1c6b6157",
+                          "ad_ids": ["1004"],
+                          "has_data": false
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "data",
+                        "next_action": "import"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "matrix": {
+        "rows": [
+          {
+            "expression_id": "e1_1",
+            "name": "使用情境演示",
+            "visual_mechanism": null,
+            "angle_ids": ["a1"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e1_2",
+            "name": "问题与解决过程",
+            "visual_mechanism": null,
+            "angle_ids": ["a1"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_1",
+            "name": "疑问问答",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_2",
+            "name": "产品细节说明",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_3",
+            "name": "适用边界解读",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          }
+        ],
+        "cols": [
+          {
+            "angle_id": "a1",
+            "proposition": "清楚理解产品价值"
+          },
+          {
+            "angle_id": "a2",
+            "proposition": "减少购买顾虑"
+          }
+        ],
+        "cells": [
+          [["c1_1"], null],
+          [["c1_2"], null],
+          [null, ["c2_1"]],
+          [null, ["c2_2"]],
+          [null, ["c2_3"]]
+        ]
+      },
+      "product_appearance": {
+        "status": "pending_verification",
+        "reference_version_ids": [],
+        "pending_combination_ids": ["c1_1", "c1_2", "c2_1", "c2_2", "c2_3"]
+      }
+    }
+  },
+  "evaluated": {
+    "id": "mround_31c20f2d11774c31b7310f442949269a",
+    "ordinal": 1,
+    "state": "evaluated",
+    "close": null,
+    "continuation": null,
+    "revision": 15,
+    "plan_revision": 7,
+    "execution_mode": "mock",
+    "snapshot": {
+      "version": 1,
+      "plan": {
+        "stage": "screen_angles",
+        "question": "哪套购买主张与表达组合值得进一步探索？",
+        "comparison_kind": "whole_combinations",
+        "changed": ["购买主张与表达"],
+        "allowed_changes": ["文案和布局随表达调整"],
+        "held_constant": ["同一产品、Offer、受众与投放时期"],
+        "limitations": [
+          "同时改变主张与表达，不能归因为角度独立效果。",
+          "受控 Mock 无真实效果证据。"
+        ],
+        "limited_expression_coverage": false,
+        "conclusion_scope": "combination",
+        "audience": "待确认的目标客户",
+        "market": "待确认",
+        "placement": "Meta 信息流，待确认",
+        "offer": "待确认销售方案",
+        "landing_page": "待确认落地页",
+        "baseline": "无基准，按预先确认的业务目标评估",
+        "currency": "USD",
+        "media_budget": "300",
+        "small_round_budget": "100",
+        "duration_days": 7,
+        "allocation": "计划分配相同媒体预算；实际分配在回传时核对。",
+        "rules": {
+          "business_metric": "cpa",
+          "threshold": "30",
+          "business_goal": "待确认：CPA 不超过 30 美元。",
+          "evidence_requirements": "待确认最低投放、购买量与区间规则；不足不判胜负。",
+          "evaluation_schedule": "周期结束并等待归因成熟后评估。",
+          "stop_rule": "达到本小轮预算或七天时停止新增花费；数据不足可结束。",
+          "max_small_rounds": 3
+        },
+        "angles": [
+          {
+            "id": "a1",
+            "proposition": "清楚理解产品价值",
+            "rationale": "仅用于验证流程的示例假设。",
+            "fact_ids": ["f1"],
+            "inference_ids": [],
+            "expressions": [
+              {
+                "id": "e1_1",
+                "name": "使用情境演示",
+                "description": "用使用情境演示讲清主张。",
+                "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e1_2",
+                "name": "问题与解决过程",
+                "description": "用问题与解决过程讲清主张。",
+                "fit_reason": "让用户理解“清楚理解产品价值”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              }
+            ]
+          },
+          {
+            "id": "a2",
+            "proposition": "减少购买顾虑",
+            "rationale": "仅用于验证流程的示例假设。",
+            "fact_ids": ["f1"],
+            "inference_ids": [],
+            "expressions": [
+              {
+                "id": "e2_1",
+                "name": "疑问问答",
+                "description": "用疑问问答讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e2_2",
+                "name": "产品细节说明",
+                "description": "用产品细节说明讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              },
+              {
+                "id": "e2_3",
+                "name": "适用边界解读",
+                "description": "用适用边界解读讲清主张。",
+                "fit_reason": "让用户理解“减少购买顾虑”，属于示例建议，需核对产品适用性。",
+                "required_evidence": []
+              }
+            ]
+          }
+        ],
+        "combinations": [
+          {
+            "id": "c1_1",
+            "angle_id": "a1",
+            "expression_id": "e1_1",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "清楚理解产品价值",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过使用情境演示传达清楚理解产品价值。",
+            "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"]
+          },
+          {
+            "id": "c1_2",
+            "angle_id": "a1",
+            "expression_id": "e1_2",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "清楚理解产品价值",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过问题与解决过程传达清楚理解产品价值。",
+            "checks": ["产品外观与资料一致", "主张清楚：清楚理解产品价值"]
+          },
+          {
+            "id": "c2_1",
+            "angle_id": "a2",
+            "expression_id": "e2_1",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过疑问问答传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          },
+          {
+            "id": "c2_2",
+            "angle_id": "a2",
+            "expression_id": "e2_2",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过产品细节说明传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          },
+          {
+            "id": "c2_3",
+            "angle_id": "a2",
+            "expression_id": "e2_3",
+            "elements": {
+              "场景": "产品实际使用环境"
+            },
+            "headline": "减少购买顾虑",
+            "body_copy": "了解产品的实际用途与适用条件。",
+            "visual_brief": "产品主体清晰，通过适用边界解读传达减少购买顾虑。",
+            "checks": ["产品外观与资料一致", "主张清楚：减少购买顾虑"]
+          }
+        ],
+        "groups": [
+          {
+            "id": "g1",
+            "name": "清楚理解产品价值",
+            "combination_ids": ["c1_1", "c1_2"],
+            "rationale": "按主张组织候选，多表达避免单图决定。"
+          },
+          {
+            "id": "g2",
+            "name": "减少购买顾虑",
+            "combination_ids": ["c2_1", "c2_2", "c2_3"],
+            "rationale": "按主张组织候选，多表达避免单图决定。"
+          }
+        ]
+      },
+      "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+      "understanding": {
+        "product_name": "Alpha 充电器",
+        "category_need": "待核对：客户希望解决产品资料描述的问题。",
+        "product_choice_reason": "待核对：资料中的差异是否构成有证据的购买理由。",
+        "audience": "待确认的目标客户",
+        "situations": ["待确认的使用情境"],
+        "objections": ["购买前需要哪些可信依据？"],
+        "facts": [
+          {
+            "id": "f1",
+            "statement": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+            "source_quote": "Alpha 充电器\n65W，多口，面向差旅办公用户。",
+            "confirmation": "confirmed"
+          }
+        ],
+        "inferences": [
+          {
+            "id": "i1",
+            "statement": "清楚展示产品如何解决问题可能有助于理解。",
+            "rationale": "示例假设，尚无投放证据。",
+            "fact_ids": ["f1"]
+          }
+        ],
+        "unknowns": ["这是受控 Mock 示例，请使用正式 AI 起草产品专属建议。"]
+      },
+      "protocol": {
+        "version": "marketing-eval-v1",
+        "min_days": 7,
+        "min_impressions": 1000,
+        "min_clicks": 20,
+        "min_purchases": 20,
+        "min_spend": "20",
+        "alpha": "0.05",
+        "attribution_lag_days": 8,
+        "allocation": "equal_budget",
+        "max_spend_ratio": "2",
+        "checkpoint": "end_of_window"
+      },
+      "currency": "USD",
+      "attribution_window": "7d_click_1d_view"
+    },
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-07",
+    "timezone": "UTC",
+    "assets": [
+      {
+        "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+        "combination_id": "c1_1",
+        "headline": "清楚理解产品价值",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：清楚理解产品价值"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：清楚理解产品价值"
+          },
+          "recipe_hash": "c8f0a39294a17bb1c369ffc77861a59ac8786aed2f681094b05f0cb3e1236baa",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+        "combination_id": "c1_2",
+        "headline": "清楚理解产品价值",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：清楚理解产品价值"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：清楚理解产品价值"
+          },
+          "recipe_hash": "2d7358922b89dad1ec2ae52a17d05364311bf24daa46806509f041b1be214de9",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+        "combination_id": "c2_1",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "ab2d6e459a67c020aa7fbf86801af264b49b7f981f25c69001a0a8da7e5aa865",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+        "combination_id": "c2_2",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "3b0f2d27ad4ac845067761050edfcd3f9b34669d18cacb075bf7b7953db6dd36",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      },
+      {
+        "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+        "combination_id": "c2_3",
+        "headline": "减少购买顾虑",
+        "body_copy": "了解产品的实际用途与适用条件。",
+        "required_checks": {
+          "product_fidelity": "Product appearance and use are accurate",
+          "facts_supported": "Claims are supported by the confirmed product facts",
+          "proposition_clear": "The intended buying proposition is clear",
+          "expression_realized": "The intended expression is present",
+          "comparison_faithful": "Changed and held conditions match the comparison",
+          "copy_consistent": "Image and accompanying copy agree",
+          "intent_1": "产品外观与资料一致",
+          "intent_2": "主张清楚：减少购买顾虑"
+        },
+        "quality": {
+          "ai_qc_id": null,
+          "override_note": "",
+          "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+          "quality": "approved",
+          "checks": {
+            "product_fidelity": "pass",
+            "facts_supported": "pass",
+            "proposition_clear": "pass",
+            "expression_realized": "pass",
+            "comparison_faithful": "pass",
+            "copy_consistent": "pass",
+            "intent_1": "pass",
+            "intent_2": "pass"
+          },
+          "note": "Checked product, proposition, copy and comparison",
+          "compared_asset_version_ids": [],
+          "source": "human_semantic_review",
+          "required_checks": {
+            "product_fidelity": "Product appearance and use are accurate",
+            "facts_supported": "Claims are supported by the confirmed product facts",
+            "proposition_clear": "The intended buying proposition is clear",
+            "expression_realized": "The intended expression is present",
+            "comparison_faithful": "Changed and held conditions match the comparison",
+            "copy_consistent": "Image and accompanying copy agree",
+            "intent_1": "产品外观与资料一致",
+            "intent_2": "主张清楚：减少购买顾虑"
+          },
+          "recipe_hash": "4763bc9b9be5d6300c39b3c9bccc90473ee1c7a7715a533e75eadb2a563fd3f9",
+          "plan_hash": "968bac9c47445ca7518bc505901ce6e9b2d6459eb70754b5f15cfe066f0205fb",
+          "ai_input_hash": null,
+          "ai_policy_version": null,
+          "normalization_version": null,
+          "effective_findings": [],
+          "overrides": {}
+        },
+        "ready": true,
+        "mime_type": "image/png",
+        "ai_qc": null
+      }
+    ],
+    "handoff": {
+      "quality_current": true,
+      "id": "mh_7ee37a63ea9049b3b012557f04e374a3",
+      "state": "ready",
+      "error_code": null,
+      "manifest_hash": "9e21fabbef46bc8bda8deca439ca88fdc8def39c07ccca13c234509619a790c6",
+      "entries": [
+        {
+          "entry_id": "e5e8535311130908381c53b4",
+          "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_1",
+          "angle_id": "a2",
+          "expression_id": "e2_1",
+          "proposition": "减少购买顾虑",
+          "expression_name": "疑问问答",
+          "ad_name": "MA-e5e853531113 减少购买顾虑 / 疑问问答",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "ab2d6e459a67c020aa7fbf86801af264b49b7f981f25c69001a0a8da7e5aa865",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "500c9a9f5443f7a5fbe4da04",
+          "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+          "group_id": "g1",
+          "group_name": "清楚理解产品价值",
+          "combination_id": "c1_1",
+          "angle_id": "a1",
+          "expression_id": "e1_1",
+          "proposition": "清楚理解产品价值",
+          "expression_name": "使用情境演示",
+          "ad_name": "MA-500c9a9f5443 清楚理解产品价值 / 使用情境演示",
+          "headline": "清楚理解产品价值",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "c8f0a39294a17bb1c369ffc77861a59ac8786aed2f681094b05f0cb3e1236baa",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "48361d85503fa284dcb5eb60",
+          "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_2",
+          "angle_id": "a2",
+          "expression_id": "e2_2",
+          "proposition": "减少购买顾虑",
+          "expression_name": "产品细节说明",
+          "ad_name": "MA-48361d85503f 减少购买顾虑 / 产品细节说明",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "3b0f2d27ad4ac845067761050edfcd3f9b34669d18cacb075bf7b7953db6dd36",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "ea11ec40ad5e81fec38b4d86",
+          "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+          "group_id": "g1",
+          "group_name": "清楚理解产品价值",
+          "combination_id": "c1_2",
+          "angle_id": "a1",
+          "expression_id": "e1_2",
+          "proposition": "清楚理解产品价值",
+          "expression_name": "问题与解决过程",
+          "ad_name": "MA-ea11ec40ad5e 清楚理解产品价值 / 问题与解决过程",
+          "headline": "清楚理解产品价值",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "2d7358922b89dad1ec2ae52a17d05364311bf24daa46806509f041b1be214de9",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        },
+        {
+          "entry_id": "be75b2ccb253ee4b1c6b6157",
+          "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+          "group_id": "g2",
+          "group_name": "减少购买顾虑",
+          "combination_id": "c2_3",
+          "angle_id": "a2",
+          "expression_id": "e2_3",
+          "proposition": "减少购买顾虑",
+          "expression_name": "适用边界解读",
+          "ad_name": "MA-be75b2ccb253 减少购买顾虑 / 适用边界解读",
+          "headline": "减少购买顾虑",
+          "body_copy": "了解产品的实际用途与适用条件。",
+          "content_sha256": "10276cefa4d10f3fbe536b7ee3c2a773a6c24de4d6347478a56fca1d50b60949",
+          "mime_type": "image/png",
+          "recipe_hash": "4763bc9b9be5d6300c39b3c9bccc90473ee1c7a7715a533e75eadb2a563fd3f9",
+          "product_references": null,
+          "provenance": null,
+          "provider": null,
+          "model": null
+        }
+      ]
+    },
+    "bindings": [
+      {
+        "entry_id": "e5e8535311130908381c53b4",
+        "ad_account_id": "123",
+        "ad_id": "1000",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_9241e67c76f84554b94075d8e88fa76e"
+      },
+      {
+        "entry_id": "500c9a9f5443f7a5fbe4da04",
+        "ad_account_id": "123",
+        "ad_id": "1001",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_c51cf3bd5ab449b8845758da775ce2e0"
+      },
+      {
+        "entry_id": "48361d85503fa284dcb5eb60",
+        "ad_account_id": "123",
+        "ad_id": "1002",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_042a6600705444e4afa024e9f55bb7bd"
+      },
+      {
+        "entry_id": "ea11ec40ad5e81fec38b4d86",
+        "ad_account_id": "123",
+        "ad_id": "1003",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_c8bc7e19ed6142f0936e9f9e2980c608"
+      },
+      {
+        "entry_id": "be75b2ccb253ee4b1c6b6157",
+        "ad_account_id": "123",
+        "ad_id": "1004",
+        "conditions_match": true,
+        "deviations": [],
+        "id": "mab_db37937b5b5a41dfa5c92eb12443ceb1"
+      }
+    ],
+    "batches": [
+      {
+        "id": "mmb_d14213e3823f47f1b4bbae41d1354ad4",
+        "state": "confirmed",
+        "raw_hash": "e5907f91f9f0c78617c92b9cde452595b1ce0c379215d89d51fe503f0ceeb57b",
+        "metadata": {
+          "filename": "meta.csv",
+          "ad_account_id": "123",
+          "account_timezone": "UTC",
+          "currency": "USD",
+          "attribution_window": "7d_click_1d_view",
+          "source_mode": "controlled_mock",
+          "field_mapping": {},
+          "resolved_mapping": {
+            "date": "date",
+            "ad_id": "ad_id",
+            "spend": "spend",
+            "impressions": "impressions",
+            "clicks": "clicks",
+            "purchases": "purchases",
+            "purchase_value": "purchase_value"
+          }
+        },
+        "row_count": 35,
+        "issues": [],
+        "replaces_batch_id": null
+      }
+    ],
+    "evaluation": {
+      "current": true,
+      "id": "me_fb81abe01d5d401ebf6937756043d2b4",
+      "input_hash": "e307ba035c26da1b9faaf0e01e5902ce7f12a152ec048b82498dd61431052a31",
+      "algorithm_version": "marketing-eval-v1",
+      "metric": "cpa",
+      "threshold": "30",
+      "currency": "USD",
+      "attribution_window": "7d_click_1d_view",
+      "account_timezone": "UTC",
+      "evidence_status": "simulated",
+      "results": [
+        {
+          "purchases_reported": false,
+          "id": "group:g1",
+          "kind": "group",
+          "label": "清楚理解产品价值",
+          "entry_ids": ["500c9a9f5443f7a5fbe4da04", "ea11ec40ad5e81fec38b4d86"],
+          "entry_id": "group:g1",
+          "metric": "cpa",
+          "estimate": "1.300000000000",
+          "interval_low": "1.100000000000",
+          "interval_high": "1.500000000000",
+          "reason_codes": [],
+          "totals": {
+            "days": 7,
+            "impressions": 140000,
+            "clicks": 1400,
+            "spend": "182.000000000000",
+            "purchases": "140.000000000000",
+            "purchase_value": "4242.000000000000"
+          },
+          "business_status": "passes",
+          "conclusion_scope": "tested_group_of_combinations"
+        },
+        {
+          "purchases_reported": false,
+          "id": "group:g2",
+          "kind": "group",
+          "label": "减少购买顾虑",
+          "entry_ids": [
+            "e5e8535311130908381c53b4",
+            "48361d85503fa284dcb5eb60",
+            "be75b2ccb253ee4b1c6b6157"
+          ],
+          "entry_id": "group:g2",
+          "metric": "cpa",
+          "estimate": "1.300000000000",
+          "interval_low": "1.100000000000",
+          "interval_high": "1.485714285714",
+          "reason_codes": [],
+          "totals": {
+            "days": 7,
+            "impressions": 210000,
+            "clicks": 2100,
+            "spend": "273.000000000000",
+            "purchases": "210.000000000000",
+            "purchase_value": "6363.000000000000"
+          },
+          "business_status": "passes",
+          "conclusion_scope": "tested_group_of_combinations"
+        },
+        {
+          "purchases_reported": false,
+          "id": "asset:av_35473a8b76ee46c388f37988c68cae20",
+          "kind": "asset",
+          "label": "MA-e5e853531113 减少购买顾虑 / 疑问问答",
+          "entry_ids": ["e5e8535311130908381c53b4"],
+          "entry_id": "asset:av_35473a8b76ee46c388f37988c68cae20",
+          "metric": "cpa",
+          "estimate": "1.300000000000",
+          "interval_low": "1.114285714286",
+          "interval_high": "1.500000000000",
+          "reason_codes": [],
+          "totals": {
+            "days": 7,
+            "impressions": 70000,
+            "clicks": 700,
+            "spend": "91.000000000000",
+            "purchases": "70.000000000000",
+            "purchase_value": "2121.000000000000"
+          },
+          "business_status": "passes",
+          "conclusion_scope": "asset"
+        },
+        {
+          "purchases_reported": false,
+          "id": "asset:av_a10e4d59fa6445e6b4188836dd407866",
+          "kind": "asset",
+          "label": "MA-500c9a9f5443 清楚理解产品价值 / 使用情境演示",
+          "entry_ids": ["500c9a9f5443f7a5fbe4da04"],
+          "entry_id": "asset:av_a10e4d59fa6445e6b4188836dd407866",
+          "metric": "cpa",
+          "estimate": "1.300000000000",
+          "interval_low": "1.100000000000",
+          "interval_high": "1.500000000000",
+          "reason_codes": [],
+          "totals": {
+            "days": 7,
+            "impressions": 70000,
+            "clicks": 700,
+            "spend": "91.000000000000",
+            "purchases": "70.000000000000",
+            "purchase_value": "2121.000000000000"
+          },
+          "business_status": "passes",
+          "conclusion_scope": "asset"
+        },
+        {
+          "purchases_reported": false,
+          "id": "asset:av_dc08cade1e12479190d3d25ae0eb9adc",
+          "kind": "asset",
+          "label": "MA-48361d85503f 减少购买顾虑 / 产品细节说明",
+          "entry_ids": ["48361d85503fa284dcb5eb60"],
+          "entry_id": "asset:av_dc08cade1e12479190d3d25ae0eb9adc",
+          "metric": "cpa",
+          "estimate": "1.300000000000",
+          "interval_low": "1.100000000000",
+          "interval_high": "1.485714285714",
+          "reason_codes": [],
+          "totals": {
+            "days": 7,
+            "impressions": 70000,
+            "clicks": 700,
+            "spend": "91.000000000000",
+            "purchases": "70.000000000000",
+            "purchase_value": "2121.000000000000"
+          },
+          "business_status": "passes",
+          "conclusion_scope": "asset"
+        },
+        {
+          "purchases_reported": false,
+          "id": "asset:av_e7553414960c423a8694056ed13e1ecd",
+          "kind": "asset",
+          "label": "MA-ea11ec40ad5e 清楚理解产品价值 / 问题与解决过程",
+          "entry_ids": ["ea11ec40ad5e81fec38b4d86"],
+          "entry_id": "asset:av_e7553414960c423a8694056ed13e1ecd",
+          "metric": "cpa",
+          "estimate": "1.300000000000",
+          "interval_low": "1.114285714286",
+          "interval_high": "1.500000000000",
+          "reason_codes": [],
+          "totals": {
+            "days": 7,
+            "impressions": 70000,
+            "clicks": 700,
+            "spend": "91.000000000000",
+            "purchases": "70.000000000000",
+            "purchase_value": "2121.000000000000"
+          },
+          "business_status": "passes",
+          "conclusion_scope": "asset"
+        },
+        {
+          "purchases_reported": false,
+          "id": "asset:av_f78c4a1b97a14bbeba3c06518ac48f28",
+          "kind": "asset",
+          "label": "MA-be75b2ccb253 减少购买顾虑 / 适用边界解读",
+          "entry_ids": ["be75b2ccb253ee4b1c6b6157"],
+          "entry_id": "asset:av_f78c4a1b97a14bbeba3c06518ac48f28",
+          "metric": "cpa",
+          "estimate": "1.300000000000",
+          "interval_low": "1.114285714286",
+          "interval_high": "1.500000000000",
+          "reason_codes": [],
+          "totals": {
+            "days": 7,
+            "impressions": 70000,
+            "clicks": 700,
+            "spend": "91.000000000000",
+            "purchases": "70.000000000000",
+            "purchase_value": "2121.000000000000"
+          },
+          "business_status": "passes",
+          "conclusion_scope": "asset"
+        }
+      ],
+      "relative_status": "no_clear_difference",
+      "relative_group_ids": [],
+      "qualified_asset_version_ids": [],
+      "confirmed_combinations": [],
+      "all_assets_failed": false,
+      "round_spend": "455",
+      "small_round_budget": "100",
+      "big_round_spend": "455",
+      "big_round_budget": "300",
+      "mature": true,
+      "next_action": "close_and_summarize",
+      "limitations": [
+        "同时改变主张与表达，不能归因为角度独立效果。",
+        "受控 Mock 无真实效果证据。",
+        "CSV was supplied by the user; Meta provenance is not independently verified.",
+        "Relative performance does not establish a causal effect of an angle or an element.",
+        "Unobserved combinations remain unknown; approval is a quality decision.",
+        "CPA/ROAS intervals use a seeded daily bootstrap and are approximate.",
+        "Simulated data cannot become validated marketing knowledge."
+      ],
+      "factor_conclusion": "not_established",
+      "conditions": {
+        "audience": "待确认的目标客户",
+        "market": "待确认",
+        "placement": "Meta 信息流，待确认",
+        "offer": "待确认销售方案",
+        "landing_page": "待确认落地页"
+      },
+      "budget_exhausted": true,
+      "round_limit_reached": false
+    },
+    "explanation": null,
+    "feedback_drafts": [],
+    "board": {
+      "version": "marketing-board-v1",
+      "question": "哪套购买主张与表达组合值得进一步探索？",
+      "stage": "screen_angles",
+      "comparison_kind": "whole_combinations",
+      "primary_comparison": {
+        "kind": "between_groups",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "清楚理解产品价值",
+            "angle_ids": ["a1"],
+            "combination_ids": ["c1_1", "c1_2"]
+          },
+          {
+            "id": "g2",
+            "name": "减少购买顾虑",
+            "angle_ids": ["a2"],
+            "combination_ids": ["c2_1", "c2_2", "c2_3"]
+          }
+        ]
+      },
+      "secondary_observation": {
+        "kind": "expression_coverage",
+        "angle_id": null
+      },
+      "tree": {
+        "angles": [
+          {
+            "angle_id": "a1",
+            "proposition": "清楚理解产品价值",
+            "group_ids": ["g1"],
+            "expressions": [
+              {
+                "expression_id": "e1_1",
+                "name": "使用情境演示",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c1_1",
+                    "group_id": "g1",
+                    "group_name": "清楚理解产品价值",
+                    "headline": "清楚理解产品价值",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_a10e4d59fa6445e6b4188836dd407866",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a1",
+                        "expression_id": "e1_1",
+                        "combination_id": "c1_1",
+                        "group_id": "g1",
+                        "stage": "has_data",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "500c9a9f5443f7a5fbe4da04",
+                          "ad_ids": ["1001"],
+                          "has_data": true
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_35473a8b76ee46c388f37988c68cae20",
+                          "av_dc08cade1e12479190d3d25ae0eb9adc",
+                          "av_f78c4a1b97a14bbeba3c06518ac48f28"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "none",
+                        "next_action": "none"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e1_2",
+                "name": "问题与解决过程",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c1_2",
+                    "group_id": "g1",
+                    "group_name": "清楚理解产品价值",
+                    "headline": "清楚理解产品价值",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_e7553414960c423a8694056ed13e1ecd",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a1",
+                        "expression_id": "e1_2",
+                        "combination_id": "c1_2",
+                        "group_id": "g1",
+                        "stage": "has_data",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "ea11ec40ad5e81fec38b4d86",
+                          "ad_ids": ["1003"],
+                          "has_data": true
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_35473a8b76ee46c388f37988c68cae20",
+                          "av_dc08cade1e12479190d3d25ae0eb9adc",
+                          "av_f78c4a1b97a14bbeba3c06518ac48f28"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "none",
+                        "next_action": "none"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "angle_id": "a2",
+            "proposition": "减少购买顾虑",
+            "group_ids": ["g2"],
+            "expressions": [
+              {
+                "expression_id": "e2_1",
+                "name": "疑问问答",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_1",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_35473a8b76ee46c388f37988c68cae20",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_1",
+                        "combination_id": "c2_1",
+                        "group_id": "g2",
+                        "stage": "has_data",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "e5e8535311130908381c53b4",
+                          "ad_ids": ["1000"],
+                          "has_data": true
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "none",
+                        "next_action": "none"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e2_2",
+                "name": "产品细节说明",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_2",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_dc08cade1e12479190d3d25ae0eb9adc",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_2",
+                        "combination_id": "c2_2",
+                        "group_id": "g2",
+                        "stage": "has_data",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "48361d85503fa284dcb5eb60",
+                          "ad_ids": ["1002"],
+                          "has_data": true
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "none",
+                        "next_action": "none"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "expression_id": "e2_3",
+                "name": "适用边界解读",
+                "visual_mechanism": null,
+                "details_missing": true,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "c2_3",
+                    "group_id": "g2",
+                    "group_name": "减少购买顾虑",
+                    "headline": "减少购买顾虑",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "av_f78c4a1b97a14bbeba3c06518ac48f28",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a2",
+                        "expression_id": "e2_3",
+                        "combination_id": "c2_3",
+                        "group_id": "g2",
+                        "stage": "has_data",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": {
+                          "entry_id": "be75b2ccb253ee4b1c6b6157",
+                          "ad_ids": ["1004"],
+                          "has_data": true
+                        },
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [
+                          "av_a10e4d59fa6445e6b4188836dd407866",
+                          "av_e7553414960c423a8694056ed13e1ecd"
+                        ],
+                        "awaiting_combination_ids": [],
+                        "gap": "none",
+                        "next_action": "none"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "matrix": {
+        "rows": [
+          {
+            "expression_id": "e1_1",
+            "name": "使用情境演示",
+            "visual_mechanism": null,
+            "angle_ids": ["a1"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e1_2",
+            "name": "问题与解决过程",
+            "visual_mechanism": null,
+            "angle_ids": ["a1"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_1",
+            "name": "疑问问答",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_2",
+            "name": "产品细节说明",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          },
+          {
+            "expression_id": "e2_3",
+            "name": "适用边界解读",
+            "visual_mechanism": null,
+            "angle_ids": ["a2"],
+            "details_missing": true,
+            "shared": false
+          }
+        ],
+        "cols": [
+          {
+            "angle_id": "a1",
+            "proposition": "清楚理解产品价值"
+          },
+          {
+            "angle_id": "a2",
+            "proposition": "减少购买顾虑"
+          }
+        ],
+        "cells": [
+          [["c1_1"], null],
+          [["c1_2"], null],
+          [null, ["c2_1"]],
+          [null, ["c2_2"]],
+          [null, ["c2_3"]]
+        ]
+      },
+      "product_appearance": {
+        "status": "pending_verification",
+        "reference_version_ids": [],
+        "pending_combination_ids": ["c1_1", "c1_2", "c2_1", "c2_2", "c2_3"]
+      }
+    }
+  }
+}

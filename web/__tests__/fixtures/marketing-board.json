@@ -1,0 +1,889 @@
+{
+  "product_name": "CCS to NACS adapter",
+  "screen": {
+    "version": "marketing-board-v1",
+    "question": "Which buying proposition is worth exploring further?",
+    "stage": "screen_angles",
+    "comparison_kind": "whole_combinations",
+    "primary_comparison": {
+      "kind": "between_groups",
+      "groups": [
+        {
+          "id": "g_a",
+          "name": "Group A",
+          "angle_ids": ["a_option"],
+          "combination_ids": ["c_route", "c_live_a", "c_story"]
+        },
+        {
+          "id": "g_b",
+          "name": "Group B",
+          "angle_ids": ["a_safe"],
+          "combination_ids": ["c_cert", "c_live_b"]
+        }
+      ]
+    },
+    "secondary_observation": {
+      "kind": "expression_coverage",
+      "angle_id": null
+    },
+    "tree": {
+      "angles": [
+        {
+          "angle_id": "a_option",
+          "proposition": "One more charging option",
+          "group_ids": ["g_a"],
+          "expressions": [
+            {
+              "expression_id": "x_route",
+              "name": "Route choice diagram",
+              "visual_mechanism": "route_map",
+              "details_missing": false,
+              "shared": false,
+              "combinations": [
+                {
+                  "combination_id": "c_route",
+                  "group_id": "g_a",
+                  "group_name": "Group A",
+                  "headline": "Pick the route, not the charger",
+                  "planned_executions": 1,
+                  "executions": [
+                    {
+                      "asset_version_id": "v_route_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_route",
+                      "combination_id": "c_route",
+                      "group_id": "g_a",
+                      "stage": "single_qc_done",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": {
+                        "id": "aiqc_route_1",
+                        "state": "succeeded",
+                        "current": true,
+                        "quality_suggestion": "ready_to_confirm"
+                      },
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "reference_backed",
+                        "reason": null,
+                        "reference_version_ids": ["ref_main"]
+                      },
+                      "compare_with": ["v_cert_1", "v_live_b_1", "v_live_b_1r"],
+                      "awaiting_combination_ids": [],
+                      "gap": "paired_qc",
+                      "next_action": "paired_qc"
+                    },
+                    {
+                      "asset_version_id": "v_route_1_copy",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": "v_route_1",
+                      "angle_id": "a_option",
+                      "expression_id": "x_route",
+                      "combination_id": "c_route",
+                      "group_id": "g_a",
+                      "stage": "single_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": [],
+                      "awaiting_combination_ids": [],
+                      "gap": "single_qc",
+                      "next_action": "single_qc"
+                    },
+                    {
+                      "asset_version_id": "v_route_2",
+                      "execution_index": 2,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_route",
+                      "combination_id": "c_route",
+                      "group_id": "g_a",
+                      "stage": "single_qc_running",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": {
+                        "id": "aiqc_route_2",
+                        "state": "running",
+                        "current": true,
+                        "quality_suggestion": null
+                      },
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["v_cert_1", "v_live_b_1", "v_live_b_1r"],
+                      "awaiting_combination_ids": [],
+                      "gap": "single_qc",
+                      "next_action": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "expression_id": "x_live",
+              "name": "Live connection demo",
+              "visual_mechanism": "live_connection_demo",
+              "details_missing": false,
+              "shared": true,
+              "combinations": [
+                {
+                  "combination_id": "c_live_a",
+                  "group_id": "g_a",
+                  "group_name": "Group A",
+                  "headline": "Plug in and charge",
+                  "planned_executions": 1,
+                  "executions": [
+                    {
+                      "asset_version_id": "v_live_a_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_live",
+                      "combination_id": "c_live_a",
+                      "group_id": "g_a",
+                      "stage": "blocked",
+                      "blocked_reason": "quality_changes_requested",
+                      "quality": "needs_changes",
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["v_cert_1", "v_live_b_1", "v_live_b_1r"],
+                      "awaiting_combination_ids": [],
+                      "gap": "review",
+                      "next_action": "revise"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "expression_id": "x_story",
+              "name": "Finding a charger story",
+              "visual_mechanism": "scenario_story",
+              "details_missing": false,
+              "shared": false,
+              "combinations": [
+                {
+                  "combination_id": "c_story",
+                  "group_id": "g_a",
+                  "group_name": "Group A",
+                  "headline": "One more stop on the map",
+                  "planned_executions": 1,
+                  "executions": [
+                    {
+                      "asset_version_id": null,
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_story",
+                      "combination_id": "c_story",
+                      "group_id": "g_a",
+                      "stage": "pending_generation",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": [],
+                      "awaiting_combination_ids": [],
+                      "gap": "pending_generation",
+                      "next_action": "generate"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "angle_id": "a_safe",
+          "proposition": "Safer at high power",
+          "group_ids": ["g_b"],
+          "expressions": [
+            {
+              "expression_id": "x_cert",
+              "name": "Certification evidence explained",
+              "visual_mechanism": "certification_walkthrough",
+              "details_missing": false,
+              "shared": false,
+              "combinations": [
+                {
+                  "combination_id": "c_cert",
+                  "group_id": "g_b",
+                  "group_name": "Group B",
+                  "headline": "Certified for high power",
+                  "planned_executions": 1,
+                  "executions": [
+                    {
+                      "asset_version_id": "v_cert_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_safe",
+                      "expression_id": "x_cert",
+                      "combination_id": "c_cert",
+                      "group_id": "g_b",
+                      "stage": "paired_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": {
+                        "id": "aiqc_cert_1",
+                        "state": "succeeded",
+                        "current": true,
+                        "quality_suggestion": "ready_to_confirm"
+                      },
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["v_route_1", "v_route_2"],
+                      "awaiting_combination_ids": ["c_live_a", "c_story"],
+                      "gap": "paired_qc",
+                      "next_action": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "expression_id": "x_live",
+              "name": "Live connection demo",
+              "visual_mechanism": "live_connection_demo",
+              "details_missing": false,
+              "shared": true,
+              "combinations": [
+                {
+                  "combination_id": "c_live_b",
+                  "group_id": "g_b",
+                  "group_name": "Group B",
+                  "headline": "Plug in and charge safely",
+                  "planned_executions": 1,
+                  "executions": [
+                    {
+                      "asset_version_id": "v_live_b_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_safe",
+                      "expression_id": "x_live",
+                      "combination_id": "c_live_b",
+                      "group_id": "g_b",
+                      "stage": "single_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["v_route_1", "v_route_2"],
+                      "awaiting_combination_ids": ["c_live_a", "c_story"],
+                      "gap": "single_qc",
+                      "next_action": "single_qc"
+                    },
+                    {
+                      "asset_version_id": "v_live_b_1r",
+                      "execution_index": 1,
+                      "execution_version": 2,
+                      "parent_version_id": "v_live_b_1",
+                      "duplicate_of": null,
+                      "angle_id": "a_safe",
+                      "expression_id": "x_live",
+                      "combination_id": "c_live_b",
+                      "group_id": "g_b",
+                      "stage": "paired_qc_done",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": {
+                        "id": "aiqc_live_b_1r",
+                        "state": "succeeded",
+                        "current": true,
+                        "quality_suggestion": "ready_to_confirm"
+                      },
+                      "paired_ai_qc": {
+                        "id": "aiqc_live_b_1r_pair",
+                        "state": "succeeded",
+                        "current": true,
+                        "quality_suggestion": "needs_changes"
+                      },
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["v_route_1", "v_route_2"],
+                      "awaiting_combination_ids": ["c_live_a", "c_story"],
+                      "gap": "review",
+                      "next_action": "review"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "matrix": {
+      "rows": [
+        {
+          "expression_id": "x_route",
+          "name": "Route choice diagram",
+          "visual_mechanism": "route_map",
+          "angle_ids": ["a_option"],
+          "details_missing": false,
+          "shared": false
+        },
+        {
+          "expression_id": "x_live",
+          "name": "Live connection demo",
+          "visual_mechanism": "live_connection_demo",
+          "angle_ids": ["a_option", "a_safe"],
+          "details_missing": false,
+          "shared": true
+        },
+        {
+          "expression_id": "x_story",
+          "name": "Finding a charger story",
+          "visual_mechanism": "scenario_story",
+          "angle_ids": ["a_option"],
+          "details_missing": false,
+          "shared": false
+        },
+        {
+          "expression_id": "x_cert",
+          "name": "Certification evidence explained",
+          "visual_mechanism": "certification_walkthrough",
+          "angle_ids": ["a_safe"],
+          "details_missing": false,
+          "shared": false
+        }
+      ],
+      "cols": [
+        {
+          "angle_id": "a_option",
+          "proposition": "One more charging option"
+        },
+        {
+          "angle_id": "a_safe",
+          "proposition": "Safer at high power"
+        }
+      ],
+      "cells": [
+        [["c_route"], null],
+        [["c_live_a"], ["c_live_b"]],
+        [["c_story"], null],
+        [null, ["c_cert"]]
+      ]
+    },
+    "product_appearance": {
+      "status": "partial",
+      "reference_version_ids": ["ref_main"],
+      "pending_combination_ids": [
+        "c_route",
+        "c_live_a",
+        "c_story",
+        "c_cert",
+        "c_live_b"
+      ]
+    }
+  },
+  "match": {
+    "version": "marketing-board-v1",
+    "question": "How should “One more charging option” be told?",
+    "stage": "match_expressions",
+    "comparison_kind": "whole_combinations",
+    "primary_comparison": {
+      "kind": "within_angle",
+      "angle_id": "a_option",
+      "expression_ids": ["x_route", "x_live", "x_story"]
+    },
+    "secondary_observation": {
+      "kind": "same_angle",
+      "angle_id": "a_option"
+    },
+    "tree": {
+      "angles": [
+        {
+          "angle_id": "a_safe",
+          "proposition": "Safer at high power",
+          "group_ids": ["g_b"],
+          "expressions": [
+            {
+              "expression_id": "x_cert",
+              "name": "Certification evidence explained",
+              "visual_mechanism": "certification_walkthrough",
+              "details_missing": false,
+              "shared": false,
+              "combinations": [
+                {
+                  "combination_id": "m_cert",
+                  "group_id": "g_b",
+                  "group_name": "Group B",
+                  "headline": "Certified for high power",
+                  "planned_executions": 2,
+                  "executions": [
+                    {
+                      "asset_version_id": "w_cert_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_safe",
+                      "expression_id": "x_cert",
+                      "combination_id": "m_cert",
+                      "group_id": "g_b",
+                      "stage": "single_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["w_test_1"],
+                      "awaiting_combination_ids": [],
+                      "gap": "single_qc",
+                      "next_action": "single_qc"
+                    },
+                    {
+                      "asset_version_id": null,
+                      "execution_index": 2,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_safe",
+                      "expression_id": "x_cert",
+                      "combination_id": "m_cert",
+                      "group_id": "g_b",
+                      "stage": "pending_generation",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": [],
+                      "awaiting_combination_ids": [],
+                      "gap": "pending_generation",
+                      "next_action": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "expression_id": "x_test",
+              "name": "Test process explained",
+              "visual_mechanism": "test_process",
+              "details_missing": false,
+              "shared": false,
+              "combinations": [
+                {
+                  "combination_id": "m_test",
+                  "group_id": "g_b",
+                  "group_name": "Group B",
+                  "headline": "Tested before it ships",
+                  "planned_executions": 2,
+                  "executions": [
+                    {
+                      "asset_version_id": "w_test_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_safe",
+                      "expression_id": "x_test",
+                      "combination_id": "m_test",
+                      "group_id": "g_b",
+                      "stage": "single_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["w_cert_1"],
+                      "awaiting_combination_ids": [],
+                      "gap": "single_qc",
+                      "next_action": "single_qc"
+                    },
+                    {
+                      "asset_version_id": null,
+                      "execution_index": 2,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_safe",
+                      "expression_id": "x_test",
+                      "combination_id": "m_test",
+                      "group_id": "g_b",
+                      "stage": "pending_generation",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": [],
+                      "awaiting_combination_ids": [],
+                      "gap": "pending_generation",
+                      "next_action": "none"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "angle_id": "a_option",
+          "proposition": "One more charging option",
+          "group_ids": ["g_a"],
+          "expressions": [
+            {
+              "expression_id": "x_route",
+              "name": "Route choice diagram",
+              "visual_mechanism": "route_map",
+              "details_missing": false,
+              "shared": false,
+              "combinations": [
+                {
+                  "combination_id": "m_route",
+                  "group_id": "g_a",
+                  "group_name": "Group A",
+                  "headline": "Pick the route, not the charger",
+                  "planned_executions": 2,
+                  "executions": [
+                    {
+                      "asset_version_id": "w_route_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_route",
+                      "combination_id": "m_route",
+                      "group_id": "g_a",
+                      "stage": "single_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["w_live_1", "w_story_1"],
+                      "awaiting_combination_ids": [],
+                      "gap": "single_qc",
+                      "next_action": "single_qc"
+                    },
+                    {
+                      "asset_version_id": "w_route_2",
+                      "execution_index": 2,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_route",
+                      "combination_id": "m_route",
+                      "group_id": "g_a",
+                      "stage": "single_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["w_live_1", "w_story_1"],
+                      "awaiting_combination_ids": [],
+                      "gap": "single_qc",
+                      "next_action": "single_qc"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "expression_id": "x_live",
+              "name": "Live connection demo",
+              "visual_mechanism": "live_connection_demo",
+              "details_missing": false,
+              "shared": false,
+              "combinations": [
+                {
+                  "combination_id": "m_live",
+                  "group_id": "g_a",
+                  "group_name": "Group A",
+                  "headline": "Plug in and charge",
+                  "planned_executions": 2,
+                  "executions": [
+                    {
+                      "asset_version_id": "w_live_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_live",
+                      "combination_id": "m_live",
+                      "group_id": "g_a",
+                      "stage": "single_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["w_route_1", "w_route_2", "w_story_1"],
+                      "awaiting_combination_ids": [],
+                      "gap": "single_qc",
+                      "next_action": "single_qc"
+                    },
+                    {
+                      "asset_version_id": null,
+                      "execution_index": 2,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_live",
+                      "combination_id": "m_live",
+                      "group_id": "g_a",
+                      "stage": "pending_generation",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": [],
+                      "awaiting_combination_ids": [],
+                      "gap": "pending_generation",
+                      "next_action": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "expression_id": "x_story",
+              "name": "Finding a charger story",
+              "visual_mechanism": "scenario_story",
+              "details_missing": false,
+              "shared": false,
+              "combinations": [
+                {
+                  "combination_id": "m_story",
+                  "group_id": "g_a",
+                  "group_name": "Group A",
+                  "headline": "One more stop on the map",
+                  "planned_executions": 2,
+                  "executions": [
+                    {
+                      "asset_version_id": "w_story_1",
+                      "execution_index": 1,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_story",
+                      "combination_id": "m_story",
+                      "group_id": "g_a",
+                      "stage": "single_qc_pending",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": ["w_route_1", "w_route_2", "w_live_1"],
+                      "awaiting_combination_ids": [],
+                      "gap": "single_qc",
+                      "next_action": "single_qc"
+                    },
+                    {
+                      "asset_version_id": null,
+                      "execution_index": 2,
+                      "execution_version": 1,
+                      "parent_version_id": null,
+                      "duplicate_of": null,
+                      "angle_id": "a_option",
+                      "expression_id": "x_story",
+                      "combination_id": "m_story",
+                      "group_id": "g_a",
+                      "stage": "generating",
+                      "blocked_reason": null,
+                      "quality": null,
+                      "ai_qc": null,
+                      "paired_ai_qc": null,
+                      "delivery": null,
+                      "product_appearance": {
+                        "status": "pending_verification",
+                        "reason": "no_reference",
+                        "reference_version_ids": []
+                      },
+                      "compare_with": [],
+                      "awaiting_combination_ids": [],
+                      "gap": "pending_generation",
+                      "next_action": "none"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "matrix": {
+      "rows": [
+        {
+          "expression_id": "x_cert",
+          "name": "Certification evidence explained",
+          "visual_mechanism": "certification_walkthrough",
+          "angle_ids": ["a_safe"],
+          "details_missing": false,
+          "shared": false
+        },
+        {
+          "expression_id": "x_test",
+          "name": "Test process explained",
+          "visual_mechanism": "test_process",
+          "angle_ids": ["a_safe"],
+          "details_missing": false,
+          "shared": false
+        },
+        {
+          "expression_id": "x_route",
+          "name": "Route choice diagram",
+          "visual_mechanism": "route_map",
+          "angle_ids": ["a_option"],
+          "details_missing": false,
+          "shared": false
+        },
+        {
+          "expression_id": "x_live",
+          "name": "Live connection demo",
+          "visual_mechanism": "live_connection_demo",
+          "angle_ids": ["a_option"],
+          "details_missing": false,
+          "shared": false
+        },
+        {
+          "expression_id": "x_story",
+          "name": "Finding a charger story",
+          "visual_mechanism": "scenario_story",
+          "angle_ids": ["a_option"],
+          "details_missing": false,
+          "shared": false
+        }
+      ],
+      "cols": [
+        {
+          "angle_id": "a_safe",
+          "proposition": "Safer at high power"
+        },
+        {
+          "angle_id": "a_option",
+          "proposition": "One more charging option"
+        }
+      ],
+      "cells": [
+        [["m_cert"], null],
+        [["m_test"], null],
+        [null, ["m_route"]],
+        [null, ["m_live"]],
+        [null, ["m_story"]]
+      ]
+    },
+    "product_appearance": {
+      "status": "pending_verification",
+      "reference_version_ids": [],
+      "pending_combination_ids": [
+        "m_cert",
+        "m_test",
+        "m_route",
+        "m_live",
+        "m_story"
+      ]
+    }
+  }
+}

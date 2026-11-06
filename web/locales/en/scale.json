@@ -1,0 +1,384 @@
+{
+  "title": "Scale",
+  "not-implemented": "{{feature}} is not available yet.",
+  "advisory-boundary": {
+    "title": "Read-only advisory workspace.",
+    "description": "Scale never activates, pauses, deletes, or changes budgets or delivery settings in Meta. Conversions create unsubmitted drafts that keep their downstream preview, cost, QC, Experiment, and confirmation gates."
+  },
+  "meta-mode": {
+    "label": "Meta mode",
+    "customer_sandbox": "Customer sandbox",
+    "controlled_mock": "Controlled mock",
+    "internal_validation": "Internal validation"
+  },
+  "lifecycle": {
+    "enrollment": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused",
+      "closed": "Closed"
+    },
+    "episode": {
+      "collecting": "Collecting",
+      "evaluating": "Evaluating",
+      "closed": "Closed"
+    },
+    "advice": {
+      "active": "Active",
+      "resolved": "Resolved",
+      "superseded": "Superseded",
+      "expired": "Expired"
+    }
+  },
+  "health": {
+    "no-evidence": "No evidence yet",
+    "unclassified": "Not classified",
+    "healthy": "Healthy",
+    "fatigue_watch": "Fatigue watch",
+    "creative_fatigue": "Creative fatigue",
+    "economics_decline": "Economics decline",
+    "delivery_anomaly": "Delivery anomaly",
+    "not_delivering": "Not delivering"
+  },
+  "maturity": {
+    "warming": "Warming",
+    "monitorable": "Monitorable",
+    "economics_ready": "Economics ready",
+    "insufficient": "Insufficient"
+  },
+  "severity": {
+    "info": "Info",
+    "warning": "Warning",
+    "critical": "Critical"
+  },
+  "advice-type": {
+    "refresh_creative": "Refresh creative",
+    "review_offer_or_landing_page": "Review offer or landing page",
+    "review_delivery_mix": "Review delivery mix",
+    "investigate_delivery_anomaly": "Investigate delivery anomaly",
+    "consider_scale_test": "Consider scale test"
+  },
+  "action-denied": {
+    "invalid_lifecycle": "Not allowed in the current lifecycle state",
+    "owner_required": "Only the Workspace Owner can do this.",
+    "thread_not_active": "This advice thread is no longer active",
+    "advice_type_not_convertible": "This advice type cannot be converted"
+  },
+  "list": {
+    "targets-link": "Targets",
+    "new-enrollment": "New Enrollment",
+    "filter-all": "All",
+    "refreshing": "Refreshing…",
+    "error": "Failed to load enrollments.",
+    "retry": "Retry",
+    "empty-title": "No enrollments yet",
+    "empty-description": "Enroll a Winner to start monitoring its Scale evidence.",
+    "column-enrollment": "Enrollment",
+    "column-lifecycle": "Lifecycle",
+    "column-market": "Market",
+    "column-updated": "Updated",
+    "loading": "Loading…",
+    "load-more": "Load more",
+    "end": "All enrollments loaded"
+  },
+  "candidate-selector": {
+    "title": "New Enrollment",
+    "description": "Select an eligible Winner decision, then name the delivery target to enroll.",
+    "empty": "No eligible Winner decisions are available for this Meta mode.",
+    "asset-version": "Asset version: {{id}}",
+    "manual-entry-description": "Enter the identifiers for the Winner decision to enroll. This is a manual-entry seam until server-computed candidate eligibility is available.",
+    "field": {
+      "meta_connection_id": "Meta connection ID",
+      "ad_account_id": "Ad account ID",
+      "delivery_target_id": "Delivery target ID",
+      "scenario_scope_key": "Scenario scope key",
+      "winner_decision_id": "Winner decision ID",
+      "winner_confirmation_id": "Winner confirmation ID",
+      "asset_version_id": "Asset version ID",
+      "product_version_id": "Product version ID",
+      "offer_version_id": "Offer version ID",
+      "market_code": "Market code",
+      "creator_id": "Creator ID"
+    },
+    "cancel": "Cancel",
+    "creating": "Creating…",
+    "create": "Create",
+    "marketing-origin": "Marketing: combination confirmed under recorded conditions",
+    "marketing-boundary": "This combination is supported only under the recorded conditions and user-supplied delivery evidence. Choose a currently compatible observed delivery target. This prepares monitoring and never creates, activates or changes an ad.",
+    "match-delivery": "Matching observed delivery",
+    "choose-delivery": "Choose the matching Meta ad",
+    "delivery-not-ready": "Complete current source-market truth and asset readiness, then sync the matching actual delivery through an authorized read-only connection. No compatible observed target is ready yet; monitoring cannot be created."
+  },
+  "detail": {
+    "not-found": "Enrollment not found",
+    "back-to-list": "Back to enrollments",
+    "back-to-enrollment": "Back to enrollment",
+    "activate": "Activate",
+    "pause": "Pause",
+    "resume": "Resume",
+    "close": "Close",
+    "view-evidence": "View evidence",
+    "view-breakdowns": "View breakdowns",
+    "market": "Market",
+    "meta-mode": "Meta mode",
+    "revision": "Revision",
+    "updated-at": "Updated",
+    "advice-heading": "Advice",
+    "pause-dialog-title": "Pause enrollment",
+    "close-dialog-title": "Close enrollment"
+  },
+  "lifecycle-dialog": {
+    "reason-label": "Reason",
+    "cancel": "Cancel",
+    "pending": "Submitting…"
+  },
+  "activate-dialog": {
+    "title": "Activate enrollment",
+    "description": "Activating opens the first Episode. Delivery config and Episode context normally come from a synced Meta read; this form is a manual-entry seam until that prefill lands.",
+    "preview-description": "Create an activation preview before opening the first Episode.",
+    "previewing": "Creating preview…",
+    "preview": "Create preview",
+    "confirm-description": "Review the activation preview reference, then confirm activation.",
+    "preview-id": "Activation preview ID",
+    "delivery-config-heading": "Delivery config baseline",
+    "episode-context-heading": "Episode context",
+    "reconciliation-required": "The previous attempt is ambiguous. Retry to reconcile.",
+    "cancel": "Cancel",
+    "activating": "Activating…",
+    "confirm": "Activate",
+    "field": {
+      "contract_generation_id": "Contract generation ID",
+      "ad_creative_id": "Ad creative ID",
+      "campaign_status": "Campaign status",
+      "ad_set_status": "Ad set status",
+      "ad_status": "Ad status",
+      "budget_source": "Budget source",
+      "budget_amount": "Budget amount",
+      "optimization_goal": "Optimization goal",
+      "bid_strategy": "Bid strategy",
+      "attribution_setting": "Attribution setting",
+      "targeting_safety_hash": "Targeting safety hash",
+      "evidence_hash": "Evidence hash",
+      "comparability_hash": "Comparability hash",
+      "raw_response_hash": "Raw response hash",
+      "sync_run_id": "Sync run ID",
+      "occurrence_id": "Occurrence ID",
+      "call_intent_id": "Call intent ID",
+      "observed_at": "Observed at",
+      "metric_semantic_contract_set_id": "Metric semantic contract set ID",
+      "timezone_name": "Timezone",
+      "currency": "Currency",
+      "attribution_semantics_hash": "Attribution semantics hash",
+      "started_local_day": "Started local day"
+    }
+  },
+  "episode": {
+    "heading": "Episode",
+    "no-active-episode": "No active episode",
+    "unavailable": "Episode data unavailable",
+    "started-local-day": "Started",
+    "timezone": "Timezone",
+    "currency": "Currency",
+    "closure-reason": "Closed: {{reason}}"
+  },
+  "evidence": {
+    "heading": "Evidence",
+    "no-evidence-yet": "No evidence yet for this episode",
+    "unavailable": "Evidence unavailable",
+    "as-of": "As of {{day}}",
+    "refresh": "Refresh",
+    "refresh-stale": "Refresh stale evidence",
+    "quality": {
+      "pass": "Data quality passed",
+      "warning": "Data quality warning",
+      "blocked": "Data quality blocked"
+    },
+    "healthy-evaluations": "Healthy evaluations",
+    "cursor-revision": "Cursor revision",
+    "watermark": "Safe watermark",
+    "updated-at": "Updated",
+    "windows-heading": "Exact evidence windows",
+    "window": {
+      "current_7d": "Current 7 days",
+      "baseline_7d": "Baseline 7 days",
+      "rolling_14d": "Rolling 14 days"
+    },
+    "end-exclusive": "End date is exclusive",
+    "policy-version": "Policy version",
+    "target-version": "Target version",
+    "no-target-version": "No published target",
+    "algorithm-version": "Algorithm version",
+    "metric-contract": "Metric contract hash",
+    "delivery-days": "Active / complete days",
+    "last-sync": "Last successful sync",
+    "quality-issues-heading": "Data-quality findings",
+    "quality-issue": {
+      "daily_slot_missing": "Daily data is missing for a day",
+      "exact_window_value_unavailable": "Reach and frequency for the window are unavailable",
+      "breakdown_segment_unknown": "A breakdown segment is incomplete",
+      "delivery_configuration_incompatible": "Delivery settings changed and cannot be compared",
+      "delivery_diagnostic_unknown": "Delivery diagnostic state is unknown",
+      "freshness_slo_exceeded": "Data is older than the freshness limit",
+      "source_pagination_incomplete": "Source data was not fully paged",
+      "source_contract_mismatch": "Source data does not match the metric contract",
+      "source_timezone_mismatch": "Source time zone does not match",
+      "source_currency_mismatch": "Source currency does not match",
+      "source_binding_incomplete": "Source binding is incomplete",
+      "source_reconcile_pending": "Source data is awaiting reconciliation",
+      "source_mode_mismatch": "Source mode does not match"
+    },
+    "quality-severity": {
+      "blocking": "Blocking",
+      "warning": "Warning"
+    },
+    "technical-details": "Technical details",
+    "recovery-action": "Recovery: {{action}}",
+    "signals-heading": "Deterministic signals and intervals",
+    "signal": "Signal",
+    "signal-state": "State",
+    "signal-states": {
+      "hit": "Hit",
+      "miss": "Not hit",
+      "unavailable": "Unavailable",
+      "blocked": "Blocked"
+    },
+    "observed": "Observed",
+    "interval": "Interval",
+    "threshold": "Threshold",
+    "reason": "Reason",
+    "health-reason": {
+      "conflicting_signals": "Health not classified: CTR declined while CPA or ROAS clearly improved.",
+      "partial_adverse_signals": "Health not classified: some signals are adverse, but they match no health pattern.",
+      "signal_unavailable": "Health not classified: a required signal could not be computed.",
+      "quality_blocked": "Health not classified: data quality is blocked."
+    },
+    "signal-reason": {
+      "frequency_unavailable": "No frequency data",
+      "unavailable_baseline": "No usable baseline",
+      "explained_by_pause": "Explained by a delivery pause; not counted as a hit",
+      "bootstrap_unavailable": "Too few valid samples for an interval",
+      "data_quality_blocked": "Not computed: data quality is blocked"
+    },
+    "streak-counters": "Streak counters",
+    "unknown-signal": "Unknown signal"
+  },
+  "breakdowns": {
+    "heading": "Breakdowns",
+    "type": {
+      "placement": "Placement",
+      "country": "Country",
+      "age_gender": "Age & gender"
+    },
+    "column": {
+      "segment": "Segment",
+      "spend-share": "Spend share",
+      "impressions": "Impressions",
+      "link-clicks": "Link clicks",
+      "purchases": "Purchases",
+      "cpa": "CPA",
+      "roas": "ROAS"
+    },
+    "suppressed": "Privacy suppressed",
+    "suppression-reason": {
+      "below_privacy_threshold": "Below Meta's privacy reporting threshold"
+    },
+    "no-metric": "—",
+    "insufficient-reason": {
+      "descriptive_only": "This breakdown type does not report CPA/ROAS"
+    },
+    "no-snapshot": "No evidence snapshot yet for this Episode",
+    "error": "Failed to load breakdowns.",
+    "empty": "No segments observed for this breakdown type yet.",
+    "window": "Window {{start}} – {{end}}",
+    "loading": "Loading…",
+    "load-more": "Load more"
+  },
+  "advice-list": {
+    "error": "Failed to load advice.",
+    "retry": "Retry",
+    "empty": "No advice for this scope.",
+    "loading": "Loading…",
+    "load-more": "Load more",
+    "end": "All advice loaded"
+  },
+  "advice-card": {
+    "disposition": "Disposition: {{kind}}",
+    "snoozed-until": "Snoozed until {{until}}",
+    "acknowledge": "Acknowledge",
+    "dismiss": "Dismiss",
+    "snooze": "Snooze",
+    "convert": "Convert",
+    "conversion-created": "Created unsubmitted draft",
+    "conversion-unsubmitted": "No Generation, Experiment, or Meta action has been submitted.",
+    "snooze-until-label": "Snooze until",
+    "snooze-confirm": "Confirm",
+    "snooze-cancel": "Cancel"
+  },
+  "targets": {
+    "title": "Targets",
+    "new-target": "New target",
+    "owner-only": "Only the Workspace Owner can publish or withdraw targets.",
+    "error": "Failed to load targets.",
+    "retry": "Retry",
+    "empty": "No published targets yet.",
+    "loading": "Loading…",
+    "load-more": "Load more",
+    "withdraw": "Withdraw",
+    "column": {
+      "context": "Context",
+      "currency": "Currency",
+      "target-cpa": "Target CPA",
+      "breakeven-roas": "Breakeven ROAS",
+      "lifecycle": "Lifecycle",
+      "actions": "Actions"
+    },
+    "field": {
+      "product_version_id": "Product version ID",
+      "offer_version_id": "Offer version ID",
+      "market_code": "Market code",
+      "currency": "Currency",
+      "target_cpa": "Target CPA",
+      "breakeven_roas": "Breakeven ROAS",
+      "minimum_economic_spend": "Minimum economic spend"
+    },
+    "publish-dialog": {
+      "title": "Publish target",
+      "context-label": "Context",
+      "context-placeholder": "Select a context…",
+      "has-active-target": "already has an active target",
+      "no-contexts": "No eligible contexts. A context needs at least one active or paused Enrollment with observed Episode currency.",
+      "affected-enrollments": "Affected enrollments",
+      "policy-floor-check": "Policy floor check",
+      "policy-floor-passed": "Passed",
+      "policy-floor-failed": "Failed",
+      "cancel": "Cancel",
+      "previewing": "Creating preview…",
+      "preview": "Create preview",
+      "publishing": "Publishing…",
+      "confirm": "Confirm publish",
+      "refresh-preview": "Create a new preview"
+    },
+    "withdraw-dialog": {
+      "title": "Withdraw target",
+      "reason-label": "Reason",
+      "affected-enrollments": "Affected enrollments",
+      "dependent-advice-threads": "Dependent advice threads",
+      "cancel": "Cancel",
+      "previewing": "Creating preview…",
+      "preview": "Create preview",
+      "withdrawing": "Withdrawing…",
+      "confirm": "Confirm withdrawal",
+      "refresh-preview": "Create a new preview"
+    }
+  },
+  "export": {
+    "heading": "Export",
+    "action": "Export evidence",
+    "creating": "Starting export…",
+    "processing": "Export processing…",
+    "failed": "Export failed.",
+    "get-download": "Get download link",
+    "requesting-download": "Requesting…",
+    "download-ready": "Download intent ready (expires {{expiresAt}})"
+  }
+}

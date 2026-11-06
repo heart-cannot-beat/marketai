@@ -1,0 +1,151 @@
+# Golden-path E2E overlay — extends docker-compose.yml.
+#
+#   docker compose -p gp-<run_id>-<run_attempt> \
+#     -f docker-compose.yml \
+#     -f docker-compose.golden-path.yml up -d
+#
+# Adds: controlled-provider, mail-sink, playwright. All services on a
+# single internal network. No published ports.
+
+services:
+  # --- Override base services to remove host ports and join gp-net -------
+
+  postgres:
+    ports: !override []
+    networks:
+      - gp-net
+
+  init-domain:
+    networks:
+      - gp-net
+
+  init-control:
+    networks:
+      - gp-net
+
+  blob-transfer:
+    ports: !override []
+    networks:
+      - gp-net
+
+  web:
+    ports: !override []
+    networks:
+      - gp-net
+    environment:
+      APP_URL: http://web:4002
+      NEXTAUTH_URL: http://web:4002
+      META_ADAPTER: fake_meta
+      SMTP_HOST: mail-sink
+      SMTP_PORT: "2525"
+
+  api:
+    ports: !override []
+    networks:
+      - gp-net
+    environment:
+      GENERATION_ADAPTER: controlled_mock
+      CONTROLLED_PROVIDER_URL: http://controlled-provider:9090
+      META_ADAPTER: fake_meta
+      META_WRITE_ENABLED: "false"
+      META_WRITE_ACCESS_TOKEN: ""
+
+  worker:
+    networks:
+      - gp-net
+    environment:
+      GENERATION_ADAPTER: controlled_mock
+      CONTROLLED_PROVIDER_URL: http://controlled-provider:9090
+      META_ADAPTER: fake_meta
+      META_WRITE_ENABLED: "false"
+      META_WRITE_ACCESS_TOKEN: ""
+
+  # --- Golden-path sidecar services ------------------------------------
+
+  controlled-provider:
+    build:
+      context: test-support/controlled-provider
+    depends_on:
+      init-domain:
+        condition: service_completed_successfully
+    networks:
+      - gp-net
+    environment:
+      PORT: "9090"
+      LEDGER_PATH: /data/ledger.db
+    volumes:
+      - sidecar-ledger:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/test/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  mail-sink:
+    build:
+      context: test-support/mail-sink
+    networks:
+      - gp-net
+    environment:
+      SMTP_PORT: "2525"
+      HTTP_PORT: "8025"
+      MAIL_SINK_TOKEN_FILE: /run/secrets/mail_sink_token
+    secrets:
+      - mail_sink_token
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8025/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  playwright:
+    profiles:
+      - test-runner
+    build:
+      context: .
+      dockerfile: web/e2e/golden-path/Dockerfile
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      controlled-provider:
+        condition: service_healthy
+      mail-sink:
+        condition: service_healthy
+    networks:
+      - gp-net
+    environment:
+      BASE_URL: http://web:4002
+      API_BASE_URL: http://api:8787
+      DATABASE_URL: postgresql://marketai_control_app:compose_control_app@postgres:5432/marketai_control
+      MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:compose_domain_owner@postgres:5432/marketai_domain
+      MARKETAI_TENANT_CONTEXT_SECRET: compose-tenant-context-secret-32-bytes-min
+      CONTROLLED_PROVIDER_URL: http://controlled-provider:9090
+      MAIL_SINK_URL: http://mail-sink:8025
+      MAIL_SINK_TOKEN_FILE: /run/secrets/mail_sink_token
+    secrets:
+      - mail_sink_token
+    volumes:
+      - type: bind
+        source: ${BROKER_SOCKET_DIR:-/var/run/lifecycle-broker}
+        target: /var/run/lifecycle-broker
+        read_only: true
+      - type: bind
+        source: ${TOPOLOGY_ATTESTATION_DIR:-/var/run/topology}
+        target: /var/run/topology
+        read_only: true
+      - type: bind
+        source: ${ARTIFACT_DIR:-/tmp/gp-artifacts}
+        target: /results
+
+networks:
+  gp-net:
+    internal: true
+
+volumes:
+  sidecar-ledger:
+
+secrets:
+  mail_sink_token:
+    file: ${MAIL_SINK_TOKEN_FILE:-/dev/null}

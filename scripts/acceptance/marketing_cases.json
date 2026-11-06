@@ -1,0 +1,124 @@
+[
+  {
+    "id": 1,
+    "scenario": "品类需求、选择理由、事实与推测分开",
+    "tests": [
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_fact_confirmation_does_not_validate_inferences",
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_missing_fact_source_and_ai_confirmation_rejected",
+      "tests/test_marketing_ai_qc.py::TestMarketingAIQC::test_product_name_cannot_support_certification_or_electrical_ratings",
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_matching_product_quote_does_not_support_invented_certification"
+    ]
+  },
+  {
+    "id": 2,
+    "scenario": "每个角度拥有各自的动态表达",
+    "tests": [
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_dynamic_expressions_and_explicit_group_membership",
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_shared_expression_keeps_angle_specific_fit_and_distinct_combinations"
+    ]
+  },
+  {
+    "id": 3,
+    "scenario": "单图失败不否定整个角度",
+    "tests": [
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_single_failed_execution_does_not_reject_or_blacklist_an_angle"
+    ]
+  },
+  {
+    "id": 4,
+    "scenario": "组合比较与因素专测保留结论范围",
+    "tests": [
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_invalid_relationship_and_overclaim_rejected",
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_confirmed_plan_creates_reusable_drafts_and_freezes_test_intent",
+      "tests/test_marketing_evaluation.py::TestMarketingEvaluation::test_mock_ctr_and_changed_conditions_never_upgrade"
+    ]
+  },
+  {
+    "id": 5,
+    "scenario": "组内素材数和分配差异不按订单总数判胜负",
+    "tests": [
+      "tests/test_marketing_evaluation.py::TestMarketingEvaluation::test_unequal_counts_do_not_pick_total_order_winner_and_both_pass",
+      "tests/test_marketing_evaluation.py::TestMarketingEvaluation::test_missing_days_not_zero_maturity_and_unequal_allocation"
+    ]
+  },
+  {
+    "id": 6,
+    "scenario": "业务达标与相对表现独立",
+    "tests": [
+      "tests/test_marketing_evaluation.py::TestMarketingEvaluation::test_unequal_counts_do_not_pick_total_order_winner_and_both_pass",
+      "tests/test_marketing_evaluation.py::TestMarketingEvaluation::test_relative_best_but_all_below_business_threshold"
+    ]
+  },
+  {
+    "id": 7,
+    "scenario": "单素材有效与组合复用证据分开",
+    "tests": [
+      "tests/test_marketing_evaluation.py::TestMarketingEvaluation::test_new_image_and_new_round_needed_for_reusable_combination",
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_byok_two_rounds_new_execution_can_confirm_reusable_combination",
+      "tests/test_marketing_evidence_handoff.py::TestMarketingEvidenceHandoff::test_new_execution_and_second_round_enter_scale_discovery_but_stale_support_removes_them"
+    ]
+  },
+  {
+    "id": 8,
+    "scenario": "预算耗尽与证据不足正常结束",
+    "tests": [
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_budget_exhaustion_can_close_without_champion_and_blocks_more_rounds",
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_full_http_generation_zip_import_evaluate_close_loop",
+      "tests/test_marketing_progression.py::TestMarketingProgression::test_active_round_and_exhausted_round_count_block_paid_intent_admission"
+    ]
+  },
+  {
+    "id": 9,
+    "scenario": "营销 QC 阻断与新版本重新审核",
+    "tests": [
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_qc_unknown_and_missing_combination_block_export",
+      "tests/test_marketing_ai_qc.py::TestMarketingAIQC::test_ai_failures_cannot_be_bulk_ignored_and_overrides_need_a_reason",
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_qc_feedback_creates_new_version_and_requires_fresh_review",
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_feedback_keeps_saved_review_and_additional_note_and_all_failed_checks",
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_revoked_approval_hides_current_explanation_and_blocks_paid_admission",
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_withdrawn_export_is_preserved_but_cannot_issue_new_download_grants",
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_quality_withdrawal_during_zip_build_never_publishes_ready"
+    ]
+  },
+  {
+    "id": 10,
+    "scenario": "广告改名、幂等回传和可追溯修正",
+    "tests": [
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_meta_name_is_not_the_csv_identity",
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_csv_duplicate_unknown_mode_and_correction",
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_bad_daily_rows_are_isolated_and_cannot_confirm",
+      "tests/test_marketing_evaluation.py::TestMarketingEvaluation::test_optional_missing_purchase_counts_remain_unknown_in_ctr_projection",
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_closed_round_accepts_late_binding_correction_and_new_evaluation_without_reopening",
+      "tests/test_marketing_fault_recovery.py::TestMarketingFaultRecovery::test_lost_csv_confirmation_response_replays_without_duplicate_evidence",
+      "tests/test_marketing_fault_recovery.py::TestMarketingFaultRecovery::test_competing_clean_replacement_previews_are_revalidated_at_confirmation",
+      "tests/test_marketing_fault_recovery.py::TestMarketingFaultRecovery::test_invalid_csv_variants_never_partially_confirm_or_affect_spend"
+    ]
+  },
+  {
+    "id": 11,
+    "scenario": "历史冻结、恢复与付费防重",
+    "tests": [
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_optimistic_lock_and_immutable_history",
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_product_source_revision_invalidates_plan_and_keeps_prior_evidence",
+      "tests/test_marketing_ai_qc.py::TestMarketingAIQC::test_restart_after_committed_dispatch_never_sends_a_second_request",
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_paid_explanation_timeout_retains_exposure_and_never_resends",
+      "tests/test_marketing_progression.py::TestMarketingProgression::test_next_plan_receives_exact_candidates_and_scoped_delivery_evidence",
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_revoked_approval_before_explanation_dispatch_releases_reservation",
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_reapproval_without_intermediate_evaluation_does_not_revive_old_evidence",
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_legacy_evaluation_without_review_ids_requires_unchanged_earlier_reviews",
+      "tests/test_marketing_workflow.py::TestMarketingWorkflow::test_closed_round_accepts_late_binding_correction_and_new_evaluation_without_reopening",
+      "tests/test_marketing_fault_recovery.py::TestMarketingFaultRecovery::test_export_commit_acknowledgement_loss_reuses_the_exact_blob_on_explicit_retry",
+      "tests/test_marketing_fault_recovery.py::TestMarketingFaultRecovery::test_export_process_stop_after_blob_commit_recovers_same_operation_and_version"
+    ]
+  },
+  {
+    "id": 12,
+    "scenario": "模拟、租户、适用条件与未知搭配隔离",
+    "tests": [
+      "tests/test_marketing_planning.py::TestMarketingPlanning::test_cross_workspace_objects_and_project_lists_isolated",
+      "tests/test_marketing_evaluation.py::TestMarketingEvaluation::test_mock_ctr_and_changed_conditions_never_upgrade",
+      "tests/test_marketing_followup.py::TestMarketingFollowup::test_explanation_rejects_invented_evidence_or_upgraded_interpretations",
+      "tests/test_marketing_evidence_handoff.py::TestMarketingEvidenceHandoff::test_replacing_approval_requires_new_evaluation_before_downstream_reuse"
+    ]
+  }
+]

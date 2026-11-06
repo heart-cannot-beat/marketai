@@ -1,0 +1,34 @@
+# Railway production Dockerfile for the domain Worker service.
+#
+# Private only — no HTTP port, no public endpoint. Polls the durable
+# job queue and executes domain tasks. Connects to PostgreSQL as
+# marketai_domain_worker (least-privilege, no DDL, no BYPASSRLS).
+
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /srv/marketai
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY alembic.ini ./
+COPY app ./app
+COPY migrations ./migrations
+COPY static ./static
+COPY worker ./worker
+
+RUN addgroup --system marketai \
+    && adduser --system --ingroup marketai marketai \
+    && chown -R marketai:marketai /srv/marketai
+
+USER marketai
+
+# No EXPOSE — Worker does not serve HTTP.
+# No HEALTHCHECK — Railway monitors the process; restart policy is On Failure.
+
+CMD ["python", "-m", "worker.main"]

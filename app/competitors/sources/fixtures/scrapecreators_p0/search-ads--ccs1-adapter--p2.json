@@ -1,0 +1,1311 @@
+{
+ "provenance": {
+  "kind": "recorded",
+  "run": "p0-scrapecreators/20261026-163158",
+  "raw_file": "013-*.json",
+  "captured_at": "2026-10-26T08:31:58+00:00",
+  "latency_ms": 2213,
+  "sanitized_by": "scripts/build_competitor_mock_fixtures.py"
+ },
+ "request": {
+  "path": "/v1/facebook/adLibrary/search/ads",
+  "params": {
+   "query": "CCS1 adapter",
+   "country": "US",
+   "status": "ACTIVE",
+   "cursor": "mock-cursor--ccs1-adapter--p2"
+  }
+ },
+ "status": 200,
+ "body": {
+  "success": true,
+  "credits_remaining": 88,
+  "credits_charged": 1,
+  "searchResults": [
+   {
+    "ad_archive_id": "1000000000000104",
+    "collation_count": null,
+    "collation_id": null,
+    "page_id": "100000000011045",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000011045",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/SpringfieldMotorsJoplin",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Springfield Motors of Joplin",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "brookdale-motors.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Still thinking about a new Springfield Luxe? Take another look at the newest vehicles at Springfield Luxe of Joplin. Find the model, features, and comfort you've been looking for.",
+       "cta_type": "SHOP_NOW",
+       "caption": "brookdale-motors.example",
+       "link_description": "Factory MSRP: $58,900 2026 Springfield Luxe X5 Premium 3.6L V6 DI VVT 9-Speed Automatic AWD2 KEYS WITH MOST VEHICLES, 170 Amp Alternator, Adaptive Cruise Control, Automatic Seat Belt Tightening, Driver Assist Package, Enhanced Automatic Emergency Braking, Floor Liner Package, Front and Rear Contoured Floor Liners, Heavy-Duty Cooling System, Hitch Guidance, Hitch Guidance with Hitch View, Integrated Cargo Liner, Navigation System, Premium Package 1SD, Reverse Automatic Braking, Smart Towing. 18/26 City/Highway MPGHere at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive. Price includes: $500 - Springfield Bonus Cash Program. Exp. 08/31/2026 $500 - Springfield Consumer Cash Program. Exp. 08/31/2026The price of this vehicle includes a $499 admin fee.",
+       "link_url": "https://www.springfield-luxe-joplin.example/inventory/new-1SPLX0EXAMPLE0001/",
+       "title": "2026 Springfield Luxe X5 AWD Premium",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/0d6426cde888dedc.png?oe=6AE4FB08",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/0d6426cde888dedc.png?oe=6AE4FB08",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Still thinking about a new Springfield Luxe? Take another look at the newest vehicles at Springfield Luxe of Joplin. Find the model, features, and comfort you've been looking for.",
+       "cta_type": "SHOP_NOW",
+       "caption": "brookdale-motors.example",
+       "link_description": "Factory MSRP: $79,400 2027 Springfield Luxe VISTA Electric Motor 1-Speed Automatic AWD2 KEYS WITH MOST VEHICLES. 93/78 City/Highway MPGHere at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive.",
+       "link_url": "https://www.springfield-luxe-joplin.example/inventory/new-1SPLX0EXAMPLE0002/",
+       "title": "2027 Springfield Luxe VISTA",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/85165740d753f597.png?oe=6AE4D161",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/85165740d753f597.png?oe=6AE4D161",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Still thinking about a new Springfield Luxe? Take another look at the newest vehicles at Springfield Luxe of Joplin. Find the model, features, and comfort you've been looking for.",
+       "cta_type": "SHOP_NOW",
+       "caption": "brookdale-motors.example",
+       "link_description": "Factory MSRP: $57,800 2026 Springfield Luxe OPTA Premium Electric Motor 1-Speed Automatic2 KEYS WITH MOST VEHICLES, Charging Essentials Package, Springfield CCS1 DC Adapter, Springfield J1772 AC Adapter, Springfield HomeLink (NACS) Charger, Navigation system: Connected Services Capable, Preferred Equipment Group 1SE.Awards:* Motor Ledger Editors' ChoiceMotor Ledger, January 2017.Here at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive. Price includes: $1000 - Springfield Consumer Cash Program. Exp. 08/31/2026 $2000 - Springfield EV Switch Offer. Exp. 08/31/2026The price of this vehicle includes a $499 admin fee.",
+       "link_url": "https://www.springfield-luxe-joplin.example/inventory/new-1SPLX0EXAMPLE0003/",
+       "title": "2026 Springfield Luxe OPTA Premium",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/9e8c5c2602af91ee.png?oe=6AE4DAB7",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9e8c5c2602af91ee.png?oe=6AE4DAB7",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Still thinking about a new Springfield Luxe? Take another look at the newest vehicles at Springfield Luxe of Joplin. Find the model, features, and comfort you've been looking for.",
+       "cta_type": "SHOP_NOW",
+       "caption": "brookdale-motors.example",
+       "link_description": "Factory MSRP: $57,700 2026 Springfield Luxe C5 Premium 2.0L I4 Turbocharged DOHC 16V LEV3-SULEV30 237hp 10-Speed Automatic AWD2 KEYS WITH MOST VEHICLES, Adaptive Forward Lighting Headlamps, Air Quality Indicator Sensor, Automatic Leveling System Headlamp Control, Body-Color Heated Power-Adjustable Outside Mirrors, Digital Rear Camera Mirror with Tilt and Zoom Function, Front Cornering LED Lamps, Hands-Free Decklid Release, Head-Up Display, Illuminating Front Sill Plates, Navigation System, Pollutant/Odor/Fine Dust Air Filter, Preferred Equipment Group 1SD, Premium Headlamp System, Technology Package.Here at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive. Price includes: $500 - Springfield Bonus Cash Program. Exp. 08/31/2026 $500 - Springfield Consumer Cash Program. Exp. 08/31/2026The price of this vehicle includes a $499 admin fee.",
+       "link_url": "https://www.springfield-luxe-joplin.example/inventory/new-1SPLX0EXAMPLE0004/",
+       "title": "2026 Springfield Luxe C5 Premium",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/02f97eedafd2bba1.png?oe=6AE4FAA6",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/02f97eedafd2bba1.png?oe=6AE4FAA6",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Still thinking about a new Springfield Luxe? Take another look at the newest vehicles at Springfield Luxe of Joplin. Find the model, features, and comfort you've been looking for."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DPA",
+     "link_description": "Factory MSRP: $58,900 2026 Springfield Luxe X5 Premium 3.6L V6 DI VVT 9-Speed Automatic AWD2 KEYS WITH MOST VEHICLES, 170 Amp Alternator, Adaptive Cruise Control, Automatic Seat Belt Tightening, Driver Assist Package, Enhanced Automatic Emergency Braking, Floor Liner Package, Front and Rear Contoured Floor Liners, Heavy-Duty Cooling System, Hitch Guidance, Hitch Guidance with Hitch View, Integrated Cargo Liner, Navigation System, Premium Package 1SD, Reverse Automatic Braking, Smart Towing. 18/26 City/Highway MPGHere at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive. Price includes: $500 - Springfield Bonus Cash Program. Exp. 08/31/2026 $500 - Springfield Consumer Cash Program. Exp. 08/31/2026The price of this vehicle includes a $499 admin fee.",
+     "link_url": "https://www.brookdale-motors.example/",
+     "images": [],
+     "page_categories": [
+      "Auto Dealer"
+     ],
+     "page_like_count": 5534,
+     "title": "2026 Springfield Luxe X5 AWD Premium",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Springfield Motors of Joplin",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787641200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000104",
+    "start_date_string": "2026-08-25T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000103",
+    "collation_count": 1,
+    "collation_id": "1000000000000281",
+    "page_id": "100000000011001",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000011001",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/10000000001102",
+     "root_reshared_post": null,
+     "byline": "",
+     "disclaimer_label": null,
+     "page_name": "Kestrel Power",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "backerhub.example/kestrelpower",
+     "cta_text": "Book now",
+     "cards": [],
+     "body": {
+      "text": "Dedicated DC-to-AC V2L discharge adapter built for the North American CCS1 Stratford Pulse-E. 3.6kW continuous output, twin 120V outlets, IPX5 weatherproof design."
+     },
+     "cta_type": "BOOK_TRAVEL",
+     "display_format": "IMAGE",
+     "link_description": "IPX5 Rated • 120V Pure Sine Wave",
+     "link_url": "https://www.backerhub.example/projects/kestrelpower/kestrel-k2-v2l-adapter-nacs-ccs1",
+     "images": [
+      {
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d07872f59713a22e.png?oe=6AE4D911",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/d1242e621ed4b00d.png?oe=6AE4E4F1",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "page_categories": [
+      "Electronics"
+     ],
+     "page_like_count": 103,
+     "title": "Kestrel K2: 3.6kW Pulse-E V2L Adapter 🚗⚡",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Kestrel Power",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787295600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000103",
+    "start_date_string": "2026-08-21T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000176",
+    "collation_count": 3,
+    "collation_id": "1000000000000177",
+    "page_id": "100000000000022",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000022",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/LumenlineSupport",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Lumenline",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "https://www.lumenline.example",
+     "cta_text": "Shop now",
+     "cards": [],
+     "body": {
+      "text": "🚨 STILL STUCK WITH SLOW CHARGING AND SHORT CABLES? YOUR EV DESERVES BETTER! ⚡\n\nTired of waiting forever for your EV to charge? 😩 Annoyed that you have to park in the exact same spot just to reach the charging port? Stop letting a clumsy charging setup run your daily routine!\n\n🔥 UPGRADE YOUR HOME CHARGING WITH LUMENLINE — SPECIAL DEALS ARE LIVE! 🔥\n\nWhether you drive a Halcyon or a J1772-equipped EV, Lumenline has charging solutions that make everyday charging faster, smarter, and easier!\n\n⚡ Powerful Level 2 Charging — Pick 32A, 40A, or 48A home charger options for faster charging than basic Level 1 setups.\n\n🔌 25FT Charging Cables — More freedom when parking in your garage or driveway.\n\n🚗 Need Even More Reach? Pair a compatible Lumenline wall-mounted charger with a Lumenline extension cable for extra charging distance!\n\n📱 Smart Charging Features — Select models add Wi-Fi control, scheduled charging, and adjustable current.\n\n✅ ETL-Certified Models — Built with safety and daily reliability in mind.\n\n🛡️ 3-YEAR WARRANTY — More confidence in your home charging upgrade!\n\n🚚 FREE US SHIPPING — Get your charging setup delivered to your door!\n\n🎉 DON'T MISS THE DEALS! Whether you're replacing an old charger or setting up home charging for the first time, find the right fit for your EV.\n\n👉 SHOP LUMENLINE CHARGERS NOW!"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "VIDEO",
+     "link_description": null,
+     "link_url": "https://www.lumenline.example/collections/chargers",
+     "images": [],
+     "page_categories": [
+      "Cars"
+     ],
+     "page_like_count": 14365,
+     "title": "⚡ Slow Charging? Cable Too Short? Upgrade Your EV Setup & SAVE BIG! 🔥",
+     "videos": [
+      {
+       "video_hd_url": null,
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/ba1ba10cb1fb3cda.png?oe=6AE4FC7D",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/1a5519fab165b641.mp4?oe=6AE4DE41",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null
+      }
+     ],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Lumenline",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1792393200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000176",
+    "start_date_string": "2026-10-19T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100015",
+    "collation_count": null,
+    "collation_id": null,
+    "page_id": "100000000011045",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000011045",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/SpringfieldMotorsJoplin",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Springfield Motors of Joplin",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "springfield-luxe-joplin.example/new-vehicles/",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Still thinking about your next vehicle? Take another look at the new inventory you browsed at Springfield Luxe of Joplin—and see what else just came in.",
+       "cta_type": "SHOP_NOW",
+       "caption": "springfield-luxe-joplin.example",
+       "link_description": "Factory MSRP: $58,900 2026 Springfield Luxe X5 Premium 3.6L V6 DI VVT 9-Speed Automatic AWD2 KEYS WITH MOST VEHICLES, 170 Amp Alternator, Adaptive Cruise Control, Automatic Seat Belt Tightening, Driver Assist Package, Enhanced Automatic Emergency Braking, Floor Liner Package, Front and Rear Contoured Floor Liners, Heavy-Duty Cooling System, Hitch Guidance, Hitch Guidance with Hitch View, Integrated Cargo Liner, Navigation System, Premium Package 1SD, Reverse Automatic Braking, Smart Towing. 18/26 City/Highway MPGHere at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive. Price includes: $500 - Springfield Bonus Cash Program. Exp. 08/31/2026 $500 - Springfield Consumer Cash Program. Exp. 08/31/2026The price of this vehicle includes a $499 admin fee.",
+       "link_url": "https://www.springfield-luxe-joplin.example/inventory/new-1SPLX0EXAMPLE0001/",
+       "title": "2026 Springfield Luxe X5 AWD Premium",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/5cd351d57cf8c7bb.png?oe=6AE4DD1B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/5cd351d57cf8c7bb.png?oe=6AE4DD1B",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Still thinking about your next vehicle? Take another look at the new inventory you browsed at Springfield Luxe of Joplin—and see what else just came in.",
+       "cta_type": "SHOP_NOW",
+       "caption": "springfield-luxe-joplin.example",
+       "link_description": "Factory MSRP: $57,700 2026 Springfield Luxe C5 Premium 2.0L I4 Turbocharged DOHC 16V LEV3-SULEV30 237hp 10-Speed Automatic AWD2 KEYS WITH MOST VEHICLES, Adaptive Forward Lighting Headlamps, Air Quality Indicator Sensor, Automatic Leveling System Headlamp Control, Body-Color Heated Power-Adjustable Outside Mirrors, Digital Rear Camera Mirror with Tilt and Zoom Function, Front Cornering LED Lamps, Hands-Free Decklid Release, Head-Up Display, Illuminating Front Sill Plates, Navigation System, Pollutant/Odor/Fine Dust Air Filter, Preferred Equipment Group 1SD, Premium Headlamp System, Technology Package.Here at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive. Price includes: $500 - Springfield Bonus Cash Program. Exp. 08/31/2026 $500 - Springfield Consumer Cash Program. Exp. 08/31/2026The price of this vehicle includes a $499 admin fee.",
+       "link_url": "https://www.springfield-luxe-joplin.example/inventory/new-1SPLX0EXAMPLE0004/",
+       "title": "2026 Springfield Luxe C5 Premium",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ba7b6a8c70e996c4.png?oe=6AE4E093",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/ba7b6a8c70e996c4.png?oe=6AE4E093",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Still thinking about your next vehicle? Take another look at the new inventory you browsed at Springfield Luxe of Joplin—and see what else just came in.",
+       "cta_type": "SHOP_NOW",
+       "caption": "springfield-luxe-joplin.example",
+       "link_description": "Factory MSRP: $79,400 2027 Springfield Luxe VISTA Electric Motor 1-Speed Automatic AWD2 KEYS WITH MOST VEHICLES. 93/78 City/Highway MPGHere at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive.",
+       "link_url": "https://www.springfield-luxe-joplin.example/inventory/new-1SPLX0EXAMPLE0002/",
+       "title": "2027 Springfield Luxe VISTA",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a301361efdca417f.png?oe=6AE4F52E",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/a301361efdca417f.png?oe=6AE4F52E",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Still thinking about your next vehicle? Take another look at the new inventory you browsed at Springfield Luxe of Joplin—and see what else just came in.",
+       "cta_type": "SHOP_NOW",
+       "caption": "springfield-luxe-joplin.example",
+       "link_description": "Factory MSRP: $57,800 2026 Springfield Luxe OPTA Premium Electric Motor 1-Speed Automatic2 KEYS WITH MOST VEHICLES, Charging Essentials Package, Springfield CCS1 DC Adapter, Springfield J1772 AC Adapter, Springfield HomeLink (NACS) Charger, Navigation system: Connected Services Capable, Preferred Equipment Group 1SE.Awards:* Motor Ledger Editors' ChoiceMotor Ledger, January 2017.Here at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive. Price includes: $1000 - Springfield Consumer Cash Program. Exp. 08/31/2026 $2000 - Springfield EV Switch Offer. Exp. 08/31/2026The price of this vehicle includes a $499 admin fee.",
+       "link_url": "https://www.springfield-luxe-joplin.example/inventory/new-1SPLX0EXAMPLE0003/",
+       "title": "2026 Springfield Luxe OPTA Premium",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/5e5270246ea50d54.png?oe=6AE4F471",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/5e5270246ea50d54.png?oe=6AE4F471",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Still thinking about your next vehicle? Take another look at the new inventory you browsed at Springfield Luxe of Joplin—and see what else just came in."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DPA",
+     "link_description": "Factory MSRP: $58,900 2026 Springfield Luxe X5 Premium 3.6L V6 DI VVT 9-Speed Automatic AWD2 KEYS WITH MOST VEHICLES, 170 Amp Alternator, Adaptive Cruise Control, Automatic Seat Belt Tightening, Driver Assist Package, Enhanced Automatic Emergency Braking, Floor Liner Package, Front and Rear Contoured Floor Liners, Heavy-Duty Cooling System, Hitch Guidance, Hitch Guidance with Hitch View, Integrated Cargo Liner, Navigation System, Premium Package 1SD, Reverse Automatic Braking, Smart Towing. 18/26 City/Highway MPGHere at Springfield Luxe of Joplin, we keep car buying and servicing open and simple; Our Best Price is posted on every vehicle. Come see a better way to buy your next car! Call us today to book a demonstration drive and get clear answers to your questions. SPRINGFIELD LUXE, .........For The Long Road! Prices do not include any dealer installed add-ons. Not every customer will qualify for every incentive. Price includes: $500 - Springfield Bonus Cash Program. Exp. 08/31/2026 $500 - Springfield Consumer Cash Program. Exp. 08/31/2026The price of this vehicle includes a $499 admin fee.",
+     "link_url": "https://www.springfield-luxe-joplin.example/new-vehicles/",
+     "images": [],
+     "page_categories": [
+      "Auto Dealer"
+     ],
+     "page_like_count": 5534,
+     "title": "2026 Springfield Luxe X5 AWD Premium",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Springfield Motors of Joplin",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787641200,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100015",
+    "start_date_string": "2026-08-25T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000335",
+    "collation_count": 2,
+    "collation_id": "1000000000000149",
+    "page_id": "100000000000017",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000017",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/northpeak",
+     "root_reshared_post": null,
+     "byline": "",
+     "disclaimer_label": null,
+     "page_name": "Northpeak",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "northpeak.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core stops that.\n\n💗 80,000+ Halcyon owners worldwide.\n\n● Won't melt — UL 2252 Listed with thermal cutoff ● 2-in-1: 250kW CCS and 80A J1772 ● Fits every Halcyon, incl. Ridge\n\n🎁 Surprise gift + 💸 money-back guarantee\n\nTry it today with 30-day free returns! 😍👇",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": "80,000+ Happy Customers",
+       "link_url": "https://northpeak.example/products/ccs1-j1772-2-in-1-adapter",
+       "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/71bdabcbde93ab38.png?oe=6AE4C77B",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/8af13fcc3c87c6d6.png?oe=6AE4F487",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core stops that.\n\n💗 80,000+ Halcyon owners worldwide.\n\n● Won't melt — UL 2252 Listed with thermal cutoff ● 2-in-1: 250kW CCS and 80A J1772 ● Fits every Halcyon, incl. Ridge\n\n🎁 Surprise gift + 💸 money-back guarantee\n\nTry it today with 30-day free returns! 😍👇",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": "80,000+ Happy Customers",
+       "link_url": "https://northpeak.example/products/ccs1-j1772-2-in-1-adapter",
+       "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/a124d0a9910a36bc.png?oe=6AE4E63D",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/3c89dbd276cc1b2e.png?oe=6AE4E11D",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core stops that.\n\n💗 80,000+ Halcyon owners worldwide.\n\n● Won't melt — UL 2252 Listed with thermal cutoff ● 2-in-1: 250kW CCS and 80A J1772 ● Fits every Halcyon, incl. Ridge\n\n🎁 Surprise gift + 💸 money-back guarantee\n\nTry it today with 30-day free returns! 😍👇"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": "80,000+ Happy Customers",
+     "link_url": "https://northpeak.example/products/ccs1-j1772-2-in-1-adapter",
+     "images": [],
+     "page_categories": [
+      "Brand"
+     ],
+     "page_like_count": 7469,
+     "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Northpeak",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1791356400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000335",
+    "start_date_string": "2026-10-07T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000183",
+    "collation_count": null,
+    "collation_id": "1000000000000149",
+    "page_id": "100000000000017",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000017",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/northpeak",
+     "root_reshared_post": null,
+     "byline": "",
+     "disclaimer_label": null,
+     "page_name": "Northpeak",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "northpeak.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core stops that.\n\n💗 80,000+ Halcyon owners worldwide.\n\n● Won't melt — UL 2252 Listed with thermal cutoff ● 2-in-1: 250kW CCS and 80A J1772 ● Fits every Halcyon, incl. Ridge\n\n🎁 Surprise gift + 💸 money-back guarantee\n\nTry it today with 30-day free returns! 😍👇",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": "80,000+ Happy Customers",
+       "link_url": "https://northpeak.example/blogs/tips/ccs1-j1772-adapter-guide",
+       "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/5871acd6f2e7daf5.png?oe=6AE4E17A",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/e274bea67ca872ee.png?oe=6AE4D2F3",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core stops that.\n\n💗 80,000+ Halcyon owners worldwide.\n\n● Won't melt — UL 2252 Listed with thermal cutoff ● 2-in-1: 250kW CCS and 80A J1772 ● Fits every Halcyon, incl. Ridge\n\n🎁 Surprise gift + 💸 money-back guarantee\n\nTry it today with 30-day free returns! 😍👇",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": "80,000+ Happy Customers",
+       "link_url": "https://northpeak.example/blogs/tips/ccs1-j1772-adapter-guide",
+       "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/d19846a0fcc10f95.png?oe=6AE4C92F",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/9542d2717618d8e2.png?oe=6AE4D8AD",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core stops that.\n\n💗 80,000+ Halcyon owners worldwide.\n\n● Won't melt — UL 2252 Listed with thermal cutoff ● 2-in-1: 250kW CCS and 80A J1772 ● Fits every Halcyon, incl. Ridge\n\n🎁 Surprise gift + 💸 money-back guarantee\n\nTry it today with 30-day free returns! 😍👇"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": "80,000+ Happy Customers",
+     "link_url": "https://northpeak.example/blogs/tips/ccs1-j1772-adapter-guide",
+     "images": [],
+     "page_categories": [
+      "Brand"
+     ],
+     "page_like_count": 7469,
+     "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Northpeak",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1791356400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000183",
+    "start_date_string": "2026-10-07T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "10000000001000701",
+    "collation_count": 1,
+    "collation_id": "1000000000000280",
+    "page_id": "100000000000017",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000017",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/northpeak",
+     "root_reshared_post": null,
+     "byline": "",
+     "disclaimer_label": null,
+     "page_name": "Northpeak",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "northpeak.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core + UL 2252 Listed thermal cutoff make sure that never happens ⚡\n💗 80,000+ Halcyon owners worldwide\n● Won't melt — UL 2252 Listed with thermal cutoff\n● 2-in-1: 250kW CCS and 80A J1772\n● Fits every Halcyon, incl. Ridge\n● Opens 12,000+ charging stations\n🎁 Surprise gift + 💸 money-back guarantee\nTHE PRICE IS JUST $129 (you save $50)\nTry it today with 30-day free returns! 😍👇",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": "2-in-1 Halcyon charger that won't melt",
+       "link_url": "https://northpeak.example/blogs/tips/ccs1-j1772-adapter-guide",
+       "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/13c2ccea75c6655a.mp4?oe=6AE4F601",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/9d5da4d193a048df.png?oe=6AE4FD2B",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/66a0020082facc51.mp4?oe=6AE4EF9F",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core + UL 2252 Listed thermal cutoff make sure that never happens ⚡\n💗 80,000+ Halcyon owners worldwide\n● Won't melt — UL 2252 Listed with thermal cutoff\n● 2-in-1: 250kW CCS and 80A J1772\n● Fits every Halcyon, incl. Ridge\n● Opens 12,000+ charging stations\n🎁 Surprise gift + 💸 money-back guarantee\nTHE PRICE IS JUST $129 (you save $50)\nTry it today with 30-day free returns! 😍👇",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": "2-in-1 Halcyon charger that won't melt",
+       "link_url": "https://northpeak.example/blogs/tips/ccs1-j1772-adapter-guide",
+       "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/3d7907bc4cd7149e.mp4?oe=6AE4F66A",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/f66b9699b29d5bdd.png?oe=6AE4CFE3",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/8c59a4a6db8013b5.mp4?oe=6AE4EC43",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "🚨 Most cheap Halcyon adapters overheat, swell, and melt — right when you need a charge. Northpeak's thick solid-copper core + UL 2252 Listed thermal cutoff make sure that never happens ⚡\n💗 80,000+ Halcyon owners worldwide\n● Won't melt — UL 2252 Listed with thermal cutoff\n● 2-in-1: 250kW CCS and 80A J1772\n● Fits every Halcyon, incl. Ridge\n● Opens 12,000+ charging stations\n🎁 Surprise gift + 💸 money-back guarantee\nTHE PRICE IS JUST $129 (you save $50)\nTry it today with 30-day free returns! 😍👇"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": "2-in-1 Halcyon charger that won't melt",
+     "link_url": "https://northpeak.example/blogs/tips/ccs1-j1772-adapter-guide",
+     "images": [],
+     "page_categories": [
+      "Brand"
+     ],
+     "page_like_count": 7469,
+     "title": "⚡ ONE ADAPTER FOR EVERY CHARGER.",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Northpeak",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792998000,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1791356400,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=10000000001000701",
+    "start_date_string": "2026-10-07T07:00:00.000Z",
+    "end_date_string": "2026-10-26T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100032",
+    "collation_count": 1,
+    "collation_id": "1000000000000363",
+    "page_id": "100000000000010",
+    "snapshot": {
+     "branded_content": {
+      "page_id": "100000000000010",
+      "page_is_deleted": false,
+      "page_profile_uri": "https://facebook.com/acmecharge",
+      "page_name": "Acme Charge"
+     },
+     "page_id": "950000000000016",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/creator.example.16",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Creator Example 16",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Found a fast charger, but the plug won't fit? \n\nWith the Acme Charge CCS to NACS Adapter, unlock thousands of extra CCS fast chargers for your Halcyon or NACS-equipped EV. \n\n⚡ More Places to Charge: Use 12,000+ CCS fast chargers beyond the Halcyon Supercharger network. \n\n⚡ Built for High Power: Handles up to 500A and 1,000V DC for steady fast charging. \n\n⚡ Road-Trip Ready: IP67-rated against dust and water, made for charging on the go.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "Handles up to 500A for fast charging",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/7558577ca6889edc.mp4?oe=6AE4E585",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/3571ba6ef5a578f7.png?oe=6AE4D78B",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/d85e6e4f813c616e.mp4?oe=6AE4FA32",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      },
+      {
+       "body": "Found a fast charger, but the plug won't fit? \n\nWith the Acme Charge CCS to NACS Adapter, unlock thousands of extra CCS fast chargers for your Halcyon or NACS-equipped EV. \n\n⚡ More Places to Charge: Use 12,000+ CCS fast chargers beyond the Halcyon Supercharger network. \n\n⚡ Built for High Power: Handles up to 500A and 1,000V DC for steady fast charging. \n\n⚡ Road-Trip Ready: IP67-rated against dust and water, made for charging on the go.",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "Handles up to 500A for fast charging",
+       "cta_text": "Shop Now",
+       "video_hd_url": "https://media.mock.invalid/competitor-media/video/7558577ca6889edc.mp4?oe=6AE4E585",
+       "video_preview_image_url": "https://media.mock.invalid/competitor-media/video-poster/a94e6d3b96fdc121.png?oe=6AE4DA12",
+       "video_sd_url": "https://media.mock.invalid/competitor-media/video/d85e6e4f813c616e.mp4?oe=6AE4FA32",
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": null,
+       "resized_image_url": null,
+       "watermarked_resized_image_url": null
+      }
+     ],
+     "body": {
+      "text": "Found a fast charger, but the plug won't fit? \n\nWith the Acme Charge CCS to NACS Adapter, unlock thousands of extra CCS fast chargers for your Halcyon or NACS-equipped EV. \n\n⚡ More Places to Charge: Use 12,000+ CCS fast chargers beyond the Halcyon Supercharger network. \n\n⚡ Built for High Power: Handles up to 500A and 1,000V DC for steady fast charging. \n\n⚡ Road-Trip Ready: IP67-rated against dust and water, made for charging on the go."
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Cars"
+     ],
+     "page_like_count": 1523,
+     "title": "Handles up to 500A for fast charging",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "THREADS"
+    ],
+    "start_date": 1792479600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100032",
+    "start_date_string": "2026-10-20T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000100026",
+    "collation_count": 1,
+    "collation_id": "1000000000000102",
+    "page_id": "100000000011001",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000011001",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/10000000001102",
+     "root_reshared_post": null,
+     "byline": "",
+     "disclaimer_label": null,
+     "page_name": "Kestrel Power",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "backerhub.example/kestrelpower",
+     "cta_text": "Book now",
+     "cards": [],
+     "body": {
+      "text": "Unlock 3.6kW of AC power straight from your Stratford Pulse-E. Run high-power appliances, camp gear, and tools wherever you go through your CCS1 port. Plug and play with Kestrel K2."
+     },
+     "cta_type": "BOOK_TRAVEL",
+     "display_format": "IMAGE",
+     "link_description": "Live on Backerhub • 120V Pure Sine Wave",
+     "link_url": "https://www.backerhub.example/projects/kestrelpower/kestrel-k2-v2l-adapter-nacs-ccs1",
+     "images": [
+      {
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/86e9f00afc0599fd.png?oe=6AE4E3EB",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/997e502497099604.png?oe=6AE4FEBD",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "page_categories": [
+      "Electronics"
+     ],
+     "page_like_count": 103,
+     "title": "Turn Your Pulse-E into a 3.6kW Power Station ⚡",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Kestrel Power",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "MESSENGER",
+     "THREADS"
+    ],
+    "start_date": 1787295600,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000100026",
+    "start_date_string": "2026-08-21T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   },
+   {
+    "ad_archive_id": "1000000000000295",
+    "collation_count": 1,
+    "collation_id": "1000000000000286",
+    "page_id": "100000000000010",
+    "snapshot": {
+     "branded_content": null,
+     "page_id": "100000000000010",
+     "page_is_deleted": false,
+     "page_profile_uri": "https://facebook.com/acmecharge",
+     "root_reshared_post": null,
+     "byline": null,
+     "disclaimer_label": null,
+     "page_name": "Acme Charge",
+     "page_profile_picture_url": null,
+     "event": null,
+     "caption": "acme-charge.example",
+     "cta_text": "Shop now",
+     "cards": [
+      {
+       "body": "Don't let a plug mismatch stop you! The Acme Charge CCS1 → NACS DC Adapter is UL 2252 certified and IP67 weather resistant, delivering up to 500A / 1,000V / 500 kW whenever you need it. 🔌🛡 Plug-and-play",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "No more plug mismatch stress",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/b999b0b22c0504e4.png?oe=6AE4E903",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/73b53a6414d9377d.png?oe=6AE4D6C8",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Don't let a plug mismatch stop you! The Acme Charge CCS1 → NACS DC Adapter is UL 2252 certified and IP67 weather resistant, delivering up to 500A / 1,000V / 500 kW whenever you need it. 🔌🛡 Plug-and-play",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "No more plug mismatch stress",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/ec9cc2ae99761247.png?oe=6AE4F51D",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/545337617c95930e.png?oe=6AE4F41D",
+       "watermarked_resized_image_url": ""
+      },
+      {
+       "body": "Don't let a plug mismatch stop you! The Acme Charge CCS1 → NACS DC Adapter is UL 2252 certified and IP67 weather resistant, delivering up to 500A / 1,000V / 500 kW whenever you need it. 🔌🛡 Plug-and-play",
+       "cta_type": "SHOP_NOW",
+       "caption": "",
+       "link_description": null,
+       "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+       "title": "No more plug mismatch stress",
+       "cta_text": "Shop Now",
+       "video_hd_url": null,
+       "video_preview_image_url": null,
+       "video_sd_url": null,
+       "watermarked_video_hd_url": null,
+       "watermarked_video_sd_url": null,
+       "image_crops": [],
+       "original_image_url": "https://media.mock.invalid/competitor-media/image/180e3ca281a38ae0.png?oe=6AE4F7BD",
+       "resized_image_url": "https://media.mock.invalid/competitor-media/image/efab406f067c986a.png?oe=6AE4EAB7",
+       "watermarked_resized_image_url": ""
+      }
+     ],
+     "body": {
+      "text": "Don't let a plug mismatch stop you! The Acme Charge CCS1 → NACS DC Adapter is UL 2252 certified and IP67 weather resistant, delivering up to 500A / 1,000V / 500 kW whenever you need it. 🔌🛡 Plug-and-play"
+     },
+     "cta_type": "SHOP_NOW",
+     "display_format": "DCO",
+     "link_description": null,
+     "link_url": "https://acme-charge.example/products/acme-charge-ccs-to-nacs-ev-adapter-ul-2252-certified-1000v-500-amp",
+     "images": [],
+     "page_categories": [
+      "Shopping",
+      "Cars",
+      "Electric Vehicle Charging Station"
+     ],
+     "page_like_count": 3509,
+     "title": "No more plug mismatch stress",
+     "videos": [],
+     "is_reshared": false,
+     "extra_links": [],
+     "extra_texts": [],
+     "extra_images": [],
+     "extra_videos": [],
+     "country_iso_code": null,
+     "brazil_tax_id": null,
+     "additional_info": null,
+     "ec_certificates": []
+    },
+    "is_active": true,
+    "has_user_reported": false,
+    "report_count": null,
+    "menu_items": [],
+    "state_media_run_label": null,
+    "page_is_deleted": false,
+    "page_name": "Acme Charge",
+    "impressions_with_index": {
+     "impressions_text": null,
+     "impressions_index": -1
+    },
+    "gated_type": "ELIGIBLE",
+    "categories": [
+     "UNKNOWN"
+    ],
+    "is_aaa_eligible": false,
+    "contains_digital_created_media": false,
+    "reach_estimate": null,
+    "currency": "",
+    "spend": null,
+    "end_date": 1792911600,
+    "publisher_platform": [
+     "FACEBOOK",
+     "INSTAGRAM",
+     "AUDIENCE_NETWORK",
+     "WHATSAPP",
+     "THREADS"
+    ],
+    "start_date": 1789714800,
+    "contains_sensitive_content": false,
+    "total_active_time": null,
+    "regional_regulation_data": {
+     "finserv": {
+      "is_deemed_finserv": false,
+      "is_limited_delivery": false
+     },
+     "tw_anti_scam": {
+      "is_limited_delivery": false
+     }
+    },
+    "hide_data_status": "NONE",
+    "fev_info": null,
+    "ad_id": null,
+    "targeted_or_reached_countries": [],
+    "url": "https://www.facebook.com/ads/library?id=1000000000000295",
+    "start_date_string": "2026-09-18T07:00:00.000Z",
+    "end_date_string": "2026-10-25T07:00:00.000Z"
+   }
+  ],
+  "cursor": "mock-cursor--ccs1-adapter--p3"
+ }
+}

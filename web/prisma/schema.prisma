@@ -1,0 +1,781 @@
+// MarketAI control-plane schema.
+//
+// Ownership boundary: this datasource contains identity, Workspace (Team),
+// membership, invitation and account-administration records ONLY. MarketAI
+// domain tables live in a separate PostgreSQL database owned by SQLAlchemy
+// (FastAPI/Worker) and are never readable or writable from here.
+//
+// Removed from upstream together with their routes and handlers:
+//   ApiKey, Subscription, Service, Price, jackson_store, jackson_index,
+//   jackson_ttl, the ADMIN role, and shareable link invitations
+//   (Invitation.sentViaEmail / Invitation.allowedDomains).
+
+generator client {
+  provider = "prisma-client-js"
+
+  // Defence in depth for the `where: { userId: undefined }` class of bug:
+  // without this, Prisma drops an `undefined` filter and silently widens the
+  // query to every row. With it, passing `undefined` explicitly throws.
+  // `lib/requireSession.ts` is the primary guard; this is the backstop.
+  previewFeatures = ["strictUndefinedChecks"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Customer-facing role contract for the invite-only Beta. Upstream ADMIN is
+// deliberately absent; see lib/roles.ts.
+enum Role {
+  OWNER
+  MEMBER
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id                 String        @id @default(uuid())
+  sessionToken       String        @unique
+  userId             String
+  expires            DateTime
+  /// Set only after a server-verified TOTP/recovery-code challenge.
+  mfaAuthenticatedAt DateTime?
+  /// Password-authenticated session restricted to the MFA recovery proof API.
+  /// `findActiveAuthSession` rejects it for every normal application request.
+  recoveryOnly       Boolean       @default(false)
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stepUpGrants       StepUpGrant[]
+
+  @@index([userId])
+  // Supports the scheduled sweep of aged-out rows across all accounts.
+  @@index([expires])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id                     String    @id @default(uuid())
+  name                   String
+  email                  String    @unique
+  emailVerified          DateTime?
+  password               String?
+  image                  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now())
+  invalid_login_attempts Int       @default(0)
+  lockedAt               DateTime?
+
+  /// Bumped by every credential change. A sign-in that verified the old
+  /// password carries the version it saw; minting the session re-checks it
+  /// under a row lock, so a password reset that lands in between makes the
+  /// in-flight sign-in fail instead of producing a session with stale
+  /// authority. Password changes use the same check so they cannot overwrite
+  /// a reset that beat them to it.
+  credentialVersion   Int       @default(0)
+  /// Durable evidence used by the 24-hour MFA-recovery cooling period.
+  lastPasswordResetAt DateTime?
+  /// Interface language (`en` or `zh-CN`, see `lib/i18n/locales.ts`). Null
+  /// follows the browser. Only the account itself writes it, through
+  /// `PUT /api/users`.
+  locale              String?
+
+  teamMembers         TeamMember[]
+  accounts            Account[]
+  sessions            Session[]
+  invitations         Invitation[]
+  passwordResets      PasswordReset[]
+  mfaCredential       MfaCredential?
+  mfaRecoveryCodes    MfaRecoveryCode[]
+  stepUpGrants        StepUpGrant[]
+  mfaResetCasesTarget MfaResetCase[]    @relation("MfaResetTarget")
+}
+
+/// Implementation name for the MarketAI Workspace.
+model Team {
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  domain      String? @unique
+  defaultRole Role    @default(MEMBER)
+
+  /// Bumped on every membership or role change (removal, role edit).
+  /// Delegated BFF identity claims carry the epoch they were minted
+  /// against; a mismatch forces re-authorization instead of trusting a
+  /// claim issued before the change.
+  authorizationEpoch Int @default(0)
+
+  /// Bumped on every subscription/entitlement change. Lets downstream
+  /// consumers detect stale entitlement claims independently of
+  /// authorization changes.
+  entitlementVersion Int @default(0)
+
+  /// True once an admin has suspended the Workspace. Suspension bumps
+  /// authorizationEpoch so any in-flight claim is invalidated immediately.
+  suspended Boolean @default(false)
+
+  /// Bumped by every write below (authorizationEpoch, entitlementVersion,
+  /// suspended). A single monotonically increasing counter downstream
+  /// projections can poll to detect any change without tracking three
+  /// separate fields.
+  projectionVersion Int @default(0)
+
+  /// PROVISIONING, ACTIVE, SUSPENDED, DELETION_PENDING, DELETED. Legacy
+  /// `suspended` remains a fail-closed compatibility projection; publication
+  /// updates both fields transactionally. See spec §1.13.
+  lifecycle String
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now())
+  members     TeamMember[]
+  invitations Invitation[]
+
+  accessGrants               AccessGrant[]
+  subscriptions              Subscription[]
+  commercialAccessBindings   CommercialAccessBinding[]
+  restrictions               Restriction[]
+  entitlementSnapshots       EntitlementSnapshot[]
+  commercialAccessProjection CommercialAccessProjection?
+  auditEvents                ControlPlaneAuditEvent[]
+  onboardingProgress         OnboardingProgress?
+  stepUpGrants               StepUpGrant[]
+  controlPlaneOutboxEvents   ControlPlaneOutboxEvent[]
+  mfaResetCases              MfaResetCase[]
+  operatorActionCases        OperatorActionCase[]
+  onboardingDomainFacts      OnboardingDomainFact[]
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  userId    String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+/// A single-use invitation addressed to exactly one email address.
+///
+/// Upstream additionally supported shareable link invitations: `email` was
+/// nullable, `sentViaEmail` selected the mode, and `allowedDomains` let anyone
+/// with a matching email domain join. CONTEXT.md defines an invitation as
+/// one-time and addressed to a named email, so both columns and the nullable
+/// email are gone; the shape of the table is what enforces it.
+model Invitation {
+  id        String   @id @default(uuid())
+  teamId    String
+  email     String
+  role      Role     @default(MEMBER)
+  token     String   @unique
+  expires   DateTime
+  invitedBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  /// FIRST_OWNER invitations are emitted only by the operator provisioning
+  /// workflow and carry a fourteen-day lifetime. MEMBER is the normal
+  /// seven-day invitation created by an existing Owner.
+  kind             InvitationKind @default(MEMBER)
+  consumedAt       DateTime?
+  consumedByUserId String?
+  revokedAt        DateTime?
+  revokedReason    String?
+
+  user          User           @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+  team          Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  mfaResetCases MfaResetCase[]
+
+  @@unique([teamId, id])
+  @@index([teamId, email])
+  @@index([email])
+}
+
+enum InvitationKind {
+  MEMBER
+  FIRST_OWNER
+}
+
+/// One encrypted TOTP seed per account. `protectedSecret` is an AES-GCM
+/// envelope; plaintext seeds are never persisted.
+model MfaCredential {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  protectedSecret Json
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+/// Recovery codes are stored as slow bcrypt hashes and consumed atomically.
+model MfaRecoveryCode {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, consumedAt])
+}
+
+/// Browser-visible step-up ids are opaque, session/user/Workspace/action
+/// bound, single-use, and durable across BFF restarts. No longer written:
+/// MFA is checked only at login (ADR 0015); the table and its rows stay.
+model StepUpGrant {
+  id             String    @id
+  sessionId      String
+  session        Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId         String
+  team           Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  action         String
+  targetId       String
+  targetRevision String
+  contentHash    String
+  authTime       Int
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([sessionId, expiresAt])
+  @@index([userId, revokedAt])
+  @@index([teamId, action])
+}
+
+/// Monotonic server-owned projection of the Beta first-value journey. Domain
+/// facts may move a milestone from null to complete, never back to null.
+model OnboardingProgress {
+  id                   String    @id @default(cuid())
+  teamId               String    @unique
+  team                 Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  workspacePreparedAt  DateTime?
+  ownerAcceptedAt      DateTime?
+  validPreviewAt       DateTime?
+  mockRecipeSnapshotAt DateTime?
+  assetQualifiedAt     DateTime?
+  humanReviewAt        DateTime?
+  version              Int       @default(0)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+/// Idempotent receipt of a typed, trusted domain outbox fact. The source event
+/// id is globally unique, so retries cannot increment the projection twice.
+model OnboardingDomainFact {
+  id               String   @id @default(cuid())
+  teamId           String
+  team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sourceEventId    String   @unique
+  factType         String
+  sourceResourceId String
+  observedAt       DateTime
+  createdAt        DateTime @default(now())
+
+  @@unique([teamId, factType, sourceResourceId])
+  @@index([teamId, observedAt])
+}
+
+/// Generic transactional outbox for onboarding/recovery events. Payloads are
+/// redacted identifiers and state only; secrets are forbidden by API design.
+model ControlPlaneOutboxEvent {
+  id          String    @id @default(cuid())
+  teamId      String?
+  team        Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  eventType   String
+  payload     Json
+  deliveredAt DateTime?
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([deliveredAt, createdAt])
+  @@index([teamId, createdAt])
+}
+
+/// Support MFA reset is operated out-of-band. Operator ids are deliberately
+/// not User foreign keys: support personnel never become customer identities
+/// or Workspace members.
+model MfaResetCase {
+  id                       String                     @id // external support case id
+  teamId                   String
+  team                     Team                       @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  targetUserId             String
+  targetUser               User                       @relation("MfaResetTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  betaInvitationId         String
+  betaInvitation           Invitation                 @relation(fields: [teamId, betaInvitationId], references: [teamId, id], onDelete: Restrict)
+  provisioningAuditEventId String
+  requestedByOperatorId    String
+  reason                   String
+  passwordSessionId        String?                    @unique
+  passwordVerifiedAt       DateTime?
+  passwordRevision         Int?
+  emailVerifiedAt          DateTime?
+  status                   String                     @default("AWAITING_EVIDENCE")
+  expiresAt                DateTime
+  createdAt                DateTime                   @default(now())
+  completedAt              DateTime?
+  approvals                MfaResetApproval[]
+  emailChallenge           MfaRecoveryEmailChallenge?
+
+  @@index([teamId, status])
+  @@index([targetUserId, status])
+}
+
+model MfaResetApproval {
+  id         String       @id @default(cuid())
+  caseId     String
+  resetCase  MfaResetCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  operatorId String
+  approvedAt DateTime     @default(now())
+
+  @@unique([caseId, operatorId])
+  @@index([caseId, approvedAt])
+}
+
+/// Dual-control case for destructive or recovery operator actions that are
+/// outside the customer session boundary.
+model OperatorActionCase {
+  id                 String                   @id
+  teamId             String
+  team               Team                     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  action             String
+  targetResourceId   String
+  resultResourceId   String?
+  requestedBySubject String
+  reason             String
+  status             String                   @default("AWAITING_APPROVAL")
+  expiresAt          DateTime
+  createdAt          DateTime                 @default(now())
+  completedAt        DateTime?
+  approvals          OperatorActionApproval[]
+
+  @@index([teamId, action, status])
+}
+
+model OperatorActionApproval {
+  id              String             @id @default(cuid())
+  caseId          String
+  actionCase      OperatorActionCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  operatorSubject String
+  operatorIssuer  String
+  approvedAt      DateTime           @default(now())
+
+  @@unique([caseId, operatorSubject])
+  @@index([caseId, approvedAt])
+}
+
+model MfaRecoveryEmailChallenge {
+  id         String       @id @default(cuid())
+  caseId     String       @unique
+  resetCase  MfaResetCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  tokenHash  String
+  expiresAt  DateTime
+  attempts   Int          @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime     @default(now())
+}
+
+/// Lifecycle states for a DelegatedSigningKey. See spec §1.6: a key is
+/// PREPUBLISHED while its public JWK is advertised on the JWKS endpoint but
+/// not yet used to sign, ACTIVE while it is the sole signer, RETIRING once a
+/// newer key has taken over signing but old tokens may still verify against
+/// it, RETIRED once its verification window has elapsed, and REVOKED if it
+/// was compromised or withdrawn early.
+enum DelegatedSigningKeyState {
+  PREPUBLISHED
+  ACTIVE
+  RETIRING
+  RETIRED
+  REVOKED
+}
+
+// Commercial access model enums. See docs/superpowers/specs/2026-08-31-entitlements-byok-credentials-usage-cost-design.md
+// §1.1 and docs/architecture/subscription-entitlement-usage-cost-ownership.md.
+enum PlanVersionState {
+  EFFECTIVE
+  RETIRED
+}
+
+enum CommercialAccessSourceKind {
+  ACCESS_GRANT
+  SUBSCRIPTION
+}
+
+enum AccessGrantKind {
+  BASE
+  ADD_ON
+}
+
+enum RestrictionKind {
+  SECURITY
+  ABUSE
+  COMPLIANCE
+  BILLING
+}
+
+enum RestrictionEffect {
+  DISABLE
+  REDUCE_CAP
+}
+
+enum SubscriptionState {
+  PROVISIONING
+  ACTIVE
+  PAST_DUE
+  GRACE_PERIOD
+  CANCELLED
+  EXPIRED
+}
+
+enum SnapshotDeliveryState {
+  PENDING
+  DELIVERING
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+}
+
+/// ES256 signing key pairs used to mint delegated BFF-to-FastAPI JWTs (spec
+/// §1.6). At most one row may be ACTIVE at a time; that invariant is enforced
+/// by a partial unique index added via raw SQL in the migration, since Prisma
+/// does not support partial unique indexes natively (see migration.sql).
+model DelegatedSigningKey {
+  id String @id // "dsk_" + ULID
+
+  kid       String @unique
+  algorithm String @default("ES256")
+
+  publicJwk           Json
+  /// { ciphertext, iv, authTag } base64-encoded. The raw private key never
+  /// appears in plaintext in the database; see DELEGATED_SIGNING_KEY_ENCRYPTION_KEY.
+  protectedPrivateKey Json
+  publicJwkThumbprint String
+
+  state DelegatedSigningKeyState
+
+  createdAt           DateTime  @default(now())
+  activatedAt         DateTime?
+  rotationCommittedAt DateTime?
+  verifyUntil         DateTime?
+  revokedAt           DateTime?
+
+  @@index([state])
+}
+
+/// A password reset token, bound to the account and to the credential state it
+/// was issued against.
+///
+/// Upstream keyed only on `email` and allowed several live rows per account,
+/// and redeeming one deleted only that row. Two tokens could therefore both be
+/// redeemed, the older one overwriting the password the newer had just set.
+/// Redeeming now deletes every token for the account, and
+/// `credentialVersionAtIssue` makes a token issued before any credential change
+/// unusable even if a row survives.
+model PasswordReset {
+  id                       Int      @id @default(autoincrement())
+  userId                   String
+  email                    String
+  token                    String   @unique
+  credentialVersionAtIssue Int
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  expiresAt                DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// -----------------------------------------------------------------------
+// Commercial access models. Source of truth: spec §1.2-§1.11 and
+// docs/architecture/subscription-entitlement-usage-cost-ownership.md.
+// CHECK constraints, partial indexes, triggers and immutability guards
+// that Prisma cannot express natively are added in the migration (Task 2).
+// -----------------------------------------------------------------------
+
+/// Immutable, versioned plan content. See spec §1.2: content is immutable
+/// after publication (migration adds a trigger); retirement is one-way
+/// (EFFECTIVE -> RETIRED, no reactivation).
+model PlanVersion {
+  id               String           @id @default(cuid())
+  planKey          String
+  versionNo        Int
+  displayName      String
+  state            PlanVersionState @default(EFFECTIVE)
+  entitlements     Json // validated key/value map
+  entitlementsHash String // SHA-256 of canonical JSON
+  publishedBy      String
+  publishedAt      DateTime         @default(now())
+  retiredAt        DateTime?
+  createdAt        DateTime         @default(now())
+
+  accessGrants             AccessGrant[]
+  subscriptions            Subscription[]
+  commercialAccessBindings CommercialAccessBinding[]
+
+  @@unique([planKey, versionNo])
+  @@index([state])
+}
+
+/// A Workspace's grant of BASE or ADD_ON commercial access to a PlanVersion.
+/// See spec §1.3 for CHECK constraints added in the migration (BASE requires
+/// periodAnchor, ADD_ON requires reason and forbids periodAnchor, endsAt >
+/// startsAt).
+model AccessGrant {
+  id            String          @id @default(cuid())
+  teamId        String
+  team          Team            @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  planVersionId String
+  planVersion   PlanVersion     @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  grantKind     AccessGrantKind
+  source        String // "operator_invite", "support_grant", "promotion"
+  reason        String          @default("")
+  periodAnchor  DateTime? // required for BASE; null for ADD_ON
+  startsAt      DateTime
+  endsAt        DateTime? // null = no scheduled expiry (still revocable)
+  grantedBy     String
+  revokedAt     DateTime?
+  revokedBy     String?
+  revokeReason  String?
+  createdAt     DateTime        @default(now())
+
+  commercialAccessBinding CommercialAccessBinding?
+
+  @@unique([teamId, id])
+  @@index([teamId, grantKind])
+  @@index([teamId, revokedAt])
+}
+
+/// Placeholder billing-subscription record. Defaults to PROVISIONING, not
+/// ACTIVE — a subscription enters ACTIVE only after confirmed billing
+/// events. See spec §1.4 for the periodEnd > periodStart CHECK constraint
+/// added in the migration.
+model Subscription {
+  id            String            @id @default(cuid())
+  teamId        String
+  team          Team              @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  planVersionId String
+  planVersion   PlanVersion       @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  state         SubscriptionState @default(PROVISIONING)
+  periodStart   DateTime
+  periodEnd     DateTime
+  periodAnchor  DateTime
+  graceEndsAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  commercialAccessBinding CommercialAccessBinding?
+
+  @@unique([teamId, id])
+  @@index([teamId, state])
+}
+
+/// Binds a Workspace's currently active commercial access source (an
+/// AccessGrant or a Subscription) to the PlanVersion it grants. No
+/// `@unique` on teamId — this is one-to-many with Team so deactivated
+/// bindings remain as history; the migration adds a partial unique index
+/// enforcing at most one active binding per Workspace (see spec §1.5).
+model CommercialAccessBinding {
+  id             String                     @id @default(cuid())
+  teamId         String
+  team           Team                       @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  sourceKind     CommercialAccessSourceKind
+  accessGrantId  String?                    @unique
+  accessGrant    AccessGrant?               @relation(fields: [teamId, accessGrantId], references: [teamId, id], onDelete: Restrict)
+  subscriptionId String?                    @unique
+  subscription   Subscription?              @relation(fields: [teamId, subscriptionId], references: [teamId, id], onDelete: Restrict)
+  planVersionId  String
+  planVersion    PlanVersion                @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  effectiveAt    DateTime
+  deactivatedAt  DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  // Composite uniques required so the accessGrant/subscription relations
+  // above can bind teamId alongside the entity FK (Global Constraint: all
+  // cross-table references bind teamId). The single-column @unique above
+  // remains the semantic constraint (one binding per grant/subscription);
+  // these are additionally required by Prisma for a 1:1 relation on a
+  // composite FK.
+  @@unique([teamId, accessGrantId])
+  @@unique([teamId, subscriptionId])
+  @@index([teamId, deactivatedAt])
+}
+
+/// An operator-imposed restriction (security/abuse/compliance/billing) that
+/// disables or reduces an entitlement key regardless of plan. See spec
+/// §1.6 for the DISABLE-requires-false and REDUCE_CAP-requires-non-negative-
+/// number CHECK constraints added in the migration.
+model Restriction {
+  id              String            @id @default(cuid())
+  teamId          String
+  team            Team              @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  kind            RestrictionKind
+  effect          RestrictionEffect
+  entitlementKey  String
+  restrictedValue Json // false for DISABLE; reduced numeric for REDUCE_CAP
+  reason          String
+  imposedBy       String
+  imposedAt       DateTime          @default(now())
+  liftedAt        DateTime?
+  liftedBy        String?
+  liftReason      String?
+
+  @@index([teamId, liftedAt])
+}
+
+/// One row per Workspace — the authoritative publication state, locked
+/// (SELECT ... FOR UPDATE) during snapshot publication to serialize
+/// concurrent version allocation. See spec §1.7 for the publication
+/// transaction.
+model CommercialAccessProjection {
+  id                         String               @id @default(cuid())
+  teamId                     String               @unique
+  team                       Team                 @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  currentSnapshotId          String?              @unique
+  currentSnapshot            EntitlementSnapshot? @relation(fields: [teamId, currentSnapshotId], references: [teamId, id], onDelete: Restrict)
+  entitlementVersion         Int                  @default(0)
+  leaseSequence              Int                  @default(0)
+  semanticHash               String               @default("")
+  entitlementRegistryVersion Int                  @default(1)
+  resolutionPolicyVersion    Int                  @default(1)
+  platformLimitsVersion      Int                  @default(1)
+  updatedAt                  DateTime             @updatedAt
+
+  // Required by Prisma for a 1:1 relation on a composite FK (teamId is
+  // already unique alone; this composite unique lets currentSnapshot bind
+  // teamId alongside currentSnapshotId per the Global Constraint).
+  @@unique([teamId, currentSnapshotId])
+}
+
+/// The signed, immutable envelope pushed to and pulled by the domain
+/// service. `leaseSequence` is strictly monotonic within a Workspace across
+/// renewals, Plan changes and access-source replacement. See spec §1.9 for
+/// the semanticHash and validUntil bounding rules.
+model EntitlementSnapshot {
+  id                         String                 @id @default(cuid())
+  teamId                     String
+  team                       Team                   @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  schemaVersion              Int
+  workspaceName              String
+  authorizationEpoch         Int
+  entitlementVersion         Int
+  leaseSequence              Int
+  projectionVersion          Int
+  lifecycle                  String
+  suspended                  Boolean
+  planVersionId              String
+  sourceRefs                 Json // [{ kind, id, planVersionId, startsAt, endsAt }]
+  periodStart                DateTime
+  periodEnd                  DateTime
+  periodAnchor               DateTime
+  resolvedEntitlements       Json
+  restrictionSummary         Json // [{ id, kind, key, effect, value, reason }]
+  semanticHash               String
+  entitlementRegistryVersion Int
+  resolutionPolicyVersion    Int
+  platformLimitsVersion      Int
+  issuedAt                   DateTime               @default(now())
+  validUntil                 DateTime // bounded by min(issuedAt+24h, endsAt, periodEnd, grace)
+  auditEventId               String
+  auditEvent                 ControlPlaneAuditEvent @relation(fields: [teamId, auditEventId], references: [teamId, id], onDelete: Restrict)
+  signatureHmac              String // HMAC-SHA256 of canonical snapshot
+  signatureKeyId             String // identifies which key signed, for rotation
+  signatureAlgorithm         String                 @default("hmac-sha256")
+  canonicalEnvelope          Bytes // exact immutable bytes sent by push and pull
+  createdAt                  DateTime               @default(now())
+
+  projection  CommercialAccessProjection?
+  outboxEntry EntitlementSnapshotOutbox?
+
+  @@unique([teamId, entitlementVersion, leaseSequence])
+  @@unique([teamId, id])
+  @@index([teamId, entitlementVersion])
+}
+
+/// Transactional outbox for snapshot delivery. State machine: PENDING ->
+/// DELIVERING -> DELIVERED (happy path), DELIVERING -> FAILED -> DELIVERING
+/// -> ... (retries with backoff), FAILED -> DEAD_LETTER (after
+/// maxAttempts). A delivery lease prevents concurrent dispatchers from
+/// double-delivering the same entry. See spec §1.10.
+model EntitlementSnapshotOutbox {
+  id                     String                @id @default(cuid())
+  snapshotId             String                @unique
+  teamId                 String
+  snapshot               EntitlementSnapshot   @relation(fields: [teamId, snapshotId], references: [teamId, id], onDelete: Restrict)
+  deliveryState          SnapshotDeliveryState @default(PENDING)
+  attempts               Int                   @default(0)
+  maxAttempts            Int                   @default(5)
+  lastAttemptAt          DateTime?
+  nextAttemptAt          DateTime?
+  lastError              String?
+  deliveryLeaseId        String?
+  deliveryLeaseExpiresAt DateTime?
+  deliveredAt            DateTime?
+  createdAt              DateTime              @default(now())
+
+  @@unique([teamId, snapshotId])
+  @@index([deliveryState, nextAttemptAt])
+  @@index([teamId])
+  @@index([deliveryLeaseExpiresAt])
+}
+
+/// Append-only durable audit trail. Distinct from `sendAudit()`, which only
+/// emits a redacted structured log. Platform-wide PlanVersion publication
+/// does not require a Team; Workspace commercial-access changes and every
+/// Snapshot publication do. A database trigger (added in the migration)
+/// rejects UPDATE and DELETE of this table. See spec §1.11.
+model ControlPlaneAuditEvent {
+  id           String   @id @default(cuid())
+  scopeKind    String // "PLATFORM" or "WORKSPACE"
+  teamId       String?
+  team         Team?    @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  actorKind    String
+  actorId      String
+  executor     String
+  eventType    String
+  resourceType String
+  resourceId   String
+  requestId    String?
+  traceId      String?
+  details      Json // redacted
+  createdAt    DateTime @default(now())
+
+  entitlementSnapshots EntitlementSnapshot[]
+
+  @@unique([teamId, id])
+  @@index([teamId, createdAt])
+  @@index([eventType, createdAt])
+}

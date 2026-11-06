@@ -1,0 +1,1208 @@
+{
+  "updated_at": "2026-11-05",
+  "main_sha": "c2bd35a8e6723c42d485aa2bd98a6edbc1c0ac21",
+  "competitor_chapter": "#277 (C-50): main-tutorial chapter (steps 9-20) and step 22, plus a support-reference section; their screenshots were removed on 2026-11-05 (#429) and are to be reshot in a fictional Workspace; the acceptance criteria are in docs/product/competitor-scan-acceptance.md",
+  "text_update_2026_11_03": {
+    "main_sha": "f4ef97d8fe57be0cc88b32606bd1f27124ef61b7",
+    "scope": "text only: competitor parts of both pages, README and this file rewritten for the fixes merged on 2026-11-03 (#346 quote lines, PR #357; #353 a completed recluster supersedes the failed cluster step, PR #359; #355 no re-quote after a recluster, PR #358, and the empty-page / wrong page ID hint, PR #360)",
+    "screenshots": "not retaken: source_screenshots, figure numbers, tags and embedded image bytes are unchanged; main-tutorial figures 15 and 19 still show the pre-#346 quote lines and support figure 18 the pre-#353 cluster step; the text next to each of them says so (captions unchanged)",
+    "rerun": "files[] (bytes, sha256, static scans) and browser_validation re-run on 2026-11-03 with the C-50 scripts; workflow_audit and paid_calls are the earlier editions' records, not re-run"
+  },
+  "text_update_2026_11_03_next_plan": {
+    "main_sha": "3d00c82348cc130cb58a934430f6c62269aedcc6",
+    "scope": "text only: #367 fixed \"Plan the next round\" after an ended round; the known issue, its workaround and its troubleshooting row were removed from both pages and README, main-tutorial step 52 describes the flow directly, and the round 2 / round 3 demo note now says it was the known issue at the time (main bc2ccc5f)",
+    "screenshots": "not retaken: source_screenshots, figure numbers, tags and embedded image bytes are unchanged",
+    "rerun": "files[] (bytes, sha256, static scans) and browser_validation re-run on 2026-11-03 with the C-50 scripts; workflow_audit and paid_calls are the earlier editions' records, not re-run"
+  },
+  "text_update_2026_11_05_board_running": {
+    "main_sha": "bdda1017b1a1f91d18f717483c2b85acadac64db",
+    "scope": "text only: #385 shows a step whose generation or check is queued or running as the current step in progress, not as missing; the support page's board status table gains one row for it (an uncertain check still reads as not done) and README says so",
+    "screenshots": "not retaken: source_screenshots, figure numbers, tags and embedded image bytes are unchanged; the board screenshots show settled states, which #385 does not change",
+    "rerun": "files[] (bytes, sha256, static scans) and browser_validation re-run on 2026-11-05 with the C-50 scripts; workflow_audit and paid_calls are the earlier editions' records, not re-run"
+  },
+  "text_update_2026_11_05_customer_cleanup": {
+    "main_sha": "7b6046ebddfbf1edf8ae2791bb2f2beb65639757",
+    "scope": "#429: removed the competitor screenshots that were captured on production or showed real page data from the recorded Mock examples: main-tutorial figures 13-34 and 36-40 (27) and support figures 16-18 (3); each of these sections now says its screenshots are to be reshot in a fictional Workspace; the remaining figures were renumbered in order, and text that named the real product, pages or advertisers was rewritten generically",
+    "screenshots": "30 unique screenshots and their source_screenshots entries removed; the remaining 72 keep their bytes, tags and capture dates, and used_in follows the new figure numbers",
+    "rerun": "files[] (bytes, sha256, static scans) and browser_validation re-run on 2026-11-05 with a local playwright-core script (same viewports, offline file protocol); workflow_audit and paid_calls are the earlier editions' records, not re-run"
+  },
+  "board_thumbnails": "#250 merged (main bc2ccc5f); every screenshot showing board tiles, the comparison table or the image drawer was reshot on bc2ccc5f with 512px thumbnails (drawer large preview stays original)",
+  "source_editions": [
+    {
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "unique_embedded_images": 17,
+      "mode": "board, comparison table and drawer screenshots reshot after merging #250; same Workspace and fictional product, explicit controlled Mock"
+    },
+    {
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "unique_embedded_images": 48,
+      "mode": "local compose stack (web, FastAPI, Worker, Postgres, blob transfer), dedicated tutorial Workspace provisioned with the golden-path helpers, fictional product, explicit controlled Mock"
+    },
+    {
+      "captured_at": "2026-10-23",
+      "main_sha": "8cf5ba8aca8a85d1e888395f85c3ff1d11f1a749",
+      "unique_embedded_images": 6,
+      "mode": "retained editing-panel captures (fields unchanged; entry moved to the image drawer)"
+    },
+    {
+      "captured_at": "2026-10-18",
+      "main_sha": "6d93ccf67961de10fd93b2e146ed1dfce534ee68",
+      "unique_embedded_images": 1,
+      "mode": "retained login page capture (unchanged)"
+    }
+  ],
+  "fresh_unique_screenshots_2026_11_02": 0,
+  "carried_over_unique_screenshots": 72,
+  "total_unique_screenshots": 72,
+  "screenshot_mode": "controlled Mock in every chapter; the competitor chapter, step 22 and the support page's competitor section have no screenshots until they are reshot in a fictional Workspace; no Meta writes",
+  "source_screenshots": {
+    "retained from previous edition (marketai-01)": {
+      "sha256": "6094123bc0775c7b24ec767805c12f4432f5c3f862b999be2b43f67b0946a044",
+      "bytes": 32431,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-18",
+      "main_sha": "6d93ccf67961de10fd93b2e146ed1dfce534ee68",
+      "mode": "retained controlled Mock UI capture",
+      "used_in": [
+        "marketai-tutorial.html#fig-1"
+      ]
+    },
+    "k01-provider-credentials.png": {
+      "sha256": "3d7a8665a184778a001d53b109f65477b029e1d86b1a3595cf20742647d74808",
+      "bytes": 45731,
+      "width": 1128,
+      "height": 537,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-2",
+        "advanced-reference.html#fig-2"
+      ]
+    },
+    "k02-gemini-empty-form.png": {
+      "sha256": "334f3ec16adbf3306473ec3604525ad60783c7b72a604c7fc927745a953c2628",
+      "bytes": 16209,
+      "width": 840,
+      "height": 278,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-3",
+        "advanced-reference.html#fig-3"
+      ]
+    },
+    "a01-products-empty.png": {
+      "sha256": "a534fddcb0350313dda2daff8e78531127e8ac69cc684528e0a4ed6775c2fa48",
+      "bytes": 45826,
+      "width": 1440,
+      "height": 540,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-4"
+      ]
+    },
+    "a02-paste-product.png": {
+      "sha256": "988619157d9e679d13227cd4109e786edcd13d654e286819a7cdd162c32ada79",
+      "bytes": 43034,
+      "width": 1184,
+      "height": 470,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-5"
+      ]
+    },
+    "a03-product-card-variant.png": {
+      "sha256": "0b255aa2e7a484b55671848fa2a18257087937cbf3021e12b5d47aa7b3169fe8",
+      "bytes": 65027,
+      "width": 820,
+      "height": 860,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-6"
+      ]
+    },
+    "a04-reference-images.png": {
+      "sha256": "82ee3c095ba13a208ed3bbd2af1c718785d05fe36a3abd39b921c2b94bc15c9d",
+      "bytes": 43857,
+      "width": 356,
+      "height": 1004,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-7",
+        "advanced-reference.html#fig-7"
+      ]
+    },
+    "a05-brand-baseline.png": {
+      "sha256": "19637a6a104453cce09d2c5c2316b59b209b781bafb75211d43039e7d4aca42d",
+      "bytes": 44054,
+      "width": 356,
+      "height": 890,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-8",
+        "advanced-reference.html#fig-11"
+      ]
+    },
+    "a06-product-card-start-test.png": {
+      "sha256": "012f8fea18c36d86fb1940ba3c886cbe68c07284a1a5dd4aa4ef1d01142c1674",
+      "bytes": 56545,
+      "width": 1440,
+      "height": 820,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-9"
+      ]
+    },
+    "b01-test-start-from-card.png": {
+      "sha256": "4ad4a2a9944d36d43d3cfea2dc6c14a032dca6fd438ec5e100270edd66b5ef02",
+      "bytes": 54189,
+      "width": 1184,
+      "height": 660,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-10"
+      ]
+    },
+    "b02-controlled-mock-choice.png": {
+      "sha256": "e8ea1f6d490b7796bcde442fbeaecb2b928413866902a97845d10d1eef0d9331",
+      "bytes": 38071,
+      "width": 1184,
+      "height": 500,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-11"
+      ]
+    },
+    "b03-understanding-edit.png": {
+      "sha256": "16c7ea01ba272e50432b01a77a6dcdaf6ba2666dd33a481ea7ea1f7da2d99566",
+      "bytes": 121787,
+      "width": 1184,
+      "height": 1000,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-12"
+      ]
+    },
+    "b04-plan-review.png": {
+      "sha256": "87e582bd8128ad5f00830aa24e8608c1e193304e4962da41b6f407d16491e357",
+      "bytes": 116245,
+      "width": 1152,
+      "height": 849,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-13"
+      ]
+    },
+    "b05-plan-budget-executions.png": {
+      "sha256": "dd1815ad4485fbfa99f9bc4ce35fe6731268a5e0ca969c08c19a36e63dd7c33f",
+      "bytes": 37596,
+      "width": 1152,
+      "height": 453,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-14"
+      ]
+    },
+    "b06-expression-three-elements.png": {
+      "sha256": "0617790e6acae9dee00c14fdfea189bbcbc64bfec4be896e52cb77d0698877fc",
+      "bytes": 59543,
+      "width": 1152,
+      "height": 682,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-15"
+      ]
+    },
+    "b07-ad-language-copy.png": {
+      "sha256": "37e669ef2f3c722f02fcc5af31a3b59037c45e82586129723048f9f86c949c9f",
+      "bytes": 31706,
+      "width": 1152,
+      "height": 494,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-16"
+      ]
+    },
+    "b08-not-distinct-banner.png": {
+      "sha256": "28e5249a91174b917c5a06c8517c43120f840b556640f0510464891f7f5d0de7",
+      "bytes": 36090,
+      "width": 1184,
+      "height": 310,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-17",
+        "advanced-reference.html#fig-16"
+      ]
+    },
+    "b09-not-distinct-fields.png": {
+      "sha256": "359828ce561d5fbaf47c792964bdae1d4b940608c157db1d14d16754d067a08f",
+      "bytes": 92952,
+      "width": 1152,
+      "height": 1021,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-18",
+        "advanced-reference.html#fig-17"
+      ]
+    },
+    "b10-compare-brand-style.png": {
+      "sha256": "09063332e7172fd4db31bee08c7de6a1b92cd3a509d889575a068194834bd63f",
+      "bytes": 61483,
+      "width": 1152,
+      "height": 588,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-19"
+      ]
+    },
+    "b11-conditions-generation-settings.png": {
+      "sha256": "764f1a420f13eb7a67ac1daa84289125553710f4eaa533c9836977d4b655a91a",
+      "bytes": 86565,
+      "width": 1152,
+      "height": 769,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-20"
+      ]
+    },
+    "c01-plan-confirmed-drafts.png": {
+      "sha256": "162e758a6dd43219fdb2cd9cedf128cc0eca93f2b689a1899376a6bc4f0c0892",
+      "bytes": 76785,
+      "width": 1184,
+      "height": 800,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-21",
+        "advanced-reference.html#fig-8"
+      ]
+    },
+    "c02-round-settings.png": {
+      "sha256": "bcef900a267275ee1e64909237270cd70db7a6c451678751320b1c210db10da0",
+      "bytes": 47415,
+      "width": 1120,
+      "height": 472,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-22"
+      ]
+    },
+    "c03-model-settings.png": {
+      "sha256": "349864a2b4f40bf1615dff0ec86da4fadad8ded9f29d20eed108243781a1ae27",
+      "bytes": 55401,
+      "width": 760,
+      "height": 680,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-23",
+        "advanced-reference.html#fig-4"
+      ]
+    },
+    "c04-cost-preview.png": {
+      "sha256": "9471e8c5234e5cffee5c95da3b913a8a2e12e0710a904685359ccabc497e3143",
+      "bytes": 64572,
+      "width": 1152,
+      "height": 917,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-24",
+        "advanced-reference.html#fig-5"
+      ]
+    },
+    "n01-board-groups.png": {
+      "sha256": "eb72aae19fa8070f85301bd69bebcd92814a7b7d5241639051ec2f1a414b5ab5",
+      "bytes": 65033,
+      "width": 1164,
+      "height": 595,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-25"
+      ]
+    },
+    "e09-board-execution-v2.png": {
+      "sha256": "7265c83b258efb6ca10fe0096da76b3e6c02bdaa962ed5f81c246141eac1b34e",
+      "bytes": 35099,
+      "width": 564,
+      "height": 811,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-26"
+      ]
+    },
+    "l01-version-history.png": {
+      "sha256": "c3b708e849d7a0fd647fe10fc34b66364d9594f19ece3cddeb1da22d6e0e166a",
+      "bytes": 30643,
+      "width": 1164,
+      "height": 408,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-27",
+        "advanced-reference.html#fig-21"
+      ]
+    },
+    "j01-board-within-angle.png": {
+      "sha256": "1fa747517c2519efa3a77785d73ec23e2621780717c6e1bbef7854c50b44433e",
+      "bytes": 41508,
+      "width": 1164,
+      "height": 599,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-28"
+      ]
+    },
+    "j02-current-angle-switched.png": {
+      "sha256": "162744115d96a38d9cf90ffcbc2ad725828563466a8432ad9386ed7913431aed",
+      "bytes": 49716,
+      "width": 1164,
+      "height": 659,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-29"
+      ]
+    },
+    "j03-comparison-table.png": {
+      "sha256": "59a737dd98a04f1dd69922c9181711dc78871a7c295a84f62852516b59b50ed2",
+      "bytes": 50939,
+      "width": 1132,
+      "height": 648,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-30",
+        "advanced-reference.html#fig-13"
+      ]
+    },
+    "e01-drawer-belongs.png": {
+      "sha256": "40f6f185f37898360f0adee5a21e4679b78ecccc4440fd03c889b0bb7a1f65e2",
+      "bytes": 46886,
+      "width": 512,
+      "height": 1000,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-31"
+      ]
+    },
+    "e02-drawer-compare-missing.png": {
+      "sha256": "44de8b88c3643246b334ba3c90b892bc523ff4d60c6e184d3bdbf1a8c8d0c344",
+      "bytes": 45965,
+      "width": 512,
+      "height": 1000,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-32",
+        "advanced-reference.html#fig-12"
+      ]
+    },
+    "j04-drawer-same-angle.png": {
+      "sha256": "b49c6e38e34d2d1fb40f474fd8fee76b45e7d072c8f5a744cd6bc18d8c250cfc",
+      "bytes": 63671,
+      "width": 512,
+      "height": 1000,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-33"
+      ]
+    },
+    "j05-appearance-pending-drafts.png": {
+      "sha256": "3baa824e27cbe4fcf2bceaa6c6fc038f206266b40ac611c401f9ef7a77b4702d",
+      "bytes": 11290,
+      "width": 1152,
+      "height": 86,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-34",
+        "advanced-reference.html#fig-9"
+      ]
+    },
+    "j06-appearance-pending-board.png": {
+      "sha256": "48fa7773d00c6622d082d67b3fefd335f765e0f462fdb147925a348d44807dd7",
+      "bytes": 23842,
+      "width": 1164,
+      "height": 166,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-35"
+      ]
+    },
+    "m01-mobile-board.png": {
+      "sha256": "e9e7fd1920e758f5fb91122f4e4e27a86bc21c060becf41e36701c0067c208d6",
+      "bytes": 109871,
+      "width": 780,
+      "height": 1688,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-36"
+      ]
+    },
+    "m02-mobile-drawer.png": {
+      "sha256": "83c7972f78b377fd54133267270f3ac677487f14a70d867ae67ec12ba3a3d973",
+      "bytes": 134238,
+      "width": 780,
+      "height": 1688,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-37"
+      ]
+    },
+    "d01-ai-qc-two-kinds.png": {
+      "sha256": "49223584d9ee31f3d8ae79126f8d5fc0b53fa3f2c4a742aa9b68a78ffe64f7e2",
+      "bytes": 62309,
+      "width": 1136,
+      "height": 492,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-38"
+      ]
+    },
+    "d02-single-done-paired-ready.png": {
+      "sha256": "4b5c94fd1dfd3f8fa556267c81c44b942f5a9539d15aaf86914a99f32bee772a",
+      "bytes": 63639,
+      "width": 1136,
+      "height": 446,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-39"
+      ]
+    },
+    "e03-drawer-single-qc.png": {
+      "sha256": "7fd325820597c1e53970cab2568701add795541fe85bc2c1245b49ff9fb0b4ce",
+      "bytes": 76233,
+      "width": 512,
+      "height": 1000,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-40"
+      ]
+    },
+    "e04-drawer-paired-qc-actions.png": {
+      "sha256": "aa6259cdbc6040a57c3766d4672b9645666b0e3b38b2402e32f9842694b08020",
+      "bytes": 89638,
+      "width": 512,
+      "height": 1000,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-41"
+      ]
+    },
+    "e05-review-needs-changes.png": {
+      "sha256": "259ea502f907ef8a40c172a1deb586117c9194e845cda8e4fcf8b717109edf6c",
+      "bytes": 98939,
+      "width": 512,
+      "height": 1000,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-42",
+        "advanced-reference.html#fig-14"
+      ]
+    },
+    "e06-drawer-blocked-revise.png": {
+      "sha256": "968e2dae32024b3a8fc7f33f462461550729925bf265dcce590cefa694941f0b",
+      "bytes": 54394,
+      "width": 512,
+      "height": 1000,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-43"
+      ]
+    },
+    "e07-modify-with-ai.png": {
+      "sha256": "910016c9ab8d71dc6056107965024df14e903b08e8e2e0b374e07cca8f59ea46",
+      "bytes": 58252,
+      "width": 512,
+      "height": 1000,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-44",
+        "advanced-reference.html#fig-15"
+      ]
+    },
+    "e08-revision-draft-cost.png": {
+      "sha256": "067ffc46806b7a06b58798c5f7c1f4eb4338c7ae561cd3a7e2cc70f0458afd42",
+      "bytes": 64014,
+      "width": 1136,
+      "height": 847,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-45"
+      ]
+    },
+    "retained from previous edition (marketai-30)": {
+      "sha256": "242fd57c8c184fc289296f9e33530c3e3d0cde23a60c1c2f72aa8efeddef1ccd",
+      "bytes": 47741,
+      "width": 1120,
+      "height": 775,
+      "captured_at": "2026-10-23",
+      "main_sha": "8cf5ba8aca8a85d1e888395f85c3ff1d11f1a749",
+      "mode": "retained controlled Mock UI capture",
+      "used_in": [
+        "marketai-tutorial.html#fig-46",
+        "advanced-reference.html#fig-19"
+      ]
+    },
+    "retained from previous edition (marketai-31)": {
+      "sha256": "021e51a1681f56ec726f1c45d969df7ee138b5de08be37c21089fc3c0d18151f",
+      "bytes": 54073,
+      "width": 1120,
+      "height": 887,
+      "captured_at": "2026-10-23",
+      "main_sha": "8cf5ba8aca8a85d1e888395f85c3ff1d11f1a749",
+      "mode": "retained controlled Mock UI capture",
+      "used_in": [
+        "marketai-tutorial.html#fig-47"
+      ]
+    },
+    "retained from previous edition (marketai-33)": {
+      "sha256": "edaa07071d3c49c81121444a40dc5b1b78ba2581483d39146cb9c8d191756aa1",
+      "bytes": 40832,
+      "width": 1120,
+      "height": 782,
+      "captured_at": "2026-10-23",
+      "main_sha": "8cf5ba8aca8a85d1e888395f85c3ff1d11f1a749",
+      "mode": "retained controlled Mock UI capture",
+      "used_in": [
+        "marketai-tutorial.html#fig-48"
+      ]
+    },
+    "retained from previous edition (marketai-34)": {
+      "sha256": "b9bcc60061f954ccb89e97ec5902acb1b1e5a739e2598bb61050db78b35ec540",
+      "bytes": 36281,
+      "width": 1086,
+      "height": 700,
+      "captured_at": "2026-10-23",
+      "main_sha": "8cf5ba8aca8a85d1e888395f85c3ff1d11f1a749",
+      "mode": "retained controlled Mock UI capture",
+      "used_in": [
+        "marketai-tutorial.html#fig-49"
+      ]
+    },
+    "retained from previous edition (marketai-35)": {
+      "sha256": "a273084f0d4f5636ab06694505c609b2dded041fef99333594b70e496bce1e2b",
+      "bytes": 73419,
+      "width": 1120,
+      "height": 1021,
+      "captured_at": "2026-10-23",
+      "main_sha": "8cf5ba8aca8a85d1e888395f85c3ff1d11f1a749",
+      "mode": "retained controlled Mock UI capture",
+      "used_in": [
+        "marketai-tutorial.html#fig-50",
+        "advanced-reference.html#fig-20"
+      ]
+    },
+    "retained from previous edition (marketai-36)": {
+      "sha256": "e44ac029dd28d2831587721eb2dab59f55895fbba34cd4d1815ba31ec5dd36ff",
+      "bytes": 73834,
+      "width": 1120,
+      "height": 1021,
+      "captured_at": "2026-10-23",
+      "main_sha": "8cf5ba8aca8a85d1e888395f85c3ff1d11f1a749",
+      "mode": "retained controlled Mock UI capture",
+      "used_in": [
+        "marketai-tutorial.html#fig-51"
+      ]
+    },
+    "f01-export-selection.png": {
+      "sha256": "03fdaff056714000e1e4ba2743d8472621877a8a1c52fd2fd0da78f5ea7ac193",
+      "bytes": 13866,
+      "width": 1140,
+      "height": 118,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-52"
+      ]
+    },
+    "f02-handoff-download.png": {
+      "sha256": "479fab94a648805e522895116d50f01cf0c4e71ace654c611759a4c99e981a65",
+      "bytes": 38800,
+      "width": 1152,
+      "height": 481,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-53",
+        "advanced-reference.html#fig-23"
+      ]
+    },
+    "f03-match-meta-ad.png": {
+      "sha256": "2773b46e0906a4f0f22b08ccb129e639390c732f3099d3b1e4b736615ed91d3e",
+      "bytes": 22541,
+      "width": 1140,
+      "height": 273,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-54"
+      ]
+    },
+    "g01-import-form.png": {
+      "sha256": "50844969e6830397412bb36df561c21634bc7d090e64ba56b957019e5faad7ae",
+      "bytes": 37284,
+      "width": 1140,
+      "height": 370,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-55"
+      ]
+    },
+    "g02-import-invalid.png": {
+      "sha256": "a2317c430f39f3d0549fd6e8211bb5b9c8607b5f4a77674c2a37f9db63065ddc",
+      "bytes": 24055,
+      "width": 1152,
+      "height": 207,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-56",
+        "advanced-reference.html#fig-18"
+      ]
+    },
+    "g03-import-valid-preview.png": {
+      "sha256": "9c974de4cbfbd13973851dd62fbfd1e65e550315e4084cbb577a1f972aeb68c5",
+      "bytes": 18091,
+      "width": 1152,
+      "height": 199,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-57"
+      ]
+    },
+    "g04-import-active-batch.png": {
+      "sha256": "f6f9bf103fa1b72e279eccf07685059943f80fc25f2e8ba79049a64107ecb170",
+      "bytes": 27393,
+      "width": 1152,
+      "height": 256,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-58",
+        "advanced-reference.html#fig-25"
+      ]
+    },
+    "g05-correction-preview.png": {
+      "sha256": "ecd3537af3b2c11c044d9af83c3cd4bea9568406e676c0d3c54956819529c807",
+      "bytes": 57518,
+      "width": 1140,
+      "height": 552,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-59",
+        "advanced-reference.html#fig-24"
+      ]
+    },
+    "h01-evaluation.png": {
+      "sha256": "f9f2709cfcc2fd8fe7256fef2e7abeba5de3db20bdfd66ea057deb9c09dfa66d",
+      "bytes": 53010,
+      "width": 1152,
+      "height": 463,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-60"
+      ]
+    },
+    "h02-evidence-gate.png": {
+      "sha256": "5c7c47d18c4d4d10862c6888bbde0e10c957096186403c0840f37bf62172e819",
+      "bytes": 55101,
+      "width": 1152,
+      "height": 456,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-61"
+      ]
+    },
+    "h03-interpretation.png": {
+      "sha256": "ed323206a4ca18c2848383a0391a76325c482b930b8ed3ef24185e5a19c83ae3",
+      "bytes": 50419,
+      "width": 1140,
+      "height": 376,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-62"
+      ]
+    },
+    "h04-end-round.png": {
+      "sha256": "525c1bd75f267e2e6046c2ee55eff9adafdfaa89bd66f40de0b23845c8628f2f",
+      "bytes": 22802,
+      "width": 1140,
+      "height": 239,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-63"
+      ]
+    },
+    "i01-reuse-picker.png": {
+      "sha256": "cd1aa209ed2c53eec1a0f09733608cb04cb7b8cebc0edb18794051ad34ebae66",
+      "bytes": 41751,
+      "width": 1140,
+      "height": 588,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-64"
+      ]
+    },
+    "i04-reuse-fresh-review.png": {
+      "sha256": "d406af7704d4485524b9f567e67dafe6f713879c0acc0dc2865e146644b4e1f6",
+      "bytes": 20182,
+      "width": 564,
+      "height": 510,
+      "captured_at": "2026-10-26",
+      "main_sha": "bc2ccc5f83f94461345863d4aaae21a34b65df21",
+      "mode": "local compose stack rebuilt on main bc2ccc5f (#250 board thumbnails), same Workspace and fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-65"
+      ]
+    },
+    "i02-previous-rounds.png": {
+      "sha256": "d77473ed61bab6902854697e2ab4a18c85e72f936981e8c614f29e47173ffedf",
+      "bytes": 16802,
+      "width": 1140,
+      "height": 146,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-66"
+      ]
+    },
+    "i03-round1-history.png": {
+      "sha256": "05bd5bce49b4f025b27f8add24551a8edc96610ee9d6d3c6928d43f93422af46",
+      "bytes": 45158,
+      "width": 1152,
+      "height": 500,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-67",
+        "advanced-reference.html#fig-22"
+      ]
+    },
+    "k04-localization-no-source.png": {
+      "sha256": "4f2b38322e1330a3fbabbd2f0a2f9eef7fe628a5ac76de30a667e2c34ca6a3d7",
+      "bytes": 28851,
+      "width": 1184,
+      "height": 330,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "marketai-tutorial.html#fig-68",
+        "advanced-reference.html#fig-26"
+      ]
+    },
+    "k03-advanced-nav.png": {
+      "sha256": "e6fc07f801880e46273435052d58ad4dd596f0d56a0c0b77fc26470aa39f4298",
+      "bytes": 17610,
+      "width": 256,
+      "height": 610,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "advanced-reference.html#fig-1"
+      ]
+    },
+    "k06-generate-workbench.png": {
+      "sha256": "98ea2423721e38ce1fc52e59a82eca9a3bdea37ca388caaa63dda9f90a12b0a2",
+      "bytes": 34224,
+      "width": 1184,
+      "height": 540,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "advanced-reference.html#fig-6"
+      ]
+    },
+    "k07-library-products.png": {
+      "sha256": "b8f2541be08b17ade03f54e1b520352a3909ce3197d315c99d1c945a72efacd4",
+      "bytes": 12720,
+      "width": 1184,
+      "height": 300,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "advanced-reference.html#fig-10"
+      ]
+    },
+    "k05-scale-no-winner.png": {
+      "sha256": "76747d9912faa7ec534731a8874098cfc2c6abc9e3256c3e29c296d8165284d2",
+      "bytes": 34751,
+      "width": 1184,
+      "height": 640,
+      "captured_at": "2026-10-25",
+      "main_sha": "de8c24529001aa27c5916cd4130bba5bf94b9d1a",
+      "mode": "local compose stack (current main), dedicated tutorial Workspace, fictional product, explicit controlled Mock",
+      "used_in": [
+        "advanced-reference.html#fig-27"
+      ]
+    }
+  },
+  "files": [
+    {
+      "name": "marketai-tutorial.html",
+      "bytes": 4845223,
+      "sha256": "ee1da153f05bd625c9e8b729ba39be13ce142d716086f3df255a5028a9b3e062",
+      "images": 68,
+      "new_images_2026_11_02": 0,
+      "carried_over_images": 68,
+      "numbered_steps": 54,
+      "toc_entries": 69,
+      "anchors_valid": true,
+      "duplicate_ids": false,
+      "all_images_embedded": true,
+      "all_images_decoded_static": true,
+      "external_subresources": 0,
+      "javascript_syntax_valid": true,
+      "visible_internal_ids": [],
+      "public_signed_urls_or_keys": false
+    },
+    {
+      "name": "advanced-reference.html",
+      "bytes": 1677733,
+      "sha256": "d9215231cd573fb40258171b39f7f964ee2f49b766effea330c2046ef37992cc",
+      "images": 27,
+      "new_images_2026_11_02": 0,
+      "carried_over_images": 27,
+      "numbered_steps": 0,
+      "toc_entries": 25,
+      "anchors_valid": true,
+      "duplicate_ids": false,
+      "all_images_embedded": true,
+      "all_images_decoded_static": true,
+      "external_subresources": 0,
+      "javascript_syntax_valid": true,
+      "visible_internal_ids": [],
+      "public_signed_urls_or_keys": false
+    }
+  ],
+  "workflow_audit": {
+    "stack": "docker compose (docker-compose.yml) at main de8c2452, rebuilt at bc2ccc5f for the board reshoot (data volumes kept); META_WRITE_ENABLED=false; META_WRITE_ACCESS_TOKEN empty; no provider credentials configured",
+    "login": "golden-path provisioning helpers, owner sign-up and TOTP MFA with project fixture test values",
+    "projects": 3,
+    "small_rounds": {
+      "tutorial_product": 3,
+      "appearance_demo_product": 1
+    },
+    "confirmations_to_first_image": "5 clicks + 3 confirmations (Mock); 4 clicks + 3 confirmations with BYOK planning key (per #230 option A)",
+    "planning_modes": [
+      "mock"
+    ],
+    "generation_provider": "mock / mock-v1",
+    "qc_result_source": [
+      "controlled_mock"
+    ],
+    "round1": {
+      "combinations": 5,
+      "executions_per_combination": 2,
+      "asset_versions": 11,
+      "feedback_revisions": 1,
+      "approved_versions": 10,
+      "single_and_paired_qc_per_asset": true,
+      "package_ad_entries": 10,
+      "package_media_files": 10,
+      "ad_bindings": 10,
+      "csv_invalid_rows": 13,
+      "csv_invalid_issues": 2,
+      "active_report_batches": 1,
+      "active_daily_rows": 70,
+      "batch_corrections": 1,
+      "simulated_media_spend_usd": "127.00",
+      "qualified_real_assets": 0,
+      "outcome": "insufficient_evidence"
+    },
+    "round2": {
+      "path": "More -> Edit plan (confirmation required)",
+      "reused_exact_versions": 1,
+      "outcome": "user_stopped"
+    },
+    "round3": {
+      "stage": "match_expressions",
+      "plan_request": "same start_marketing_planning BFF command the hidden next-plan section sends (UI section does not render on de8c2452)",
+      "asset_versions": 5
+    },
+    "expressions_not_distinct_blocked": true,
+    "field_errors": 2,
+    "appearance_pending_demo": "second fictional product card without checked photos",
+    "board_reshoot_on_bc2ccc5f": {
+      "thumbnails_in_board_projection": "21/21 executions of the main demo",
+      "tile_and_peer_natural_size": "410x512 (512px derivative)",
+      "drawer_preview": "original 896x1120",
+      "drawer_review_sequence": "a repeat test on the same product with the same steps (5 combinations x 2 executions, single + paired Mock QC, execution 1 marked needs changes, Modify with AI opened)"
+    },
+    "paid_calls": 0,
+    "real_meta_writes": 0,
+    "competitor_chapter_2026_11_02": "real-key acceptance on production; its record (products, scans, credits and costs) is kept in the private archive repository, not in this repository"
+  },
+  "paid_calls": {
+    "2026-10-25 edition": 0,
+    "2026-11-02 competitor chapter": "real ScrapeCreators and OpenAI calls during the production acceptance; the record is kept in the private archive repository, not in this repository"
+  },
+  "ads_published": 0,
+  "browser_validation": {
+    "status": "passed",
+    "surface": "Chromium (playwright-core 1.62.1) via direct file protocol with the browser context set offline",
+    "desktop": {
+      "width": 1440,
+      "height": 1000
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "deviceScaleFactor": 2
+    },
+    "checks": [
+      {
+        "viewport": "desktop",
+        "file": "marketai-tutorial.html",
+        "images": 68,
+        "imagesDecoded": 68,
+        "anchors": {
+          "count": 69,
+          "missing": [],
+          "duplicateIds": []
+        },
+        "crossLinks": [
+          "advanced-reference.html"
+        ],
+        "crossLinkNavigates": true,
+        "horizontalOverflowPx": 0,
+        "toc": {
+          "sidebarOpen": true,
+          "tocVisible": true,
+          "target": "#mock-language",
+          "targetTop": 24
+        },
+        "competitorsSection": {
+          "top": 11927,
+          "imgs": 56
+        },
+        "figureNumbersSequential": true,
+        "viewer": {
+          "opensOnClick": true,
+          "showsEmbeddedImage": true,
+          "closesOnEscape": true,
+          "closesOnButton": true
+        },
+        "externalRequests": [],
+        "consoleOrPageErrors": []
+      },
+      {
+        "viewport": "desktop",
+        "file": "advanced-reference.html",
+        "images": 27,
+        "imagesDecoded": 27,
+        "anchors": {
+          "count": 25,
+          "missing": [],
+          "duplicateIds": []
+        },
+        "crossLinks": [
+          "marketai-tutorial.html"
+        ],
+        "crossLinkNavigates": true,
+        "horizontalOverflowPx": 0,
+        "toc": {
+          "sidebarOpen": true,
+          "tocVisible": true,
+          "target": "#competitor-modes",
+          "targetTop": 24
+        },
+        "competitorsSection": {
+          "top": 14108,
+          "imgs": 12
+        },
+        "figureNumbersSequential": true,
+        "viewer": {
+          "opensOnClick": true,
+          "showsEmbeddedImage": true,
+          "closesOnEscape": true,
+          "closesOnButton": true
+        },
+        "externalRequests": [],
+        "consoleOrPageErrors": []
+      },
+      {
+        "viewport": "mobile",
+        "file": "marketai-tutorial.html",
+        "images": 68,
+        "imagesDecoded": 68,
+        "anchors": {
+          "count": 69,
+          "missing": [],
+          "duplicateIds": []
+        },
+        "crossLinks": [
+          "advanced-reference.html"
+        ],
+        "crossLinkNavigates": true,
+        "horizontalOverflowPx": 0,
+        "toc": {
+          "opened": true,
+          "closedAfterClick": true,
+          "hash": "#product-card",
+          "target": "#product-card",
+          "targetTop": 24
+        },
+        "competitorsSection": {
+          "top": 12066,
+          "imgs": 56
+        },
+        "figureNumbersSequential": true,
+        "viewer": {
+          "opensOnClick": true,
+          "showsEmbeddedImage": true,
+          "closesOnEscape": true,
+          "closesOnButton": true
+        },
+        "externalRequests": [],
+        "consoleOrPageErrors": []
+      },
+      {
+        "viewport": "mobile",
+        "file": "advanced-reference.html",
+        "images": 27,
+        "imagesDecoded": 27,
+        "anchors": {
+          "count": 25,
+          "missing": [],
+          "duplicateIds": []
+        },
+        "crossLinks": [
+          "marketai-tutorial.html"
+        ],
+        "crossLinkNavigates": true,
+        "horizontalOverflowPx": 0,
+        "toc": {
+          "opened": true,
+          "closedAfterClick": true,
+          "hash": "#reference-rules",
+          "target": "#reference-rules",
+          "targetTop": 24
+        },
+        "competitorsSection": {
+          "top": 13825,
+          "imgs": 12
+        },
+        "figureNumbersSequential": true,
+        "viewer": {
+          "opensOnClick": true,
+          "showsEmbeddedImage": true,
+          "closesOnEscape": true,
+          "closesOnButton": true
+        },
+        "externalRequests": [],
+        "consoleOrPageErrors": []
+      }
+    ],
+    "checked_at": "2026-11-05"
+  }
+}

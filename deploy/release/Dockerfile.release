@@ -1,0 +1,73 @@
+# Run-to-completion Release service.
+#
+# Owns schema migrations for both the control-plane (Prisma) and the domain
+# (Alembic). Runtime services never receive these credentials or binaries.
+#
+# Railway runs this as a one-off deploy command; it exits 0 on success
+# and non-zero to abort the deployment.
+
+FROM python:3.12-slim AS python-base
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      curl \
+      ca-certificates \
+      gnupg \
+ && install -d /usr/share/postgresql-common/pgdg \
+ && curl -fsSL \
+      https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+      -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+ && . /etc/os-release \
+ && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-client-18 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22 for Prisma CLI
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# The release entrypoint invokes Prisma through web/scripts/prisma-migrate.mjs;
+# expose the npm-installed CLI when the container is running (not only while
+# `npx prisma generate` executes during the image build).
+ENV PATH="/app/web/node_modules/.bin:${PATH}"
+
+# ---- Python dependencies (Alembic, SQLAlchemy, psycopg) ----
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ---- Prisma CLI (control-plane migrations) ----
+COPY web/package.json web/package-lock.json web/
+COPY web/prisma/ web/prisma/
+COPY web/scripts/prisma-migrate.mjs web/scripts/
+RUN cd web && npm ci --ignore-scripts && npx prisma generate
+
+# ---- Release scripts and migration files ----
+COPY alembic.ini .
+COPY migrations/ migrations/
+COPY deploy/postgres/ deploy/postgres/
+COPY deploy/release/ deploy/release/
+COPY scripts/verify_release_target.py scripts/verify_release_target.py
+COPY scripts/verify_railway_bucket.py scripts/verify_railway_bucket.py
+COPY scripts/domain_bridge.py scripts/domain_bridge.py
+COPY scripts/__init__.py scripts/__init__.py
+COPY app/platform/ app/platform/
+COPY app/__init__.py app/__init__.py
+COPY app/config.py app/config.py
+COPY app/adapters/ app/adapters/
+# Alembic imports every SQLAlchemy model package so autogenerate/drift
+# detection sees the same metadata as the API.  Keep these packages in the
+# release image even though the release process does not start the API.
+COPY app/entitlements/ app/entitlements/
+COPY app/generation/ app/generation/
+COPY app/meta/ app/meta/
+COPY app/launch/ app/launch/
+COPY app/scale/ app/scale/
+COPY app/marketing/ app/marketing/
+COPY app/competitors/ app/competitors/
+
+ENTRYPOINT ["bash", "deploy/release/release.sh"]
