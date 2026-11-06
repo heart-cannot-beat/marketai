@@ -3020,6 +3020,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'get_library_data_source_connection_check',
+    {
+      operationId: 'get_library_data_source_connection_check',
+      method: 'GET',
+      pathTemplate:
+        '/api/v1/library/entries/{data_source_entry_id}/connection-checks/{check_id}',
+      pathParams: ['data_source_entry_id', 'check_id'],
+      queryParams: [],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 65536,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'get_library_data_source_connection_check_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'get_library_data_source_credential_binding',
     {
       operationId: 'get_library_data_source_credential_binding',

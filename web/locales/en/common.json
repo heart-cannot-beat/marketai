@@ -1663,6 +1663,7 @@
   "error-conflicting_source_context": "The source market settings conflict with each other.",
   "error-connection_already_exists": "An active connection already exists for this mode.",
   "error-connection_check_failed": "The connection check did not finish.",
+  "error-connection_check_not_found": "That connection check was not found.",
   "error-connection_not_found": "The Meta connection does not exist or is not active.",
   "error-content_length_exceeds_policy": "The file is larger than {{limit_mb}} MB.",
   "error-content_length_invalid": "The file size is invalid.",

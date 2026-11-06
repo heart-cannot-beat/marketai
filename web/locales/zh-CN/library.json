@@ -449,17 +449,37 @@
     }
   },
   "data-source-ops": {
-    "connection-unavailable": "连接检查还没有上线，目前不会检查这个数据源的凭据和可用性。",
-    "connection-description": "测试与这个数据源的连接，验证凭据和可用性。",
+    "connection-description": "检查这个数据源的已发布版本、有没有对应的连接器，以及绑定凭据的状态。不会联系服务商。",
     "check-connection": "检查连接",
-    "checking": "正在检查连接…",
-    "connection-success": "连接成功",
-    "connection-failed": "连接失败",
-    "provider": "服务商",
+    "checking": "正在检查…",
+    "check-not-confirmed": "无法确认检查已经开始，请再检查一次。",
+    "outcome-uncertain": "检查结果不确定，请稍后再检查一次。",
+    "health": {
+      "healthy": "检查通过",
+      "unknown": "还没有检查",
+      "degraded": "能用，但有问题",
+      "failed": "检查未通过",
+      "revoked": "凭据已失效"
+    },
+    "outcome": {
+      "data_source_not_published": "先发布数据源，再检查连接。",
+      "data_source_config_invalid": "已发布版本的配置无效，请修改后重新发布。",
+      "adapter_not_enabled": "这种数据源还没有可用的连接器。",
+      "credential_not_active": "绑定的凭据版本已轮换或撤销，请重新绑定有效的凭据。",
+      "manual_source_no_connection": "人工数据源不需要连接，事实来自导入。",
+      "controlled_mock_source": "这是受控 Mock 数据源，不连接真实服务商。"
+    },
+    "outcome-other": "检查已完成，但这里无法说明这个结果。",
+    "adapter": "连接器",
+    "adapter-kind": {
+      "manual": "人工导入",
+      "mock": "受控 Mock",
+      "shopify": "Shopify"
+    },
+    "adapter-kind-other": "其他",
     "mode": "模式",
-    "freshness": "新鲜度",
-    "capability": "能力",
-    "failure-reason": "失败原因",
+    "checked-at": "检查时间",
+    "check-again": "再检查一次",
     "retry": "重试",
     "done": "完成",
     "no-credentials": "没有可绑定的凭据。",

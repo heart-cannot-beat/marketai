@@ -449,17 +449,37 @@
     }
   },
   "data-source-ops": {
-    "connection-unavailable": "Connection checks are not available yet. MarketAI does not test this data source's credentials or availability today.",
-    "connection-description": "Test the connection to this data source to verify credentials and availability.",
+    "connection-description": "Checks this data source's published version, whether a connector exists for it, and the state of its bound credential. MarketAI does not contact the provider.",
     "check-connection": "Check connection",
-    "checking": "Checking connection…",
-    "connection-success": "Connection successful",
-    "connection-failed": "Connection failed",
-    "provider": "Provider",
+    "checking": "Checking…",
+    "check-not-confirmed": "We could not confirm that the check started. Check again.",
+    "outcome-uncertain": "The check outcome is uncertain. Check again later.",
+    "health": {
+      "healthy": "Check passed",
+      "unknown": "Not checked yet",
+      "degraded": "Working with problems",
+      "failed": "Check did not pass",
+      "revoked": "Credential no longer valid"
+    },
+    "outcome": {
+      "data_source_not_published": "Publish this data source first, then check it.",
+      "data_source_config_invalid": "The published version's configuration is not valid. Fix it and publish again.",
+      "adapter_not_enabled": "There is no connector for this kind of data source yet.",
+      "credential_not_active": "The bound credential version was rotated or revoked. Bind a valid credential.",
+      "manual_source_no_connection": "Manual data sources need no connection: their facts come from imports.",
+      "controlled_mock_source": "This is a Controlled Mock data source. It does not connect to a real provider."
+    },
+    "outcome-other": "The check finished with a result this page cannot describe.",
+    "adapter": "Connector",
+    "adapter-kind": {
+      "manual": "Manual import",
+      "mock": "Controlled Mock",
+      "shopify": "Shopify"
+    },
+    "adapter-kind-other": "Other",
     "mode": "Mode",
-    "freshness": "Freshness",
-    "capability": "Capability",
-    "failure-reason": "Failure reason",
+    "checked-at": "Checked at",
+    "check-again": "Check again",
     "retry": "Retry",
     "done": "Done",
     "no-credentials": "No credentials available for binding.",

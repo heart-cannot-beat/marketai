@@ -72,10 +72,8 @@ jest.mock('@/hooks/library/useLibraryCache', () => ({
   }),
 }));
 
-import { ConnectionCheckPanel } from '@/components/library/data-sources/ConnectionCheckPanel';
 import { CredentialBindingPanel } from '@/components/library/data-sources/CredentialBindingPanel';
 import { ManualFactImportPanel } from '@/components/library/data-sources/ManualFactImportPanel';
-import { SettingsTab } from '@/components/library/tabs/SettingsTab';
 
 if (typeof Blob.prototype.text !== 'function') {
   Blob.prototype.text = function () {
@@ -107,34 +105,6 @@ beforeEach(() => {
     },
   });
   mockInvalidate = jest.fn().mockResolvedValue(undefined);
-});
-
-// ─── ConnectionCheckPanel ─────────────────────────────────────────────
-
-describe('ConnectionCheckPanel', () => {
-  it('says the check is not available and offers no button', () => {
-    render(createElement(ConnectionCheckPanel));
-
-    expect(
-      screen.getByText('library:data-source-ops.connection-unavailable')
-    ).toBeTruthy();
-    expect(screen.queryByRole('button')).toBeNull();
-    expect(
-      screen.queryByText('library:data-source-ops.check-connection')
-    ).toBeNull();
-    expect(
-      screen.queryByText('library:data-source-ops.connection-success')
-    ).toBeNull();
-  });
-
-  it('is all the data source settings tab shows', () => {
-    const { container } = render(createElement(SettingsTab));
-
-    expect(container.textContent).toBe(
-      'library:data-source-ops.connection-unavailable'
-    );
-    expect(screen.queryByRole('button')).toBeNull();
-  });
 });
 
 // ─── CredentialBindingPanel ───────────────────────────────────────────

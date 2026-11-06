@@ -268,7 +268,7 @@ function ActiveTabContent({
     case 'resolution':
       return <ResolutionTab />;
     case 'settings':
-      return <SettingsTab />;
+      return <SettingsTab entryId={entryId} />;
     default:
       return (
         <div className="flex items-center justify-center py-12 text-center">

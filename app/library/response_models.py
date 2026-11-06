@@ -308,6 +308,30 @@ class CredentialBindingSummary(BaseModel):
     state: str
 
 
+class DataSourceConnectionCheck(BaseModel):
+    """``GET /entries/{id}/connection-checks/{check_id}``: one check's evidence (#383).
+
+    The conclusion is ``health`` plus ``reason_code``; the Operation that ran
+    the check is ``succeeded`` whatever it found. ``execution_mode`` is the
+    checked version's, never the one a client asked for.
+    """
+
+    check_id: str
+    data_source_entry_id: str
+    health: Literal["unknown", "healthy", "degraded", "failed", "revoked"]
+    reason_code: str = Field(
+        description="One of the codes in app.library.connection_checks.REASON_HEALTH.",
+    )
+    adapter_kind: str | None
+    adapter_version: str | None
+    execution_mode: str | None
+    data_source_version_id: str | None
+    credential_state: str | None = Field(
+        description="State of the bound CredentialVersion, or null when none is bound.",
+    )
+    checked_at: datetime
+
+
 class OperationAccepted(BaseModel):
     """202 Accepted envelope for async domain commands (connection-checks, manual-fact-imports, reference-gate)."""
 

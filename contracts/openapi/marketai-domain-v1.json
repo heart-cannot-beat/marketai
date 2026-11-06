@@ -5370,6 +5370,7 @@
       "post": {
         "operationId": "check_library_data_source_connection",
         "summary": "Check Connection",
+        "description": "Queue a local check of the data source (#383, ``app.library.connection_checks``).\n\nThe Worker takes the execution mode from the effective version;\n``execution_mode`` is only recorded beside it. A replayed Idempotency-Key\nreturns the Operation it created, wherever that has got to; the same key\nfor another data source is ``409 idempotency_key_reused``.",
         "parameters": [
           {
             "name": "data_source_entry_id",
@@ -5426,6 +5427,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OperationAccepted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/library/entries/{data_source_entry_id}/connection-checks/{check_id}": {
+      "get": {
+        "operationId": "get_library_data_source_connection_check",
+        "summary": "Get Connection Check",
+        "description": "One finished check: ``check_id`` is the ``resource_id`` of its Operation's result.",
+        "parameters": [
+          {
+            "name": "data_source_entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "check_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceConnectionCheck"
                 }
               }
             }
@@ -23251,15 +23299,20 @@
       "ConnectionCheckInput": {
         "properties": {
           "execution_mode": {
-            "type": "string",
-            "maxLength": 40,
-            "minLength": 1
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ignored. A data source is checked in its published version's execution mode.",
+            "deprecated": true
           }
         },
-        "type": "object",
-        "required": [
-          "execution_mode"
-        ]
+        "type": "object"
       },
       "ConversionRequest": {
         "properties": {
@@ -24547,6 +24600,99 @@
           "state"
         ],
         "description": "Shape of ``datasources.bind_credential`` / ``get_active_binding``."
+      },
+      "DataSourceConnectionCheck": {
+        "properties": {
+          "check_id": {
+            "type": "string"
+          },
+          "data_source_entry_id": {
+            "type": "string"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "healthy",
+              "degraded",
+              "failed",
+              "revoked"
+            ]
+          },
+          "reason_code": {
+            "type": "string",
+            "description": "One of the codes in app.library.connection_checks.REASON_HEALTH."
+          },
+          "adapter_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "adapter_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "data_source_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "credential_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "State of the bound CredentialVersion, or null when none is bound."
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "check_id",
+          "data_source_entry_id",
+          "health",
+          "reason_code",
+          "adapter_kind",
+          "adapter_version",
+          "execution_mode",
+          "data_source_version_id",
+          "credential_state",
+          "checked_at"
+        ],
+        "description": "``GET /entries/{id}/connection-checks/{check_id}``: one check's evidence (#383).\n\nThe conclusion is ``health`` plus ``reason_code``; the Operation that ran\nthe check is ``succeeded`` whatever it found. ``execution_mode`` is the\nchecked version's, never the one a client asked for."
       },
       "DecisionRules-Input": {
         "properties": {
