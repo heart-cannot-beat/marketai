@@ -25,3 +25,6 @@ pytest>=8.3,<10
 # Ticket #20 constraint solver: property-based tests assert solver output
 # agrees with brute-force expansion across randomized dimension/value counts.
 hypothesis>=6.100,<7
+# CI runs the suite across every vCPU of the runner, one test file per worker
+# (#10). `make test` stays serial; add `-n logical` locally when wanted.
+pytest-xdist>=3.6,<4
