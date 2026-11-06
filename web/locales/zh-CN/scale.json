@@ -356,6 +356,7 @@
       "preview": "创建预览",
       "publishing": "正在发布…",
       "confirm": "确认发布",
+      "replaces-active-target": "发布后，这个上下文当前有效的目标会被撤回。",
       "refresh-preview": "重新生成预览"
     },
     "withdraw-dialog": {

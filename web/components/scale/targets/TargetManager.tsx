@@ -45,9 +45,12 @@ interface PublishTargetDialogProps {
 }
 
 /** Publish flow (spec §10, §21): context selector -> enter target
- * CPA/ROAS/minimum spend -> preview -> confirm. A confirm the server refuses
- * with `preview_expired` offers a new preview in place (#382); the user
- * confirms again after seeing its impact. */
+ * CPA/ROAS/minimum spend -> preview -> confirm. A context that already has an
+ * active target stays selectable: publishing replaces it, and the confirm
+ * step says so (#398). A confirm the server refuses with `preview_expired`,
+ * or with `preview_hash_mismatch` because the context changed, offers a new
+ * preview in place (#382, #398); the user confirms again after seeing its
+ * impact. */
 function PublishTargetDialog({
   open,
   metaMode,
@@ -55,8 +58,11 @@ function PublishTargetDialog({
   onPublished,
 }: PublishTargetDialogProps) {
   const { t } = useTranslation('scale');
-  const { contexts, isLoading: contextsLoading } =
-    useScaleTargetContexts(metaMode);
+  const {
+    contexts,
+    isLoading: contextsLoading,
+    refresh: refreshContexts,
+  } = useScaleTargetContexts(metaMode);
   const [contextIndex, setContextIndex] = useState<number | null>(null);
   const [form, setForm] = useState<MoneyForm>(EMPTY_MONEY_FORM);
   const [preview, setPreview] = useState<ScaleTargetPublicationPreview | null>(
@@ -113,8 +119,12 @@ function PublishTargetDialog({
     minimumEconomicSpend: form.minimum_economic_spend.trim(),
   });
 
+  // Each preview refetches the context list too, so the replacement line
+  // on the confirm step reads what the context has now, not what it had
+  // when the dialog opened (#398).
   const handleCreatePreview = async () => {
     if (!context) return;
+    void refreshContexts();
     const outcome = await previewCmd.run({
       metaMode,
       productVersionId: context.product_version_id,
@@ -145,6 +155,7 @@ function PublishTargetDialog({
   // order. The amounts are the user's own strings, never the echoed ones.
   const handleRefreshPreview = async () => {
     if (!preview) return;
+    void refreshContexts();
     const outcome = await previewCmd.run({
       metaMode,
       productVersionId: preview.product_version_id,
@@ -159,7 +170,21 @@ function PublishTargetDialog({
     }
   };
 
-  const previewExpired = publishCmd.problem?.code === 'preview_expired';
+  const previewRenewable =
+    publishCmd.problem?.code === 'preview_expired' ||
+    publishCmd.problem?.code === 'preview_hash_mismatch';
+
+  // Matched on the previewed context's fields, for the same reason as above.
+  const replacesActiveTarget =
+    preview !== null &&
+    contexts.some(
+      (c) =>
+        c.product_version_id === preview.product_version_id &&
+        c.offer_version_id === preview.offer_version_id &&
+        c.market_code === preview.market_code &&
+        c.currency === preview.currency &&
+        c.has_active_target
+    );
 
   return (
     <dialog
@@ -305,6 +330,12 @@ function PublishTargetDialog({
               </div>
             </dl>
 
+            {replacesActiveTarget && (
+              <p className="mt-3 text-sm text-warning">
+                {t('targets.publish-dialog.replaces-active-target')}
+              </p>
+            )}
+
             {publishCmd.problem && (
               <p className="mt-2 text-sm text-error" role="alert">
                 {errorMessage(t, publishCmd.problem)}
@@ -324,7 +355,7 @@ function PublishTargetDialog({
               >
                 {t('targets.publish-dialog.cancel')}
               </button>
-              {previewExpired ? (
+              {previewRenewable ? (
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
