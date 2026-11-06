@@ -35,6 +35,18 @@ def pytest_configure(config):
     )
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _start_each_file_with_no_claimable_leftover_jobs():
+    """Every file in a process shares one ``jobs`` table, and many files leave
+    Jobs open. Defer them before the file's first test (and its setUpClass),
+    so no file's Worker claims another file's Job, whichever files ran before
+    it -- CI spreads files over ``pytest -n`` workers (#10)."""
+    from tests.support.queue_hygiene import quarantine_open_jobs
+
+    quarantine_open_jobs()
+    yield
+
+
 def pytest_collection_modifyitems(config, items):
     """Skip postgres- and e2e-marked tests in development (SQLite-only,
     browser-less local/CI-lite environment)."""

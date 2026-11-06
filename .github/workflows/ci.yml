@@ -79,10 +79,11 @@ jobs:
           grep -m1 'model name' /proc/cpuinfo || true
       # One worker per vCPU: `logical` counts vCPUs whether or not psutil is
       # installed (`auto` would count physical cores when it is). `loadfile`
-      # keeps each file on one worker, in order, so a class's setUpClass and
-      # a file's shared job queue are never split. Every worker imports
-      # tests/conftest.py and gets its own temporary data directory and
-      # SQLite database.
+      # keeps each file on one worker, in order, so a class's setUpClass is
+      # never split. Every worker imports tests/conftest.py and gets its own
+      # temporary data directory and SQLite database, and conftest defers
+      # the Jobs earlier files left open before each file starts, whatever
+      # files a worker happens to run first.
       - name: Run unit and integration tests
         run: python -m pytest -q -n logical --dist loadfile --durations=30 --ignore=tests/test_experiment_decisions_pg.py
       - name: Apply and verify migrations
