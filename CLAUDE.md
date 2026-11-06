@@ -9,6 +9,7 @@ For v9 implementation, use [#14](https://github.com/Raybbish/marketai/issues/14)
 3. Create `claude/issue-<number>-<slug>` from current `main`. Keep the diff inside the ticket scope and preserve unrelated user changes.
 4. Deliver a vertical slice: migration, domain behavior, API/Worker path, authorization, observability and automated evidence required by the ticket. Add negative tenant and permission tests whenever data or commands are Workspace-scoped.
 5. Run `make verify` plus every ticket-specific command. Open a PR that references the Issue and records migrations, test evidence, operational impact and remaining risks. The Issue remains open until the PR is merged.
+6. After the PR is merged, remove the task worktree so it does not accumulate on disk: from the main checkout run `git worktree remove --force .claude/worktrees/<name>` (never while it still holds uncommitted or unpushed work), and tear down any Docker stack the task started with `docker compose down --rmi local` so its images are not left behind.
 
 ## Public repository rules
 
