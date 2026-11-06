@@ -561,6 +561,36 @@ class TestFullLifecycleViaPreview(ActivationFlowTestBase):
             self.assertEqual(refreshed_episode.closure_reason, "enrollment_closed")
 
 
+class TestFullLifecycleViaPreviewControlledMock(TestFullLifecycleViaPreview):
+    """The lifecycle above on a ``controlled_mock`` DeliveryTarget, the mode
+    the Scale E2E seed (``web/e2e/scale/seed_prerequisites.py
+    seed-controlled-mock``) builds through the same shared fixture (#19).
+
+    A controlled-Mock target is scoped to its ScenarioVersion and every other
+    mode to the reserved ``__no_scenario__`` marker
+    (``ck_sdt_scenario_biconditional``; Scale domain model spec §1.1). The
+    candidate and the Enrollment copy the target's scope."""
+
+    mode = "controlled_mock"
+
+    def test_target_and_enrollment_carry_the_scenario_scope(self):
+        from app.scale.models import ScaleDeliveryTargetRecord
+
+        with tenant_session(self.ctx) as session:
+            target = session.get(
+                ScaleDeliveryTargetRecord, self._chain["delivery_target_id"],
+            )
+            self.assertEqual(target.meta_mode, "controlled_mock")
+            scenario_version_id = target.scenario_version_id
+            self.assertIsNotNone(scenario_version_id)
+            self.assertEqual(target.scenario_scope_key, scenario_version_id)
+
+        enrollment_id, _revision = self._draft()
+        with tenant_session(self.ctx) as session:
+            enrollment = session.get(ScaleEnrollmentRecord, enrollment_id)
+            self.assertEqual(enrollment.scenario_scope_key, scenario_version_id)
+
+
 class TestPauseResumeEnrollment(EnrollmentTestBase):
     """Pause only: ``resume_enrollment``'s own behavior (continuing an open
     Episode, building a fresh one after a no-delivery closure) now requires

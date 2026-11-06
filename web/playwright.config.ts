@@ -59,6 +59,17 @@ export default defineConfig({
       dependencies: ['setup'],
     },
     {
+      // A fresh Workspace with an MFA Owner and a Member for the
+      // Localization and Scale runners (e2e/support/identities.setup.ts).
+      name: 'identities',
+      testMatch: /support\/identities\.setup\.ts/,
+      retries: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: undefined,
+      },
+    },
+    {
       name: 'onboarding',
       testMatch: /onboarding\/first-owner-controlled-mock\.spec\.ts/,
       use: {

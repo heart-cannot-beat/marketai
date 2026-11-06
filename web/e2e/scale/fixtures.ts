@@ -68,16 +68,30 @@ export const WORKSPACE_SLUG =
 export const WORKSPACE_ID = process.env.E2E_SCALE_WORKSPACE_ID!;
 export const USER_ID = process.env.E2E_OWNER_USER_ID!;
 
-export function scaleUrl(): string {
-  return `/w/${WORKSPACE_SLUG}/scale`;
+/**
+ * A Scale page reads its Meta mode from `?meta_mode=` and falls back to
+ * `customer_sandbox` (`lib/scale/meta-mode.ts`), so a page for any other
+ * mode has to name it.
+ */
+function inMode(pagePath: string, metaMode?: string): string {
+  return metaMode ? `${pagePath}?meta_mode=${metaMode}` : pagePath;
 }
 
-export function scaleEnrollmentUrl(enrollmentId: string): string {
-  return `/w/${WORKSPACE_SLUG}/scale/${enrollmentId}`;
+export function scaleUrl(metaMode?: string): string {
+  return inMode(`/w/${WORKSPACE_SLUG}/scale`, metaMode);
 }
 
-export function scaleTargetsUrl(): string {
-  return `/w/${WORKSPACE_SLUG}/scale/targets`;
+export function scaleEnrollmentUrl(
+  enrollmentId: string,
+  metaMode?: string,
+  view?: 'evidence'
+): string {
+  const enrollmentPath = `/w/${WORKSPACE_SLUG}/scale/${enrollmentId}`;
+  return inMode(view ? `${enrollmentPath}/${view}` : enrollmentPath, metaMode);
+}
+
+export function scaleTargetsUrl(metaMode?: string): string {
+  return inMode(`/w/${WORKSPACE_SLUG}/scale/targets`, metaMode);
 }
 
 export function scaleBff(metaMode: string): string {

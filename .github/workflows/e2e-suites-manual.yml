@@ -1,0 +1,145 @@
+name: E2E suites (manual)
+
+# The Localization and Scale real-backend Playwright suites on one Compose
+# stack (#19; web/e2e/README.md). Manual only: it never runs on pull
+# requests, pushes or a schedule, so it costs nothing until a maintainer
+# starts it, and it uses the standard GitHub runner rather than ci.yml's
+# runner budget. Most of its time is installs and the Compose build, as in
+# ci.yml's golden-path-e2e. Retries are off so a flaky step shows as a
+# failure instead of passing on a second try.
+on:
+  workflow_dispatch:
+    inputs:
+      suites:
+        description: Suites to run
+        type: choice
+        options:
+          - localization-and-scale
+          - localization
+          - scale
+        default: localization-and-scale
+
+concurrency:
+  group: e2e-suites-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  suites:
+    name: Localization and Scale E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT: e2e-suites
+      CI: "true"
+      E2E_STANDARD_GITHUB_RUNNER: "true"
+      E2E_BASE_URL: http://localhost:4002
+      E2E_DOMAIN_BASE_URL: http://localhost:8787
+      E2E_PYTHON: python
+      # Compose-only values, as in ci.yml's golden-path-e2e job.
+      CONTROL_PLANE_DATABASE_URL: postgresql://marketai_control_owner:compose_control_owner@localhost:5432/marketai_control
+      DOMAIN_OWNER_DATABASE_URL: postgresql://marketai_domain_owner:compose_domain_owner@localhost:5432/marketai_domain
+      MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:compose_domain_owner@localhost:5432/marketai_domain
+      CONTROL_PLANE_TO_DOMAIN_ENTITLEMENT_TOKEN: compose-entitlement-inbox-token
+      ENTITLEMENT_SNAPSHOT_SIGNING_KEY: compose-entitlement-signing-key-32-bytes-minimum
+      ENTITLEMENT_SNAPSHOT_SIGNING_KEY_ID: compose-beta-v1
+      MFA_ENCRYPTION_KEY: Y29tcG9zZS1tZmEtZW5jcnlwdGlvbi1rZXktMzJiISE=
+      MARKETAI_TENANT_CONTEXT_SECRET: compose-tenant-context-secret-32-bytes-min
+      E2E_IDENTITIES_ALLOW_MUTATIONS: "1"
+      E2E_LOCALIZATION_ALLOW_MUTATIONS: "1"
+      E2E_LOCALIZATION_COMPOSE_PROJECT: e2e-suites
+      E2E_LOCALIZATION_CONTROL_OWNER_DATABASE_URL: postgresql+psycopg://marketai_control_owner:compose_control_owner@localhost:5432/marketai_control
+      E2E_SCALE_ALLOW_MUTATIONS: "1"
+      E2E_SCALE_COMPOSE_PROJECT: e2e-suites
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Install control-plane dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install chromium --with-deps
+
+      - name: Build and start compose stack
+        run: >
+          docker compose -p "$COMPOSE_PROJECT"
+          --env-file deploy/docker/.env.compose
+          up -d --build
+
+      - name: Wait for all services
+        run: scripts/compose-wait.sh 180 "$COMPOSE_PROJECT"
+
+      - name: Sign up the Owner and Member
+        working-directory: web
+        run: npx playwright test --project identities --reporter=list
+
+      - name: Localization suite
+        if: inputs.suites != 'scale'
+        working-directory: web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/localization-report.json
+        run: >
+          npm run test:e2e:localization --
+          --retries=0
+          --reporter=list,json
+          --output=test-results/localization
+
+      - name: Scale suite
+        if: ${{ !cancelled() && inputs.suites != 'localization' }}
+        working-directory: web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/scale-report.json
+        run: >
+          npm run test:e2e:scale --
+          --retries=0
+          --reporter=list,json
+          --output=test-results/scale
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-suites-results
+          path: web/test-results/
+          retention-days: 7
+
+      - name: Redact compose logs
+        if: failure()
+        run: |
+          docker compose -p "$COMPOSE_PROJECT" logs --no-color \
+            > /tmp/raw-compose-logs.txt 2>&1 || true
+          python3 scripts/ci/redact_compose_logs.py \
+            --project-name "$COMPOSE_PROJECT" \
+            --raw-input /tmp/raw-compose-logs.txt \
+            --output e2e-suites-compose-logs.txt
+
+      - name: Upload compose logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-suites-compose-logs
+          path: e2e-suites-compose-logs.txt
+          retention-days: 3
+
+      - name: Tear down
+        if: always()
+        run: docker compose -p "$COMPOSE_PROJECT" down -v

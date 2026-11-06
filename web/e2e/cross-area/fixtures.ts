@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'child_process';
 import path from 'path';
 import { test as base, expect } from '@playwright/test';
 import type { APIResponse, Page, Request, Response } from '@playwright/test';
+import { en } from '../support/copy';
 
 export { expect };
 
@@ -329,9 +330,16 @@ export async function createLocalizationBatchThroughUi(
   const newBatch = page
     .getByRole('heading', { name: 'New batch' })
     .locator('xpath=ancestor::section');
-  await newBatch
-    .getByLabel('Winner / offer / source')
-    .selectOption(seed.assetVersionId);
+  // An option's value is its Winner Decision; pick the one that shows the
+  // seeded AssetVersion, as the golden path does.
+  const source = newBatch.getByLabel(
+    en('localization', 'new-batch.source-label')
+  );
+  const choice = source
+    .locator('option')
+    .filter({ hasText: seed.assetVersionId });
+  await expect(choice).toHaveCount(1);
+  await source.selectOption((await choice.getAttribute('value'))!);
 
   const selectedMarkets = targets.map((t) => t.market);
   for (const target of targets) {

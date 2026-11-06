@@ -64,10 +64,11 @@ test.describe('Library golden path', () => {
 });
 
 test.describe('Library page structure', () => {
-  test('no FeatureEmptyState renders', async ({ page }) => {
+  test('renders the library shell, not a placeholder', async ({ page }) => {
     await page.goto(LIBRARY_URL);
-    const emptyState = page.locator('text=Your library is empty');
-    await expect(emptyState).not.toBeVisible();
+    // The route was a FeatureEmptyState placeholder whose copy no longer
+    // exists, so asserting that copy's absence always passed.
+    await expect(page.getByTestId('library-shell')).toBeVisible();
   });
 
   test('library shell has tablist', async ({ page }) => {

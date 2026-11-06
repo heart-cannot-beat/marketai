@@ -62,6 +62,11 @@ import type {
  *    provide within the retry bound, that step asserts on precisely which
  *    live state it observed instead of a false pass.
  */
+
+/** Every Scale page this journey opens names its mode; without it the page
+ * reads `customer_sandbox` (`scaleUrl` in `./fixtures`). */
+const MODE = 'controlled_mock';
+
 test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => {
   let seed: ScaleChainSeed;
   let networkSpy: NetworkSpy;
@@ -142,7 +147,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     page,
   }) => {
     networkSpy = installNetworkSpy(page);
-    await page.goto(scaleUrl());
+    await page.goto(scaleUrl(MODE));
     await expect(page.getByRole('heading', { name: 'Scale' })).toBeVisible();
 
     await page.getByRole('button', { name: 'New Enrollment' }).click();
@@ -195,7 +200,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
   test('03: activate with ETag/If-Match and survive refresh', async ({
     page,
   }) => {
-    await page.goto(scaleEnrollmentUrl(enrollmentId));
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     await expect(
       page.getByRole('heading', { name: enrollmentId })
     ).toBeVisible();
@@ -268,7 +273,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     ).toBe(true);
     expect(result.adviceThreadIds).toEqual([]);
 
-    await page.goto(scaleEnrollmentUrl(enrollmentId));
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     await expect(
       page.getByRole('heading', { name: enrollmentId })
     ).toBeVisible();
@@ -311,7 +316,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     );
     expect(episode.phase).toBe('collecting'); // no stuck 'evaluating'
 
-    await page.goto(scaleEnrollmentUrl(enrollmentId));
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     await expect(page.getByText('No advice for this scope.')).toBeVisible({
       timeout: 15_000,
     });
@@ -334,7 +339,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
       result.maturity
     );
 
-    await page.goto(scaleEnrollmentUrl(enrollmentId));
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     await expect(
       page.getByRole('heading', { name: enrollmentId })
     ).toBeVisible();
@@ -343,7 +348,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
   test('07: publish an economic Target through preview and an idempotent command', async ({
     page,
   }) => {
-    await page.goto(scaleTargetsUrl());
+    await page.goto(scaleTargetsUrl(MODE));
     await expect(page.getByRole('heading', { name: 'Targets' })).toBeVisible();
     await page.getByRole('button', { name: 'New target' }).click();
 
@@ -455,7 +460,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     expect(result!.evaluationId).toBeTruthy();
     expect(result!.adviceThreadIds).toEqual([]);
 
-    await page.goto(`${scaleEnrollmentUrl(enrollmentId)}/evidence`);
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE, 'evidence'));
     await expect(page.getByRole('heading', { name: 'Evidence' })).toBeVisible();
     await expect(page.getByText('Policy version')).toBeVisible();
     await expect(page.getByText('Target version')).toBeVisible();
@@ -507,7 +512,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
       !firstThreadId,
       'No AdviceThread was produced by step 10 in this environment'
     );
-    await page.goto(scaleEnrollmentUrl(enrollmentId));
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     const card = page.locator('li.card', { hasText: firstThreadId! }).first();
 
     const dismissButton = card.locator(`[data-action="dismiss"]`);
@@ -555,7 +560,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
       !firstThreadId,
       'No AdviceThread was produced by step 10 in this environment'
     );
-    await page.goto(scaleEnrollmentUrl(enrollmentId));
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     const convertButton = page.locator('[data-action="convert"]').first();
     const isConvertible = await convertButton.isVisible().catch(() => false);
     test.skip(
@@ -642,7 +647,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
   test('15: convert a consider_scale_test occurrence -> non-executable ScaleTestPlanDraft', async ({
     page,
   }) => {
-    await page.goto(scaleEnrollmentUrl(enrollmentId));
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     const convertButtons = page.locator('[data-action="convert"]');
     const count = await convertButtons.count();
     test.skip(
@@ -686,7 +691,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     await restartScaleApiServer();
     restartScaleWorker();
 
-    await page.goto(scaleEnrollmentUrl(enrollmentId));
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     await expect(
       page.getByRole('heading', { name: enrollmentId })
     ).toBeVisible();

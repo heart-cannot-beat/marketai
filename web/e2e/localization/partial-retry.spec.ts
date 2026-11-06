@@ -15,6 +15,7 @@ import type {
   LocalizationBatchPayload,
   LocalizationItemPayload,
 } from './fixtures';
+import { en } from '../support/copy';
 
 interface MatrixEvidence {
   batchId: string;
@@ -69,8 +70,31 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(truthEvidence).toContainText(unavailableMarket!.market);
     await expect(truthEvidence).toContainText('Missing/degraded detail');
     await expect(truthEvidence).toContainText('discount');
-    await expect(truthEvidence).toContainText('fact_type_not_in_mock_scenario');
-    await expect(truthEvidence).toContainText('on_failure_skip');
+    // The page words the Truth failure and skip codes; the codes themselves
+    // are checked on the persisted source attempts.
+    await expect(truthEvidence).toContainText(
+      en('common', 'error-fact_type_not_in_mock_scenario')
+    );
+    await expect(truthEvidence).toContainText(
+      en('localization', 'truth.skip.on_failure_skip')
+    );
+    const prepared = await readJson<LocalizationBatchPayload>(
+      await page.request.get(`${LOCALIZATION_BFF}/batches/${batchId}`)
+    );
+    expect(
+      prepared.markets.flatMap((market) => market.source_attempts ?? [])
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fact_type: 'discount',
+          failure_code: 'fact_type_not_in_mock_scenario',
+        }),
+        expect.objectContaining({
+          fact_type: 'discount',
+          skip_code: 'on_failure_skip',
+        }),
+      ])
+    );
     await expect(
       truthEvidence.getByText('unavailable', { exact: true })
     ).toBeVisible();
@@ -159,7 +183,17 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(
       retryEvidence.getByText('Locked-copy / blocking QC failure')
     ).toBeVisible();
-    await expect(retryEvidence).toContainText('forbidden_term');
+    await expect(retryEvidence).toContainText(
+      en('localization', 'item.qc-kind.forbidden_term')
+    );
+    const retryDetail = await readJson<LocalizationItemPayload>(
+      await page.request.get(
+        `${LOCALIZATION_BFF}/batches/${batchId}/items/${retryItem.id}`
+      )
+    );
+    expect(
+      retryDetail.attempts.flatMap((attempt) => attempt.qc)
+    ).toContainEqual(expect.objectContaining({ check_kind: 'forbidden_term' }));
   });
 
   test('retries only the failed item to the bound and preserves both siblings exactly', async ({
@@ -241,7 +275,14 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(
       itemEvidence.getByRole('button', { name: 'Retry item' })
     ).toBeDisabled();
-    await expect(itemEvidence).toContainText('attempts_exhausted');
+    expect(
+      exhausted!.allowed_actions?.find((action) => action.action === 'retry')
+    ).toMatchObject({ allowed: false, reason_code: 'attempts_exhausted' });
+    await expect(itemEvidence).toContainText(
+      en('localization', 'item.retry-unavailable', {
+        reason: en('localization', 'action-reason.attempts_exhausted'),
+      })
+    );
 
     expect(
       itemDurabilitySnapshot(
