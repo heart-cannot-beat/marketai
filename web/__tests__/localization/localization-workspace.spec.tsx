@@ -257,6 +257,8 @@ describe('Localization workspace evidence views', () => {
   beforeEach(() => {
     for (const executor of Object.values(commandExecutors))
       executor.mockReset();
+    for (const operation of Object.keys(mockQueryData))
+      delete mockQueryData[operation];
   });
 
   it('starts persisted Truth and analysis with exact policy, source, offer, and markets', async () => {
@@ -432,6 +434,79 @@ describe('Localization workspace evidence views', () => {
     );
   });
 
+  it('words the command timeline, source modes and copy origins', () => {
+    const command = (id: string, command_kind: string, operation_id = '') => ({
+      id,
+      command_kind,
+      operation_id: operation_id || null,
+      actor_id: 'user-1',
+      created_at: '2026-09-09T00:00:00Z',
+    });
+    const copy = (id: string, target_market: string, copy_origin: string) => ({
+      id,
+      source_asset_version_id: 'asset-source-v1',
+      target_market,
+      state: 'approved',
+      copy_origin,
+      content: { headline: 'Hallo' },
+      evidence_hash: `evidence-${id}`,
+    });
+    mockQueryData.get_localization_batch = batch({
+      phase: 'preparing',
+      commands: [
+        command('command-1', 'create_draft'),
+        command('command-2', 'start_preparation', 'op_prepare'),
+      ],
+      sources: [
+        {
+          ...claimReviewBatch().sources![0],
+          source_generation_mode: 'mock',
+          experiment_evidence_mode: 'sandbox',
+        },
+      ],
+      copies: [
+        copy('copy-de', 'DE', 'translated'),
+        copy('copy-at', 'AT', 'source_locale_projection'),
+      ],
+    });
+    render(<LocalizationWorkspace />);
+
+    expect(screen.getByText(/^Batch created · user-1 ·/)).toBeInTheDocument();
+    // The latest Operation's command also heads the Operation status.
+    expect(screen.getAllByText(/^Preparation started ·/)).toHaveLength(2);
+    expect(
+      screen.getByText('generation mock · evidence sandbox')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Origin: translated · asset')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Origin: same language as the source (not translated) · asset'
+      )
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(
+      /create_draft|start_preparation|source_locale_projection/
+    );
+  });
+
+  it.each([
+    ['to a Member', 'member', true],
+    ['not to an Owner', 'owner', false],
+    ['not while the workspace loads', undefined, false],
+  ])('shows the Member role note %s', (_who, role, told) => {
+    if (role)
+      mockQueryData.get_localization_workspace = {
+        ...workspace(),
+        role,
+      };
+    render(<LocalizationWorkspace />);
+
+    const note =
+      'You are a Member of this Workspace. Commands remain subject to server authorization; unavailable actions stay visible with their reason.';
+    if (told) expect(screen.getByText(note)).toBeInTheDocument();
+    else expect(screen.queryByText(note)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Role:/);
+  });
+
   it('requires translation when locales share a language but differ by region', async () => {
     commandExecutors.submit_localization_claim_decisions = jest
       .fn()
@@ -523,27 +598,48 @@ describe('Localization workspace evidence views', () => {
     });
   });
 
-  it('blocks batch creation without an explicit source market snapshot', () => {
-    const incomplete = workspace();
-    incomplete.eligible_sources![0].source_market_snapshot = null;
-    incomplete.eligible_sources![0].source_context_problem = {
-      code: 'missing_source_context',
-      missing_fields: ['locale'],
-    };
-    render(
-      <NewBatchPanel
-        workspace={incomplete}
-        onCreated={jest.fn().mockResolvedValue(undefined)}
-      />
-    );
+  type ContextProblem = NonNullable<
+    NonNullable<Workspace['eligible_sources']>[number]['source_context_problem']
+  >;
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      /missing_source_context.*locale/i
-    );
-    expect(
-      screen.getByRole('button', { name: /create controlled mock batch/i })
-    ).toBeDisabled();
-  });
+  it.each<[ContextProblem, string]>([
+    [
+      { code: 'missing_source_context', missing_fields: ['locale'] },
+      'The selected source is missing its saved locale. Complete the source context before creating a batch; no target Market Policy or browser default is used.',
+    ],
+    [
+      { code: 'invalid_source_context', invalid_fields: ['currency'] },
+      'The selected source has an invalid currency. Fix the source context before creating a batch.',
+    ],
+    [
+      {
+        code: 'conflicting_source_context',
+        conflicting_fields: ['country', 'currency'],
+      },
+      "The selected source's saved contexts disagree on country, currency. Make them match before creating a batch.",
+    ],
+  ])(
+    'blocks batch creation and words the source context problem %#',
+    (problem, sentence) => {
+      const incomplete = workspace();
+      incomplete.eligible_sources![0].source_market_snapshot = null;
+      incomplete.eligible_sources![0].source_context_problem = problem;
+      render(
+        <NewBatchPanel
+          workspace={incomplete}
+          onCreated={jest.fn().mockResolvedValue(undefined)}
+        />
+      );
+
+      expect(screen.getByRole('alert')).toHaveTextContent(sentence);
+      expect(screen.getByRole('alert').textContent).not.toMatch(
+        /_source_context|_fields/
+      );
+      expect(
+        screen.getByRole('button', { name: /create controlled mock batch/i })
+      ).toBeDisabled();
+    }
+  );
 
   it('keeps degraded Truth, missing facts, and source failures visible', () => {
     render(
@@ -559,7 +655,10 @@ describe('Localization workspace evidence views', () => {
               locale: 'de-DE',
               currency: 'EUR',
               readiness: 'degraded',
-              readiness_detail: { missing: ['availability'] },
+              readiness_detail: {
+                reason: 'fact_missing_permitted',
+                missing: ['availability'],
+              },
               facts: [],
               source_attempts: [
                 {
@@ -580,13 +679,110 @@ describe('Localization workspace evidence views', () => {
     expect(
       screen.getByText(/degraded or missing facts remain visible/i)
     ).toBeInTheDocument();
-    expect(screen.getAllByText(/availability/).length).toBeGreaterThan(0);
+    // The missing fact types stay listed as they are.
+    expect(
+      screen.getByText(
+        'Some facts could not be resolved; the market continues without them. Missing: availability.'
+      )
+    ).toBeInTheDocument();
     expect(screen.getByText(/no persisted facts/i)).toBeInTheDocument();
     expect(
       screen.getByText(
-        'availability via manual: The manual fact set has no value for this fact.'
+        'availability via manual facts: The manual fact set has no value for this fact.'
       )
     ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(
+      /fact_missing_permitted|Missing\/degraded detail/
+    );
+  });
+
+  it('words why each market Truth is not ready', () => {
+    const market = (
+      name: string,
+      readiness: string,
+      readiness_detail: Record<string, unknown>,
+      source_attempts: NonNullable<
+        Batch['markets']
+      >[number]['source_attempts'] = []
+    ) => ({
+      market: name,
+      market_policy_version_id: `market-policy-${name}`,
+      locale: 'de-DE',
+      currency: 'EUR',
+      readiness,
+      readiness_detail,
+      facts: [],
+      source_attempts,
+    });
+    render(
+      <TruthPanel
+        batch={batch({
+          truth_status: 'degraded',
+          truth_freshness: 'current',
+          truth_package_id: 'truth-1',
+          markets: [
+            // A draft batch: Truth is resolved when preparation starts.
+            market('DE', 'pending', {}),
+            market('FR', 'failed', {
+              reason: 'price_unresolved',
+              missing: ['discount', 'price'],
+            }),
+            market('AU', 'unavailable', { reason: 'skipped_unavailable' }, [
+              {
+                id: 'attempt-au',
+                fact_type: 'discount',
+                adapter_kind: 'controlled_mock',
+                data_source_version_id: 'source-v1',
+                outcome: 'failed',
+                failure_code: 'fact_type_not_in_mock_scenario',
+              },
+              {
+                id: 'attempt-au-shop',
+                fact_type: 'price',
+                adapter_kind: 'shopify',
+                data_source_version_id: 'source-v2',
+                outcome: 'failed',
+                failure_code: 'adapter_not_enabled',
+              },
+            ]),
+            // A package without this market keeps its JSON.
+            market('IT', 'failed', { missing: ['truth_package_market'] }),
+          ],
+        })}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        'Truth has not been resolved yet. It is resolved when preparation starts.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The price could not be resolved. Missing: discount, price.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Truth says the product is not available in this market.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'discount via Controlled Mock: The mock scenario has no value for this fact.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('price via Shopify: This fact source is not set up.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Missing/degraded detail: {"missing":["truth_package_market"]}'
+      )
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(
+      /\{\}|price_unresolved|skipped_unavailable|controlled_mock/
+    );
   });
 
   it('never reports an accepted source attempt as a failure', () => {
@@ -654,7 +850,10 @@ describe('Localization workspace evidence views', () => {
               locale: 'fr-FR',
               currency: 'EUR',
               readiness: 'degraded',
-              readiness_detail: { missing: ['availability'] },
+              readiness_detail: {
+                reason: 'fact_missing_permitted',
+                missing: ['availability', 'shipping'],
+              },
               facts: [],
               source_attempts: [
                 {
@@ -693,16 +892,17 @@ describe('Localization workspace evidence views', () => {
     expect(screen.getByText(/source failures \/ skips/i)).toBeInTheDocument();
     expect(
       screen.getByText(
-        'availability via manual: The manual fact set has no value for this fact.'
+        'availability via manual facts: The manual fact set has no value for this fact.'
       )
     ).toBeInTheDocument();
+    // A skip comes from the fact's `on_failure` rule, not from a source.
     expect(
       screen.getByText(
-        'shipping via policy: no source resolved it (policy: skip)'
+        'shipping via fallback rule: no source resolved it (policy: skip)'
       )
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(
-      /fact_type_not_in_manual_set|on_failure_skip/
+      /fact_type_not_in_manual_set|on_failure_skip|via policy/
     );
     // The accepted price attempt contributes no failure row.
     expect(screen.queryByText(/price via manual/i)).toBeNull();
@@ -941,7 +1141,55 @@ describe('Localization workspace evidence views', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows stale_truth on the active MarketAssetBinding as blocking', () => {
+  it.each([
+    [
+      // What every published Item shows today: no command reviews a binding.
+      'pending_review',
+      'current',
+      false,
+      'Active binding: Localized version · review: pending review · Truth: current · not ready for a new experiment yet',
+    ],
+    [
+      'approved',
+      'current',
+      true,
+      'Active binding: Localized version · review: approved · Truth: current · ready for a new experiment',
+    ],
+    [
+      'needs_changes',
+      'current',
+      false,
+      'Active binding: Localized version · review: needs changes · Truth: current · not ready for a new experiment yet',
+    ],
+  ])(
+    'words an active binding under review %s',
+    (review_state, truth_freshness, ready_for_experiment, sentence) => {
+      render(
+        <LocalizationItemInspector
+          item={item({
+            binding: {
+              id: 'binding-1',
+              kind: 'localized',
+              bound_asset_version_id: 'asset-localized-v1',
+              review_state,
+              truth_freshness,
+              ready_for_experiment,
+            },
+          })}
+          onRetry={jest.fn()}
+          onResume={jest.fn()}
+          isPending={false}
+        />
+      );
+
+      expect(screen.getByText(sentence)).toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(
+        /localized ·|_review|needs_changes|true|false/
+      );
+    }
+  );
+
+  it('blocks a binding whose Truth is out of date from a new experiment', () => {
     render(
       <LocalizationItemInspector
         item={item({
@@ -960,10 +1208,16 @@ describe('Localization workspace evidence views', () => {
       />
     );
 
-    expect(screen.getByText(/truth freshness stale/i)).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent(/stale_truth/i);
+    expect(
+      screen.getByText(
+        'Active binding: Localized version · review: pending review · Truth: stale · not ready for a new experiment yet'
+      )
+    ).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent(
-      /blocked from a new experiment/i
+      /cannot be used in a new experiment until it is localized again/i
+    );
+    expect(screen.getByRole('alert').textContent).not.toMatch(
+      /stale_truth|MarketAssetBinding/
     );
   });
 

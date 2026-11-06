@@ -1,16 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { LEDGER_SIGN } from '@/components/localization/LocalizationWorkspace';
-import { CJK, readNamespace } from './locale-files';
+import { CJK, placeholdersOf, readNamespace } from './locale-files';
 
 /**
  * The localization page words the codes it used to print (#384): why an
  * action is unavailable, an Item's next action, a Truth skip, QC checks,
- * provider calls and cost ledger entries. None of these fields has an enum in
- * the contract, so each family is read from where the server fixes its
- * values: the literals its producers write, a database CheckConstraint, or a
- * Python constant. A value added there without en and zh-CN copy fails here
- * instead of reaching the page as a raw code.
+ * provider calls and cost ledger entries. #400 adds the rest of the page's
+ * closed sets: a market's Truth readiness, the source a Truth attempt asked,
+ * the batch command timeline, an asset binding, a source's context problem,
+ * generation and evidence modes, and a copy's origin. Only the context
+ * problem has an enum in the contract, so the other families are read from
+ * where the server fixes their values: the literals its producers write, a
+ * database CheckConstraint, or a Python constant. A value added there without
+ * en and zh-CN copy fails here instead of reaching the page as a raw code.
  */
 const APP = path.resolve(__dirname, '../../../app');
 const WEB = path.resolve(__dirname, '../..');
@@ -24,6 +27,11 @@ const qc = read('localization/qc.py');
 const libraryContracts = read('library/contracts.py');
 const costModels = read('entitlements/cost_models.py');
 const models = read('adapters/persistence/models.py');
+const tenancy = read('platform/tenancy.py');
+const localizationModules = fs
+  .readdirSync(path.join(APP, 'localization'))
+  .filter((file) => file.endsWith('.py'))
+  .map((file) => read(`localization/${file}`));
 
 const LITERAL = /^"([a-z_]+)"$/;
 const literals = (text: string) =>
@@ -196,6 +204,142 @@ const ledgerDirections = constraint(
   'provider_cost_ledger_direction_valid'
 );
 
+/**
+ * `_derive_market_readiness` gives a market that is not ready a `reason`
+ * and the fact types still `missing` (#400). Before a batch has Truth, or
+ * when its package lacks the market, `_truth_market` in `queries.py` fills
+ * the shapes registered below; anything else is the stored detail.
+ */
+const readiness = functionBody(truth, '_derive_market_readiness');
+const readinessReasonWrites = Array.from(
+  readiness.matchAll(/"reason":\s*([^,}\n]+)/g),
+  (m) => m[1].trim()
+);
+const readinessReasons = unique(
+  readinessReasonWrites.flatMap((value) => value.match(LITERAL)?.[1] ?? [])
+);
+const readinessDetailKeys = unique(
+  Array.from(readiness.matchAll(/"([a-z_]+)":/g), (m) => m[1])
+);
+const truthMarket = functionBody(queries, '_truth_market');
+const truthMarketReadiness = Array.from(
+  truthMarket.matchAll(/"readiness":\s*([^,\n}]+)/g),
+  (m) => m[1].trim()
+);
+const truthMarketDetails = Array.from(
+  truthMarket.matchAll(/"readiness_detail":\s*(\{[^{}]*\}|[\w.]+)/g),
+  (m) => m[1]
+);
+const storedDetailWrites = Array.from(
+  truth.matchAll(/\breadiness_detail(?:_json)?=([^,\n)]+)/g),
+  (m) => m[1].trim()
+);
+
+/**
+ * A Truth attempt records the adapter it asked, or `policy` for the fact's
+ * `on_failure` rule once no source resolved it (#400). `_build_source_step`
+ * builds the two implemented adapters, whose class attributes name their
+ * kind, and passes any other registered kind on unimplemented.
+ */
+const adapterClassKinds = Array.from(
+  factSources.matchAll(/^\s+adapter_kind = "([a-z_]+)"/gm),
+  (m) => m[1]
+);
+const adapterKindsBuilt = Array.from(
+  functionBody(truth, '_build_source_step').matchAll(
+    /\bif adapter_kind == "([a-z_]+)"/g
+  ),
+  (m) => m[1]
+);
+const registeredAdapterKinds = literals(
+  libraryContracts.match(/^ADAPTER_KINDS = frozenset\(\{([^}]*)\}\)/m)?.[1] ??
+    ''
+);
+const adapterKindWrites = Array.from(
+  truth.matchAll(/\badapter_kind=(?!=)([^,\n)]+)/g),
+  (m) => m[1].trim()
+);
+const adapterKinds = unique([
+  ...adapterClassKinds,
+  ...registeredAdapterKinds.filter((kind) => !adapterKindsBuilt.includes(kind)),
+  ...adapterKindWrites.flatMap((value) => value.match(LITERAL)?.[1] ?? []),
+]);
+const ADAPTER_KIND_INDIRECT = [
+  // The implemented adapters' class attributes, read above.
+  'ControlledMockFactSourceAdapter.adapter_kind',
+  'ManualFactSourceAdapter.adapter_kind',
+  // Any other registered kind, passed on: it fails as `adapter_not_enabled`.
+  'adapter_kind',
+  // Copies of an attempt's or a step's kind.
+  'attempt.adapter_kind',
+  'step.adapter_kind',
+  'step.adapter_kind',
+];
+
+/** Each `_record_command(...)` in `batch.py` names its `command_kind`. */
+const commandCalls = batch.match(/(?<!def )\b_record_command\(/g)?.length ?? 0;
+const commandWrites = Array.from(
+  batch.matchAll(
+    /(?<!def )\b_record_command\([^)]*?\bcommand_kind=([^,\n)]+)/g
+  ),
+  (m) => m[1].trim()
+);
+const commandKinds = unique(
+  commandWrites.flatMap((value) => value.match(LITERAL)?.[1] ?? [])
+);
+
+/** An active binding's kind, review and freshness (`MarketAssetBinding`). */
+const bindingKinds = constraint(models, 'binding_kind', 'ck_mab_binding_kind');
+const bindingReviewStates = constraint(
+  models,
+  'review_state',
+  'ck_mab_review_state'
+);
+const bindingFreshness = constraint(
+  models,
+  'truth_freshness',
+  'ck_mab_truth_freshness'
+);
+
+/** How a batch source was generated, and its experiment's evidence. */
+const generationModes = constraint(
+  models,
+  'source_generation_mode',
+  'ck_lbs_source_generation_mode'
+);
+const evidenceModes = constraint(
+  models,
+  'experiment_evidence_mode',
+  'ck_lbs_experiment_evidence_mode'
+);
+const copyOrigins = constraint(models, 'copy_origin', 'ck_lcv_copy_origin');
+
+/** A source's context problem is the one family with a contract enum. */
+interface SchemaProperty {
+  enum?: string[];
+  items?: SchemaProperty;
+}
+const contextProblem: Record<string, SchemaProperty> = JSON.parse(
+  fs.readFileSync(
+    path.resolve(WEB, '../contracts/openapi/marketai-domain-v1.json'),
+    'utf8'
+  )
+).components.schemas.LocalizationSourceContextProblem.properties;
+const CONTEXT_FIELD_LISTS = [
+  'missing_fields',
+  'invalid_fields',
+  'conflicting_fields',
+];
+const contextProblems = [...(contextProblem.code?.enum ?? [])].sort();
+const contextFieldLists = CONTEXT_FIELD_LISTS.map((list) =>
+  [...(contextProblem[list]?.items?.enum ?? [])].sort()
+);
+const contextFields = contextFieldLists[0];
+
+const roles = literals(
+  tenancy.match(/^Role = Literal\[([^\]]*)\]/m)?.[1] ?? ''
+);
+
 interface Row {
   name: string;
   codes: string[];
@@ -274,6 +418,88 @@ const ROWS: Row[] = [
     prefix: 'item.ledger-entry.',
     renderedBy: WORKSPACE,
   },
+  {
+    name: 'Truth readiness reasons',
+    codes: readinessReasons,
+    prefix: 'truth.readiness-reason.',
+    renderedBy: WORKSPACE,
+  },
+  {
+    name: 'Truth attempt sources',
+    codes: adapterKinds,
+    prefix: 'truth.adapter.',
+    renderedBy: WORKSPACE,
+  },
+  {
+    name: 'batch commands',
+    codes: commandKinds,
+    prefix: 'workspace.command-kind.',
+    renderedBy: WORKSPACE,
+  },
+  {
+    name: 'binding kinds',
+    codes: bindingKinds,
+    prefix: 'item.binding-type.',
+    renderedBy: WORKSPACE,
+  },
+  {
+    name: 'binding review states',
+    codes: bindingReviewStates,
+    prefix: 'status.',
+    shared: true,
+    renderedBy: WORKSPACE,
+    renders: 'statusLabel(t, binding.review_state)',
+  },
+  {
+    name: 'binding Truth freshness',
+    codes: bindingFreshness,
+    prefix: 'status.',
+    shared: true,
+    renderedBy: WORKSPACE,
+    renders: 'statusLabel(t, binding.truth_freshness)',
+  },
+  {
+    name: 'source generation modes',
+    codes: generationModes,
+    prefix: 'status.',
+    shared: true,
+    renderedBy: WORKSPACE,
+    renders: 'statusLabel(t, source.source_generation_mode)',
+  },
+  {
+    name: 'experiment evidence modes',
+    codes: evidenceModes,
+    prefix: 'status.',
+    shared: true,
+    renderedBy: WORKSPACE,
+    renders: 'statusLabel(t, source.experiment_evidence_mode)',
+  },
+  {
+    name: 'copy origins',
+    codes: copyOrigins,
+    prefix: 'workspace.copy-origins.',
+    renderedBy: WORKSPACE,
+  },
+  {
+    name: 'source context problems',
+    codes: contextProblems,
+    prefix: 'new-batch.context-problem.',
+    renderedBy: WORKSPACE,
+  },
+  {
+    name: 'source context fields',
+    codes: contextFields,
+    prefix: 'new-batch.context-field.',
+    renderedBy: WORKSPACE,
+  },
+];
+
+/** Sentences that word a value no code names: a boolean, an empty detail. */
+const SENTENCES = [
+  'item.binding-ready',
+  'item.binding-not-ready',
+  'truth.not-resolved',
+  'workspace.role-note',
 ];
 
 test('reads every action reason queries.py gives', () => {
@@ -343,6 +569,96 @@ test('reads every QC check kind and the billing constraints', () => {
   expect(ledgerEntries).toContain('reported_cost');
 });
 
+test('reads every Truth readiness detail a market can show', () => {
+  // Each reason is named; the detail carries nothing else to word.
+  expect(readinessReasonWrites.length).toBeGreaterThan(0);
+  expect(readinessReasonWrites.every((value) => LITERAL.test(value))).toBe(
+    true
+  );
+  expect(readinessDetailKeys).toEqual([
+    'missing',
+    'reason',
+    'resolved_fact_types',
+  ]);
+  expect(readinessReasons).toEqual(
+    expect.arrayContaining(['skipped_unavailable', 'price_unresolved'])
+  );
+  // Only `_derive_market_readiness` stores a detail ...
+  expect(storedDetailWrites.sort()).toEqual([
+    'outcome.readiness_detail',
+    'readiness_detail',
+  ]);
+  expect(
+    localizationModules.join('\n').match(/\bTruthPackageMarketRecord\(/g)
+  ).toHaveLength(1);
+  // ... and the query fills two shapes of its own: `pending` before the
+  // batch has Truth, and a package without this market (kept as JSON).
+  expect(truthMarketReadiness.sort()).toEqual([
+    '"failed"',
+    '"pending"',
+    'market.readiness',
+  ]);
+  expect(truthMarketDetails.sort()).toEqual([
+    'market.readiness_detail_json',
+    '{"missing": ["truth_package_market"]}',
+    '{}',
+  ]);
+});
+
+test('reads every source a Truth attempt records', () => {
+  expect(
+    adapterKindWrites.filter((value) => !LITERAL.test(value)).sort()
+  ).toEqual(ADAPTER_KIND_INDIRECT);
+  expect(adapterClassKinds.sort()).toEqual(['controlled_mock', 'manual']);
+  expect(adapterKindsBuilt.sort()).toEqual(['manual', 'mock']);
+  expect(adapterKinds).toEqual(
+    expect.arrayContaining(['manual', 'controlled_mock', 'shopify', 'policy'])
+  );
+  expect(adapterKinds).not.toContain('mock');
+});
+
+test('reads every batch command the server records', () => {
+  // `_record_command` is the one writer of the command timeline.
+  expect(
+    localizationModules.join('\n').match(/\bLocalizationBatchCommandRecord\(/g)
+  ).toHaveLength(1);
+  expect(functionBody(batch, '_record_command')).toContain(
+    'command_kind=command_kind'
+  );
+  expect(commandWrites).toHaveLength(commandCalls);
+  expect(commandWrites.every((value) => LITERAL.test(value))).toBe(true);
+  expect(commandKinds).toEqual(
+    expect.arrayContaining(['create_draft', 'confirm', 'cancel'])
+  );
+});
+
+test('reads the binding, source and copy constraints', () => {
+  expect(bindingKinds).toEqual(['localized', 'source_reuse']);
+  expect(bindingReviewStates).toContain('pending_review');
+  expect(bindingFreshness).toEqual(['current', 'stale']);
+  expect(generationModes).toContain('byok');
+  expect(evidenceModes).toContain('production');
+  expect(copyOrigins).toContain('source_locale_projection');
+});
+
+test('reads the source context problems from the contract', () => {
+  expect(Object.keys(contextProblem).sort()).toEqual(
+    ['code', ...CONTEXT_FIELD_LISTS].sort()
+  );
+  expect(contextProblems).toContain('missing_source_context');
+  // The panel names whichever list the problem gives; they share one enum.
+  expect(contextFields).toContain('currency');
+  for (const fields of contextFieldLists) expect(fields).toEqual(contextFields);
+});
+
+test('tells only a Member about their role', () => {
+  // A user through the BFF is an Owner or a Member; `system` is the Worker.
+  // A new role fails here to decide what it is told.
+  expect(roles.sort()).toEqual(['member', 'owner', 'system']);
+  const source = fs.readFileSync(path.join(WEB, WORKSPACE), 'utf8');
+  expect(source).toContain("role === 'member'");
+});
+
 describe.each(['en', 'zh-CN'])('%s', (locale) => {
   const keys = readNamespace(locale, 'localization');
 
@@ -352,7 +668,9 @@ describe.each(['en', 'zh-CN'])('%s', (locale) => {
       expect(row.codes.filter((code) => !keys.has(row.prefix + code))).toEqual(
         []
       );
-      if (locale === 'zh-CN')
+      // Shared `status.*` copy may keep a product word (zh-CN `mock` reads
+      // "Mock"), so only its presence is checked.
+      if (locale === 'zh-CN' && !row.shared)
         expect(
           row.codes.filter(
             (code) => !CJK.test(String(keys.get(row.prefix + code)))
@@ -378,6 +696,25 @@ describe.each(['en', 'zh-CN'])('%s', (locale) => {
       truthFailures.filter((code) => !common.has(`error-${code}`))
     ).toEqual([]);
   });
+
+  it('has the sentences no code names', () => {
+    expect(SENTENCES.filter((key) => !keys.has(key))).toEqual([]);
+    if (locale === 'zh-CN')
+      expect(
+        SENTENCES.filter((key) => !CJK.test(String(keys.get(key))))
+      ).toEqual([]);
+    // The note speaks to a Member; it no longer names a role.
+    expect(placeholdersOf(keys.get('workspace.role-note'))).toEqual([]);
+  });
+
+  it('writes no server code into its copy', () => {
+    const coded = Array.from(keys.entries())
+      .filter(([, value]) =>
+        /\b[a-z]+(?:_[a-z]+)+\b/.test(String(value).replace(/{{[^}]*}}/g, ''))
+      )
+      .map(([key]) => key);
+    expect(coded).toEqual([]);
+  });
 });
 
 test('signs exactly the ledger directions the constraint allows', () => {
@@ -387,10 +724,29 @@ test('signs exactly the ledger directions the constraint allows', () => {
 test.each(ROWS.map((row) => [row.name, row] as const))(
   'the %s are rendered through their key family',
   (_name, row) => {
+    // Compared without whitespace: formatting may wrap a call's arguments.
+    const compact = (text: string) => text.replace(/\s+/g, '');
     const source = fs.readFileSync(path.join(WEB, row.renderedBy), 'utf8');
-    expect(source).toContain(row.renders ?? `\`${row.prefix}\${`);
+    expect(compact(source)).toContain(
+      compact(row.renders ?? `\`${row.prefix}\${`)
+    );
   }
 );
+
+test('the workspace prints none of these codes as they are', () => {
+  const source = fs.readFileSync(path.join(WEB, WORKSPACE), 'utf8');
+  for (const raw of [
+    /binding\.(kind|review_state|truth_freshness)\s*(\|\||\?\?)/,
+    /String\(binding\.ready_for_experiment/,
+    /\{\s*(command|latestOperationCommand)\.command_kind\s*\}/,
+    /adapter:\s*attempt\.adapter_kind/,
+    /(generation|evidence):\s*source\.\w+_mode/,
+    /origin:\s*copy\.copy_origin/,
+    /\{\s*sourceContextProblem\?\.code/,
+    /role:\s*workspaceQuery/,
+  ])
+    expect(source).not.toMatch(raw);
+});
 
 test('both localization pages word action reasons', () => {
   for (const file of [

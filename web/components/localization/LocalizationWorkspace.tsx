@@ -165,13 +165,19 @@ const badgeTone: Record<string, string> = {
   cancelled: 'badge-ghost',
 };
 
+/** A persisted server state worded as `status.<code>`; others show as words. */
+function statusLabel(t: TFunction, value: string | null | undefined): string {
+  const status = value || 'unknown';
+  return t(`status.${status}`, { defaultValue: codeWords(status) });
+}
+
 /** A persisted server state; codes without copy show as words. */
 function StatusBadge({ value }: { value: string | null | undefined }) {
   const { t } = useTranslation('localization');
   const status = value || 'unknown';
   return (
     <span className={`badge badge-sm ${badgeTone[status] ?? 'badge-ghost'}`}>
-      {t(`status.${status}`, { defaultValue: status.replaceAll('_', ' ') })}
+      {statusLabel(t, status)}
     </span>
   );
 }
@@ -212,6 +218,35 @@ export const LEDGER_SIGN: Readonly<Record<string, string>> = {
 /** The QC check kinds of `qc.py` and the Worker, worded (#384). */
 function qcKindLabel(t: TFunction, kind: string): string {
   return t(`item.qc-kind.${kind}`, { defaultValue: codeWords(kind) });
+}
+
+/** A batch command (`_record_command` in `batch.py`) as an event (#400). */
+function commandKindLabel(t: TFunction, kind: string): string {
+  return t(`workspace.command-kind.${kind}`, { defaultValue: codeWords(kind) });
+}
+
+/**
+ * Why a market's Truth is not ready (#400). `_derive_market_readiness` in
+ * `truth.py` gives a `reason` and the `missing` fact types; a batch whose
+ * Truth is not resolved yet reads `pending` with an empty detail
+ * (`queries.py`). Any other shape keeps its JSON.
+ */
+function readinessDetailMessage(t: TFunction, market: TruthMarketRow): string {
+  const detail = market.readiness_detail;
+  const fallback = t('truth.missing-detail', {
+    detail: displayValue(t, detail),
+  });
+  if (!detail || typeof detail !== 'object')
+    return market.readiness === 'pending' ? t('truth.not-resolved') : fallback;
+  const { reason, missing } = detail as UnknownRecord;
+  if (typeof reason === 'string')
+    return t(`truth.readiness-reason.${reason}`, {
+      facts: Array.isArray(missing) ? missing.join(t('list-separator')) : '',
+      defaultValue: fallback,
+    });
+  return market.readiness === 'pending' && Object.keys(detail).length === 0
+    ? t('truth.not-resolved')
+    : fallback;
 }
 
 function Identifier({ children }: { children: string | null | undefined }) {
@@ -323,9 +358,7 @@ export function TruthPanel({ batch }: { batch: BatchDetail }) {
                 </div>
                 {market.readiness !== 'ready' ? (
                   <div className="mt-2 rounded bg-warning/10 p-2 text-xs text-warning-content">
-                    {t('truth.missing-detail', {
-                      detail: displayValue(t, market.readiness_detail),
-                    })}
+                    {readinessDetailMessage(t, market)}
                   </div>
                 ) : null}
                 <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -365,7 +398,11 @@ export function TruthPanel({ batch }: { batch: BatchDetail }) {
                       <div key={attempt.id} className="mt-1">
                         {t('truth.failure-line', {
                           fact: attempt.fact_type,
-                          adapter: attempt.adapter_kind,
+                          // The source the attempt asked; `policy` is the
+                          // fact's `on_failure` rule after them all (#400).
+                          adapter: t(`truth.adapter.${attempt.adapter_kind}`, {
+                            defaultValue: codeWords(attempt.adapter_kind),
+                          }),
                           // An adapter's failure reads as its error copy; a
                           // skip names the fact's `on_failure` policy (#384).
                           reason: attempt.failure_code
@@ -561,7 +598,7 @@ export function LocalizationItemInspector({
   const attempts = (item.attempts ?? []) as AttemptRow[];
   const cost = (item.cost ?? {}) as ItemCost;
   const lineage = (item.lineage ?? {}) as UnknownRecord;
-  const binding = item.binding as UnknownRecord | null | undefined;
+  const binding = item.binding;
   const retry = actionAllowed(item.allowed_actions, 'retry');
   const resume = actionAllowed(item.allowed_actions, 'resume');
   const blockingFailures = attempts.flatMap((attempt) =>
@@ -808,12 +845,20 @@ export function LocalizationItemInspector({
         </div>
         <div className="mt-2 text-xs">
           {t('item.binding', {
+            // Review and freshness are server states; whether the binding can
+            // enter a new experiment reads as a sentence (#400).
             binding: binding
               ? t('item.binding-detail', {
-                  kind: String(binding.kind || t('item.binding-kind')),
-                  review: String(binding.review_state || t('unknown')),
-                  freshness: String(binding.truth_freshness || t('unknown')),
-                  ready: String(binding.ready_for_experiment ?? false),
+                  kind: binding.kind
+                    ? t(`item.binding-type.${binding.kind}`, {
+                        defaultValue: codeWords(binding.kind),
+                      })
+                    : t('item.binding-kind'),
+                  review: statusLabel(t, binding.review_state),
+                  freshness: statusLabel(t, binding.truth_freshness),
+                  ready: binding.ready_for_experiment
+                    ? t('item.binding-ready')
+                    : t('item.binding-not-ready'),
                 })
               : t('none'),
           })}
@@ -909,6 +954,10 @@ export function NewBatchPanel({
   const sourceSnapshot = selectedSource?.source_market_snapshot;
   const sourceSnapshotReady = hasCompleteSourceSnapshot(sourceSnapshot);
   const sourceContextProblem = selectedSource?.source_context_problem;
+  // Worded per code with its field names (#400); a source without a
+  // complete snapshot and no reported problem is missing its context.
+  const sourceContextProblemCode =
+    sourceContextProblem?.code ?? 'missing_source_context';
   const sourceContextProblemFields = sourceContextProblem?.missing_fields
     ?.length
     ? sourceContextProblem.missing_fields
@@ -1013,13 +1062,17 @@ export function NewBatchPanel({
           </div>
           {!sourceSnapshotReady ? (
             <div className="alert alert-warning text-sm" role="alert">
-              <span className="font-mono">
-                {sourceContextProblem?.code ?? 'missing_source_context'}
-              </span>
-              {t('new-batch.missing-context', {
+              {t(`new-batch.context-problem.${sourceContextProblemCode}`, {
                 fields:
-                  sourceContextProblemFields.join(t('list-separator')) ||
+                  sourceContextProblemFields
+                    .map((field) =>
+                      t(`new-batch.context-field.${field}`, {
+                        defaultValue: codeWords(field),
+                      })
+                    )
+                    .join(t('list-separator')) ||
                   t('new-batch.missing-context-fields'),
+                defaultValue: codeWords(sourceContextProblemCode),
               })}
             </div>
           ) : null}
@@ -1252,11 +1305,11 @@ export function LocalizationWorkspace() {
         </button>
       </div>
 
-      {workspaceQuery.data?.role !== 'owner' ? (
+      {/* Through the BFF a user is an Owner or a Member; only a Member is
+          told, so an Owner never sees an unknown role while loading (#400). */}
+      {workspaceQuery.data?.role === 'member' ? (
         <div className="alert alert-info text-sm">
-          {t('workspace.role-note', {
-            role: workspaceQuery.data?.role || t('unknown'),
-          })}
+          {t('workspace.role-note')}
         </div>
       ) : null}
       <ProblemBanner
@@ -1351,8 +1404,14 @@ export function LocalizationWorkspace() {
                       </div>
                       <div className="mt-1">
                         {t('workspace.evidence-modes', {
-                          generation: source.source_generation_mode,
-                          evidence: source.experiment_evidence_mode,
+                          generation: statusLabel(
+                            t,
+                            source.source_generation_mode
+                          ),
+                          evidence: statusLabel(
+                            t,
+                            source.experiment_evidence_mode
+                          ),
                         })}
                       </div>
                     </div>
@@ -1402,7 +1461,11 @@ export function LocalizationWorkspace() {
                     pollingProblem={operation.problem}
                     outcomeSummary={
                       <span>
-                        {latestOperationCommand.command_kind} ·{' '}
+                        {commandKindLabel(
+                          t,
+                          latestOperationCommand.command_kind
+                        )}{' '}
+                        ·{' '}
                         <Identifier>
                           {latestOperationCommand.operation_id}
                         </Identifier>
@@ -1412,7 +1475,8 @@ export function LocalizationWorkspace() {
                   <div className="mt-3 space-y-1 text-xs">
                     {(batch.commands ?? []).map((command) => (
                       <div key={command.id}>
-                        {command.command_kind} · {command.actor_id} ·{' '}
+                        {commandKindLabel(t, command.command_kind)} ·{' '}
+                        {command.actor_id} ·{' '}
                         {formatDateTime(i18n.language, command.created_at)}
                         {command.operation_id ? (
                           <>
@@ -1445,7 +1509,10 @@ export function LocalizationWorkspace() {
                       </div>
                       <div className="mt-1 text-xs">
                         {t('workspace.copy-origin', {
-                          origin: copy.copy_origin,
+                          origin: t(
+                            `workspace.copy-origins.${copy.copy_origin}`,
+                            { defaultValue: codeWords(copy.copy_origin) }
+                          ),
                         })}{' '}
                         <Identifier>{copy.source_asset_version_id}</Identifier>
                       </div>

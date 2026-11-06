@@ -28,12 +28,16 @@
     "complete": "complete",
     "needs_review": "needs review",
     "approved": "approved",
+    "pending_review": "pending review",
+    "rejected": "rejected",
+    "needs_changes": "needs changes",
     "pass": "pass",
     "passed": "passed",
     "fail": "fail",
     "production": "production",
     "sandbox": "sandbox",
     "mock": "mock",
+    "byok": "BYOK",
     "full": "full",
     "degraded": "degraded",
     "pending": "pending",
@@ -72,12 +76,24 @@
     "stale-detail": "Freshness is {{freshness}}. Historical evidence remains visible, but this batch cannot authorize new provider work. Create a new batch to resolve a new immutable TruthPackage.",
     "no-markets": "Truth resolution has not produced market evidence yet.",
     "missing-detail": "Missing/degraded detail: {{detail}}",
+    "not-resolved": "Truth has not been resolved yet. It is resolved when preparation starts.",
+    "readiness-reason": {
+      "skipped_unavailable": "Truth says the product is not available in this market.",
+      "price_unresolved": "The price could not be resolved. Missing: {{facts}}.",
+      "fact_missing_permitted": "Some facts could not be resolved; the market continues without them. Missing: {{facts}}."
+    },
     "fact-source": "source {{source}}",
     "fact-source-embedded": "embedded evidence",
     "fact-valid-until": "valid until {{date}}",
     "no-facts": "No persisted facts for this market.",
     "failures": "Source failures / skips",
     "failure-line": "{{fact}} via {{adapter}}: {{reason}}",
+    "adapter": {
+      "manual": "manual facts",
+      "controlled_mock": "Controlled Mock",
+      "shopify": "Shopify",
+      "policy": "fallback rule"
+    },
     "skip": {
       "on_failure_block": "no source resolved it (policy: block, so this market does not run)",
       "on_failure_degrade": "no source resolved it (policy: continue degraded)",
@@ -194,9 +210,15 @@
     "lineage-copy": "→ copy",
     "lineage-localized": "→ localized asset",
     "binding": "Active binding: {{binding}}",
-    "binding-detail": "{{kind}} · review {{review}} · Truth freshness {{freshness}} · experiment ready {{ready}}",
+    "binding-detail": "{{kind}} · review: {{review}} · Truth: {{freshness}} · {{ready}}",
     "binding-kind": "binding",
-    "stale-binding": "stale_truth: this MarketAssetBinding remains visible for lineage, but it is blocked from a new experiment until relocalized from current Truth.",
+    "binding-type": {
+      "localized": "Localized version",
+      "source_reuse": "Source reused as is"
+    },
+    "binding-ready": "ready for a new experiment",
+    "binding-not-ready": "not ready for a new experiment yet",
+    "stale-binding": "The Truth behind this binding is out of date. It stays visible for lineage, but it cannot be used in a new experiment until it is localized again from current Truth.",
     "child-review": "Localized child review starts pending. Source approval and business evidence status were not inherited; this exact version needs human review and a new target-market experiment."
   },
   "rail": {
@@ -217,7 +239,18 @@
     "origin-historical": "Historical experiment",
     "marketing-note": "User-supplied delivery evidence for this exact creative and recorded conditions. Localization creates a new unvalidated execution; it inherits neither business success nor approval. Real truth and BYOK checks apply before any paid step.",
     "target-markets": "Target markets",
-    "missing-context": ": the selected source is missing persisted {{fields}}. Complete that immutable source context before creating a batch; no target Market Policy or browser default is used.",
+    "context-problem": {
+      "missing_source_context": "The selected source is missing its saved {{fields}}. Complete the source context before creating a batch; no target Market Policy or browser default is used.",
+      "invalid_source_context": "The selected source has an invalid {{fields}}. Fix the source context before creating a batch.",
+      "conflicting_source_context": "The selected source's saved contexts disagree on {{fields}}. Make them match before creating a batch."
+    },
+    "context-field": {
+      "market": "market",
+      "placement": "placement",
+      "locale": "locale",
+      "country": "country",
+      "currency": "currency"
+    },
     "missing-context-fields": "locale, country, or currency",
     "create": "Create Controlled Mock batch"
   },
@@ -225,7 +258,7 @@
     "title": "Localization control room",
     "intro": "Truth-backed batch review, per-item recovery, QC, cost, and asset lineage.",
     "refresh": "Refresh persisted state",
-    "role-note": "Role: {{role}}. Commands remain subject to server authorization; unavailable actions stay visible with their reason.",
+    "role-note": "You are a Member of this Workspace. Commands remain subject to server authorization; unavailable actions stay visible with their reason.",
     "loading": "Loading localization workspace",
     "source-title": "Source evidence, offer, and batch outcome",
     "source-subtitle": "Revision {{revision}} · created {{time}}",
@@ -233,15 +266,31 @@
     "source-snapshot": "Source market snapshot",
     "source-creative": "Source creative",
     "decision": "decision",
-    "evidence-modes": "{{generation}} · evidence {{evidence}}",
+    "evidence-modes": "generation {{generation}} · evidence {{evidence}}",
     "state-count": "{{state}}: {{value}}",
     "no-outcome": "No item outcome yet.",
     "operation-title": "Durable operation",
     "operation-subtitle": "Recovered from the persisted batch command timeline after refresh or process restart",
+    "command-kind": {
+      "create_draft": "Batch created",
+      "start_preparation": "Preparation started",
+      "submit_claim_decisions": "Claim decisions submitted",
+      "approve_copy": "Copy approved",
+      "confirm": "Batch confirmed",
+      "retry_item": "Item retried",
+      "resume_item": "Item resumed",
+      "authorize_isolated_qc": "Missing QC authorized",
+      "adopt_isolated_output": "Isolated output adopted",
+      "cancel": "Batch cancelled"
+    },
     "copy-title": "Localized copy",
     "copy-subtitle": "Copy origin and evidence stay visible; review failures never disappear",
     "no-copy": "No localized copy versions yet.",
     "copy-origin": "Origin: {{origin}} · asset",
+    "copy-origins": {
+      "translated": "translated",
+      "source_locale_projection": "same language as the source (not translated)"
+    },
     "copy-evidence": "Evidence",
     "approve": "Approve copy",
     "commands-title": "Batch commands",
