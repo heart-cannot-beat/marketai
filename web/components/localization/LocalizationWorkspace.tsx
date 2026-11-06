@@ -227,9 +227,10 @@ function commandKindLabel(t: TFunction, kind: string): string {
 
 /**
  * Why a market's Truth is not ready (#400). `_derive_market_readiness` in
- * `truth.py` gives a `reason` and the `missing` fact types; a batch whose
- * Truth is not resolved yet reads `pending` with an empty detail
- * (`queries.py`). Any other shape keeps its JSON.
+ * `truth.py` gives a `reason` and the `missing` fact types, plus the
+ * `blocked` ones when an `on_failure=block` fact stops the market; a
+ * batch whose Truth is not resolved yet reads `pending` with an empty
+ * detail (`queries.py`). Any other shape keeps its JSON.
  */
 function readinessDetailMessage(t: TFunction, market: TruthMarketRow): string {
   const detail = market.readiness_detail;
@@ -238,10 +239,13 @@ function readinessDetailMessage(t: TFunction, market: TruthMarketRow): string {
   });
   if (!detail || typeof detail !== 'object')
     return market.readiness === 'pending' ? t('truth.not-resolved') : fallback;
-  const { reason, missing } = detail as UnknownRecord;
+  const { reason, missing, blocked } = detail as UnknownRecord;
+  const factList = (value: unknown) =>
+    Array.isArray(value) ? value.join(t('list-separator')) : '';
   if (typeof reason === 'string')
     return t(`truth.readiness-reason.${reason}`, {
-      facts: Array.isArray(missing) ? missing.join(t('list-separator')) : '',
+      facts: factList(missing),
+      blocked: factList(blocked),
       defaultValue: fallback,
     });
   return market.readiness === 'pending' && Object.keys(detail).length === 0

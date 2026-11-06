@@ -80,7 +80,8 @@
     "readiness-reason": {
       "skipped_unavailable": "真值显示产品在这个市场不可售。",
       "price_unresolved": "价格未能解析。缺少：{{facts}}。",
-      "fact_missing_permitted": "部分事实未能解析，这个市场会在缺少它们的情况下继续。缺少：{{facts}}。"
+      "fact_missing_permitted": "部分事实未能解析，这个市场会在缺少它们的情况下继续。缺少：{{facts}}。",
+      "fact_missing_blocked": "策略要求的事实未能解析（策略：阻断），这个市场不执行。阻断的事实：{{blocked}}。缺少：{{facts}}。"
     },
     "fact-source": "来源 {{source}}",
     "fact-source-embedded": "内嵌证据",

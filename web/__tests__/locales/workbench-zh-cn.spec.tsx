@@ -275,6 +275,29 @@ describe('Advanced workbench in zh-CN', () => {
             },
           ],
         },
+        {
+          market: 'FR',
+          market_policy_version_id: 'market-policy-fr',
+          locale: 'fr-FR',
+          currency: 'EUR',
+          readiness: 'failed',
+          readiness_detail: {
+            reason: 'fact_missing_blocked',
+            blocked: ['delivery_time'],
+            missing: ['delivery_time', 'tax'],
+          },
+          facts: [],
+          source_attempts: [
+            {
+              id: 'attempt-block',
+              fact_type: 'delivery_time',
+              adapter_kind: 'policy',
+              data_source_version_id: 'source-v1',
+              outcome: 'skipped',
+              skip_code: 'on_failure_block',
+            },
+          ],
+        },
       ],
     };
     const item: Item = {
@@ -344,11 +367,21 @@ describe('Advanced workbench in zh-CN', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
+        '策略要求的事实未能解析（策略：阻断），这个市场不执行。阻断的事实：delivery_time。缺少：delivery_time、tax。'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'delivery_time（经 兜底规则）：没有来源解析出这个事实（策略：阻断，这个市场不执行）'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
         '当前绑定：本地化版本 · 审核：待审核 · 真值：最新 · 还不能用于新实验'
       )
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(
-      /\{\}|Truth has not|Missing|via|Active binding|fact_missing_permitted|controlled_mock|policy|pending_review|false/
+      /\{\}|Truth has not|Missing|Blocking|via|Active binding|fact_missing_permitted|fact_missing_blocked|on_failure_block|controlled_mock|policy|pending_review|false/
     );
   });
 });

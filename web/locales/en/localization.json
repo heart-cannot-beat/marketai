@@ -80,7 +80,8 @@
     "readiness-reason": {
       "skipped_unavailable": "Truth says the product is not available in this market.",
       "price_unresolved": "The price could not be resolved. Missing: {{facts}}.",
-      "fact_missing_permitted": "Some facts could not be resolved; the market continues without them. Missing: {{facts}}."
+      "fact_missing_permitted": "Some facts could not be resolved; the market continues without them. Missing: {{facts}}.",
+      "fact_missing_blocked": "A fact the policy requires could not be resolved (policy: block), so this market does not run. Blocking: {{blocked}}. Missing: {{facts}}."
     },
     "fact-source": "source {{source}}",
     "fact-source-embedded": "embedded evidence",

@@ -747,6 +747,12 @@ describe('Localization workspace evidence views', () => {
             ]),
             // A package without this market keeps its JSON.
             market('IT', 'failed', { missing: ['truth_package_market'] }),
+            // An `on_failure=block` fact stops the market.
+            market('NL', 'failed', {
+              reason: 'fact_missing_blocked',
+              blocked: ['delivery_time'],
+              missing: ['delivery_time', 'discount'],
+            }),
           ],
         })}
       />
@@ -780,8 +786,13 @@ describe('Localization workspace evidence views', () => {
         'Missing/degraded detail: {"missing":["truth_package_market"]}'
       )
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'A fact the policy requires could not be resolved (policy: block), so this market does not run. Blocking: delivery_time. Missing: delivery_time, discount.'
+      )
+    ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(
-      /\{\}|price_unresolved|skipped_unavailable|controlled_mock/
+      /\{\}|price_unresolved|skipped_unavailable|fact_missing_blocked|controlled_mock/
     );
   });
 

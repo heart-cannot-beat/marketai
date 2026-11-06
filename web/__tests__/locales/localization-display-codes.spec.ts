@@ -251,9 +251,15 @@ const adapterKindsBuilt = Array.from(
   ),
   (m) => m[1]
 );
-const registeredAdapterKinds = literals(
-  libraryContracts.match(/^ADAPTER_KINDS = frozenset\(\{([^}]*)\}\)/m)?.[1] ??
-    ''
+// `ADAPTER_KINDS` is the key set of `ADAPTER_EXECUTION_MODES`, one
+// execution mode per registered kind.
+const registeredAdapterKinds = Array.from(
+  (
+    libraryContracts.match(
+      /^ADAPTER_EXECUTION_MODES\b[^=\n]*= \{([^}]*)\}/m
+    )?.[1] ?? ''
+  ).matchAll(/^\s*"([a-z_]+)":/gm),
+  (m) => m[1]
 );
 const adapterKindWrites = Array.from(
   truth.matchAll(/\badapter_kind=(?!=)([^,\n)]+)/g),
@@ -570,18 +576,24 @@ test('reads every QC check kind and the billing constraints', () => {
 });
 
 test('reads every Truth readiness detail a market can show', () => {
-  // Each reason is named; the detail carries nothing else to word.
+  // Each reason is named; the detail carries nothing else to word, only
+  // fact types (`missing`, `blocked`, `resolved_fact_types`).
   expect(readinessReasonWrites.length).toBeGreaterThan(0);
   expect(readinessReasonWrites.every((value) => LITERAL.test(value))).toBe(
     true
   );
   expect(readinessDetailKeys).toEqual([
+    'blocked',
     'missing',
     'reason',
     'resolved_fact_types',
   ]);
   expect(readinessReasons).toEqual(
-    expect.arrayContaining(['skipped_unavailable', 'price_unresolved'])
+    expect.arrayContaining([
+      'skipped_unavailable',
+      'price_unresolved',
+      'fact_missing_blocked',
+    ])
   );
   // Only `_derive_market_readiness` stores a detail ...
   expect(storedDetailWrites.sort()).toEqual([
@@ -611,6 +623,11 @@ test('reads every source a Truth attempt records', () => {
   ).toEqual(ADAPTER_KIND_INDIRECT);
   expect(adapterClassKinds.sort()).toEqual(['controlled_mock', 'manual']);
   expect(adapterKindsBuilt.sort()).toEqual(['manual', 'mock']);
+  // A reshaped registry would otherwise drop its kinds without a failure.
+  expect(libraryContracts).toMatch(
+    /^ADAPTER_KINDS = frozenset\(ADAPTER_EXECUTION_MODES\)$/m
+  );
+  expect(registeredAdapterKinds.sort()).toEqual(['manual', 'mock', 'shopify']);
   expect(adapterKinds).toEqual(
     expect.arrayContaining(['manual', 'controlled_mock', 'shopify', 'policy'])
   );
