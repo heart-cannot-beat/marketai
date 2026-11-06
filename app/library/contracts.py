@@ -860,7 +860,15 @@ def _validate_selection_rule(content: dict, findings: list[Finding]) -> None:
 # 维度模板/Schema、Prompt 规则、数据源、人工事实集与真值解析策略内容校验（#20）。
 # --------------------------------------------------------------------------
 
-ADAPTER_KINDS = frozenset({"manual", "shopify", "mock"})
+# 数据源的来源类型决定执行模式（#396）：受控 Mock 是独立的来源，只能是 mock；人工和
+# Shopify 只能是 real。其余组合解析 Truth 时会撞 ck_tsa_manual_adapter / ck_tsa_mock_fields。
+# 草稿表单的选项（DataSourceDraftEditor.tsx 的 DATA_SOURCE_ADAPTERS）由守护测试对照本表。
+ADAPTER_EXECUTION_MODES: dict[str, str] = {
+    "manual": EXECUTION_MODE_REAL,
+    "shopify": EXECUTION_MODE_REAL,
+    "mock": EXECUTION_MODE_MOCK,
+}
+ADAPTER_KINDS = frozenset(ADAPTER_EXECUTION_MODES)
 CARDINALITIES = frozenset({"one_per_dimension"})
 CONSTRAINT_TYPES = frozenset({"requires", "excludes", "max_occurrence"})
 FACT_TYPES = frozenset({"price", "shipping_availability", "delivery_time", "tax", "discount"})
@@ -1028,11 +1036,23 @@ def _validate_prompt_policy(content: dict, findings: list[Finding]) -> None:
 
 
 def _validate_data_source(content: dict, findings: list[Finding]) -> None:
-    if content.get("adapter_kind") not in ADAPTER_KINDS:
+    adapter_kind = content.get("adapter_kind")
+    execution_mode = content.get("execution_mode")
+    if adapter_kind not in ADAPTER_KINDS:
         findings.append(Finding("ds_adapter_kind", f"adapter_kind 必须是 {sorted(ADAPTER_KINDS)} 之一",
                                 "adapter_kind"))
-    if content.get("execution_mode") not in EXECUTION_MODES:
-        findings.append(Finding("ds_execution_mode", "必须显式声明 execution_mode", "execution_mode"))
+    if execution_mode not in EXECUTION_MODES:
+        findings.append(Finding("ds_execution_mode",
+                                f"必须显式声明 execution_mode，取值为 {sorted(EXECUTION_MODES)} 之一",
+                                "execution_mode"))
+    elif adapter_kind in ADAPTER_KINDS and execution_mode != ADAPTER_EXECUTION_MODES[adapter_kind]:
+        pairs = "、".join(f"{kind}/{mode}" for kind, mode in ADAPTER_EXECUTION_MODES.items())
+        findings.append(Finding(
+            "ds_execution_mode_mismatch",
+            f"adapter_kind {adapter_kind!r} 的 execution_mode 必须是 "
+            f"{ADAPTER_EXECUTION_MODES[adapter_kind]!r}，合法组合只有 {pairs}",
+            "execution_mode",
+        ))
     config = content.get("config")
     if config is not None and not isinstance(config, dict):
         findings.append(Finding("ds_config_shape", "config 必须是对象", "config"))

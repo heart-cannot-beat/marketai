@@ -299,7 +299,8 @@ function promptPolicyContent(): JsonObject {
 function dataSourceContent(markets: string[]): JsonObject {
   return {
     adapter_kind: 'manual',
-    execution_mode: 'mock',
+    // A manual source is always real (`ADAPTER_EXECUTION_MODES`, #396).
+    execution_mode: 'real',
     config: { markets },
   };
 }
