@@ -116,7 +116,6 @@ test('reads every reason the Library eligibility functions give', () => {
       'entry_archived',
       'no_draft',
       'owner_required',
-      'entry_type_not_bindable',
       'invalid_state',
       'entry_type_mismatch',
     ])

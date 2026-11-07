@@ -237,7 +237,6 @@
       "entry_archived": "This entry is archived",
       "no_draft": "This entry has no draft",
       "owner_required": "Only the Workspace Owner can do this",
-      "entry_type_not_bindable": "Only Product and Person entries can bind references",
       "invalid_state": "This version has been withdrawn",
       "entry_type_mismatch": "Only Product entries can be cloned"
     },

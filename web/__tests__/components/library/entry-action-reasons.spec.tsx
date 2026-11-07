@@ -34,9 +34,8 @@ const COPY = {
     archive: 'Archive',
     bind: 'Bind Reference',
     ownerRequired: 'Archive: Only the Workspace Owner can do this',
+    ownerOnlyPublish: 'Publish, Archive: Only the Workspace Owner can do this',
     archived: 'Publish, Archive, Bind Reference: This entry is archived',
-    notBindable:
-      'Bind Reference: Only Product and Person entries can bind references',
     unknown: "Publish: This action isn't available right now",
   },
   'zh-CN': {
@@ -45,8 +44,8 @@ const COPY = {
     archive: '归档',
     bind: '绑定参考素材',
     ownerRequired: '归档：只有工作区 Owner 可以执行这个操作',
+    ownerOnlyPublish: '发布、归档：只有工作区 Owner 可以执行这个操作',
     archived: '发布、归档、绑定参考素材：这个条目已归档',
-    notBindable: '绑定参考素材：只有产品和人物条目可以绑定参考素材',
     unknown: '发布：暂时不能执行这个操作',
   },
 } as const;
@@ -54,18 +53,24 @@ type Locale = keyof typeof COPY;
 
 type Eligibility = [boolean, string | null];
 
-/** An entry's `allowed_actions` the way `_entry_allowed_actions` gives them. */
+/**
+ * An entry's `allowed_actions` the way `_entry_allowed_actions` gives them:
+ * `bind_reference` only for a Product or Person (`null` leaves it out).
+ */
 function serverActions(
   publish: Eligibility,
   archive: Eligibility,
-  bind: Eligibility
+  bind: Eligibility | null,
+  draft: Eligibility = publish
 ) {
   return [
-    { action: 'save_draft', allowed: publish[0], reason_code: publish[1] },
-    { action: 'validate_draft', allowed: publish[0], reason_code: publish[1] },
+    { action: 'save_draft', allowed: draft[0], reason_code: draft[1] },
+    { action: 'validate_draft', allowed: draft[0], reason_code: draft[1] },
     { action: 'publish', allowed: publish[0], reason_code: publish[1] },
     { action: 'archive', allowed: archive[0], reason_code: archive[1] },
-    { action: 'bind_reference', allowed: bind[0], reason_code: bind[1] },
+    ...(bind
+      ? [{ action: 'bind_reference', allowed: bind[0], reason_code: bind[1] }]
+      : []),
   ];
 }
 
@@ -161,23 +166,24 @@ describe.each(Object.keys(COPY) as Locale[])('%s', (locale) => {
     expectNoRawCodes(container);
   });
 
-  it('keeps Bind Reference on an Offer and says only Products and People bind', () => {
+  it('tells a Member why Publish is unavailable on an Offer, with no Bind Reference', () => {
+    // An Offer is Owner-only to publish and takes no reference bindings, so
+    // the server refuses Publish for a Member and never lists Bind Reference.
+    const ownerOnly: Eligibility = [false, 'owner_required'];
     const { container } = renderIn(
       locale,
       'offer',
-      serverActions(
-        ALLOWED,
-        [false, 'owner_required'],
-        [false, 'entry_type_not_bindable']
-      )
+      serverActions(ownerOnly, ownerOnly, null, ALLOWED)
     );
 
-    expect(reasonLines()).toEqual([copy.ownerRequired, copy.notBindable]);
-    const bind = button(copy.bind);
-    expect(bind).toHaveAttribute('aria-disabled', 'true');
-    expect(bind).toHaveAccessibleDescription(copy.notBindable);
-    fireEvent.click(bind);
-    expect(screen.queryByTestId('bind-reference-dialog')).toBeNull();
+    expect(reasonLines()).toEqual([copy.ownerOnlyPublish]);
+    const publish = button(copy.publish);
+    expect(publish).toHaveAttribute('aria-disabled', 'true');
+    expect(publish).not.toBeDisabled();
+    expect(publish).toHaveAccessibleDescription(copy.ownerOnlyPublish);
+    fireEvent.click(publish);
+    expect(screen.queryByTestId('publish-dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: copy.bind })).toBeNull();
     expectNoRawCodes(container);
   });
 
