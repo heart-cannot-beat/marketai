@@ -487,14 +487,17 @@
     "credential-status": "状态：{{status}}",
     "bind": "绑定",
     "binding": "正在绑定…",
-    "import-description": "从 CSV 或 JSON 文件导入事实到这个事实集。",
+    "import-description": "从 CSV 或 JSON 文件导入事实。每次导入都会新建一份事实集草稿。",
     "select-file": "选择文件",
     "file-input": "选择要导入的事实文件",
     "importing": "正在读取文件…",
     "processing": "正在处理事实…",
-    "import-complete": "已导入 {{count}} 条事实。",
-    "import-row-errors": "{{count}} 行有错误：",
-    "row-error": "第 {{row}} 行，字段「{{field}}」：{{message}}"
+    "import-complete": "事实已导入一份新的事实集草稿，请在那里检查后再发布。",
+    "import-uncertain": "无法确定导入是否完成。请先在创意库里查看有没有新的事实集草稿，再决定是否重新导入。",
+    "import-not-confirmed": "无法确认导入是否已经开始。请先在创意库里查看有没有新的事实集草稿，再重试。",
+    "upload-failed": "文件没有上传成功，请重试。",
+    "upload-rejected": "文件没有通过上传检查。请使用不超过 10 MB 的 CSV 或 JSON 文件。",
+    "open-fact-set": "打开事实集"
   },
   "contextual-create": {
     "new": "新建{{type}}",
