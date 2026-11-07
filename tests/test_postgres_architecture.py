@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 
 from tests import test_marketing_architecture as architecture_fixtures
 from app.adapters.persistence.database import tenant_session
-from app.adapters.persistence.models import WorkspaceRecord, JobRecord, utcnow
+from app.adapters.persistence.models import WorkspaceRecord, JobRecord, OperationRecord, utcnow
 from app.platform import jobs
 from app.platform.tenancy import TenantContext
 from tests.support.job_policies import probe_job_types
@@ -491,6 +491,21 @@ class PostgresArchitectureTests(unittest.TestCase):
             connection.execute(update(JobRecord).where(JobRecord.workspace_id == workspace_id, open_states)
                 .values(next_attempt_at=None))
 
+    def _retire_crash_workspace(self, workspace_id):
+        # marketai_health_stats_v1 counts open and uncertain Jobs and stale
+        # open Operations in every Workspace, and later suites share this
+        # database. The paid control leaves its Jobs uncertain on purpose and
+        # the fixtures leave their Operations open, so close both. The rows
+        # stay: operation_state_events and the Localization tables refuse
+        # DELETE and reference them, and each Workspace is this test's own.
+        with self.owner.begin() as connection:
+            connection.execute(update(JobRecord).where(JobRecord.workspace_id == workspace_id,
+                JobRecord.state.in_(('queued', 'retry_wait', 'leased', 'running', 'uncertain'))).values(
+                    state='cancelled', finished_at=utcnow(), lease_owner=None, lease_expires_at=None, heartbeat_at=None))
+            connection.execute(update(OperationRecord).where(OperationRecord.workspace_id == workspace_id,
+                OperationRecord.state.notin_(('succeeded', 'failed', 'partially_succeeded', 'cancelled'))).values(
+                    state='cancelled', updated_at=utcnow()))
+
     @staticmethod
     def _claim_recovers_expired_leases():
         # The claim function retires every expired lease before it looks for
@@ -505,6 +520,7 @@ class PostgresArchitectureTests(unittest.TestCase):
             fixture.setUp()
             fixture.seed()
         self.addCleanup(fixture.doCleanups)
+        self.addCleanup(self._retire_crash_workspace, fixture.workspace_id())
         self.workspaces.append(fixture.workspace_id())
         fixture.expire_lease = lambda: self._expire_lease(fixture.job_id)
         fixture.recover = self._claim_recovers_expired_leases
@@ -599,6 +615,7 @@ class PostgresArchitectureTests(unittest.TestCase):
         with patch('app.adapters.persistence.database.SessionLocal', self.sessions[0]):
             fixture.setUp()
         self.addCleanup(fixture.doCleanups)
+        self.addCleanup(self._retire_crash_workspace, fixture.ctx.workspace_id)
         self.workspaces.append(fixture.ctx.workspace_id)
         for job_type in PaidJobFixture.PAID_TYPES:
             with self.subTest(job_type=job_type):
