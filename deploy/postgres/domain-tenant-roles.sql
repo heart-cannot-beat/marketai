@@ -387,7 +387,11 @@ BEGIN
     'products', 'generation_runs', 'generation_drafts',
     'resolution_previews', 'resolution_preview_confirmations',
     'generation_recipe_snapshots', 'run_items', 'generation_run_commands',
-    'export_packages', 'assets', 'jobs',
+    'export_packages', 'assets',
+    -- Adopting an isolated Localization output publishes its child
+    -- AssetVersion in the API transaction, like finalize does in the Worker
+    -- (#46, spec §3H).
+    'asset_versions', 'jobs',
     'cost_ledger', 'meta_accounts',
     'meta_sync_runs', 'meta_ingestions', 'meta_sync_schedules', 'experiments',
     'launch_previews', 'launch_confirmations', 'launch_operations',

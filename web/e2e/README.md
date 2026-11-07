@@ -93,9 +93,6 @@ Localization batch its fixture confirms.
 On a local Compose stack each suite finishes in about a minute. These fail
 for reasons outside the suites' copy and seeds:
 
-- Localization, `isolated-recovery.spec.ts` "recovers a preserved isolated
-  output…": adopting the output returns 500, because the API database role
-  may not insert into `asset_versions`.
 - Scale, controlled-mock journey step 06: the seed writes daily evidence only
   from the Episode's first day, while the snapshot needs every day of its
   14-day window, so each evaluation before day 14 is blocked by

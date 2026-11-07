@@ -135,8 +135,9 @@ class Gate0MigrationTests(unittest.TestCase):
         # zz5e6f7a8b9c (competitor discovery decisions, Issue #276) and
         # zz6f7a8b9c0d (soft-removable experiment entries, Issue #284) and
         # zz7a8b9c0d1e (the API reads usage events, Issue #347) and
-        # zz8b9c0d1e2f (stored spend guardrail previews, Issue #386).
-        self.assertEqual(revision, "zz8b9c0d1e2f")
+        # zz8b9c0d1e2f (stored spend guardrail previews, Issue #386) and
+        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46).
+        self.assertEqual(revision, "zz9c0d1e2f3a")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as conn:

@@ -107,8 +107,9 @@ class TestLocalizationMigration(unittest.TestCase):
             # zz5e6f7a8b9c (competitor discovery decisions, Issue #276) and
             # zz6f7a8b9c0d (soft-removable experiment entries, Issue #284) and
             # zz7a8b9c0d1e (the API reads usage events, Issue #347) and
-            # zz8b9c0d1e2f (stored spend guardrail previews, Issue #386).
-            self.assertIn("zz8b9c0d1e2f", revisions)
+            # zz8b9c0d1e2f (stored spend guardrail previews, Issue #386) and
+            # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46).
+            self.assertIn("zz9c0d1e2f3a", revisions)
 
     def test_downgrade_and_upgrade(self):
         up = self._alembic("upgrade", "head")
