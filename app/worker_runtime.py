@@ -94,6 +94,30 @@ def _locked_operation(session, context: TenantContext, operation_id: str) -> Ope
     ).one()
 
 
+def _settle_running_operation(
+    context: TenantContext,
+    operation_id: str,
+    to_state: OperationState,
+    *,
+    reason: str | None,
+    result_ref: OperationResultRef | None = None,
+) -> str | None:
+    """Move a ``running`` Operation to ``to_state`` under its row lock.
+
+    Returns ``None`` when this call moved it, or the state it found when
+    another run of the same Job got there first -- which then writes nothing.
+    """
+    with tenant_session(context) as session:
+        state = _locked_operation(session, context, operation_id).state
+        if state != OperationState.RUNNING.value:
+            return state
+        transition_operation(
+            session, operation_id, to_state,
+            reason=reason, actor=context.executor, result_ref=result_ref,
+        )
+    return None
+
+
 class WorkerRuntime:
     def __init__(self, owner: str | None = None, meta_client: MetaClient | None = None,
                  launch_adapter: MetaWritePort | None = None,
@@ -1167,8 +1191,7 @@ class WorkerRuntime:
         jobs.mark_running(job.context, job.id, self.owner)
         try:
             with tenant_session(job.context) as session:
-                await handle_export_package(session, self.blob_store, package_id)
-            jobs.succeed(job.context, job.id, self.owner)
+                state = await handle_export_package(session, self.blob_store, package_id)
         except Exception as exc:
             jobs.fail(
                 job.context,
@@ -1178,6 +1201,21 @@ class WorkerRuntime:
                 detail=str(exc),
                 retryable=False,
             )
+            return
+        # The build and the package's terminal state commit together, and a
+        # rerun of a Job whose package already settled (#22) closes the Job
+        # the same way the run that settled it would have.
+        if state == "ready":
+            jobs.succeed(job.context, job.id, self.owner)
+            return
+        jobs.fail(
+            job.context,
+            job.id,
+            self.owner,
+            code="generation_export_package_failed",
+            detail=f"导出包已是 {state}",
+            retryable=False,
+        )
 
     def _library_connection_check(self, job: jobs.ClaimedJob) -> None:
         """Run the local DataSource check (#383, ``app.library.connection_checks``).
@@ -1372,12 +1410,16 @@ class WorkerRuntime:
         A Job left ``succeeded`` beside a failed import would keep its upload
         from being imported again (``upload_intent_consumed``).
         """
+        self._close_settled_job(job, state, code="manual_fact_import_failed")
+
+    def _close_settled_job(self, job: jobs.ClaimedJob, state: str, *, code: str) -> None:
+        """Close the Job the way another run already settled its Operation."""
         if state == OperationState.SUCCEEDED.value:
             jobs.succeed(job.context, job.id, self.owner)
             return
         jobs.fail(
             job.context, job.id, self.owner,
-            code="manual_fact_import_failed", detail=f"Operation 已是 {state}", retryable=False,
+            code=code, detail=f"Operation 已是 {state}", retryable=False,
         )
 
     async def _library_reference_gate(self, job: jobs.ClaimedJob) -> None:
@@ -1394,6 +1436,11 @@ class WorkerRuntime:
         The content-safety execution mode is resolved from deployment
         configuration inside ``run_reference_gate`` -- the Job payload never
         carries it, so a client cannot pick the Mock (Issue #158).
+
+        The Job is requeued after a crash (#22). A rerun finds the Operation
+        already ``running`` and carries on, or finds it settled and only
+        closes the Job; the object is decided under its own row lock and the
+        Operation under its, so two runs of one Job each write once.
         """
         from .library import references
         from .library.reference_gate_worker import run_reference_gate
@@ -1409,66 +1456,71 @@ class WorkerRuntime:
             return
         jobs.mark_running(job.context, job.id, self.owner)
         with tenant_session(job.context) as session:
-            operation = get_operation(session, operation_id)
+            operation = _locked_operation(session, job.context, operation_id)
+            settled = operation.state if OperationState(operation.state) in TERMINAL_STATES else None
             if operation.state == OperationState.QUEUED.value:
                 transition_operation(
                     session, operation_id, OperationState.RUNNING,
                     reason=None, actor=job.context.executor,
                 )
+        if settled is not None:
+            self._close_settled_job(job, settled, code="reference_gate_failed")
+            return
         result_ref = OperationResultRef(
             resource_type="reference_object", resource_id=object_id,
         )
         try:
             outcome = await run_reference_gate(job.context, self.blob_store, object_id)
         except references.ReferenceGateError as exc:
-            with tenant_session(job.context) as session:
-                transition_operation(
-                    session, operation_id, OperationState.FAILED,
-                    reason=exc.failure_code, actor=job.context.executor,
-                    result_ref=result_ref,
-                )
-            jobs.fail(
-                job.context, job.id, self.owner,
-                code=exc.failure_code, detail=str(exc), retryable=False,
+            self._fail_reference_gate(
+                job, operation_id, result_ref, code=exc.failure_code, detail=str(exc),
             )
             return
         except Exception as exc:
-            with tenant_session(job.context) as session:
-                transition_operation(
-                    session, operation_id, OperationState.FAILED,
-                    reason="reference_gate_failed", actor=job.context.executor,
-                    result_ref=result_ref,
-                )
-            jobs.fail(
-                job.context, job.id, self.owner,
-                code="reference_gate_failed", detail=str(exc),
-                retryable=False,
+            self._fail_reference_gate(
+                job, operation_id, result_ref, code="reference_gate_failed", detail=str(exc),
             )
             return
 
         if outcome.succeeded:
-            with tenant_session(job.context) as session:
-                transition_operation(
-                    session, operation_id, OperationState.SUCCEEDED,
-                    reason=None, actor=job.context.executor,
-                    result_ref=result_ref,
-                )
+            settled = _settle_running_operation(
+                job.context, operation_id, OperationState.SUCCEEDED,
+                reason=None, result_ref=result_ref,
+            )
+            if settled is not None:
+                self._close_settled_job(job, settled, code="reference_gate_failed")
+                return
             jobs.succeed(job.context, job.id, self.owner)
             return
 
         # A transient storage read failure leaves the Operation running until
         # the Job's retry budget is spent; every other outcome is final.
-        job_state = jobs.fail(
-            job.context, job.id, self.owner,
-            code=outcome.code, detail=outcome.detail, retryable=outcome.retryable,
+        if outcome.retryable and job.attempt < job.max_attempts:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code=outcome.code, detail=outcome.detail, retryable=True,
+            )
+            return
+        self._fail_reference_gate(
+            job, operation_id, result_ref, code=outcome.code, detail=outcome.detail,
         )
-        if job_state == "failed":
-            with tenant_session(job.context) as session:
-                transition_operation(
-                    session, operation_id, OperationState.FAILED,
-                    reason=outcome.code, actor=job.context.executor,
-                    result_ref=result_ref,
-                )
+
+    def _fail_reference_gate(
+        self, job: jobs.ClaimedJob, operation_id: str, result_ref: OperationResultRef,
+        *, code: str, detail: str,
+    ) -> None:
+        """Settle the Operation ``failed``, then the Job -- in that order, so
+        a crash between the two leaves a Job a rerun can close."""
+        settled = _settle_running_operation(
+            job.context, operation_id, OperationState.FAILED,
+            reason=code, result_ref=result_ref,
+        )
+        if settled is not None:
+            self._close_settled_job(job, settled, code=code)
+            return
+        jobs.fail(
+            job.context, job.id, self.owner, code=code, detail=detail, retryable=False,
+        )
 
     def intake_fetcher(self):
         """The SSRF-safe fetcher product intake reads pasted links with (Issue #161)."""

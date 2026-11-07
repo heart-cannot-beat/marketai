@@ -6,7 +6,9 @@ original, running the pure gate checks (``app.library.references``),
 committing the controlled derivative through the same ``BlobStore`` seam
 generated assets use, and writing the evidence (record + audit) in short
 tenant transactions. No step here holds a database transaction open across
-blob I/O.
+blob I/O. Each decision is written under the object's row lock, and only
+while the object is still ``quarantined``, so two runs of one gate decide it
+once and a rerun after a crash reports the decision already made (#22).
 
 Outcome kinds (``GateOutcome.kind``):
 
@@ -31,8 +33,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from sqlalchemy import select
+
 from .. import config
 from ..adapters.persistence.database import tenant_session
+from ..adapters.persistence.models import ReferenceObjectRecord
 from ..platform.blob_store import (
     BlobRef,
     BlobStore,
@@ -150,6 +155,43 @@ def _checks_detail(checks: list[references.GateCheck]) -> list[dict]:
     return [check.as_dict() for check in checks]
 
 
+def _lock_gate_target(session, context: TenantContext, object_id: str) -> ReferenceObjectRecord:
+    """``load_gate_target`` under ``SELECT ... FOR UPDATE``, as committed now.
+
+    Every write that decides the object goes through here and first checks
+    the object is still ``quarantined``: two runs of one gate (a lease that
+    expired mid-check, or the same bytes uploaded twice) serialize on the
+    row, and the second finds the decision already made. SQLite ignores the
+    clause and serializes writers itself.
+    """
+    record = session.scalars(
+        select(ReferenceObjectRecord)
+        .where(
+            ReferenceObjectRecord.id == object_id,
+            ReferenceObjectRecord.workspace_id == context.workspace_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    if record is None:
+        raise references.ReferenceGateError("参考对象不存在", code="reference_object_not_found")
+    return record
+
+
+def _decided_outcome(record: ReferenceObjectRecord) -> GateOutcome | None:
+    """The outcome an earlier run already committed, or ``None`` if undecided."""
+    if record.state == references.STATE_RELEASED:
+        return GateOutcome("released", record.id)
+    if record.state == references.STATE_REJECTED:
+        code, detail = references.gate_failure(record)
+        return GateOutcome(
+            "rejected", record.id,
+            code=code or references.FAILURE_GATE_REJECTED,
+            detail=detail or "该对象此前已被上传门禁拒绝",
+        )
+    return None
+
+
 async def run_reference_gate(
     context: TenantContext,
     blob_store: BlobStore,
@@ -168,15 +210,9 @@ async def run_reference_gate(
 
     with tenant_session(context) as session:
         record = references.load_gate_target(session, context, object_id)
-        if record.state == references.STATE_RELEASED:
-            return GateOutcome("released", object_id)
-        if record.state == references.STATE_REJECTED:
-            code, detail = references.gate_failure(record)
-            return GateOutcome(
-                "rejected", object_id,
-                code=code or references.FAILURE_GATE_REJECTED,
-                detail=detail or "该对象此前已被上传门禁拒绝",
-            )
+        decided = _decided_outcome(record)
+        if decided is not None:
+            return decided
         if not record.original_object_key or record.original_purged:
             return GateOutcome(
                 "source_unavailable", object_id,
@@ -197,6 +233,11 @@ async def run_reference_gate(
     except (ObjectNotFoundError, FileNotFoundError):
         detail = "committed blob 不存在"
         with tenant_session(context) as session:
+            # A run that rejected the object purged its original; that is
+            # the decision to report, not the missing bytes it left behind.
+            decided = _decided_outcome(_lock_gate_target(session, context, object_id))
+            if decided is not None:
+                return decided
             _audit(session, context, "reference_gate", result="blocked", detail={
                 "object_id": object_id, "execution_mode": mode,
                 "failure_code": references.FAILURE_SOURCE_UNAVAILABLE, "reason": detail,
@@ -223,7 +264,10 @@ async def run_reference_gate(
         )
     except references.ContentSafetyUnavailable as exc:
         with tenant_session(context) as session:
-            record = references.load_gate_target(session, context, object_id)
+            record = _lock_gate_target(session, context, object_id)
+            decided = _decided_outcome(record)
+            if decided is not None:
+                return decided
             record.byte_size = len(raw) or record.byte_size
             references.record_gate_unavailable(record, exc, mode=mode)
             _audit(session, context, "reference_gate", result="unavailable", detail={
@@ -239,7 +283,10 @@ async def run_reference_gate(
     if not evaluation.passed:
         purge_error = await _purge_original(blob_store, source)
         with tenant_session(context) as session:
-            record = references.load_gate_target(session, context, object_id)
+            record = _lock_gate_target(session, context, object_id)
+            decided = _decided_outcome(record)
+            if decided is not None:
+                return decided
             record.byte_size = len(raw) or record.byte_size
             reason = references.record_gate_rejection(record, evaluation)
             references.mark_original_purged(record, purge_error)
@@ -273,7 +320,10 @@ async def run_reference_gate(
         )
 
     with tenant_session(context) as session:
-        record = references.load_gate_target(session, context, object_id)
+        record = _lock_gate_target(session, context, object_id)
+        decided = _decided_outcome(record)
+        if decided is not None:
+            return decided
         record.byte_size = len(raw) or record.byte_size
         references.record_gate_release(
             record, evaluation, derivative,

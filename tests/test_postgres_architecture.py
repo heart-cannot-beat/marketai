@@ -1,8 +1,11 @@
 """Run against an isolated migrated PostgreSQL with the real API/Worker roles."""
 import asyncio
+import contextlib
 import os
+import time
 import unittest
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import AsyncMock, patch
@@ -15,6 +18,7 @@ from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import WorkspaceRecord, JobRecord, utcnow
 from app.platform import jobs
 from app.platform.tenancy import TenantContext
+from tests.support.job_policies import probe_job_types
 
 URLS = [os.getenv(key) for key in ('DOMAIN_OWNER_DATABASE_URL', 'DOMAIN_API_DATABASE_URL', 'DOMAIN_WORKER_DATABASE_URL')]
 
@@ -66,7 +70,7 @@ class PostgresArchitectureTests(unittest.TestCase):
             session.commit()
         slow, fast = 'arch.slow.' + suffix, 'arch.fast.' + suffix
         with patch('app.adapters.persistence.database.SessionLocal', self.sessions[0]):
-            with tenant_session(ctx) as session:
+            with probe_job_types(slow, fast), tenant_session(ctx) as session:
                 for kind in (slow, fast):
                     jobs.enqueue_in_session(session, context=ctx, job_type=kind, payload={}, idempotency_key=kind)
         with patch('app.platform.jobs.engine', self.worker):
@@ -460,3 +464,199 @@ class PostgresArchitectureTests(unittest.TestCase):
                 ('succeeded', {'resource_type': RESULT_TYPE, 'resource_id': fact_set}))
             [job] = fixture.jobs()
             self.assertEqual(job.state, 'succeeded')
+
+    # -- #22: Jobs with no external call come back from a crash ------------------
+    #
+    # The fixtures are tests.test_job_crash_recovery's: seeded as the schema
+    # owner, every Worker phase run as marketai_domain_worker, recovery done by
+    # marketai_claim_next_job_v2 rather than the SQLite sweep.
+
+    def _as_worker(self):
+        stack = contextlib.ExitStack()
+        stack.enter_context(patch('app.adapters.persistence.database.SessionLocal', self.sessions[2]))
+        stack.enter_context(patch('app.platform.jobs.engine', self.worker))
+        return stack
+
+    def _expire_lease(self, job_id):
+        with self.owner.begin() as connection:
+            connection.execute(update(JobRecord).where(JobRecord.id == job_id)
+                .values(lease_expires_at=utcnow() - timedelta(seconds=1)))
+
+    def _quarantine_others(self, workspace_id):
+        # As the owner: the Worker role's untenanted session sees no Job at all.
+        with self.owner.begin() as connection:
+            open_states = JobRecord.state.in_(('queued', 'retry_wait'))
+            connection.execute(update(JobRecord).where(JobRecord.workspace_id != workspace_id, open_states)
+                .values(next_attempt_at=utcnow() + timedelta(days=1)))
+            connection.execute(update(JobRecord).where(JobRecord.workspace_id == workspace_id, open_states)
+                .values(next_attempt_at=None))
+
+    @staticmethod
+    def _claim_recovers_expired_leases():
+        # The claim function retires every expired lease before it looks for
+        # work; a lane no Job is in makes it do only that.
+        assert jobs.claim_next('ci-only-recovery-probe', job_types=('ci-only.no-such-job',)) is None
+
+    def _crash_fixture(self, fixture_cls):
+        fixture = fixture_cls()
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[0]):
+            if hasattr(fixture_cls, '_build_ready_batch'):
+                fixture_cls.setUpClass()
+            fixture.setUp()
+            fixture.seed()
+        self.addCleanup(fixture.doCleanups)
+        self.workspaces.append(fixture.workspace_id())
+        fixture.expire_lease = lambda: self._expire_lease(fixture.job_id)
+        fixture.recover = self._claim_recovers_expired_leases
+        self._quarantine_others(fixture.workspace_id())
+        return fixture
+
+    def _wait_until_blocked(self, thread):
+        """Return once the second Worker waits on a row lock (or has finished)."""
+        deadline = time.monotonic() + 15
+        while thread.is_alive() and time.monotonic() < deadline:
+            # pg_locks, not pg_stat_activity: another role's wait events are
+            # hidden from a non-superuser, its ungranted locks are not. A row
+            # lock is waited for as the holder's transaction id, which names
+            # no database.
+            with self.owner.connect() as connection:
+                if connection.scalar(text("SELECT count(*) FROM pg_locks WHERE NOT granted")):
+                    self.second_worker_blocked = True
+                    return
+            time.sleep(0.05)
+
+    def _requeue_fixtures(self):
+        from tests import test_job_crash_recovery as crash
+        return (crash.ReferenceGateFixture, crash.ExportPackageFixture, crash.DeterministicQcFixture,
+                crash.FinalizeItemFixture, crash.FoldBatchFixture)
+
+    def test_a_crashed_job_with_no_external_call_is_requeued_by_the_claim_and_settles_once(self):
+        """mark_running, then the Worker dies: the claim requeues the Job (lease_expired, not paid_call_outcome_unknown) and the rerun settles the work once; a Worker that dies after the work committed leaves a Job the rerun only closes (#22)."""
+        for fixture_cls in self._requeue_fixtures():
+            with self.subTest(job_type=fixture_cls.JOB_TYPE, crash='after mark_running'):
+                fixture = self._crash_fixture(fixture_cls)
+                with self._as_worker():
+                    fixture.crash_after_mark_running()
+                    fixture.recover()
+                job = fixture.job_row()
+                self.assertEqual((job.state, job.error_code), ('queued', 'lease_expired'))
+                self.assertNotIn('job.uncertain', fixture.job_events())
+                self.assertIn('job.requeued', fixture.job_events())
+                with self._as_worker():
+                    self.assertEqual(fixture.drain(), 1)
+                self.assertEqual(fixture.job_row().state, 'succeeded')
+                fixture.assert_settled_once(fixture.observe())
+            with self.subTest(job_type=fixture_cls.JOB_TYPE, crash='after the work committed'):
+                fixture = self._crash_fixture(fixture_cls)
+                with self._as_worker():
+                    fixture.crash_before_closing_the_job()
+                    fixture.recover()
+                settled = fixture.observe()
+                fixture.assert_settled_once(settled)
+                self.assertEqual(fixture.job_row().state, 'queued')
+                with self._as_worker():
+                    self.assertEqual(fixture.drain(), 1)
+                self.assertEqual(fixture.job_row().state, 'succeeded')
+                self.assertEqual(fixture.observe(), settled)
+
+    def test_two_workers_on_one_requeued_job_write_once_under_the_row_lock(self):
+        """The first Worker holds the row lock past its lease; the second takes the Job over, waits on the lock and then finds the work done (#22)."""
+        from tests.test_job_crash_recovery import LEASE_LOST
+        for fixture_cls in self._requeue_fixtures():
+            with self.subTest(job_type=fixture_cls.JOB_TYPE):
+                fixture = self._crash_fixture(fixture_cls)
+                self.second_worker_blocked = False
+                with self._as_worker():
+                    first, second = fixture.run_two_workers(wait_for_second=self._wait_until_blocked)
+                self.assertIsNone(second)
+                self.assertIsInstance(first, RuntimeError)
+                self.assertIn(LEASE_LOST, str(first))
+                if fixture_cls.JOB_TYPE != 'library.reference_gate':
+                    # The gate reads its bytes outside any transaction; every
+                    # other handler holds its resource's lock at that point.
+                    self.assertTrue(self.second_worker_blocked, 'the second Worker waited on the lock')
+                self.assertEqual(fixture.job_row().state, 'succeeded')
+                fixture.assert_settled_once(fixture.observe())
+
+    def test_a_crashed_scale_export_is_requeued_by_the_claim(self):
+        """Only the recovery half: the frozen Job context carries no meta_mode, which scale_exports' policy requires, so the Worker role cannot run the export itself yet (#22)."""
+        from tests.test_job_crash_recovery import ScaleExportFixture
+        fixture = self._crash_fixture(ScaleExportFixture)
+        with self._as_worker():
+            claimed = jobs.claim_next('scale-crashed', job_types=('scale_export',))
+            self.assertEqual(claimed.id, fixture.job_id)
+            jobs.mark_running(claimed.context, claimed.id, 'scale-crashed')
+            fixture.expire_lease()
+            fixture.recover()
+        job = fixture.job_row()
+        self.assertTrue(job.safe_to_retry_after_crash)
+        self.assertEqual((job.state, job.error_code), ('queued', 'lease_expired'))
+        self.assertNotIn('job.uncertain', fixture.job_events())
+
+    def test_a_crashed_paid_job_is_still_left_uncertain_by_the_claim(self):
+        from tests.test_job_crash_recovery import PaidJobFixture
+        fixture = PaidJobFixture()
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[0]):
+            fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        self.workspaces.append(fixture.ctx.workspace_id)
+        for job_type in PaidJobFixture.PAID_TYPES:
+            with self.subTest(job_type=job_type):
+                self._quarantine_others(fixture.ctx.workspace_id)
+                with self._as_worker():
+                    job_id = fixture.crash(job_type, expire_lease=self._expire_lease)
+                    self._claim_recovers_expired_leases()
+                with patch('app.adapters.persistence.database.SessionLocal', self.sessions[0]):
+                    fixture.assert_uncertain(job_id)
+
+    def test_a_reclaimed_job_keeps_its_workspace_and_cannot_reach_another(self):
+        """Workspace A's expired Job is reclaimed with A's frozen context and writes only A's object; a forged payload naming B's object finds nothing under FORCE RLS (#22)."""
+        from tests.test_job_crash_recovery import ReferenceGateFixture
+        from app.platform.operations import create_operation
+        with self.owner.connect() as connection:
+            for table in ('jobs', 'reference_objects', 'operation_records', 'export_packages',
+                          'scale_exports', 'localization_items', 'localization_batches'):
+                self.assertEqual(connection.execute(text(
+                    'SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = :t'),
+                    {'t': table}).one(), (True, True), table)
+        a = self._crash_fixture(ReferenceGateFixture)
+        b = self._crash_fixture(ReferenceGateFixture)
+        self._quarantine_others(a.workspace_id())
+        with self._as_worker():
+            claimed = jobs.claim_next('crashed-in-a', job_types=('library.reference_gate',))
+            self.assertEqual(claimed.id, a.job_id)
+            jobs.mark_running(claimed.context, claimed.id, 'crashed-in-a')
+            a.expire_lease()
+            a.recover()
+            reclaimed = jobs.claim_next('reclaims-a', job_types=('library.reference_gate',))
+        self.assertEqual(reclaimed.id, a.job_id)
+        self.assertEqual(
+            (reclaimed.context.workspace_id, reclaimed.context.initiator_id,
+             reclaimed.context.authorization_epoch, reclaimed.context.executor),
+            (a.ctx.workspace_id, a.ctx.initiator_id, a.ctx.authorization_epoch, 'system:worker'))
+        with self._as_worker():
+            asyncio.run(a.runtime('reclaims-a')._library_reference_gate(reclaimed))
+        self.assertEqual(a.observe()['object'], 'released')
+        b_before = b.observe()
+        self.assertEqual((b_before['object'], b_before['operation']), ('quarantined', 'queued'))
+        # Only a forged payload could name B's object from A's Workspace.
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[0]):
+            with tenant_session(a.ctx) as session:
+                forged_operation = create_operation(session, command_type='reference_gate').id
+                forged = jobs.enqueue_in_session(
+                    session, context=a.ctx, job_type='library.reference_gate',
+                    payload={'object_id': b.object_id, 'operation_id': forged_operation},
+                    idempotency_key='reference_gate:ci-only-forged', resource_type='reference_object',
+                    resource_id=b.object_id,
+                ).id
+        with self._as_worker():
+            self.assertEqual(a.drain(), 1)
+        a.job_id = forged
+        job = a.job_row()
+        # The fence records the gate's failure family; the detail says why.
+        self.assertEqual((job.state, job.error_code), ('failed', 'reference_gate_rejected'))
+        self.assertIn('参考对象不存在', job.error_detail)
+        self.assertEqual(b.observe(), b_before, "B's object, Operation and audit are untouched")
+        with self.owner.connect() as connection:
+            self.assertEqual(connection.scalar(text(
+                'SELECT state FROM reference_objects WHERE id = :id'), {'id': b.object_id}), 'quarantined')

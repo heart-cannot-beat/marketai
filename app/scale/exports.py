@@ -276,14 +276,30 @@ def run_scale_export(
     Operation. Idempotent under Job redelivery: an export already
     ``completed_at`` is left untouched rather than re-transitioning its
     (already terminal) Operation, which would raise.
+
+    The Job is requeued after a Worker crash (#22). Everything here is one
+    transaction under the export's row lock: a crashed run committed
+    nothing, and a second run of the same Job waits for the first and then
+    finds the export completed. An Operation some other path already
+    settled without completing the export is reported, not overwritten.
     """
-    export = session.get(ScaleExportRecord, export_id)
-    if export is None or export.workspace_id != context.workspace_id:
+    export = session.scalars(
+        select(ScaleExportRecord)
+        .where(
+            ScaleExportRecord.id == export_id,
+            ScaleExportRecord.workspace_id == context.workspace_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    if export is None:
         return
     if export.completed_at is not None:
         return
 
     operation = get_operation(session, export.operation_id)
+    if OperationState(operation.state) in TERMINAL_STATES:
+        raise ExportError("export_operation_settled", f"Operation 已是 {operation.state}")
     if operation.state == OperationState.QUEUED.value:
         transition_operation(
             session,
