@@ -1786,6 +1786,7 @@
   "error-export_content_changed": "导出时有图片发生了变化，请重新导出。",
   "error-export_not_complete": "导出还没有完成，请稍后再下载。",
   "error-export_not_found": "找不到这份导出，请重新导出。",
+  "error-export_operation_settled": "这份放量导出在生成前已经结束，请重新导出。",
   "error-export_package_not_found": "找不到这个导出包。",
   "error-export_package_not_ready": "导出包还没有准备好。",
   "error-external_creative_failed": "外部素材没能处理完成。",
