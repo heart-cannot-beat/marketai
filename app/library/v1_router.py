@@ -35,7 +35,7 @@ from app.platform.action_eligibility import ActionEligibility, compute_actions
 from app.platform.blob_store_factory import build_blob_store
 from app.platform.etag import extract_if_match, set_etag
 from app.platform.http_identity import request_tenant_context
-from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
+from app.platform.pagination import InvalidCursorError, decode_offset_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 
 from . import command_impacts, connection_checks, datasources, navigation, service, templates
@@ -191,13 +191,12 @@ def _paginate(items: list, *, context: TenantContext, filters_key: str,
     start = 0
     if cursor:
         try:
-            decoded = decode_cursor(cursor, context.workspace_id, filters_key)
+            start = decode_offset_cursor(cursor, context.workspace_id, filters_key)
         except InvalidCursorError as exc:
             raise HTTPException(
                 status_code=400,
                 detail={"code": "invalid_cursor", "message": str(exc)},
             ) from exc
-        start = int(decoded[0]) if decoded else 0
     page = items[start:start + limit]
     next_cursor = None
     if start + limit < len(items):

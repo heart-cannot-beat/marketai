@@ -74,7 +74,7 @@ from app.platform.download_intents import (
 from app.platform.etag import extract_if_match, set_etag
 from app.platform.http_identity import request_tenant_context
 from app.platform.idempotency import compute_fingerprint, create_or_replay_intent
-from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
+from app.platform.pagination import InvalidCursorError, decode_offset_cursor, encode_cursor
 from app.platform.tenancy import TenantContext, new_request_id
 from app.platform.idempotency import compute_fingerprint, create_or_replay_intent
 from .selection import product_input
@@ -154,13 +154,12 @@ def _paginate(items: list, *, context: TenantContext, filters_key: str,
     start = 0
     if cursor:
         try:
-            decoded = decode_cursor(cursor, context.workspace_id, filters_key)
+            start = decode_offset_cursor(cursor, context.workspace_id, filters_key)
         except InvalidCursorError as exc:
             raise HTTPException(
                 status_code=400,
                 detail={"code": "invalid_cursor", "message": str(exc)},
             ) from exc
-        start = int(decoded[0]) if decoded else 0
     page = items[start:start + limit]
     next_cursor = None
     if start + limit < len(items):

@@ -9,14 +9,19 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from datetime import datetime
 
 __all__ = [
     "InvalidCursorError",
     "encode_cursor",
     "decode_cursor",
+    "decode_keyset_cursor",
     "decode_offset_cursor",
     "parse_limit",
 ]
+
+#: Longest row id a keyset cursor may carry (ids are ``String(64)`` columns).
+KEYSET_ID_MAX_LENGTH = 64
 
 
 class InvalidCursorError(ValueError):
@@ -80,3 +85,22 @@ def decode_offset_cursor(cursor: str, workspace_id: str, filters_hash: str) -> i
     if len(decoded) != 1 or type(decoded[0]) is not int or decoded[0] < 0:
         raise InvalidCursorError("Malformed cursor: offset is not a non-negative integer")
     return decoded[0]
+
+
+def decode_keyset_cursor(cursor: str, workspace_id: str, filters_hash: str) -> tuple[datetime, str]:
+    """Decode a cursor minted as ``encode_cursor(..., (created_at.isoformat(), id))``
+    to ``(created_at, id)``. Raises ``InvalidCursorError`` as ``decode_cursor``
+    does, and when the sort position is not exactly an ISO 8601 timestamp
+    string followed by an id string of 1 to 64 characters."""
+    decoded = decode_cursor(cursor, workspace_id, filters_hash)
+    if (
+        len(decoded) != 2
+        or not all(isinstance(value, str) for value in decoded)
+        or not 1 <= len(decoded[1]) <= KEYSET_ID_MAX_LENGTH
+    ):
+        raise InvalidCursorError("Malformed cursor: position is not a timestamp and an id")
+    try:
+        created_at = datetime.fromisoformat(decoded[0])
+    except ValueError as exc:
+        raise InvalidCursorError("Malformed cursor: position timestamp is not ISO 8601") from exc
+    return created_at, decoded[1]
