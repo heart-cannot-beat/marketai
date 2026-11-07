@@ -34,6 +34,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.generation.asset_queries import AssetBlobError, resolve_asset_blob_ref
@@ -63,9 +64,10 @@ FIXED_DATE_TIME = (2020, 1, 1, 0, 0, 0)
 FIXED_EXTERNAL_ATTR = 0o644 << 16
 
 #: Package states from which the Worker is willing to (re)start a build.
-#: Anything else (``ready``/``failed``/``expired``) is already terminal, and
-#: a redelivered Job on an already-``building`` package (this process's own
-#: earlier attempt, mid-flight) is left alone rather than raced.
+#: Anything else (``ready``/``failed``/``expired``) is already terminal.
+#: ``building`` is only ever flushed inside the build's own transaction, so
+#: no other run can observe it: the row lock below makes a second run wait
+#: for the first to commit or roll back.
 _BUILDABLE_STATES = ("pending",)
 
 
@@ -73,16 +75,40 @@ async def handle_export_package(
     session: Session,
     blob_store: BlobStore,
     package_id: str,
-) -> None:
-    """Process one ExportPackage end to end: build ZIP -> commit -> ready."""
+) -> str:
+    """Process one ExportPackage end to end: build ZIP -> commit -> ready.
+
+    Returns the state the package is in when this call leaves it: ``ready``
+    or ``failed`` from this build, or whatever terminal state an earlier
+    run already committed -- in which case nothing is written (#22).
+
+    The whole build is one transaction, taken under the package's row lock.
+    A Worker that dies mid-build leaves the package ``pending`` and its
+    Operation ``queued`` (nothing committed), so the requeued Job builds it
+    from scratch; a second run of the same Job waits on the lock and then
+    finds the package already settled.
+    """
     ctx = current_context(session)
-    package = _get_package(session, ctx, package_id)
+    package = _lock_package(session, ctx, package_id)
 
     if package.state not in _BUILDABLE_STATES:
-        return
+        return package.state
 
-    package.state = "building"
-    session.flush()
+    # Compare-and-set as well as the lock: SQLite ignores ``FOR UPDATE`` and
+    # reads outside its write transaction, so there a second run can still
+    # be holding a ``pending`` it read before the first run committed.
+    claimed = session.execute(
+        update(ExportPackageRecord)
+        .where(
+            ExportPackageRecord.id == package.id,
+            ExportPackageRecord.workspace_id == ctx.workspace_id,
+            ExportPackageRecord.state.in_(_BUILDABLE_STATES),
+        )
+        .values(state="building")
+    )
+    session.refresh(package)
+    if claimed.rowcount != 1:
+        return package.state
     _sync_operation_running(session, package)
 
     try:
@@ -92,10 +118,10 @@ async def handle_export_package(
     except (AssetBlobError, BlobStoreError) as exc:
         code = getattr(exc, "code", "asset_blob_unavailable")
         _fail_package(session, package, code=code or "asset_blob_unavailable", detail=str(exc))
-        return
+        return package.state
     except Exception as exc:  # noqa: BLE001 -- fail closed, never leave "building" stuck
         _fail_package(session, package, code="export_build_failed", detail=str(exc))
-        return
+        return package.state
 
     package.state = "ready"
     package.committed_object_key = committed_ref.committed_key
@@ -116,6 +142,27 @@ async def handle_export_package(
             actor=ctx.executor,
             result_ref=OperationResultRef(resource_type="export_package", resource_id=package.id),
         )
+    return package.state
+
+
+def _lock_package(session: Session, ctx, package_id: str) -> ExportPackageRecord:
+    """``_get_package`` under ``SELECT ... FOR UPDATE``, as committed now.
+
+    SQLite ignores the clause and serializes writers itself.
+    """
+    package = session.scalars(
+        select(ExportPackageRecord)
+        .where(
+            ExportPackageRecord.id == package_id,
+            ExportPackageRecord.workspace_id == ctx.workspace_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    if package is None:
+        # Reported exactly as the unlocked read reports it.
+        return _get_package(session, ctx, package_id)
+    return package
 
 
 async def _build_and_commit(

@@ -199,13 +199,12 @@ def submit_generation(
             resource_id=item.id,
             payload={"run_item_id": item.id, "snapshot_id": snapshot.id},
             idempotency_key=f"gen_item:{item.id}",
-        )
-        job.operation_id = operation.id
-        if "selection" in recipe:
             # This handler first checks the committed RunItem/Attempt fence:
             # pending resumes, running becomes uncertain, succeeded is a
             # no-op. Requeueing the Job never blindly repeats a paid call.
-            job.safe_to_retry_after_crash = True
+            safe_to_retry_after_crash=True if "selection" in recipe else None,
+        )
+        job.operation_id = operation.id
         job_ids_by_call_key[item.id] = job.id
 
     if preview.execution_mode == "byok":

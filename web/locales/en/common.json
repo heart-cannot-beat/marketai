@@ -1786,6 +1786,7 @@
   "error-export_content_changed": "An image changed while it was being exported. Export again.",
   "error-export_not_complete": "This export is not finished yet. Try the download again shortly.",
   "error-export_not_found": "This export could not be found. Export again.",
+  "error-export_operation_settled": "This scaling export was closed before it was built. Export again.",
   "error-export_package_not_found": "This export no longer exists.",
   "error-export_package_not_ready": "The export is not ready yet.",
   "error-external_creative_failed": "The outside image could not be processed.",

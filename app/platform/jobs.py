@@ -20,6 +20,7 @@ from .. import config
 from ..adapters.persistence.database import engine, platform_session, tenant_session
 from ..adapters.persistence.models import AssetRecord, JobRecord, WorkspaceRecord, utcnow
 from .audit import append_event
+from .job_policy import resolve_safe_to_retry_after_crash
 from .operations import (
     AGGREGATED_ADMISSION_CONTRACT_VERSION,
     NON_TERMINAL_STATES,
@@ -115,9 +116,18 @@ def enqueue_in_session(
     idempotency_key: str,
     resource_type: str = "",
     resource_id: str = "",
-    safe_to_retry_after_crash: bool = False,
+    safe_to_retry_after_crash: bool | None = None,
     max_attempts: int = 3,
 ) -> JobRecord:
+    """Persist one Job, or return the one ``idempotency_key`` already named.
+
+    ``safe_to_retry_after_crash`` comes from ``app.platform.job_policy``:
+    leave it ``None``, or pass the registered value. A type the registry
+    does not list is refused before anything is written.
+    """
+    safe_to_retry_after_crash = resolve_safe_to_retry_after_crash(
+        job_type, safe_to_retry_after_crash
+    )
     bound = current_context(session)
     if bound != context:
         raise ValueError("the job context must match the transaction's TenantContext")
