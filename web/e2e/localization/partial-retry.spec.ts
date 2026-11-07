@@ -68,15 +68,26 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(truthEvidence).toContainText(readyMarket!.market);
     await expect(truthEvidence).toContainText(retryMarket!.market);
     await expect(truthEvidence).toContainText(unavailableMarket!.market);
-    await expect(truthEvidence).toContainText('Missing/degraded detail');
-    await expect(truthEvidence).toContainText('discount');
-    // The page words the Truth failure and skip codes; the codes themselves
-    // are checked on the persisted source attempts.
+    // The page words each market's readiness and each Truth failure or skip
+    // (#17); the degraded market lists the missing fact type as it is. The
+    // codes themselves are checked on the persisted source attempts.
+    await expect(truthEvidence).toContainText(
+      en('localization', 'truth.readiness-reason.fact_missing_permitted', {
+        facts: 'discount',
+      })
+    );
+    await expect(truthEvidence).toContainText(
+      en('localization', 'truth.readiness-reason.skipped_unavailable')
+    );
     await expect(truthEvidence).toContainText(
       en('common', 'error-fact_type_not_in_mock_scenario')
     );
     await expect(truthEvidence).toContainText(
-      en('localization', 'truth.skip.on_failure_skip')
+      en('localization', 'truth.failure-line', {
+        fact: 'discount',
+        adapter: en('localization', 'truth.adapter.policy'),
+        reason: en('localization', 'truth.skip.on_failure_skip'),
+      })
     );
     const prepared = await readJson<LocalizationBatchPayload>(
       await page.request.get(`${LOCALIZATION_BFF}/batches/${batchId}`)

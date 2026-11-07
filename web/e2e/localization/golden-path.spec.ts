@@ -102,7 +102,7 @@ test('drives one ready market from Winner to exact durable Asset lineage', async
     page.getByText(en('localization', 'item.child-review'))
   ).toBeVisible();
   await expect(itemEvidence).toContainText(
-    'Active binding: localized · review pending_review · Truth freshness current · experiment ready false'
+    'Active binding: Localized version · review: pending review · Truth: current · not ready for a new experiment yet'
   );
 
   const beforeReload = itemDurabilitySnapshot(persistedItem);
