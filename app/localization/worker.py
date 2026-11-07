@@ -149,7 +149,8 @@ def _requested_evidence_tier(batch: LocalizationBatchRecord) -> str:
 def _lock_preparation_batch(
     session: Session, ctx: TenantContext, batch_id: str
 ) -> LocalizationBatchRecord | None:
-    """Serialize preparation completions before deriving their projection."""
+    """Serialize writers of the Batch projection: preparation completions
+    and the terminal fold (#22) re-read it under this lock."""
 
     return session.scalar(
         select(LocalizationBatchRecord)
@@ -518,6 +519,27 @@ def _load_item(session: Session, ctx: TenantContext, item_id: str, batch_id: str
             LocalizationItemRecord.id == item_id,
             LocalizationItemRecord.batch_id == batch_id,
         )
+    )
+
+
+def _lock_item(session: Session, ctx: TenantContext, item_id: str, batch_id: str) -> LocalizationItemRecord | None:
+    """``_load_item`` under ``SELECT ... FOR UPDATE``, as committed now.
+
+    The local pipeline steps (deterministic QC, finalize) are requeued after
+    a Worker crash (#22). Taking the Item's row lock before their
+    ``state == "running"`` guard makes two runs of one Job serialize, and
+    the second sees what the first committed. SQLite ignores the clause and
+    serializes writers itself.
+    """
+    return session.scalar(
+        select(LocalizationItemRecord)
+        .where(
+            LocalizationItemRecord.workspace_id == ctx.workspace_id,
+            LocalizationItemRecord.id == item_id,
+            LocalizationItemRecord.batch_id == batch_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
 
 
@@ -1286,7 +1308,7 @@ def _isolated_recovery_attempt(
     the recovery path checks what actually matters instead: a completed
     Attempt that still holds an unpublished output.
     """
-    item = _load_item(session, ctx, item_id, batch_id)
+    item = _lock_item(session, ctx, item_id, batch_id)
     if item is None:
         return None
     attempt = _load_attempt(session, ctx, attempt_id)
@@ -1326,7 +1348,7 @@ def handle_run_deterministic_qc(
         )
         return
 
-    item = _load_item(session, ctx, item_id, batch_id)
+    item = _lock_item(session, ctx, item_id, batch_id)
     if item is None or item.state != "running":
         return
     attempt = _load_attempt(session, ctx, attempt_id)
@@ -1477,8 +1499,12 @@ def handle_finalize_item(session: Session, ctx: TenantContext, *, batch_id: str,
     success transition. The child starts with no human QualityReview and no
     Winner verdict. All publication evidence is written through the caller's
     transaction so a failed binding or Item transition rolls it all back.
+
+    The Item's row lock is taken before its ``running`` guard, so a rerun
+    after a crash -- or a second run of the same Job -- finds the Item
+    already ``succeeded`` and publishes nothing (#22).
     """
-    item = _load_item(session, ctx, item_id, batch_id)
+    item = _lock_item(session, ctx, item_id, batch_id)
     if item is None or item.state != "running":
         return
     attempt = _load_attempt(session, ctx, attempt_id)
@@ -1553,8 +1579,10 @@ def handle_fold_batch(session: Session, ctx: TenantContext, *, batch_id: str) ->
     """Derive the Batch's terminal outcome once every Item is terminal
     (spec §2F); a best-effort no-op otherwise or on a lost CAS race -- the
     next Item completion (or another `fold_batch` redelivery) recomputes
-    the same projection."""
-    batch = _load_batch(session, ctx, batch_id)
+    the same projection. The Batch row lock is taken before the terminal
+    check, so two folds of one Batch serialize and the second writes
+    nothing (#22)."""
+    batch = _lock_preparation_batch(session, ctx, batch_id)
     if batch is None or batch.phase in _TERMINAL_BATCH_PHASES:
         return
 

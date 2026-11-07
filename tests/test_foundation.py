@@ -79,6 +79,7 @@ from app.adapters.meta.fake_write import FakeMetaWriteAdapter  # noqa: E402
 from app.pipeline import manager  # noqa: E402
 from app.platform import jobs  # noqa: E402
 from app.platform.audit import append_event  # noqa: E402
+from app.platform.job_policy import CrashPolicy, SideEffect  # noqa: E402
 from app.schemas import (  # noqa: E402
     AngleSchema,
     Combo,
@@ -91,6 +92,7 @@ from app.schemas import (  # noqa: E402
 )
 from app.worker_runtime import WorkerRuntime  # noqa: E402
 from app.platform.tenancy import TenantContext  # noqa: E402
+from tests.support.job_policies import probe_job_types  # noqa: E402
 
 
 TEST_CONTEXT = TenantContext(
@@ -727,7 +729,7 @@ class FoundationTests(unittest.TestCase):
         self.assertIsNone(store.get_product(TEST_CONTEXT, product.id))
         self.assertEqual(store.get_product(other, product.id).name, "Other tenant")
 
-        with tenant_session(other) as session:
+        with probe_job_types("tenant_boundary_probe"), tenant_session(other) as session:
             foreign_job = jobs.enqueue_in_session(
                 session,
                 context=other,
@@ -762,7 +764,7 @@ class FoundationTests(unittest.TestCase):
             authorization_epoch=0,
         )
         store.save_product(context, Product(id="prod_stale_dispatch", name="Stale job"))
-        with tenant_session(context) as session:
+        with probe_job_types("stale_dispatch_probe"), tenant_session(context) as session:
             job = jobs.enqueue_in_session(
                 session,
                 context=context,
@@ -978,7 +980,9 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(projection["context"]["market"], "KR")
 
     def test_expired_paid_running_job_becomes_uncertain(self) -> None:
-        with tenant_session(TEST_CONTEXT) as session:
+        with probe_job_types(
+            "paid-test", side_effect=SideEffect.PAID, crash=CrashPolicy.UNCERTAIN,
+        ), tenant_session(TEST_CONTEXT) as session:
             job = jobs.enqueue_in_session(
                 session,
                 context=TEST_CONTEXT,
