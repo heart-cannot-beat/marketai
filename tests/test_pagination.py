@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import datetime, timezone
 
 import pytest
 
 from app.platform.pagination import (
     InvalidCursorError,
     decode_cursor,
+    decode_keyset_cursor,
     decode_offset_cursor,
     encode_cursor,
     parse_limit,
@@ -113,3 +115,46 @@ def test_offset_cursor_still_checks_workspace_and_filters():
         decode_offset_cursor(cursor, "ws_b", "fh")
     with pytest.raises(InvalidCursorError):
         decode_offset_cursor(cursor, "ws_a", "other")
+
+
+_STAMP = "2026-01-02T03:04:05.123456+00:00"
+
+
+def test_keyset_cursor_round_trip():
+    cursor = encode_cursor("ws", "fh", (_STAMP, "ver_1"))
+    assert decode_keyset_cursor(cursor, "ws", "fh") == (
+        datetime(2026, 1, 2, 3, 4, 5, 123456, tzinfo=timezone.utc), "ver_1",
+    )
+
+
+def test_keyset_cursor_keeps_a_naive_timestamp_naive():
+    cursor = encode_cursor("ws", "fh", ("2026-01-02T03:04:05", "v" * 64))
+    assert decode_keyset_cursor(cursor, "ws", "fh") == (datetime(2026, 1, 2, 3, 4, 5), "v" * 64)
+
+
+@pytest.mark.parametrize("sort", [
+    (),
+    (_STAMP,),
+    (_STAMP, "ver_1", "extra"),
+    ("yesterday", "ver_1"),
+    ("", "ver_1"),
+    (1767225600, "ver_1"),
+    (None, "ver_1"),
+    (_STAMP, 5),
+    (_STAMP, None),
+    (_STAMP, True),
+    (_STAMP, ""),
+    (_STAMP, "v" * 65),
+    ("ver_1", _STAMP),
+])
+def test_keyset_cursor_not_an_iso_time_and_an_id(sort):
+    with pytest.raises(InvalidCursorError):
+        decode_keyset_cursor(encode_cursor("ws", "fh", sort), "ws", "fh")
+
+
+def test_keyset_cursor_still_checks_workspace_and_filters():
+    cursor = encode_cursor("ws_a", "fh", (_STAMP, "ver_1"))
+    with pytest.raises(InvalidCursorError):
+        decode_keyset_cursor(cursor, "ws_b", "fh")
+    with pytest.raises(InvalidCursorError):
+        decode_keyset_cursor(cursor, "ws_a", "other")

@@ -22,8 +22,9 @@ asset listing (``app.generation.run_queries.list_assets`` -- still present,
 now unused by any route) with a typed ``AssetGalleryPage``: a database
 keyset cursor over ``(created_at DESC, id DESC)`` bound to Workspace plus the
 canonical filter set (reusing ``app.platform.pagination.encode_cursor``/
-``decode_cursor``, the same opaque-cursor primitive every other Generation
-v1 list route uses), server-side filters, and Workspace-scoped facets.
+``decode_keyset_cursor``, the same opaque-cursor primitive every other
+Generation v1 list route uses), server-side filters, and Workspace-scoped
+facets.
 
 ``effective_review_value`` now uses Task 5's supersession-aware head-review
 rule (``app.generation.review.project_effective_review``, spec §0.3): the
@@ -52,7 +53,6 @@ authoritative ``contextual_verdict_projections`` projection for that exact
 """
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import and_, case, func, join, or_, select
@@ -79,7 +79,7 @@ from app.generation.run_queries import (
 from app.platform.action_eligibility import ActionEligibility, compute_actions
 from app.platform.blob_store import CommittedBlobRef
 from app.platform.denial_audit import check_and_record_denial
-from app.platform.pagination import decode_cursor, encode_cursor
+from app.platform.pagination import decode_keyset_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 
 __all__ = [
@@ -430,8 +430,7 @@ def list_asset_versions(
         # InvalidCursorError propagates to the caller (app.generation.v1_router
         # catches it exactly like every other Generation v1 list route's
         # ``_paginate`` cursor and turns it into ``400 invalid_cursor``).
-        last_created_at_iso, last_id = decode_cursor(cursor, ctx.workspace_id, filters_key)
-        last_created_at = datetime.fromisoformat(last_created_at_iso)
+        last_created_at, last_id = decode_keyset_cursor(cursor, ctx.workspace_id, filters_key)
         query = query.where(
             or_(
                 AssetVersionRecord.created_at < last_created_at,

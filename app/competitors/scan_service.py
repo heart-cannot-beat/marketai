@@ -66,7 +66,7 @@ from app.market_data.pricing import MarketDataPricingError, price_table
 from app.platform import audit
 from app.platform.jobs import enqueue_in_session
 from app.platform.operations import OperationResultRef, OperationState, create_operation
-from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
+from app.platform.pagination import InvalidCursorError, decode_offset_cursor, encode_cursor
 from app.platform.tenancy import UI_LANGUAGES, TenantContext
 from app.providers.llm_chat import LlmChatError, reserve_llm_chat
 from app.providers.llm_registry import OPENAI_PROVIDER
@@ -1025,8 +1025,8 @@ def list_ads(
     start = 0
     if cursor:
         try:
-            start = int(decode_cursor(cursor, ctx.workspace_id, filters_key)[0])
-        except (InvalidCursorError, IndexError, TypeError, ValueError) as exc:
+            start = decode_offset_cursor(cursor, ctx.workspace_id, filters_key)
+        except InvalidCursorError as exc:
             raise CompetitorProblem(400, "invalid_cursor", str(exc)) from exc
     with tenant_session(ctx) as session:
         record = _load(session, ctx, scan_id)
