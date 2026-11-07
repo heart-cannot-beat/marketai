@@ -1038,15 +1038,46 @@ def import_manual_facts(
     idempotency_key: str = Depends(_idempotency_key),
     command_identity: str | None = Depends(_command_identity),
 ):
+    # Queue an import of a finalized upload into a new Manual Fact Set draft
+    # (#397). A replayed Idempotency-Key returns the Operation it created,
+    # wherever that has got to, when the data source, the upload and the
+    # initiator are all the same; anything else under that key is
+    # ``409 idempotency_key_reused``. An upload another key already imports is
+    # ``409 upload_intent_consumed`` unless that import failed or was
+    # cancelled. (A docstring here would become the OpenAPI description.)
+    from sqlalchemy import select
+
     from ..adapters.persistence.database import tenant_session
+    from ..adapters.persistence.models import JobRecord
     from ..platform.jobs import enqueue_in_session
-    from ..platform.operations import create_operation
+    from ..platform.operations import create_operation, get_operation
 
     if body.purpose != "library_manual_fact_import":
         raise HTTPException(
             status_code=422,
             detail={"code": "invalid_purpose", "message": "purpose 必须是 library_manual_fact_import"},
         )
+
+    job_type = "library.manual_fact_import"
+    job_key = f"manual_fact_import:{idempotency_key}"
+    with tenant_session(context) as session:
+        replayed = session.scalar(
+            select(JobRecord).where(
+                JobRecord.workspace_id == context.workspace_id,
+                JobRecord.idempotency_key == job_key,
+            )
+        )
+        if replayed is not None:
+            if (
+                replayed.resource_id != data_source_entry_id
+                or replayed.payload_json.get("upload_intent_id") != body.upload_intent_id
+                or (replayed.initiator_id or "") != (context.initiator_id or "")
+            ):
+                raise service.IdempotencyConflict(
+                    "该 Idempotency-Key 已用于另一次手工事实导入"
+                )
+            operation = get_operation(session, str(replayed.payload_json["operation_id"]))
+            return {"operation_id": operation.id, "state": operation.state, "command_type": "manual_fact_import"}
 
     entry = service.get_entry(context, data_source_entry_id)
     if entry.get("entry_type") != "data_source":
@@ -1055,6 +1086,16 @@ def import_manual_facts(
         raise HTTPException(status_code=409, detail={"code": "entry_archived", "message": "数据源已归档"})
 
     with tenant_session(context) as session:
+        consumed = session.scalar(
+            select(JobRecord.id).where(
+                JobRecord.workspace_id == context.workspace_id,
+                JobRecord.type == job_type,
+                JobRecord.payload_json["upload_intent_id"].as_string() == body.upload_intent_id,
+                JobRecord.state.not_in(("failed", "cancelled")),
+            ).limit(1)
+        )
+        if consumed is not None:
+            raise service.LibraryConflict("该上传已被另一次导入使用", code="upload_intent_consumed")
         operation = create_operation(
             session,
             command_type="manual_fact_import",
@@ -1063,15 +1104,18 @@ def import_manual_facts(
         enqueue_in_session(
             session,
             context=context,
-            job_type="library.manual_fact_import",
+            job_type=job_type,
             payload={
                 "data_source_entry_id": data_source_entry_id,
                 "operation_id": operation.id,
                 "upload_intent_id": body.upload_intent_id,
             },
-            idempotency_key=f"manual_fact_import:{idempotency_key}",
+            idempotency_key=job_key,
             resource_type="data_source",
             resource_id=data_source_entry_id,
+            # No external side effect, and the draft commits with the
+            # Operation: a rerun after a crash finds both or neither.
+            safe_to_retry_after_crash=True,
             max_attempts=1,
         )
     return {"operation_id": operation.id, "state": "queued", "command_type": "manual_fact_import"}

@@ -43,6 +43,7 @@ from .platform.blob_store_factory import build_blob_store
 from .platform.blob_store import BlobRef, BlobStoreError
 from .platform.operations import (
     TERMINAL_STATES,
+    OperationRecord,
     OperationResultRef,
     OperationState,
     get_operation,
@@ -75,6 +76,22 @@ _LOCALIZATION_JOB_TYPES = frozenset(
         "localization.fold_batch",
     }
 )
+
+
+def _locked_operation(session, context: TenantContext, operation_id: str) -> OperationRecord:
+    """Read the Operation under ``SELECT ... FOR UPDATE``, as committed now.
+
+    SQLite ignores the clause and serializes writers itself.
+    """
+    return session.scalars(
+        select(OperationRecord)
+        .where(
+            OperationRecord.id == operation_id,
+            OperationRecord.workspace_id == context.workspace_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one()
 
 
 class WorkerRuntime:
@@ -1227,10 +1244,19 @@ class WorkerRuntime:
         jobs.succeed(job.context, job.id, self.owner)
 
     async def _library_manual_fact_import(self, job: jobs.ClaimedJob) -> None:
+        """Import a finalized upload into a new Manual Fact Set draft (#397).
+
+        The draft and the Operation's ``succeeded`` commit in one transaction
+        under the Operation's row lock, so a crash leaves both or neither and
+        the Job is safe to requeue: a rerun finds the Operation settled and
+        only closes the Job, or imports from scratch. Two runs of one Job
+        (a lease expired mid-import) serialize on the lock, and the second
+        finds the Operation no longer ``running`` and writes nothing.
+        """
         from .library.manual_fact_import import (
             ManualFactImportError,
-            process_manual_fact_import,
             read_manual_fact_payload,
+            write_manual_fact_set,
         )
         from .platform.blob_store import CommittedBlobRef
 
@@ -1246,10 +1272,15 @@ class WorkerRuntime:
         jobs.mark_running(job.context, job.id, self.owner)
         with tenant_session(job.context) as session:
             operation = get_operation(session, operation_id)
+            settled = operation.state if OperationState(operation.state) in TERMINAL_STATES else None
             if operation.state == OperationState.QUEUED.value:
                 transition_operation(
                     session, operation_id, OperationState.RUNNING, reason=None, actor=job.context.executor
                 )
+        if settled is not None:
+            self._close_settled_fact_import(job, settled)
+            return
+        heartbeat = asyncio.create_task(self._heartbeat(job.context, job.id))
         try:
             with tenant_session(job.context) as session:
                 intent = upload_intents.get_upload_intent(session, upload_intent_id)
@@ -1284,32 +1315,70 @@ class WorkerRuntime:
                 self.blob_store,
                 committed_ref,
             )
-            result = process_manual_fact_import(
-                job.context,
-                data_source_entry_id=data_source_entry_id,
-                upload_intent_id=upload_intent_id,
-                content_payload=content_payload,
-            )
             with tenant_session(job.context) as session:
-                transition_operation(
-                    session, operation_id, OperationState.SUCCEEDED,
-                    reason=None, actor=job.context.executor,
-                    result_ref=OperationResultRef(
-                        resource_type="manual_fact_set_draft",
-                        resource_id=result.get("entry_id", ""),
-                    ),
-                )
-            jobs.succeed(job.context, job.id, self.owner)
+                state = _locked_operation(session, job.context, operation_id).state
+                if state != OperationState.RUNNING.value:
+                    settled = state
+                else:
+                    fact_set = write_manual_fact_set(
+                        session,
+                        job.context,
+                        data_source_entry_id=data_source_entry_id,
+                        upload_intent_id=upload_intent_id,
+                        content_payload=content_payload,
+                    )
+                    transition_operation(
+                        session, operation_id, OperationState.SUCCEEDED,
+                        reason=None, actor=job.context.executor,
+                        result_ref=OperationResultRef(
+                            resource_type="manual_fact_set_draft",
+                            resource_id=fact_set.id,
+                        ),
+                    )
         except Exception as exc:
-            with tenant_session(job.context) as session:
-                transition_operation(
-                    session, operation_id, OperationState.FAILED,
-                    reason=str(exc)[:200], actor=job.context.executor,
+            # A file the user has to fix is an expected outcome; anything
+            # else is a fault worth a line in the log.
+            if not isinstance(exc, ManualFactImportError):
+                logger.warning(
+                    "manual fact import could not run: operation=%s data_source=%s error=%s",
+                    operation_id, data_source_entry_id, type(exc).__name__,
                 )
+            with tenant_session(job.context) as session:
+                operation = _locked_operation(session, job.context, operation_id)
+                if OperationState(operation.state) not in TERMINAL_STATES:
+                    transition_operation(
+                        session, operation_id, OperationState.FAILED,
+                        reason="manual_fact_import_failed", actor=job.context.executor,
+                    )
             jobs.fail(
                 job.context, job.id, self.owner,
                 code="manual_fact_import_failed", detail=str(exc), retryable=False,
             )
+            return
+        finally:
+            heartbeat.cancel()
+            try:
+                await heartbeat
+            except asyncio.CancelledError:
+                pass
+        if settled is not None:
+            self._close_settled_fact_import(job, settled)
+            return
+        jobs.succeed(job.context, job.id, self.owner)
+
+    def _close_settled_fact_import(self, job: jobs.ClaimedJob, state: str) -> None:
+        """Close the Job the way another run already settled its Operation.
+
+        A Job left ``succeeded`` beside a failed import would keep its upload
+        from being imported again (``upload_intent_consumed``).
+        """
+        if state == OperationState.SUCCEEDED.value:
+            jobs.succeed(job.context, job.id, self.owner)
+            return
+        jobs.fail(
+            job.context, job.id, self.owner,
+            code="manual_fact_import_failed", detail=f"Operation 已是 {state}", retryable=False,
+        )
 
     async def _library_reference_gate(self, job: jobs.ClaimedJob) -> None:
         """Run reference upload gate checks on a quarantined object.
