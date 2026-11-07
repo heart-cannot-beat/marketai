@@ -51,6 +51,7 @@ import {
   confirmLocalizationBatchThroughUi,
   type CanonicalSnapshot,
 } from './domain-helpers';
+import { en } from '../support/copy';
 
 // ---------------------------------------------------------------------------
 // Test-wide state, populated across steps
@@ -836,9 +837,9 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
         })
       ),
     });
-    await expect(page.getByText(/facts imported successfully/i)).toBeVisible({
-      timeout: 120_000,
-    });
+    await expect(
+      page.getByText(en('library', 'data-source-ops.import-complete'))
+    ).toBeVisible({ timeout: 120_000 });
   });
 
   // =========================================================================

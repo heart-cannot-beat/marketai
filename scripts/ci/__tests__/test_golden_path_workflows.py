@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -193,8 +194,20 @@ def test_deterministic_journey_imports_manual_facts_through_upload_contract() ->
         REPO / "web" / "e2e" / "golden-path" / "full-journey.spec.ts"
     ).read_text(encoding="utf-8")
 
-    assert "getByLabel(/select fact file to import/i).setInputFiles" in journey
-    assert "facts imported successfully" in journey
+    choose_file = journey.index(
+        "getByLabel(/select fact file to import/i).setInputFiles"
+    )
+    # The journey waits for the panel's success sentence, read from the en
+    # locale: `web/__tests__/locales/e2e-copy.spec.ts` keeps e2e text on
+    # locale copy, and #14 reworded the sentence.
+    success = "en('library', 'data-source-ops.import-complete')"
+    assert journey.index(success) > choose_file
+    library = json.loads(
+        (REPO / "web" / "locales" / "en" / "library.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert library["data-source-ops"]["import-complete"]
     assert "/manual-fact-imports`" not in journey
 
 
