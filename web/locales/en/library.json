@@ -487,14 +487,17 @@
     "credential-status": "Status: {{status}}",
     "bind": "Bind",
     "binding": "Binding…",
-    "import-description": "Import facts from a CSV or JSON file into this fact set.",
+    "import-description": "Import facts from a CSV or JSON file. Each import creates a new fact set draft.",
     "select-file": "Select file",
     "file-input": "Select fact file to import",
     "importing": "Reading file…",
     "processing": "Processing facts…",
-    "import-complete": "{{count}} facts imported successfully.",
-    "import-row-errors": "{{count}} row(s) had errors:",
-    "row-error": "Row {{row}}, field \"{{field}}\": {{message}}"
+    "import-complete": "Facts imported into a new fact set draft. Review it there before publishing.",
+    "import-uncertain": "We could not confirm whether the import finished. Check the library for a new fact set draft before importing again.",
+    "import-not-confirmed": "We could not confirm that the import started. Check the library for a new fact set draft, then try again.",
+    "upload-failed": "The file could not be uploaded. Try again.",
+    "upload-rejected": "The file did not pass the upload checks. Use a CSV or JSON file of up to 10 MB.",
+    "open-fact-set": "Open fact set"
   },
   "contextual-create": {
     "new": "New {{type}}",
