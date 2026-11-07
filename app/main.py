@@ -66,7 +66,7 @@ from .platform.download_intents import (
 )
 from .platform.http_identity import request_tenant_context
 from .platform.audit import record_event
-from .platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
+from .platform.pagination import InvalidCursorError, decode_offset_cursor, encode_cursor
 from .platform.idempotency import (
     IdempotencyKeyReusedError,
     compute_fingerprint,
@@ -995,10 +995,9 @@ def list_audit_events(
     start = 0
     if cursor:
         try:
-            decoded = decode_cursor(cursor, tenant.workspace_id, filters_key)
+            start = decode_offset_cursor(cursor, tenant.workspace_id, filters_key)
         except InvalidCursorError as exc:
             raise HTTPException(400, {"code": "invalid_cursor", "message": str(exc)}) from exc
-        start = int(decoded[0]) if decoded else 0
     page = items[start:start + limit]
     next_cursor = None
     if start + limit < len(items):

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from app.adapters.persistence.database import tenant_session
 from app.platform.etag import extract_if_match, set_etag
 from app.platform.http_identity import request_tenant_context
-from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
+from app.platform.pagination import InvalidCursorError, decode_offset_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 
 from . import batch as batch_module
@@ -63,11 +63,10 @@ def _page(items: list, ctx: TenantContext, filters_key: str,
     start = 0
     if cursor:
         try:
-            decoded = decode_cursor(cursor, ctx.workspace_id, filters_key)
+            start = decode_offset_cursor(cursor, ctx.workspace_id, filters_key)
         except InvalidCursorError as exc:
             from fastapi import HTTPException
             raise HTTPException(400, {"code": "invalid_cursor", "message": str(exc)}) from exc
-        start = int(decoded[0]) if decoded else 0
     page = items[start:start + limit]
     next_cursor = None
     if start + limit < len(items):
