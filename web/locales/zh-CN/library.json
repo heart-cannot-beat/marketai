@@ -237,7 +237,6 @@
       "entry_archived": "这个条目已归档",
       "no_draft": "这个条目没有草稿",
       "owner_required": "只有工作区 Owner 可以执行这个操作",
-      "entry_type_not_bindable": "只有产品和人物条目可以绑定参考素材",
       "invalid_state": "这个版本已撤回",
       "entry_type_mismatch": "只有产品条目可以克隆"
     },

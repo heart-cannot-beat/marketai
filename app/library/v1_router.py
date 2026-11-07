@@ -45,6 +45,7 @@ from .contracts import (
     LIFECYCLE_ACTIVE,
     VERSION_EFFECTIVE,
     VERSION_SUPERSEDED,
+    can_publish,
     iter_entry_types,
 )
 from .response_models import (
@@ -130,17 +131,24 @@ def _entry_allowed_actions(entry: dict, context: TenantContext) -> list[ActionEl
     draft = entry.get("draft")
     has_draft = draft is not None
     is_owner = context.role in _OWNER_ROLES
-    bindable = entry.get("entry_type") in _BINDABLE_ENTRY_TYPES
+    entry_type = entry.get("entry_type")
+    # The same rule ``service.publish`` enforces, so a Member is not
+    # offered a Publish the command then refuses.
+    may_publish = can_publish(entry_type, context.role)
     checks = {
         "save_draft": _check(active and has_draft, "entry_archived" if not active else "no_draft"),
         "validate_draft": _check(active and has_draft, "entry_archived" if not active else "no_draft"),
-        "publish": _check(active and has_draft, "entry_archived" if not active else "no_draft"),
-        "archive": _check(active and is_owner, "entry_archived" if not active else "owner_required"),
-        "bind_reference": _check(
-            active and has_draft and bindable,
-            "entry_archived" if not active else ("no_draft" if not has_draft else "entry_type_not_bindable"),
+        "publish": _check(
+            active and may_publish and has_draft,
+            "entry_archived" if not active else ("owner_required" if not may_publish else "no_draft"),
         ),
+        "archive": _check(active and is_owner, "entry_archived" if not active else "owner_required"),
+        "bind_reference": _check(active and has_draft, "entry_archived" if not active else "no_draft"),
     }
+    if entry_type not in _BINDABLE_ENTRY_TYPES:
+        # Only Products and People take reference bindings; other types never
+        # list the action rather than listing it as always refused.
+        del checks["bind_reference"]
     requirements: dict[str, list[str]] = {
         "publish": ["impact_confirmation"],
         "archive": ["impact_confirmation"],
