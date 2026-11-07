@@ -509,7 +509,13 @@ def _make_matching_delivery_target(ctx: TenantContext, chain: dict, tag: str, me
     request = DeliveryTargetRequest(
         meta_connection_id=upstream["meta_connection_id"],
         ad_account_id=upstream["ad_account_id"],
-        scenario_scope_key="__no_scenario__",
+        # ck_sdt_scenario_biconditional: a controlled_mock target is scoped to
+        # its ScenarioVersion, every other mode to the reserved marker.
+        scenario_scope_key=(
+            upstream["scenario_version_id"]
+            if meta_mode == "controlled_mock"
+            else "__no_scenario__"
+        ),
         campaign_remote_id=f"camp_{tag}",
         adset_remote_id=f"adset_{tag}",
         ad_remote_id=f"ad_{tag}",

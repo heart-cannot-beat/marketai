@@ -5,6 +5,7 @@ import {
   EXPORT_PACKAGE_ID,
   VERSION_ID,
 } from './fixtures';
+import { en } from '../support/copy';
 
 /**
  * Export flow against the async 202 acknowledgement, recoverable package
@@ -38,8 +39,9 @@ test.describe('Export flow', () => {
     await expect(dialog.getByTestId('export-package-state')).toHaveText(
       'Ready'
     );
+    // EXPORT_MANIFEST_READY has two entries with one payload hash.
     await expect(dialog.getByTestId('export-dedup')).toContainText(
-      '有 1 张内容重复'
+      en('assets', 'manifest-deduplicated', { dedupCount: 1, uniqueCount: 1 })
     );
     await expect(dialog.getByTestId('export-download')).toHaveText(
       'Download ZIP'

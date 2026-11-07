@@ -15,6 +15,7 @@ import type {
   LocalizationBatchPayload,
   LocalizationItemPayload,
 } from './fixtures';
+import { en } from '../support/copy';
 
 interface MatrixEvidence {
   batchId: string;
@@ -67,18 +68,43 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(truthEvidence).toContainText(readyMarket!.market);
     await expect(truthEvidence).toContainText(retryMarket!.market);
     await expect(truthEvidence).toContainText(unavailableMarket!.market);
-    // The degraded market lists the missing fact type as it is.
+    // The page words each market's readiness and each Truth failure or skip
+    // (#17); the degraded market lists the missing fact type as it is. The
+    // codes themselves are checked on the persisted source attempts.
     await expect(truthEvidence).toContainText(
-      'Some facts could not be resolved; the market continues without them. Missing: discount.'
+      en('localization', 'truth.readiness-reason.fact_missing_permitted', {
+        facts: 'discount',
+      })
     );
     await expect(truthEvidence).toContainText(
-      'Truth says the product is not available in this market.'
+      en('localization', 'truth.readiness-reason.skipped_unavailable')
     );
     await expect(truthEvidence).toContainText(
-      'The mock scenario has no value for this fact.'
+      en('common', 'error-fact_type_not_in_mock_scenario')
     );
     await expect(truthEvidence).toContainText(
-      'discount via fallback rule: no source resolved it (policy: skip)'
+      en('localization', 'truth.failure-line', {
+        fact: 'discount',
+        adapter: en('localization', 'truth.adapter.policy'),
+        reason: en('localization', 'truth.skip.on_failure_skip'),
+      })
+    );
+    const prepared = await readJson<LocalizationBatchPayload>(
+      await page.request.get(`${LOCALIZATION_BFF}/batches/${batchId}`)
+    );
+    expect(
+      prepared.markets.flatMap((market) => market.source_attempts ?? [])
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fact_type: 'discount',
+          failure_code: 'fact_type_not_in_mock_scenario',
+        }),
+        expect.objectContaining({
+          fact_type: 'discount',
+          skip_code: 'on_failure_skip',
+        }),
+      ])
     );
     await expect(
       truthEvidence.getByText('unavailable', { exact: true })
@@ -168,7 +194,17 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(
       retryEvidence.getByText('Locked-copy / blocking QC failure')
     ).toBeVisible();
-    await expect(retryEvidence).toContainText('forbidden_term');
+    await expect(retryEvidence).toContainText(
+      en('localization', 'item.qc-kind.forbidden_term')
+    );
+    const retryDetail = await readJson<LocalizationItemPayload>(
+      await page.request.get(
+        `${LOCALIZATION_BFF}/batches/${batchId}/items/${retryItem.id}`
+      )
+    );
+    expect(
+      retryDetail.attempts.flatMap((attempt) => attempt.qc)
+    ).toContainEqual(expect.objectContaining({ check_kind: 'forbidden_term' }));
   });
 
   test('retries only the failed item to the bound and preserves both siblings exactly', async ({
@@ -250,8 +286,13 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(
       itemEvidence.getByRole('button', { name: 'Retry item' })
     ).toBeDisabled();
+    expect(
+      exhausted!.allowed_actions?.find((action) => action.action === 'retry')
+    ).toMatchObject({ allowed: false, reason_code: 'attempts_exhausted' });
     await expect(itemEvidence).toContainText(
-      'Retry unavailable: all allowed attempts have been used'
+      en('localization', 'item.retry-unavailable', {
+        reason: en('localization', 'action-reason.attempts_exhausted'),
+      })
     );
 
     expect(

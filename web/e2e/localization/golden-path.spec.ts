@@ -14,6 +14,7 @@ import type {
   LocalizationBatchPayload,
   LocalizationItemPayload,
 } from './fixtures';
+import { en } from '../support/copy';
 
 test('drives one ready market from Winner to exact durable Asset lineage', async ({
   page,
@@ -98,9 +99,7 @@ test('drives one ready market from Winner to exact durable Asset lineage', async
     )
   ).toBeVisible();
   await expect(
-    page.getByText(
-      /source approval and business evidence status were not inherited/i
-    )
+    page.getByText(en('localization', 'item.child-review'))
   ).toBeVisible();
   await expect(itemEvidence).toContainText(
     'Active binding: Localized version · review: pending review · Truth: current · not ready for a new experiment yet'

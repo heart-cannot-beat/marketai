@@ -272,6 +272,82 @@ def _publish_policy_version(session, *, tag: str) -> str:
     return policy.id
 
 
+WORKER_WAIT_SECONDS = 90
+
+
+def _approve_binding_the_worker_leaves(ctx, fixture_binding_id: str) -> str:
+    """Approve the binding that is active once the stack's Worker is done.
+
+    ``build_ready_winner_and_target`` confirms a Localization batch, which
+    enqueues the item's Jobs, and then publishes and approves a binding
+    itself -- the Worker's part in pytest, where no Worker runs. On a Compose
+    stack the real Worker runs those Jobs too: it publishes the localized
+    child, whose pending-review binding replaces the fixture's, and the Winner
+    then fails ``binding_not_ready`` (#19). So wait until every Job of the
+    batch and its items has finished, ``localization.fold_batch`` included,
+    and give the binding active then the review the fixture gave its own.
+    Returns that binding's id.
+    """
+    import time
+
+    from sqlalchemy import select
+
+    from app.adapters.persistence.database import tenant_session
+    from app.adapters.persistence.models import (
+        JobRecord,
+        LocalizationItemRecord,
+        MarketAssetBindingRecord,
+    )
+
+    with tenant_session(ctx) as session:
+        fixture_binding = session.get(MarketAssetBindingRecord, fixture_binding_id)
+        batch_id = fixture_binding.batch_id
+        binding_key = {
+            "source_asset_version_id": fixture_binding.source_asset_version_id,
+            "target_market": fixture_binding.target_market,
+            "offer_version_id": fixture_binding.offer_version_id,
+        }
+
+    deadline = time.monotonic() + WORKER_WAIT_SECONDS
+    while True:
+        with tenant_session(ctx) as session:
+            resource_ids = [batch_id, *session.scalars(
+                select(LocalizationItemRecord.id).where(
+                    LocalizationItemRecord.workspace_id == ctx.workspace_id,
+                    LocalizationItemRecord.batch_id == batch_id,
+                )
+            )]
+            jobs = session.execute(
+                select(JobRecord.type, JobRecord.finished_at).where(
+                    JobRecord.workspace_id == ctx.workspace_id,
+                    JobRecord.resource_id.in_(resource_ids),
+                )
+            ).all()
+        folded = any(
+            job.type == "localization.fold_batch" and job.finished_at is not None
+            for job in jobs
+        )
+        if folded and all(job.finished_at is not None for job in jobs):
+            break
+        if time.monotonic() > deadline:
+            raise RuntimeError(
+                f"Localization batch {batch_id} still has unfinished Jobs after "
+                f"{WORKER_WAIT_SECONDS}s; the Scale seed needs the stack's Worker running"
+            )
+        time.sleep(0.5)
+
+    with tenant_session(ctx) as session:
+        binding = session.scalars(
+            select(MarketAssetBindingRecord).filter_by(
+                workspace_id=ctx.workspace_id, active=True, **binding_key,
+            )
+        ).one()
+        binding.review_state = "approved"
+        binding.ready_for_experiment = True
+        session.flush()
+        return binding.id
+
+
 def _seed_chain(environment: dict[str, str], *, target_meta_mode: str, fault_config: dict | None) -> dict:
     from app.adapters.persistence.database import tenant_session
     from app.meta.models import ScenarioVersionRecord
@@ -289,6 +365,7 @@ def _seed_chain(environment: dict[str, str], *, target_meta_mode: str, fault_con
     ensure_governance_prereqs(ctx, product_id)
 
     chain = build_ready_winner_and_target(ctx, product_id, tag, target_meta_mode=target_meta_mode)
+    chain["binding_id"] = _approve_binding_the_worker_leaves(ctx, chain["binding_id"])
 
     target_ctx = _tenant_context(environment, meta_mode=target_meta_mode)
     seed_activation_evidence_prereqs(
@@ -483,6 +560,7 @@ def advance_manifest(
 
     from app.adapters.persistence.database import tenant_session
     from app.adapters.persistence.models import new_id
+    from app.platform.tenancy import commit_and_rebind
     from app.scale.models import (
         ScaleAdviceThreadRecord,
         ScaleEpisodeRecord,
@@ -582,6 +660,11 @@ def advance_manifest(
             original_initiator_id="e2e-harness",
         )
         run_id = request_scale_evaluation(session, ctx, request)
+        # The request is durable before a Worker runs it, so commit here as
+        # the API does. A blocked manifest makes `run_scale_evaluation` roll
+        # back its open transaction, which would otherwise discard this
+        # manifest and run too (#19).
+        commit_and_rebind(session)
         outcome = run_scale_evaluation(session, ctx, run_id)
 
         evaluation = None

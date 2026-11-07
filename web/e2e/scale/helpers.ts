@@ -403,12 +403,17 @@ function composeService(
   }
 }
 
+/** FastAPI itself, polled for readiness after a restart: the control plane
+ * at API_BASE keeps answering (or redirecting) while the API is down. */
+const DOMAIN_API_BASE =
+  process.env.E2E_DOMAIN_BASE_URL ?? 'http://localhost:8787';
+
 export async function restartScaleApiServer(): Promise<void> {
   composeService('restart', 'api');
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${API_BASE}/healthz`);
+      const res = await fetch(`${DOMAIN_API_BASE}/api/health/ready`);
       if (res.ok) return;
     } catch {
       /* retry */

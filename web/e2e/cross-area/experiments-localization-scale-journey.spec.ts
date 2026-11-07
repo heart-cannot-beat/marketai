@@ -140,7 +140,13 @@ const DECLINING_BASELINE = {
   frequency: '1.4',
 };
 
-test('Experiments -> Localization -> Scale cross-area journey', async ({
+// Known issue #27: this journey has never run. Its Python helpers
+// (`seed_prerequisites.py`, `inspect_db.py`) import `app.experiments.models`
+// and `app.localization.models`, which do not exist, and
+// `seed-scale-from-decision` builds a ScaleDeliveryTargetRecord with fields
+// the model does not have. Until #27 fixes or removes the suite it reports
+// as fixme instead of failing on its first seed.
+test.fixme('Experiments -> Localization -> Scale cross-area journey', async ({
   page,
   networkSpy,
 }) => {
