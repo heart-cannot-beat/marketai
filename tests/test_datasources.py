@@ -8,6 +8,7 @@ from tests.support.library_fixtures import LibraryFixtures
 from app.library.contracts import (
     ENTRY_DATA_SOURCE, ROLE_OWNER, ROLE_MEMBER,
 )
+from app.library import service
 from app.library.datasources import bind_credential, get_active_binding
 from app.library.service import LibraryForbidden
 
@@ -104,6 +105,42 @@ class TestCredentialBinding(LibraryFixtures):
         ctx = self.ctx(role=ROLE_OWNER)
         ds_entry_id, _ = self._publish_data_source(ctx)
         self.assertIsNone(get_active_binding(ctx, ds_entry_id))
+
+
+class TestDataSourcePublishPairing(LibraryFixtures):
+    """Publishing checks the source type and execution mode together (#396)."""
+
+    def _draft(self, ctx, adapter_kind, execution_mode):
+        return service.create_entry(ctx, entry_type=ENTRY_DATA_SOURCE, display_name="DS", content={
+            "adapter_kind": adapter_kind,
+            "config": {},
+            "execution_mode": execution_mode,
+        })
+
+    def test_owner_cannot_publish_a_mock_source_marked_real(self):
+        owner = self.ctx(role=ROLE_OWNER)
+        entry = self._draft(owner, "mock", "real")
+        with self.assertRaises(service.LibraryValidationError) as caught:
+            service.publish(owner, entry["id"], entry["draft"]["revision"])
+        self.assertEqual(caught.exception.code, "library_validation_failed")
+        codes = {item["code"] for item in caught.exception.report["blocking"]}
+        self.assertEqual(codes, {"ds_execution_mode_mismatch"})
+        self.assertEqual(service.get_entry(owner, entry["id"])["versions"], [])
+
+    def test_owner_publishes_a_matching_pair(self):
+        owner = self.ctx(role=ROLE_OWNER)
+        entry = self._draft(owner, "mock", "mock")
+        version = service.publish(owner, entry["id"], entry["draft"]["revision"])
+        self.assertEqual(version["version_no"], 1)
+
+    def test_member_still_cannot_publish_a_data_source(self):
+        owner = self.ctx(role=ROLE_OWNER)
+        entry = self._draft(owner, "manual", "real")
+        member = self.ctx(role=ROLE_MEMBER, workspace=owner.workspace_id, provision=False)
+        with self.assertRaises(LibraryForbidden) as caught:
+            service.publish(member, entry["id"], entry["draft"]["revision"])
+        self.assertEqual(caught.exception.code, "library_forbidden")
+        self.assertEqual(service.get_entry(owner, entry["id"])["versions"], [])
 
 
 if __name__ == "__main__":

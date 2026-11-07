@@ -287,6 +287,10 @@ const NOT_SHOWN: Record<string, string> = {
     "a Creative Library finding; the panel shows the finding's message, publishing only confirms by code",
   protected_phrase_restored:
     "a Creative Library finding; the panel shows the finding's message, publishing only confirms by code",
+  ds_execution_mode:
+    "a Creative Library finding; the panel shows the finding's message, publishing only confirms by code",
+  ds_execution_mode_mismatch:
+    "a Creative Library finding; the panel shows the finding's message, and the data source form its own prompt (#396)",
   algorithm_version_unavailable:
     'an InvalidScaleSnapshot check, raised only inside the evaluation Worker',
   negative_metric:

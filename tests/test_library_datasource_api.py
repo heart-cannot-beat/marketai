@@ -253,14 +253,15 @@ class TestConnectionCheckHTTP(LibraryFixtures):
         )
         self.assertEqual(resp.status_code, 409)
 
-    def test_connection_check_requires_execution_mode(self):
+    def test_connection_check_needs_no_execution_mode(self):
+        # Deprecated and ignored (#383): the version's mode is the one checked.
         ds = self._create_data_source()
         resp = self.client.post(
             f"/api/v1/library/entries/{ds['id']}/connection-checks",
             json={},
             headers={"Idempotency-Key": "ik-conncheck-nomode-1"},
         )
-        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.status_code, 202, resp.text)
 
 
 if __name__ == "__main__":

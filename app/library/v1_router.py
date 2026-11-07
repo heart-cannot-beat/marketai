@@ -38,7 +38,7 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 
-from . import command_impacts, datasources, navigation, service, templates
+from . import command_impacts, connection_checks, datasources, navigation, service, templates
 from .contracts import (
     ENTRY_PERSON,
     ENTRY_PRODUCT,
@@ -50,6 +50,7 @@ from .contracts import (
 from .response_models import (
     CommandImpactProjection,
     CredentialBindingSummary,
+    DataSourceConnectionCheck,
     InternalEntryContext,
     InternalEntryMeta,
     InternalEntrySummary,
@@ -909,7 +910,16 @@ def bind_credential(
 
 
 class ConnectionCheckInput(BaseModel):
-    execution_mode: str = Field(min_length=1, max_length=40)
+    # Accepted for wire compatibility but never decides anything: the Worker
+    # checks in the effective version's mode and only records this one
+    # (#383). Nullable without a default so the generated TypeScript type is
+    # optional and the Web client sends nothing.
+    execution_mode: str | None = Field(
+        default=None,
+        max_length=40,
+        deprecated=True,
+        description="Ignored. A data source is checked in its published version's execution mode.",
+    )
 
 
 @router.post(
@@ -975,7 +985,9 @@ def check_connection(
             payload={
                 "data_source_entry_id": data_source_entry_id,
                 "operation_id": operation.id,
-                "execution_mode": body.execution_mode,
+                # Recorded as the requested mode only; read without the
+                # deprecated attribute access, which warns.
+                "execution_mode": body.model_dump()["execution_mode"],
             },
             idempotency_key=job_key,
             resource_type="data_source",
@@ -986,6 +998,20 @@ def check_connection(
             max_attempts=3,
         )
     return {"operation_id": operation.id, "state": "queued", "command_type": "connection_check"}
+
+
+@router.get(
+    "/entries/{data_source_entry_id}/connection-checks/{check_id}",
+    operation_id="get_library_data_source_connection_check",
+    response_model=DataSourceConnectionCheck,
+)
+def get_connection_check(
+    data_source_entry_id: str,
+    check_id: str,
+    context: TenantContext = Depends(request_tenant_context),
+):
+    """One finished check: ``check_id`` is the ``resource_id`` of its Operation's result."""
+    return connection_checks.get_connection_check(context, data_source_entry_id, check_id)
 
 
 # --------------------------------------------------------------------------

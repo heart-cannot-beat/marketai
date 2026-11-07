@@ -814,6 +814,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'get_library_data_source_connection_check',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/library/entries/:data_source_entry_id/connection-checks/:check_id',
+    pathParams: ['data_source_entry_id', 'check_id'],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'get_library_data_source_credential_binding',
     method: 'GET',
     bffPattern:

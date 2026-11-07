@@ -1224,6 +1224,40 @@ class TestScaleProblemResponses(ScaleProblemAssertions, ScaleRouterTestBase):
         resp = self._post(f"/targets/{target_id}/withdrawal-previews", {"reason": "again"})
         self._assert_problem(resp, 409, "invalid_lifecycle")
 
+    # -- Publishing into a context that has an active Target (#398) ----------
+
+    def test_publishing_again_replaces_the_active_target(self):
+        old = self._post("/targets", {"publication_preview_id": self._publication_preview()})
+        self.assertEqual(old.status_code, 201, old.text)
+        key = "ci-only-ik-398-router-replace"
+        preview_id = self._publication_preview()
+
+        new = self._post("/targets", {"publication_preview_id": preview_id}, key)
+        self.assertEqual(new.status_code, 201, new.text)
+        self.assertEqual((new.json()["lifecycle_state"], new.json()["revision"]), ("active", 1))
+        replaced = self.client.get(self._url(f"/targets/{old.json()['id']}")).json()
+        self.assertEqual((replaced["lifecycle_state"], replaced["revision"]), ("withdrawn", 2))
+        self.assertEqual(replaced["target_cpa"], old.json()["target_cpa"])
+        self.assertIsNotNone(replaced["withdrawn_at"])
+        withdraw = {a["action"]: a for a in replaced["allowed_actions"]}["withdraw"]
+        self.assertEqual((withdraw["allowed"], withdraw["reason_code"]), (False, "invalid_lifecycle"))
+
+        again = self._post("/targets", {"publication_preview_id": preview_id}, key)
+        self.assertEqual(again.status_code, 201, again.text)
+        self.assertEqual(again.json()["id"], new.json()["id"])
+        active = self.client.get(self._url("/targets"), params={"lifecycle_state": "active"})
+        self.assertEqual([t["id"] for t in active.json()["items"]], [new.json()["id"]])
+
+    def test_a_preview_made_before_another_publication_is_preview_hash_mismatch(self):
+        first, stale = self._publication_preview(), self._publication_preview()
+        published = self._post("/targets", {"publication_preview_id": first})
+        self.assertEqual(published.status_code, 201, published.text)
+
+        resp = self._post("/targets", {"publication_preview_id": stale})
+        self._assert_problem(resp, 409, "preview_hash_mismatch")
+        active = self.client.get(self._url("/targets"), params={"lifecycle_state": "active"})
+        self.assertEqual([t["id"] for t in active.json()["items"]], [published.json()["id"]])
+
     # -- Target amounts (#381) -----------------------------------------------
 
     def _amounts_body(self, field: str, value: str) -> dict:
@@ -1871,6 +1905,44 @@ class TestPlatformScaleRouterEnrollmentLifecycle(PlatformScaleRouterTestBase):
         for body in (published.json(), row, detail.json()):
             withdraw = {a["action"]: a for a in body["allowed_actions"]}["withdraw"]
             self.assertEqual((withdraw["allowed"], withdraw["reason_code"]), (True, None))
+
+
+class TestPlatformScaleRouterTargetReplacement(ScaleProblemAssertions, PlatformScaleRouterTestBase):
+    """#398 through ``/api/platform/v1/scale/*``: the platform routes publish
+    with the same domain function, so they replace the same way."""
+
+    base = "/api/platform/v1/scale/internal_validation"
+
+    def _post(self, path: str, body: dict):
+        return self.client.post(
+            f"{self.base}{path}", json=body,
+            headers=self._headers(**{"Idempotency-Key": f"ci-only-ik-398-{new_id('k')}"}),
+        )
+
+    def _preview(self) -> str:
+        resp = self._post("/target-publication-previews", {
+            "product_version_id": "pv_platform", "offer_version_id": "ov_platform",
+            "market_code": "US", "currency": "USD", "target_cpa": "20.00",
+        })
+        self.assertEqual(resp.status_code, 201, resp.text)
+        return resp.json()["id"]
+
+    def test_platform_operator_replaces_a_published_target(self):
+        old = self._post("/targets", {"publication_preview_id": self._preview()})
+        self.assertEqual(old.status_code, 201, old.text)
+        replacement, stale = self._preview(), self._preview()
+
+        new = self._post("/targets", {"publication_preview_id": replacement})
+        self.assertEqual(new.status_code, 201, new.text)
+        replaced = self.client.get(f"{self.base}/targets/{old.json()['id']}", headers=self._headers())
+        self.assertEqual((replaced.json()["lifecycle_state"], replaced.json()["revision"]), ("withdrawn", 2))
+
+        resp = self._post("/targets", {"publication_preview_id": stale})
+        self._assert_problem(resp, 409, "preview_hash_mismatch")
+        active = self.client.get(
+            f"{self.base}/targets", params={"lifecycle_state": "active"}, headers=self._headers(),
+        )
+        self.assertEqual([t["id"] for t in active.json()["items"]], [new.json()["id"]])
 
 
 if __name__ == "__main__":

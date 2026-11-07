@@ -169,6 +169,29 @@ describe('draft-codecs', () => {
   describe('data_source codec', () => {
     const codec = getCodec('data_source');
 
+    it('parses the fields `_validate_data_source` checks', () => {
+      const parsed = codec.parse({});
+      expect(parsed.fields).toEqual({
+        adapter_kind: '',
+        execution_mode: '',
+        config: {},
+      });
+    });
+
+    it('keeps an existing display_name as an unknown key, untouched', () => {
+      // The name is a property of the entry; the validator never reads it.
+      const raw = {
+        display_name: 'Old name',
+        adapter_kind: 'manual',
+        execution_mode: 'real',
+        config: {},
+      };
+      const parsed = codec.parse(raw);
+      expect(parsed.fields).not.toHaveProperty('display_name');
+      expect(parsed._unknown).toEqual({ display_name: 'Old name' });
+      expect(codec.serialize(parsed)).toEqual(raw);
+    });
+
     it('preserves config object', () => {
       const raw = {
         display_name: 'My Source',

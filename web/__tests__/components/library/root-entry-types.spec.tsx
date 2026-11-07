@@ -534,6 +534,18 @@ describe('PromptPolicyVersionViewer', () => {
 // ── DataSourceDraftEditor ──────────────────────────────────────────
 
 describe('DataSourceDraftEditor', () => {
+  const sourceSession = (fields: Record<string, unknown>) =>
+    makeSession({
+      buffer: {
+        fields: { adapter_kind: '', execution_mode: '', config: {}, ...fields },
+        _unknown: {},
+      },
+    });
+  const sourceSelect = () =>
+    screen.getByLabelText(
+      'library:fields.data-source.adapter-kind'
+    ) as HTMLSelectElement;
+
   it('returns null when buffer is null', () => {
     const session = makeSession({ buffer: null as any });
     const { container } = render(
@@ -542,66 +554,121 @@ describe('DataSourceDraftEditor', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('renders data source fields with correct values', () => {
-    const session = makeSession({
-      buffer: {
-        fields: {
-          display_name: 'Sales Feed',
-          adapter_kind: 'rest_api',
-          execution_mode: 'scheduled',
-          config: { base_url: 'https://api.example.com' },
-        },
-        _unknown: {},
-      },
-    });
+  it('offers the server source types as a list, Shopify disabled', () => {
+    render(
+      createElement(DataSourceDraftEditor, { session: sourceSession({}) })
+    );
 
-    render(createElement(DataSourceDraftEditor, { session }));
-
-    expect(screen.getByDisplayValue('Sales Feed')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('rest_api')).toBeInTheDocument();
+    const options = Array.from(sourceSelect().options).map((option) => [
+      option.value,
+      option.disabled,
+    ]);
+    expect(options).toEqual([
+      ['', true],
+      ['manual', false],
+      ['mock', false],
+      ['shopify', true],
+    ]);
+    // No name box and no execution mode list: the entry owns the name and
+    // the source type sets the mode.
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 
-  it('calls updateField on adapter_kind change', () => {
-    const session = makeSession({
-      buffer: {
-        fields: {
-          display_name: '',
-          adapter_kind: '',
-          execution_mode: '',
-          config: {},
-        },
-        _unknown: {},
-      },
-    });
-
+  it.each([
+    ['manual', { adapter_kind: 'manual', execution_mode: 'real' }],
+    ['mock', { adapter_kind: 'mock', execution_mode: 'mock' }],
+  ])('writes %s together with its execution mode', (kind, written) => {
+    const session = sourceSession({});
     render(createElement(DataSourceDraftEditor, { session }));
 
-    const adapterInput = screen
-      .getByText('library:fields.data-source.adapter-kind')
-      .closest('label')!
-      .querySelector('input')!;
-    fireEvent.change(adapterInput, { target: { value: 'graphql' } });
-    expect(session.updateField).toHaveBeenCalledWith('adapter_kind', 'graphql');
+    fireEvent.change(sourceSelect(), { target: { value: kind } });
+    expect(session.updateFields).toHaveBeenCalledWith(written);
+    expect(session.updateField).not.toHaveBeenCalled();
+  });
+
+  it('marks a controlled Mock source with the controlled Mock badge', () => {
+    render(
+      createElement(DataSourceDraftEditor, {
+        session: sourceSession({
+          adapter_kind: 'mock',
+          execution_mode: 'mock',
+        }),
+      })
+    );
+    expect(screen.getByTestId('execution-mode-badge')).toHaveAttribute(
+      'data-mode',
+      'controlled-mock'
+    );
+  });
+
+  it('shows a stored Shopify source as chosen and real', () => {
+    render(
+      createElement(DataSourceDraftEditor, {
+        session: sourceSession({
+          adapter_kind: 'shopify',
+          execution_mode: 'real',
+        }),
+      })
+    );
+    expect(sourceSelect().value).toBe('shopify');
+    expect(screen.getByTestId('execution-mode-badge')).toHaveAttribute(
+      'data-mode',
+      'real'
+    );
+  });
+
+  it('prompts to choose again for a stored value it does not offer, without editing', () => {
+    const session = sourceSession({
+      adapter_kind: 'Shopify',
+      execution_mode: 'scheduled',
+    });
+    render(createElement(DataSourceDraftEditor, { session }));
+
+    expect(sourceSelect().value).toBe('');
+    expect(
+      screen.getByText('library:fields.data-source.adapter-invalid')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('library:fields.data-source.execution-mode-mismatch')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('execution-mode-badge')
+    ).not.toBeInTheDocument();
+    expect(session.updateField).not.toHaveBeenCalled();
+    expect(session.updateFields).not.toHaveBeenCalled();
+  });
+
+  it('prompts to choose again when the stored mode does not match', () => {
+    const session = sourceSession({
+      adapter_kind: 'manual',
+      execution_mode: 'mock',
+    });
+    render(createElement(DataSourceDraftEditor, { session }));
+
+    expect(sourceSelect().value).toBe('manual');
+    expect(
+      screen.getByText('library:fields.data-source.execution-mode-mismatch')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('execution-mode-badge')
+    ).not.toBeInTheDocument();
+    expect(session.updateFields).not.toHaveBeenCalled();
   });
 
   it('renders config section', () => {
-    const session = makeSession({
-      buffer: {
-        fields: {
-          display_name: '',
-          adapter_kind: '',
-          execution_mode: '',
-          config: { base_url: 'https://api.example.com' },
-        },
-        _unknown: {},
-      },
-    });
-
-    render(createElement(DataSourceDraftEditor, { session }));
+    render(
+      createElement(DataSourceDraftEditor, {
+        session: sourceSession({
+          config: { mock_scenario: 'full' },
+        }),
+      })
+    );
 
     expect(
       screen.getByText('library:fields.data-source.config')
     ).toBeInTheDocument();
+    expect(screen.getByText(/mock_scenario/)).toBeInTheDocument();
   });
 });
 

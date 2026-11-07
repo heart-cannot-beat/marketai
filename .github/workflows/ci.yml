@@ -475,6 +475,18 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_spend_guardrail_preview_pg -v
 
+      # Scale Targets (#398): publishing into a context with an active Target
+      # replaces it as the API role, under RLS and the partial unique index,
+      # without rewriting the old Target or its events. A retry returns the
+      # same Target; a stale preview, a publication waiting on another and a
+      # withdrawal waiting on a replacement are refused with 409, never 500.
+      - name: Scale Target replacement holds under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_targets_pg -v
+
       # An already-provisioned cluster may still carry the former shared role's
       # persistent BYPASSRLS bit. Prove the release revokes it and the retired
       # role fails closed.

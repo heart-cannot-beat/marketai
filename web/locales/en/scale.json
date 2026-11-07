@@ -356,6 +356,7 @@
       "preview": "Create preview",
       "publishing": "Publishing…",
       "confirm": "Confirm publish",
+      "replaces-active-target": "Publishing withdraws the active target this context has now.",
       "refresh-preview": "Create a new preview"
     },
     "withdraw-dialog": {

@@ -1600,8 +1600,36 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Check Connection */
+    /**
+     * Check Connection
+     * @description Queue a local check of the data source (#383, ``app.library.connection_checks``).
+     *
+     *     The Worker takes the execution mode from the effective version;
+     *     ``execution_mode`` is only recorded beside it. A replayed Idempotency-Key
+     *     returns the Operation it created, wherever that has got to; the same key
+     *     for another data source is ``409 idempotency_key_reused``.
+     */
     post: operations['check_library_data_source_connection'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/library/entries/{data_source_entry_id}/connection-checks/{check_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Connection Check
+     * @description One finished check: ``check_id`` is the ``resource_id`` of its Operation's result.
+     */
+    get: operations['get_library_data_source_connection_check'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -6261,7 +6289,11 @@ export interface components {
       source: string;
     };
     ConnectionCheckInput: {
-      execution_mode: string;
+      /**
+       * @deprecated
+       * @description Ignored. A data source is checked in its published version's execution mode.
+       */
+      execution_mode?: string | null;
     };
     ConversionRequest: {
       /** @default scale_advice_default */
@@ -6531,6 +6563,29 @@ export interface components {
       credential_version_id: string;
       revision: number;
       state: string;
+    };
+    /**
+     * @description ``GET /entries/{id}/connection-checks/{check_id}``: one check's evidence (#383).
+     *
+     *     The conclusion is ``health`` plus ``reason_code``; the Operation that ran
+     *     the check is ``succeeded`` whatever it found. ``execution_mode`` is the
+     *     checked version's, never the one a client asked for.
+     */
+    DataSourceConnectionCheck: {
+      check_id: string;
+      data_source_entry_id: string;
+      /** @enum {string} */
+      health: 'unknown' | 'healthy' | 'degraded' | 'failed' | 'revoked';
+      /** @description One of the codes in app.library.connection_checks.REASON_HEALTH. */
+      reason_code: string;
+      adapter_kind: string | null;
+      adapter_version: string | null;
+      execution_mode: string | null;
+      data_source_version_id: string | null;
+      /** @description State of the bound CredentialVersion, or null when none is bound. */
+      credential_state: string | null;
+      /** Format: date-time */
+      checked_at: string;
     };
     'DecisionRules-Input': {
       /** @enum {string} */
@@ -14485,6 +14540,38 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['OperationAccepted'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_library_data_source_connection_check: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        data_source_entry_id: string;
+        check_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DataSourceConnectionCheck'];
         };
       };
       /** @description Validation Error */

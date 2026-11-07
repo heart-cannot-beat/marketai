@@ -1464,6 +1464,7 @@ _TARGET_ERROR_STATUS = {
     "target_not_found": 404,
     "preview_expired": 409,
     "preview_already_consumed": 409,
+    "preview_hash_mismatch": 409,
     "invalid_lifecycle": 409,
     "idempotency_result_missing": 400,
 }

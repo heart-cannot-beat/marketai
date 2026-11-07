@@ -522,12 +522,20 @@ class TestBatchCommandSequence(unittest.TestCase):
 
     # -- fixture builders -------------------------------------------
 
-    def _build_ready_batch(self, tag: str, markets: tuple[str, ...] = ("US",)) -> dict:
+    def _build_ready_batch(
+        self,
+        tag: str,
+        markets: tuple[str, ...] = ("US",),
+        *,
+        truth_overrides: dict[int, tuple[dict, tuple[FactPolicy, ...]]] | None = None,
+    ) -> dict:
         """Build a Batch through the real command sequence up to (but not
         including) `confirm()`: one source, N target markets, Truth
         resolved, analysis reused, Claim decisions submitted (deterministic
         source-locale projection, no translation), and copy approved for
-        every market."""
+        every market. `truth_overrides` maps a market's index to the facts
+        its Manual source holds and the `on_failure` rules it resolves
+        under."""
         winner = _build_confirmed_winner(WS_ID, CTX, tag)
         _seed_review(CTX, winner["asset_version_id"])
 
@@ -548,7 +556,10 @@ class TestBatchCommandSequence(unittest.TestCase):
                 market_targets.append(BatchMarketTargetInput(market_policy_version_id=row.id, market=mp.market_id))
                 mpv_rows.append((row.id, mp.market_id))
 
-        truth_cmd = self._truth_command_for(tag, winner["product_version_id"], winner["offer_version_id"], mpv_rows)
+        truth_cmd = self._truth_command_for(
+            tag, winner["product_version_id"], winner["offer_version_id"], mpv_rows,
+            overrides=truth_overrides,
+        )
 
         with tenant_session(CTX) as s:
             draft = create_draft(
@@ -622,6 +633,7 @@ class TestBatchCommandSequence(unittest.TestCase):
 
     def _truth_command_for(
         self, tag: str, pv_id: str, ov_id: str, mpv_rows: list[tuple[str, str]],
+        *, overrides: dict[int, tuple[dict, tuple[FactPolicy, ...]]] | None = None,
     ) -> TruthResolutionCommand:
         with tenant_session(CTX) as s:
             policy_version_id = _make_version(s, WS_ID, "truth_resolution_policy", tag)
@@ -636,16 +648,26 @@ class TestBatchCommandSequence(unittest.TestCase):
         window = (now - timedelta(days=1), now + timedelta(days=365))
         facts = {"price": {"amount": "19.99", "currency": "USD"}, "availability": {"available": True}}
 
+        fact_policies = (
+            FactPolicy("price"),
+            FactPolicy("availability"),
+            FactPolicy("discount"),
+            FactPolicy("shipping"),
+            FactPolicy("delivery"),
+            FactPolicy("product_claim"),
+        )
+
         market_cmds = []
-        for mpv_id, market in mpv_rows:
+        for index, (mpv_id, market) in enumerate(mpv_rows):
             with tenant_session(CTX) as s:
                 row = s.get(MarketPolicyVersionRecord, mpv_id)
                 locale, country, currency = row.locale, row.country, row.currency
+            market_facts, market_fact_policies = (overrides or {}).get(index, (facts, fact_policies))
             step = SourceStep(
                 data_source_version_id=data_source_version_id, adapter=ManualFactSourceAdapter(),
                 adapter_kind="manual", adapter_version="manual-v1", truth_data_mode="real",
                 manual_fact_set=ManualFactSet(
-                    version_id=manual_fact_set_version_id, facts=facts,
+                    version_id=manual_fact_set_version_id, facts=market_facts,
                     valid_from=window[0], valid_to=window[1],
                 ),
                 manual_fact_set_version_id=manual_fact_set_version_id,
@@ -653,14 +675,7 @@ class TestBatchCommandSequence(unittest.TestCase):
             market_cmds.append(MarketResolutionCommand(
                 market=market, locale=locale, country=country, currency=currency,
                 market_policy_version_id=mpv_id, sources=(step,),
-                fact_policies=(
-                    FactPolicy("price"),
-                    FactPolicy("availability"),
-                    FactPolicy("discount"),
-                    FactPolicy("shipping"),
-                    FactPolicy("delivery"),
-                    FactPolicy("product_claim"),
-                ),
+                fact_policies=market_fact_policies,
             ))
         return TruthResolutionCommand(
             product_version_id=pv_id, offer_version_id=ov_id,
@@ -887,6 +902,135 @@ class TestBatchCommandSequence(unittest.TestCase):
             target.readiness_detail_json = {
                 "reason": "price_unresolved",
                 "missing": ["price"],
+            }
+
+        confirmed = self._confirm(ready["batch_id"])
+        with tenant_session(CTX) as session:
+            items = session.scalars(
+                select(LocalizationItemRecord).where(
+                    LocalizationItemRecord.batch_id == ready["batch_id"]
+                )
+            ).all()
+            self.assertEqual({item.state for item in items}, {"queued"})
+            jobs = session.scalars(
+                select(JobRecord).where(
+                    JobRecord.operation_id == confirmed.operation_id,
+                    JobRecord.type == "localization.edit_attempt",
+                )
+            ).all()
+            self.assertEqual(len(jobs), 2)
+
+    def _confirm_with_blocked_market(
+        self, tag: str, market_facts: dict, market_fact_policies: tuple[FactPolicy, ...],
+    ) -> tuple[dict, object]:
+        """Two markets resolved through Truth; the second one's `block` fact
+        has no source. Neither MarketPolicy requires a local price and the
+        source's only Claim is a headline, so the price exception would let
+        a price-unresolved market run."""
+        ready = self._build_ready_batch(
+            tag, markets=("GB", "CA"),
+            truth_overrides={1: (market_facts, market_fact_policies)},
+        )
+        return ready, self._confirm(ready["batch_id"])
+
+    def _assert_blocked_item_and_running_sibling(
+        self, ready: dict, confirmed: object, blocked: list[str],
+    ) -> LocalizationItemRecord:
+        blocked_market, sibling_market = ready["markets"][1], ready["markets"][0]
+        with tenant_session(CTX) as session:
+            items = session.scalars(
+                select(LocalizationItemRecord).where(
+                    LocalizationItemRecord.batch_id == ready["batch_id"]
+                )
+            ).all()
+            by_market = {item.target_market: item for item in items}
+            failed, sibling = by_market[blocked_market], by_market[sibling_market]
+            self.assertEqual(failed.state, "failed")
+            self.assertEqual(failed.reason_code, "truth_fact_missing_blocked")
+            self.assertEqual(failed.attempt_count, 0)
+            self.assertEqual(failed.next_action, "create_new_batch")
+            self.assertEqual(sibling.state, "queued")
+            job_resource_ids = set(
+                session.scalars(
+                    select(JobRecord.resource_id).where(
+                        JobRecord.operation_id == confirmed.operation_id,
+                        JobRecord.type == "localization.edit_attempt",
+                    )
+                ).all()
+            )
+            self.assertEqual(job_resource_ids, {sibling.id})
+
+            batch = session.get(LocalizationBatchRecord, ready["batch_id"])
+            tpm = session.scalar(
+                select(TruthPackageMarketRecord).where(
+                    TruthPackageMarketRecord.truth_package_id == batch.truth_package_id,
+                    TruthPackageMarketRecord.market == blocked_market,
+                )
+            )
+            self.assertEqual(tpm.readiness, "failed")
+            self.assertEqual(tpm.readiness_detail_json["reason"], "fact_missing_blocked")
+            self.assertEqual(tpm.readiness_detail_json["blocked"], blocked)
+            return sibling
+
+    def test_blocked_price_market_skips_the_price_exception(self) -> None:
+        ready, confirmed = self._confirm_with_blocked_market(
+            "blocked_price01",
+            {"availability": {"available": True}},
+            (FactPolicy("price", on_failure="block"), FactPolicy("availability", on_failure="block")),
+        )
+        self._assert_blocked_item_and_running_sibling(ready, confirmed, ["price"])
+
+    def test_blocked_fact_market_fails_while_sibling_succeeds(self) -> None:
+        ready, confirmed = self._confirm_with_blocked_market(
+            "blocked_discount01",
+            {"price": {"amount": "19.99", "currency": "USD"}, "availability": {"available": True}},
+            (
+                FactPolicy("price", on_failure="block"),
+                FactPolicy("availability", on_failure="block"),
+                FactPolicy("discount", on_failure="block"),
+            ),
+        )
+        sibling = self._assert_blocked_item_and_running_sibling(ready, confirmed, ["discount"])
+
+        with tenant_session(CTX) as session:
+            executable = session.get(LocalizationItemRecord, sibling.id)
+            executable.state = "succeeded"
+            executable.revision += 1
+            batch_revision = session.get(LocalizationBatchRecord, ready["batch_id"]).revision
+        with tenant_session(CTX) as session:
+            outcome = derive_batch_outcome(
+                session, CTX, ready["batch_id"], expected_revision=batch_revision,
+            )
+        self.assertEqual(outcome, "partially_succeeded")
+
+    def test_v1_degraded_market_still_runs_at_confirm(self) -> None:
+        # A batch bound to a package frozen under `truth-rule-v1`, which left
+        # a market missing a `block` fact `degraded`: confirm keeps that
+        # frozen readiness instead of recomputing it (#401 decision 4a).
+        ready = self._build_ready_batch(
+            "v1_degraded01", markets=("GB", "CA"),
+            truth_overrides={1: (
+                {"price": {"amount": "19.99", "currency": "USD"}, "availability": {"available": True}},
+                (
+                    FactPolicy("price", on_failure="block"),
+                    FactPolicy("availability", on_failure="block"),
+                    FactPolicy("discount", on_failure="block"),
+                ),
+            )},
+        )
+        legacy_market = ready["markets"][1]
+        with tenant_session(CTX) as session:
+            batch = session.get(LocalizationBatchRecord, ready["batch_id"])
+            target = session.scalar(
+                select(TruthPackageMarketRecord).where(
+                    TruthPackageMarketRecord.truth_package_id == batch.truth_package_id,
+                    TruthPackageMarketRecord.market == legacy_market,
+                )
+            )
+            target.readiness = "degraded"
+            target.readiness_detail_json = {
+                "reason": "fact_missing_permitted",
+                "missing": ["discount"],
             }
 
         confirmed = self._confirm(ready["batch_id"])

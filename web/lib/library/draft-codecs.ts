@@ -16,12 +16,12 @@ export interface DraftCodec<T = FieldShape> {
 /**
  * Field shapes mirror `app/library/contracts.py`'s content validators for
  * the entry types the in-app editor renders a form for (`product`,
- * `dimension_template`); every other key of the draft rides along untouched
- * in `_unknown` and is edited through the raw JSON editor. The remaining
- * shapes below are sketches that have not been aligned with their server
- * validator yet (`_validate_person`, `_validate_offer`, …), which is why
- * their editors are not mounted (`components/library/entry-types/
- * draft-editors.ts`).
+ * `dimension_template`, `data_source`); every other key of the draft rides
+ * along untouched in `_unknown` and is edited through the raw JSON editor.
+ * The remaining shapes below are sketches that have not been aligned with
+ * their server validator yet (`_validate_person`, `_validate_offer`, …),
+ * which is why their editors are not mounted (`components/library/
+ * entry-types/draft-editors.ts`).
  */
 export interface ProductFields {
   /** `_validate_product`: `name`, not `display_name` -- the display name is
@@ -113,8 +113,10 @@ export interface PromptPolicyFields {
   brand_tone: string;
 }
 
+/** `_validate_data_source`. The display name is a property of the entry; the
+ * execution mode is written with the source type it pairs with
+ * (`ADAPTER_EXECUTION_MODES`, #396). */
 export interface DataSourceFields {
-  display_name: string;
   adapter_kind: string;
   execution_mode: string;
   config: Record<string, unknown>;
@@ -312,14 +314,8 @@ const PROMPT_POLICY_DEFAULTS: PromptPolicyFields = {
   brand_tone: '',
 };
 
-const DATA_SOURCE_KEYS = [
-  'display_name',
-  'adapter_kind',
-  'execution_mode',
-  'config',
-] as const;
+const DATA_SOURCE_KEYS = ['adapter_kind', 'execution_mode', 'config'] as const;
 const DATA_SOURCE_DEFAULTS: DataSourceFields = {
-  display_name: '',
   adapter_kind: '',
   execution_mode: '',
   config: {},

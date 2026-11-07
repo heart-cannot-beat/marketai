@@ -611,6 +611,14 @@ export interface DomainGateway {
     | ReconciliationRequired
   >;
 
+  /** One finished connection check: `checkId` is the `resource_id` of its
+   * Operation's result (#383). */
+  getLibraryDataSourceConnectionCheck(params: {
+    workspaceSlug: string;
+    dataSourceEntryId: string;
+    checkId: string;
+  }): Promise<DomainResultFor<'get_library_data_source_connection_check'>>;
+
   importLibraryManualFacts(params: {
     workspaceSlug: string;
     actionInstanceId: string;
@@ -3627,6 +3635,19 @@ export class DefaultDomainGateway implements DomainGateway {
       202,
       'accepted'
     );
+  }
+
+  async getLibraryDataSourceConnectionCheck(params: {
+    workspaceSlug: string;
+    dataSourceEntryId: string;
+    checkId: string;
+  }): Promise<DomainResultFor<'get_library_data_source_connection_check'>> {
+    const path = buildBffPath('get_library_data_source_connection_check', {
+      slug: params.workspaceSlug,
+      data_source_entry_id: params.dataSourceEntryId,
+      check_id: params.checkId,
+    });
+    return this.sendSafe<'get_library_data_source_connection_check'>(path);
   }
 
   async importLibraryManualFacts(params: {

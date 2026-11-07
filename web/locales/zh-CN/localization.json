@@ -28,12 +28,16 @@
     "complete": "完整",
     "needs_review": "待审核",
     "approved": "已通过",
+    "pending_review": "待审核",
+    "rejected": "已拒绝",
+    "needs_changes": "需要修改",
     "pass": "通过",
     "passed": "已通过",
     "fail": "未通过",
     "production": "正式",
     "sandbox": "沙箱",
     "mock": "Mock",
+    "byok": "自带密钥（BYOK）",
     "full": "完整",
     "degraded": "降级",
     "pending": "待处理",
@@ -72,14 +76,27 @@
     "stale-detail": "新鲜度为 {{freshness}}。历史证据仍会显示，但这个批次不能再授权新的服务商调用。请新建批次，解析一份新的不可变 TruthPackage。",
     "no-markets": "真值解析还没有产生市场证据。",
     "missing-detail": "缺失 / 降级详情：{{detail}}",
+    "not-resolved": "还没有解析真值，开始准备时才会解析。",
+    "readiness-reason": {
+      "skipped_unavailable": "真值显示产品在这个市场不可售。",
+      "price_unresolved": "价格未能解析。缺少：{{facts}}。",
+      "fact_missing_permitted": "部分事实未能解析，这个市场会在缺少它们的情况下继续。缺少：{{facts}}。",
+      "fact_missing_blocked": "策略要求的事实未能解析（策略：阻断），这个市场不执行。阻断的事实：{{blocked}}。缺少：{{facts}}。"
+    },
     "fact-source": "来源 {{source}}",
     "fact-source-embedded": "内嵌证据",
     "fact-valid-until": "有效期至 {{date}}",
     "no-facts": "这个市场没有已保存的事实。",
     "failures": "来源失败 / 跳过",
     "failure-line": "{{fact}}（经 {{adapter}}）：{{reason}}",
+    "adapter": {
+      "manual": "人工事实集",
+      "controlled_mock": "受控 Mock",
+      "shopify": "Shopify 店铺",
+      "policy": "兜底规则"
+    },
     "skip": {
-      "on_failure_block": "没有来源解析出这个事实（策略：阻断）",
+      "on_failure_block": "没有来源解析出这个事实（策略：阻断，这个市场不执行）",
       "on_failure_degrade": "没有来源解析出这个事实（策略：降级继续）",
       "on_failure_skip": "没有来源解析出这个事实（策略：跳过）"
     }
@@ -111,6 +128,7 @@
       "skipped_market_unavailable": "已跳过：真值显示商品在这个市场不可销售。",
       "truth_price_unresolved": "未执行：这个市场的价格没有解析出来，而该市场要求本地价格，或者还有价格声明没有删除。",
       "truth_market_failed": "未执行：这个市场的真值解析失败。",
+      "truth_fact_missing_blocked": "未执行：这个市场的真值策略要求的事实没有解析出来（策略：阻断）。",
       "ineligible_before_dispatch": "编辑调用前已暂停：源素材、真值或已批准的文案已不是最新。",
       "ineligible_after_dispatch": "编辑调用后已暂停：期间源素材或真值有变化。输出已隔离，没有发布。",
       "ineligible_before_publish": "发布前已暂停：源素材、真值或已批准的文案已不是最新。输出已隔离，没有发布。",
@@ -193,9 +211,15 @@
     "lineage-copy": "→ 文案",
     "lineage-localized": "→ 本地化素材",
     "binding": "当前绑定：{{binding}}",
-    "binding-detail": "{{kind}} · 审核 {{review}} · 真值新鲜度 {{freshness}} · 可用于实验 {{ready}}",
+    "binding-detail": "{{kind}} · 审核：{{review}} · 真值：{{freshness}} · {{ready}}",
     "binding-kind": "绑定",
-    "stale-binding": "stale_truth：这个 MarketAssetBinding 仍保留在来源链中，但在用最新真值重新本地化之前，不能用于新实验。",
+    "binding-type": {
+      "localized": "本地化版本",
+      "source_reuse": "直接复用来源素材"
+    },
+    "binding-ready": "可以用于新实验",
+    "binding-not-ready": "还不能用于新实验",
+    "stale-binding": "这个绑定依据的真值已过时。它仍保留在来源链中，但在用最新真值重新本地化之前，不能用于新实验。",
     "child-review": "本地化后的子版本以待审核开始。源素材的审批和业务证据状态不会继承；这个确切版本需要人工审核，并在目标市场重新做实验。"
   },
   "rail": {
@@ -216,7 +240,18 @@
     "origin-historical": "历史实验",
     "marketing-note": "这是用户提供的、针对这个确切素材和已记录条件的投放证据。本地化会创建一次新的未经验证的执行，不会继承业务成功或审批状态。任何付费步骤前都会先做真实真值和 BYOK 检查。",
     "target-markets": "目标市场",
-    "missing-context": "：所选来源缺少已保存的 {{fields}}。请先补全这份不可变的来源上下文再创建批次；不会使用目标市场策略或浏览器默认值。",
+    "context-problem": {
+      "missing_source_context": "所选来源缺少已保存的 {{fields}}。请先补全来源上下文再创建批次；不会使用目标市场策略或浏览器默认值。",
+      "invalid_source_context": "所选来源的 {{fields}} 格式无效。请先修正来源上下文再创建批次。",
+      "conflicting_source_context": "所选来源保存的上下文在 {{fields}} 上不一致。请先统一再创建批次。"
+    },
+    "context-field": {
+      "market": "市场",
+      "placement": "版位",
+      "locale": "语言区域",
+      "country": "国家",
+      "currency": "币种"
+    },
     "missing-context-fields": "语言区域、国家或币种",
     "create": "创建受控 Mock 批次"
   },
@@ -224,7 +259,7 @@
     "title": "本地化控制台",
     "intro": "基于真值的批次审核、逐条目恢复、质检、费用和素材来源链。",
     "refresh": "刷新已保存的状态",
-    "role-note": "角色：{{role}}。命令仍需服务端授权；不可用的操作会继续显示，并注明原因。",
+    "role-note": "你是这个工作区的成员。命令仍需服务端授权；不可用的操作会继续显示，并注明原因。",
     "loading": "正在加载本地化工作区",
     "source-title": "来源证据、Offer 与批次结果",
     "source-subtitle": "修订 {{revision}} · 创建于 {{time}}",
@@ -232,15 +267,31 @@
     "source-snapshot": "源市场快照",
     "source-creative": "源素材",
     "decision": "判定",
-    "evidence-modes": "{{generation}} · 证据 {{evidence}}",
+    "evidence-modes": "生成 {{generation}} · 证据 {{evidence}}",
     "state-count": "{{state}}：{{value}}",
     "no-outcome": "还没有条目结果。",
     "operation-title": "持久操作",
     "operation-subtitle": "刷新或进程重启后，从已保存的批次命令时间线恢复",
+    "command-kind": {
+      "create_draft": "创建批次",
+      "start_preparation": "开始准备",
+      "submit_claim_decisions": "提交声明处理决定",
+      "approve_copy": "批准文案",
+      "confirm": "确认批次",
+      "retry_item": "重试条目",
+      "resume_item": "继续条目",
+      "authorize_isolated_qc": "授权补做质检",
+      "adopt_isolated_output": "采用隔离输出",
+      "cancel": "取消批次"
+    },
     "copy-title": "本地化文案",
     "copy-subtitle": "文案来源和证据始终可见；审核失败不会消失",
     "no-copy": "还没有本地化文案版本。",
     "copy-origin": "来源：{{origin}} · 素材",
+    "copy-origins": {
+      "translated": "翻译",
+      "source_locale_projection": "与来源同语言（未翻译）"
+    },
     "copy-evidence": "证据",
     "approve": "通过文案",
     "commands-title": "批次命令",

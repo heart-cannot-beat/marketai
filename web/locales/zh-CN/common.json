@@ -1663,6 +1663,7 @@
   "error-conflicting_source_context": "来源市场设置之间有冲突。",
   "error-connection_already_exists": "这个模式下已有生效的连接。",
   "error-connection_check_failed": "连接检查没有完成。",
+  "error-connection_check_not_found": "找不到这次连接检查。",
   "error-connection_not_found": "Meta 连接不存在或未激活。",
   "error-content_length_exceeds_policy": "文件超过 {{limit_mb}} MB。",
   "error-content_length_invalid": "文件大小无效。",

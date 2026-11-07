@@ -98,10 +98,12 @@ test('drives one ready market from Winner to exact durable Asset lineage', async
     )
   ).toBeVisible();
   await expect(
-    page.getByText(/source approval and Winner status were not inherited/i)
+    page.getByText(
+      /source approval and business evidence status were not inherited/i
+    )
   ).toBeVisible();
   await expect(itemEvidence).toContainText(
-    'Active binding: localized · review pending_review · Truth freshness current · experiment ready false'
+    'Active binding: Localized version · review: pending review · Truth: current · not ready for a new experiment yet'
   );
 
   const beforeReload = itemDurabilitySnapshot(persistedItem);

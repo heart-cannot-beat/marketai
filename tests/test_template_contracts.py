@@ -179,6 +179,45 @@ class TestDataSourceValidation(unittest.TestCase):
         report = validate_content(ENTRY_DATA_SOURCE, self._ds_content(execution_mode="invalid"))
         self.assertFalse(report.ok)
 
+    def test_invalid_execution_mode_message_lists_the_accepted_modes(self):
+        report = validate_content(ENTRY_DATA_SOURCE, self._ds_content(execution_mode="scheduled"))
+        finding = next(f for f in report.blocking if f.code == "ds_execution_mode")
+        self.assertIn("'mock'", finding.message)
+        self.assertIn("'real'", finding.message)
+
+    def test_source_type_and_execution_mode_pairs_publish(self):
+        # 来源类型决定执行模式（#396）：受控 Mock 只能是 mock，人工和 Shopify 只能是 real。
+        for adapter_kind, execution_mode in (("manual", "real"), ("mock", "mock"), ("shopify", "real")):
+            with self.subTest(adapter_kind=adapter_kind):
+                report = validate_content(ENTRY_DATA_SOURCE, self._ds_content(
+                    adapter_kind=adapter_kind, execution_mode=execution_mode,
+                ))
+                self.assertTrue(report.ok, report.blocking)
+
+    def test_mismatched_execution_mode_blocking(self):
+        # 这三种组合在解析 Truth 时会撞 ck_tsa_manual_adapter / ck_tsa_mock_fields。
+        for adapter_kind, execution_mode in (("manual", "mock"), ("mock", "real"), ("shopify", "mock")):
+            with self.subTest(adapter_kind=adapter_kind):
+                report = validate_content(ENTRY_DATA_SOURCE, self._ds_content(
+                    adapter_kind=adapter_kind, execution_mode=execution_mode,
+                ))
+                self.assertFalse(report.ok)
+                mismatch = [f for f in report.blocking if f.code == "ds_execution_mode_mismatch"]
+                self.assertEqual(len(mismatch), 1, report.blocking)
+                self.assertEqual(mismatch[0].path, "execution_mode")
+                self.assertIn("manual/real", mismatch[0].message)
+                self.assertIn("mock/mock", mismatch[0].message)
+                self.assertIn("shopify/real", mismatch[0].message)
+
+    def test_mismatch_is_not_reported_on_top_of_an_invalid_field(self):
+        for overrides, code in (
+            ({"adapter_kind": "Shopify", "execution_mode": "mock"}, "ds_adapter_kind"),
+            ({"adapter_kind": "mock", "execution_mode": "scheduled"}, "ds_execution_mode"),
+        ):
+            with self.subTest(**overrides):
+                report = validate_content(ENTRY_DATA_SOURCE, self._ds_content(**overrides))
+                self.assertEqual({f.code for f in report.blocking}, {code})
+
 
 class TestManualFactSetValidation(unittest.TestCase):
 
