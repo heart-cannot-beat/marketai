@@ -109,6 +109,20 @@ OWNER_ONLY_PUBLISH = frozenset(
     }
 )
 
+#: Roles that may publish ``OWNER_ONLY_PUBLISH`` types: the Owner, and a
+#: ``system`` context acting for the Workspace after a hand-off.
+PUBLISH_OWNER_ROLES = frozenset({ROLE_OWNER, "system"})
+
+
+def can_publish(entry_type: str, role: str) -> bool:
+    """Whether ``role`` may publish a version of an ``entry_type`` entry.
+
+    The one rule both the entry's ``publish`` eligibility and the publish
+    command apply, so a button offered as allowed is never refused for role.
+    """
+    return entry_type not in OWNER_ONLY_PUBLISH or role in PUBLISH_OWNER_ROLES
+
+
 EXECUTION_MODE_REAL = "real"
 EXECUTION_MODE_MOCK = "mock"
 EXECUTION_MODES = frozenset({EXECUTION_MODE_REAL, EXECUTION_MODE_MOCK})

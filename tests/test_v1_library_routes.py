@@ -30,9 +30,28 @@ from fastapi.testclient import TestClient
 from tests.support.library_fixtures import LibraryFixtures
 
 from app.library import command_outcomes, service
-from app.library.contracts import ENTRY_PRODUCT
+from app.library.contracts import ENTRY_DATA_SOURCE, ENTRY_PRODUCT, ENTRY_TYPES, ROLE_OWNER
 from app.main import app
 from app.platform.http_identity import request_tenant_context
+from app.platform.tenancy import system_context
+
+#: Every entry lists these; ``bind_reference`` is added for bindable types only.
+_ENTRY_ACTIONS = frozenset({"save_draft", "validate_draft", "publish", "archive"})
+_BINDABLE_TYPES = frozenset({"product", "person"})
+#: Contract §4 Owner-only publish types, written out rather than read from
+#: ``OWNER_ONLY_PUBLISH`` so a change to that set has to change this test too.
+_OWNER_ONLY_PUBLISH_TYPES = frozenset({
+    "offer", "prompt_policy", "data_source", "manual_fact_set",
+    "truth_resolution_policy", "brand_localization_policy",
+})
+_DATA_SOURCE_CONTENT = {
+    "adapter_kind": "manual",
+    "capabilities": ["price"],
+    "market_context": ["US"],
+    "config": {},
+    "config_schema_version": "manual/1.0",
+    "execution_mode": "real",
+}
 
 
 class TestLibraryV1Routes(LibraryFixtures):
@@ -99,7 +118,8 @@ class TestLibraryV1Routes(LibraryFixtures):
         body = resp.json()
         self.assertEqual(body["revision"], 1)
         codes = {a["action"] for a in body["allowed_actions"]}
-        self.assertEqual(codes, {"save_draft", "validate_draft", "publish", "archive", "bind_reference"})
+        # A Product is bindable, so it lists Bind Reference too.
+        self.assertEqual(codes, _ENTRY_ACTIONS | {"bind_reference"})
         # Member role cannot archive.
         archive_action = next(a for a in body["allowed_actions"] if a["action"] == "archive")
         self.assertFalse(archive_action["allowed"])
@@ -115,6 +135,110 @@ class TestLibraryV1Routes(LibraryFixtures):
         app.dependency_overrides[request_tenant_context] = lambda: other_ctx
         resp = self.client.get(f"/api/v1/library/entries/{entry['id']}")
         self.assertEqual(resp.status_code, 404)
+
+    # ------------------------------------------------------------------
+    # Entry eligibility applies the commands' own rules (#24)
+    # ------------------------------------------------------------------
+
+    def _as(self, context):
+        app.dependency_overrides[request_tenant_context] = lambda: context
+        return self.client
+
+    def _entry_actions(self, context, entry_id: str) -> dict[str, dict]:
+        resp = self._as(context).get(f"/api/v1/library/entries/{entry_id}")
+        self.assertEqual(resp.status_code, 200, resp.text)
+        return {a["action"]: a for a in resp.json()["allowed_actions"]}
+
+    def _publish_entry(self, context, entry_id: str, key: str):
+        return self._as(context).post(
+            f"/api/v1/library/entries/{entry_id}/publish",
+            json={},
+            headers={"Idempotency-Key": key, "If-Match": "1"},
+        )
+
+    def _draft_of_every_type(self) -> dict[str, str]:
+        return {
+            entry_type: service.create_entry(
+                self.ctx, entry_type=entry_type, display_name=f"Draft {entry_type}", content={},
+            )["id"]
+            for entry_type in sorted(ENTRY_TYPES)
+        }
+
+    def test_only_products_and_people_list_bind_reference(self):
+        for entry_type, entry_id in self._draft_of_every_type().items():
+            with self.subTest(entry_type=entry_type):
+                actions = self._entry_actions(self.ctx, entry_id)
+                if entry_type in _BINDABLE_TYPES:
+                    self.assertEqual(set(actions), _ENTRY_ACTIONS | {"bind_reference"})
+                    bind = actions["bind_reference"]
+                    self.assertEqual((bind["allowed"], bind["reason_code"]), (True, None))
+                else:
+                    self.assertEqual(set(actions), _ENTRY_ACTIONS)
+
+    def test_publish_eligibility_refuses_a_member_only_the_owner_only_types(self):
+        entries = self._draft_of_every_type()
+        owner = self.owner_ctx(self.ctx)
+        worker = system_context(self.ctx.workspace_id, initiator_id="owner_a", initiator_role=ROLE_OWNER)
+        refused: dict[str, set[tuple[str, str]]] = {}
+        for context in (self.ctx, owner, worker):
+            for entry_type, entry_id in entries.items():
+                publish = self._entry_actions(context, entry_id)["publish"]
+                self.assertEqual(publish["requirements"], ["impact_confirmation"])
+                if not publish["allowed"]:
+                    refused.setdefault(context.role, set()).add((entry_type, publish["reason_code"]))
+        # A Member keeps Publish on Product, Person, Dimension Template and the
+        # rest; the Owner and a system context are refused nothing.
+        self.assertEqual(
+            refused,
+            {"member": {(entry_type, "owner_required") for entry_type in _OWNER_ONLY_PUBLISH_TYPES}},
+        )
+
+    def test_member_refused_publish_is_still_refused_when_sent(self):
+        entry = service.create_entry(
+            self.ctx, entry_type=ENTRY_DATA_SOURCE, display_name="Member source", content=_DATA_SOURCE_CONTENT,
+        )
+        publish = self._entry_actions(self.ctx, entry["id"])["publish"]
+        self.assertEqual((publish["allowed"], publish["reason_code"]), (False, "owner_required"))
+
+        resp = self._publish_entry(self.ctx, entry["id"], "ik-24-member-publish")
+
+        self.assertEqual(resp.status_code, 403, resp.text)
+        self.assertEqual(resp.json()["code"], "library_forbidden")
+        self.assertIsNone(service.get_entry(self.ctx, entry["id"])["current_version_id"])
+
+    def test_owner_and_system_still_publish_an_owner_only_type(self):
+        owner = self.owner_ctx(self.ctx)
+        entry = service.create_entry(
+            self.ctx, entry_type=ENTRY_DATA_SOURCE, display_name="Owner source", content=_DATA_SOURCE_CONTENT,
+        )
+        publish = self._entry_actions(owner, entry["id"])["publish"]
+        self.assertEqual((publish["allowed"], publish["reason_code"]), (True, None))
+
+        resp = self._publish_entry(owner, entry["id"], "ik-24-owner-publish")
+
+        self.assertEqual(resp.status_code, 201, resp.text)
+        self.assertEqual(resp.json()["state"], "effective")
+
+        worker = system_context(self.ctx.workspace_id, initiator_id="owner_a", initiator_role=ROLE_OWNER)
+        handed_off = service.create_entry(
+            self.ctx, entry_type=ENTRY_DATA_SOURCE, display_name="Worker source", content=_DATA_SOURCE_CONTENT,
+        )
+        version = service.publish(worker, handed_off["id"], handed_off["draft"]["revision"])
+        self.assertEqual(version["state"], "effective")
+
+    def test_another_workspace_owner_gets_404_for_an_owner_only_entry(self):
+        entry = service.create_entry(
+            self.ctx, entry_type=ENTRY_DATA_SOURCE, display_name="Hidden source", content=_DATA_SOURCE_CONTENT,
+        )
+        outsider = self._make_context(role=ROLE_OWNER, actor="owner_elsewhere")
+
+        read = self._as(outsider).get(f"/api/v1/library/entries/{entry['id']}")
+        publish = self._publish_entry(outsider, entry["id"], "ik-24-outsider-publish")
+
+        self.assertEqual(read.status_code, 404, read.text)
+        self.assertNotIn("allowed_actions", read.json())
+        self.assertEqual(publish.status_code, 404, publish.text)
+        self.assertIsNone(service.get_entry(self.ctx, entry["id"])["current_version_id"])
 
     # ------------------------------------------------------------------
     # Commands: create / save-draft / validate / publish

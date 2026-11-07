@@ -49,6 +49,7 @@ from .contracts import (
     CLONE_PRODUCT_OPTIONAL_KEYS,
     CLONE_PRODUCT_SAFE_KEYS,
     CONTENT_SCHEMA_VERSIONS,
+    can_publish,
     check_rights_eligible,
     COMMAND_CLONE,
     COMMAND_CREATE,
@@ -68,7 +69,6 @@ from .contracts import (
     ENTRY_TYPES,
     LIFECYCLE_ACTIVE,
     LIFECYCLE_ARCHIVED,
-    OWNER_ONLY_PUBLISH,
     REL_SCHEMA_PRODUCT,
     RELATION_TARGET_TYPES,
     SEVERITY_WARNING,
@@ -1337,7 +1337,7 @@ def publish(
         if entry.lifecycle == LIFECYCLE_ARCHIVED:
             raise LibraryConflict("条目已归档，不能发布新版本", code="entry_archived")
         draft = _draft(session, context, entry_id)
-        if entry.entry_type in OWNER_ONLY_PUBLISH and context.role not in ("owner", "system"):
+        if not can_publish(entry.entry_type, context.role):
             _audit(session, context, "publish", entry_id=entry_id, result="forbidden",
                    detail=audit_base)
             return _TerminalFailure(LibraryForbidden(f"只有 Owner 可以发布 {entry.entry_type} 版本"))
