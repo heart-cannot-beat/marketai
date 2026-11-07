@@ -47,9 +47,10 @@ jobs:
     name: FastAPI / Worker (make verify)
     needs: runner-budget
     runs-on: ${{ needs.runner-budget.outputs.linux_2 || 'ubuntu-24.04' }}
-    # On Blacksmith 2 vCPU (2026-11) the suite takes ~12–13 minutes on an idle
-    # host and ~20 minutes on a slow one; migrations, smoke and setup add
-    # under a minute. Allow the GitHub fallback more time on its hardware.
+    # Run in one process, the suite took 19.5–24.7 minutes on the 4 vCPU
+    # GitHub runner (2026-11-06) and ~12–20 minutes on Blacksmith 2 vCPU.
+    # It now runs on every vCPU (#10); migrations, smoke and setup add under
+    # a minute. The limits stay until the parallel timings have settled.
     timeout-minutes: ${{ needs.runner-budget.outputs.provider == 'blacksmith' && 30 || 40 }}
     env:
       PYTHON: python
@@ -76,8 +77,15 @@ jobs:
         run: |
           echo "nproc: $(nproc)"
           grep -m1 'model name' /proc/cpuinfo || true
+      # One worker per vCPU: `logical` counts vCPUs whether or not psutil is
+      # installed (`auto` would count physical cores when it is). `loadfile`
+      # keeps each file on one worker, in order, so a class's setUpClass is
+      # never split. Every worker imports tests/conftest.py and gets its own
+      # temporary data directory and SQLite database, and conftest defers
+      # the Jobs earlier files left open before each file starts, whatever
+      # files a worker happens to run first.
       - name: Run unit and integration tests
-        run: python -m pytest -q --durations=30 --ignore=tests/test_experiment_decisions_pg.py
+        run: python -m pytest -q -n logical --dist loadfile --durations=30 --ignore=tests/test_experiment_decisions_pg.py
       - name: Apply and verify migrations
         run: make migration-check
       - name: Run isolated business smoke
