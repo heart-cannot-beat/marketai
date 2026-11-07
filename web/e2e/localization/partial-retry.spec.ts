@@ -67,10 +67,19 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(truthEvidence).toContainText(readyMarket!.market);
     await expect(truthEvidence).toContainText(retryMarket!.market);
     await expect(truthEvidence).toContainText(unavailableMarket!.market);
-    await expect(truthEvidence).toContainText('Missing/degraded detail');
-    await expect(truthEvidence).toContainText('discount');
-    await expect(truthEvidence).toContainText('fact_type_not_in_mock_scenario');
-    await expect(truthEvidence).toContainText('on_failure_skip');
+    // The degraded market lists the missing fact type as it is.
+    await expect(truthEvidence).toContainText(
+      'Some facts could not be resolved; the market continues without them. Missing: discount.'
+    );
+    await expect(truthEvidence).toContainText(
+      'Truth says the product is not available in this market.'
+    );
+    await expect(truthEvidence).toContainText(
+      'The mock scenario has no value for this fact.'
+    );
+    await expect(truthEvidence).toContainText(
+      'discount via fallback rule: no source resolved it (policy: skip)'
+    );
     await expect(
       truthEvidence.getByText('unavailable', { exact: true })
     ).toBeVisible();
@@ -241,7 +250,9 @@ test.describe.serial('multi-market partial recovery', () => {
     await expect(
       itemEvidence.getByRole('button', { name: 'Retry item' })
     ).toBeDisabled();
-    await expect(itemEvidence).toContainText('attempts_exhausted');
+    await expect(itemEvidence).toContainText(
+      'Retry unavailable: all allowed attempts have been used'
+    );
 
     expect(
       itemDurabilitySnapshot(
