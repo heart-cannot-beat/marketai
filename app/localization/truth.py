@@ -73,18 +73,17 @@ from .fact_sources import (
     SourceMappingContext,
 )
 
-# `FACT_TYPES` (contracts.py's ManualFactSet vocabulary: price/
-# shipping_availability/delivery_time/tax/discount) is intentionally not
-# imported here: `prepare_truth_resolution_command()` treats a policy rule's
-# `fact_type` as an opaque string and passes it straight through to the
-# adapter layer. `fact_sources._build_fact_value()` (Task 8) recognizes a
-# different, overlapping vocabulary (price/availability/discount/shipping/
-# delivery/product_claim). Where the two disagree (e.g. "shipping_
-# availability" vs "availability"), resolution surfaces a clear
-# `ValueError: Unknown fact_type: ...` from the adapter rather than this
-# module silently translating between them -- see the Task 9 fix-round
-# report for why reconciling the two vocabularies is out of this task's
-# scope.
+# One fact-type vocabulary (#26): the Truth fact families in
+# `app/library/fact_types.py` (price/availability/discount/shipping/
+# delivery/product_claim). The ManualFactSet and TruthResolutionPolicy
+# publish validations accept only these, and `fact_sources._build_fact_value()`
+# dispatches on the same table. This module still treats a policy rule's
+# `fact_type` as an opaque string, on purpose: a version published before
+# #26 may name `tax`, `shipping_availability` or `delivery_time`, and
+# published versions are never rewritten or translated. Such a fact fails at
+# the adapter as `fact_type_unsupported` (or `fact_value_invalid` for a row
+# that breaks its family's value structure), and the rule's `on_failure`
+# decides the market, exactly like any other unresolved fact.
 
 # ---------------------------------------------------------------------------
 # Errors

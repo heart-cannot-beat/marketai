@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal, Mapping, Protocol
 
+from ..library.fact_types import FACT_VALUE_FIELDS, fact_value_problems
+
 
 @dataclass(frozen=True)
 class OfferContext:
@@ -187,39 +189,56 @@ def _canonical_hash(payload: Mapping[str, object]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _build_fact_value(fact_type: str, raw: Mapping[str, object]) -> FactValue:
-    if fact_type == "price":
-        return MoneyFactValue(amount=Decimal(str(raw["amount"])), currency=str(raw["currency"]))
-    if fact_type == "availability":
-        return AvailabilityFactValue(available=bool(raw["available"]))
-    if fact_type == "discount":
-        return DiscountFactValue(
-            discount_type=str(raw["discount_type"]),
-            amount=Decimal(str(raw["amount"])),
-            currency=str(raw["currency"]),
-            conditions=str(raw["conditions"]),
+# One FactValue class per Truth fact family. Each class's fields are exactly
+# `FACT_VALUE_FIELDS[family]`, in order (guarded by tests/test_fact_families.py).
+_FACT_VALUE_CLASSES: dict[str, type[FactValue]] = {
+    "price": MoneyFactValue,
+    "availability": AvailabilityFactValue,
+    "discount": DiscountFactValue,
+    "shipping": ShippingFactValue,
+    "delivery": DeliveryFactValue,
+    "product_claim": ProductClaimFactValue,
+}
+
+
+def _build_fact_value(
+    fact_type: str, raw: Mapping[str, object], *, scope_key: str
+) -> FactValue | FactSourceFailure:
+    """Parse one source row into its family's FactValue.
+
+    A row this parser cannot turn into a fact -- a name outside the Truth
+    fact families (e.g. a ManualFactSet published before #26 with `tax`),
+    or a value that breaks its family's structure -- fails that one fact
+    with a non-transient failure, which the policy's `on_failure` then
+    decides. It never raises: one bad row must not fail the whole request.
+    """
+    value_class = _FACT_VALUE_CLASSES.get(fact_type)
+    if value_class is None:
+        return FactSourceFailure(
+            fact_type=fact_type,
+            scope_key=scope_key,
+            code="fact_type_unsupported",
+            message=(
+                f"fact_type {fact_type!r} is not a Truth fact family "
+                f"(valid: {sorted(_FACT_VALUE_CLASSES)})"
+            ),
+            is_transient=False,
         )
-    if fact_type == "shipping":
-        return ShippingFactValue(
-            method=str(raw["method"]),
-            cost=Decimal(str(raw["cost"])),
-            currency=str(raw["currency"]),
-            delivery_days_min=int(raw["delivery_days_min"]),
-            delivery_days_max=int(raw["delivery_days_max"]),
+    problems = fact_value_problems(fact_type, raw)
+    if problems:
+        return FactSourceFailure(
+            fact_type=fact_type,
+            scope_key=scope_key,
+            code="fact_value_invalid",
+            message=f"{fact_type} value is invalid: " + ", ".join(
+                f"{problem.field} ({problem.code})" for problem in problems
+            ),
+            is_transient=False,
         )
-    if fact_type == "delivery":
-        return DeliveryFactValue(
-            delivery_days_min=int(raw["delivery_days_min"]),
-            delivery_days_max=int(raw["delivery_days_max"]),
-            region=str(raw["region"]),
-        )
-    if fact_type == "product_claim":
-        return ProductClaimFactValue(
-            claim_type=str(raw["claim_type"]),
-            claim_text=str(raw["claim_text"]),
-            evidence_ref=str(raw["evidence_ref"]),
-        )
-    raise ValueError(f"Unknown fact_type: {fact_type}")
+    return value_class(**{
+        field: Decimal(raw[field]) if kind == "decimal" else raw[field]
+        for field, kind in FACT_VALUE_FIELDS[fact_type].items()
+    })
 
 
 class ManualFactSourceAdapter:
@@ -287,7 +306,10 @@ class ManualFactSourceAdapter:
                 )
                 continue
 
-            value = _build_fact_value(fact_type, raw)
+            value = _build_fact_value(fact_type, raw, scope_key=scope_key)
+            if isinstance(value, FactSourceFailure):
+                failures.append(value)
+                continue
             requested_context = _requested_context(request)
             evidence_hash = _canonical_hash(
                 {
@@ -374,7 +396,10 @@ class ControlledMockFactSourceAdapter:
                 )
                 continue
 
-            value = _build_fact_value(fact_type, raw)
+            value = _build_fact_value(fact_type, raw, scope_key=scope_key)
+            if isinstance(value, FactSourceFailure):
+                failures.append(value)
+                continue
             requested_context = _requested_context(request)
             evidence_hash = _canonical_hash(
                 {

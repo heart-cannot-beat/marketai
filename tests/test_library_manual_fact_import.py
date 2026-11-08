@@ -109,7 +109,7 @@ class TestFactValidation(unittest.TestCase):
     def test_multiple_valid_facts(self):
         facts = [
             _valid_fact("f1", "price", "US"),
-            _valid_fact("f2", "tax", "DE"),
+            _valid_fact("f2", "availability", "DE"),
             _valid_fact("f3", "discount", "JP"),
         ]
         errors = _validate_facts(facts)
@@ -192,7 +192,7 @@ class TestProcessManualFactImport(LibraryFixtures):
     def test_draft_contains_facts(self):
         ctx = self.ctx()
         ds = self._create_data_source(ctx)
-        facts = [_valid_fact("f1"), _valid_fact("f2", "tax", "DE")]
+        facts = [_valid_fact("f1"), _valid_fact("f2", "availability", "DE")]
         result = process_manual_fact_import(
             ctx,
             data_source_entry_id=ds["id"],

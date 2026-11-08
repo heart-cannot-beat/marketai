@@ -13,8 +13,9 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
+
+from .fact_types import FACT_FAMILIES, fact_value_problems
 
 
 # --------------------------------------------------------------------------
@@ -885,7 +886,8 @@ ADAPTER_EXECUTION_MODES: dict[str, str] = {
 ADAPTER_KINDS = frozenset(ADAPTER_EXECUTION_MODES)
 CARDINALITIES = frozenset({"one_per_dimension"})
 CONSTRAINT_TYPES = frozenset({"requires", "excludes", "max_occurrence"})
-FACT_TYPES = frozenset({"price", "shipping_availability", "delivery_time", "tax", "discount"})
+# 人工事实集和真值解析策略只接受 Truth 事实族（#26），值结构见 fact_types.FACT_VALUE_FIELDS。
+FACT_TYPES = FACT_FAMILIES
 ON_FAILURE_MODES = frozenset({"block", "degrade", "skip"})
 PRICE_FORBIDDEN_ON_FAILURE = frozenset({"degrade"})
 
@@ -1094,7 +1096,8 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
         else:
             seen_ids.add(str(fact_id))
         fact_type = fact.get("fact_type")
-        if fact_type not in FACT_TYPES:
+        known_type = isinstance(fact_type, str) and fact_type in FACT_TYPES
+        if not known_type:
             findings.append(Finding("fact_type_unknown",
                                     f"fact_type 必须是 {sorted(FACT_TYPES)} 之一", f"{fpath}.fact_type"))
         cc = fact.get("country_code")
@@ -1104,24 +1107,10 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
             findings.append(Finding("fact_valid_from", "必须声明 valid_from", f"{fpath}.valid_from"))
         if not _is_str(fact.get("valid_to")):
             findings.append(Finding("fact_valid_to", "必须声明 valid_to", f"{fpath}.valid_to"))
-        if fact_type == "price":
-            amount = fact.get("amount")
-            if not isinstance(amount, str):
-                findings.append(Finding("fact_amount_not_string",
-                                        "金额必须是 decimal 字符串", f"{fpath}.amount"))
-            elif amount.lower() in ("nan", "inf", "-inf", "infinity", "-infinity"):
-                findings.append(Finding("fact_amount_invalid",
-                                        "金额不能是 NaN 或 Inf", f"{fpath}.amount"))
-            else:
-                try:
-                    Decimal(amount)
-                except InvalidOperation:
-                    findings.append(Finding("fact_amount_parse",
-                                            f"无法解析金额: {amount!r}", f"{fpath}.amount"))
-            currency = fact.get("currency")
-            if not isinstance(currency, str) or len(currency) != 3 or currency != currency.upper():
-                findings.append(Finding("fact_currency",
-                                        "currency 必须是大写 3 位 ISO 4217", f"{fpath}.currency"))
+        if known_type:
+            # 值结构与 Truth 适配器解析时用的是同一张表、同一套规则。
+            for problem in fact_value_problems(fact_type, fact):
+                findings.append(Finding(problem.code, problem.message, f"{fpath}.{problem.field}"))
 
 
 def _validate_truth_resolution_policy(content: dict, findings: list[Finding]) -> None:
@@ -1138,6 +1127,9 @@ def _validate_truth_resolution_policy(content: dict, findings: list[Finding]) ->
         ft = rule.get("fact_type")
         if not _is_str(ft):
             findings.append(Finding("trp_fact_type", "规则需要 fact_type", rpath))
+        elif ft not in FACT_TYPES:
+            findings.append(Finding("trp_fact_type_unknown",
+                                    f"fact_type 必须是 {sorted(FACT_TYPES)} 之一", f"{rpath}.fact_type"))
         elif ft in seen_types:
             findings.append(Finding("trp_duplicate_fact_type",
                                     f"重复 fact_type: {ft}", rpath))

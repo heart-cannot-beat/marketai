@@ -1797,6 +1797,8 @@
   "error-extraction_invalid": "AI 没能从这些内容中整理出完整的产品卡。",
   "error-fact_type_not_in_manual_set": "手填事实集中没有这个事实。",
   "error-fact_type_not_in_mock_scenario": "模拟场景中没有这个事实。",
+  "error-fact_type_unsupported": "这个事实类型已不再支持，请改用现有的事实类型，重新发布事实集和真值策略。",
+  "error-fact_value_invalid": "这个事实的值不完整或格式不对，请在手填事实集中改正后重新发布。",
   "error-factor_value_invalid": "新取值需要填写名称。",
   "error-file_encoding_invalid": "无法识别文件编码，请另存为 UTF-8 CSV。",
   "error-file_too_large": "文件超过 {{limit_mb}} MB。",
