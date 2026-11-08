@@ -625,14 +625,14 @@ describe('An imported draft whose rows have problems (#23)', () => {
       screen.getAllByRole('columnheader').map((cell) => cell.textContent)
     ).toEqual([
       'Fact ID',
+      'Problems',
       'Type',
       'Market',
       'Amount',
       'Valid',
       'Other values',
-      'Problems',
     ]);
-    expect(factRows().map((cells) => cells.at(-1))).toEqual([
+    expect(factRows().map((cells) => cells[1])).toEqual([
       'Row 1: currency',
       'Row 2: valid_to, evidence_source, amount',
       '—No problems',
@@ -653,7 +653,7 @@ describe('An imported draft whose rows have problems (#23)', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'This draft has problems that block publishing.'
     );
-    expect(factRows().map((cells) => cells.at(-1))).toEqual([
+    expect(factRows().map((cells) => cells[1])).toEqual([
       '—No problems',
       '—No problems',
       '—No problems',
@@ -723,7 +723,7 @@ describe('An imported draft whose rows have problems (#23)', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       '有 3 行的问题会阻止发布，草稿页签逐条列出了原因。'
     );
-    expect(factRows().map((cells) => cells.at(-1))).toEqual([
+    expect(factRows().map((cells) => cells[1])).toEqual([
       '第 1 行：currency',
       '第 2 行：valid_to, evidence_source, amount',
       '—没有问题',

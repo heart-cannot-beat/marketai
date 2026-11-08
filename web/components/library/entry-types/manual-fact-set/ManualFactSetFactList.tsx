@@ -209,14 +209,14 @@ function FactList({
             <thead>
               <tr>
                 <th scope="col">{t('fact-list.columns.fact-id')}</th>
+                {showProblems && (
+                  <th scope="col">{t('fact-list.columns.problems')}</th>
+                )}
                 <th scope="col">{t('fact-list.columns.fact-type')}</th>
                 <th scope="col">{t('fact-list.columns.market')}</th>
                 <th scope="col">{t('fact-list.columns.amount')}</th>
                 <th scope="col">{t('fact-list.columns.valid')}</th>
                 <th scope="col">{t('fact-list.columns.other')}</th>
-                {showProblems && (
-                  <th scope="col">{t('fact-list.columns.problems')}</th>
-                )}
               </tr>
             </thead>
             <tbody>
@@ -240,6 +240,23 @@ function FactList({
                     <td className="font-mono text-xs break-all">
                       {text(fact.fact_id) ?? notSet}
                     </td>
+                    {showProblems && (
+                      <td className="text-xs text-red-700 dark:text-red-300">
+                        {fields ? (
+                          t('fact-list.problems.row', {
+                            row: String(index + 1),
+                            fields: fields.join(', '),
+                          })
+                        ) : (
+                          <>
+                            <span aria-hidden="true">—</span>
+                            <span className="sr-only">
+                              {t('fact-list.problems.none')}
+                            </span>
+                          </>
+                        )}
+                      </td>
+                    )}
                     <td className="font-mono text-xs">
                       {text(fact.fact_type) ?? notSet}
                     </td>
@@ -263,23 +280,6 @@ function FactList({
                             </div>
                           ))}
                     </td>
-                    {showProblems && (
-                      <td className="text-xs text-red-700 dark:text-red-300">
-                        {fields ? (
-                          t('fact-list.problems.row', {
-                            row: String(index + 1),
-                            fields: fields.join(', '),
-                          })
-                        ) : (
-                          <>
-                            <span aria-hidden="true">—</span>
-                            <span className="sr-only">
-                              {t('fact-list.problems.none')}
-                            </span>
-                          </>
-                        )}
-                      </td>
-                    )}
                   </tr>
                 );
               })}

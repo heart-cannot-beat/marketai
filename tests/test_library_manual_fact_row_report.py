@@ -188,7 +188,7 @@ class TestRowsDoNotFailTheImport(FactRowReportFixtures):
         events = self.client.get(f"/api/v1/library/entries/{fact_set_id}/events")
         self.assertEqual(events.status_code, 200, events.text)
         kinds = [(e["event_type"], e.get("to_state")) for e in events.json()["items"]]
-        self.assertIn(("draft_created", "editing"), kinds)
+        self.assertIn(("draft_created", DRAFT_VALIDATION_FAILED), kinds)
         self.assertIn(("validated", DRAFT_VALIDATION_FAILED), kinds)
 
 

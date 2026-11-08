@@ -29,7 +29,6 @@ from ..adapters.persistence.models import (
 from ..platform.tenancy import TenantContext
 from ..platform.blob_store import BlobStore, CommittedBlobRef
 from .contracts import (
-    DRAFT_EDITING,
     DRAFT_READY,
     DRAFT_VALIDATION_FAILED,
     ENTRY_MANUAL_FACT_SET,
@@ -222,28 +221,32 @@ def write_manual_fact_set(
     )
     session.add(entry)
     session.flush()
-    draft = LibraryDraftRecord(
-        id=new_id("libdraft"),
-        workspace_id=context.workspace_id,
-        entry_id=entry.id,
-        content_json=content,
-        revision=1,
-        state=DRAFT_EDITING,
-        origin_command="manual_fact_import",
-        source_version_id=None,
-    )
-    session.add(draft)
-    _emit(
-        session, context, entry.id, "draft_created", to_state=DRAFT_EDITING,
-        payload={"origin": "manual_fact_import", "upload_intent_id": upload_intent_id},
-    )
     # The row-by-row report is the one ``validate_draft`` would store for
     # this revision; saving the draft clears it, validating writes it again.
+    # The Worker's database role may insert a draft but not update one
+    # (deploy/postgres/domain-tenant-roles.sql), so the draft row is written
+    # once, already carrying its report and the state that follows from it.
     report, _resolved = _build_report(session, context, entry, content)
-    draft.state = DRAFT_READY if report.ok else DRAFT_VALIDATION_FAILED
-    draft.validation_json = report.as_dict()
+    state = DRAFT_READY if report.ok else DRAFT_VALIDATION_FAILED
+    session.add(
+        LibraryDraftRecord(
+            id=new_id("libdraft"),
+            workspace_id=context.workspace_id,
+            entry_id=entry.id,
+            content_json=content,
+            revision=1,
+            state=state,
+            validation_json=report.as_dict(),
+            origin_command="manual_fact_import",
+            source_version_id=None,
+        )
+    )
     _emit(
-        session, context, entry.id, "validated", to_state=draft.state,
+        session, context, entry.id, "draft_created", to_state=state,
+        payload={"origin": "manual_fact_import", "upload_intent_id": upload_intent_id},
+    )
+    _emit(
+        session, context, entry.id, "validated", to_state=state,
         payload={"blocking": len(report.blocking), "warnings": len(report.warnings)},
     )
     _audit(

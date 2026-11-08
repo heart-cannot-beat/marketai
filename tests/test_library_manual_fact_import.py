@@ -19,7 +19,8 @@ import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import event, select
+from sqlalchemy.engine import Engine
 
 from tests.support.library_fixtures import LibraryFixtures
 
@@ -302,6 +303,30 @@ class TestProcessManualFactImport(LibraryFixtures):
         )
         self.assertEqual(result["draft"]["state"], DRAFT_READY)
         self.assertEqual(result["draft"]["validation"]["blocking"], [])
+
+    def test_the_import_writes_rows_without_updating_any(self):
+        # The Worker runs the import under a database role that may insert a
+        # draft but not update one (deploy/postgres/domain-tenant-roles.sql).
+        # SQLite does not enforce grants, so the statements are checked here.
+        ctx = self.ctx(role=ROLE_OWNER)
+        ds = self._published_data_source(ctx)
+        statements: list[str] = []
+
+        def record(_conn, _cursor, statement, *_args):
+            statements.append(statement.lstrip().upper())
+
+        event.listen(Engine, "before_cursor_execute", record)
+        try:
+            result = process_manual_fact_import(
+                ctx, data_source_entry_id=ds["id"],
+                upload_intent_id="ui_test_grants",
+                content_payload={"facts": [_valid_fact("a"), {**_valid_fact("b"), "currency": "usd"}]},
+            )
+        finally:
+            event.remove(Engine, "before_cursor_execute", record)
+        self.assertEqual(result["draft"]["state"], DRAFT_VALIDATION_FAILED)
+        self.assertTrue(any(s.startswith("INSERT INTO LIBRARY_DRAFTS") for s in statements))
+        self.assertEqual([s for s in statements if s.startswith("UPDATE")], [])
 
     def test_a_member_imports_but_cannot_publish(self):
         owner = self.ctx(role=ROLE_OWNER)
