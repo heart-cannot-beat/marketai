@@ -8,6 +8,8 @@ interface FactsTabProps {
   entryType: LibraryEntryType;
   currentVersionId: string | null;
   draftContent: Record<string, unknown> | null;
+  /** The draft's stored ValidationReport, which marks its problem rows. */
+  draftValidation?: Record<string, unknown> | null;
 }
 
 /**
@@ -21,6 +23,7 @@ export function FactsTab({
   entryType,
   currentVersionId,
   draftContent,
+  draftValidation = null,
 }: FactsTabProps) {
   const { t } = useTranslation('library');
 
@@ -38,6 +41,7 @@ export function FactsTab({
         entryId={entryId}
         currentVersionId={currentVersionId}
         draftContent={draftContent}
+        draftValidation={draftValidation}
       />
     );
   }

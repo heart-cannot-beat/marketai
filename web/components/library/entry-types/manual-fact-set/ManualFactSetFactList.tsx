@@ -2,6 +2,10 @@ import { useTranslation } from 'next-i18next';
 import type { ReactNode } from 'react';
 import { useLibraryRoute } from '@/hooks/library/useLibraryRoute';
 import { useResolvedLibraryVersion } from '@/hooks/library/useResolvedLibraryVersion';
+import {
+  groupByFactRow,
+  storedBlockingFindings,
+} from '@/lib/library/fact-rows';
 import { ProblemState } from '../../detail/ProblemState';
 
 interface ManualFactSetFactListProps {
@@ -10,18 +14,23 @@ interface ManualFactSetFactListProps {
   /** The open Draft's content (`GET /library/entries/{id}` embeds it), read
    * only while the fact set has no published version. */
   draftContent: Record<string, unknown> | null;
+  /** That draft's stored ValidationReport (#23): its blocking findings mark
+   * their rows, and the Draft tab lists each reason. */
+  draftValidation?: Record<string, unknown> | null;
 }
 
 /**
  * The facts of a Manual Fact Set, read-only (#23): the current version's
  * `content.facts`, or the draft's while nothing is published, with a link to
  * the data source the facts were imported into. Imports start on that data
- * source's Facts tab, never here.
+ * source's Facts tab, never here. A draft whose ValidationReport blocks
+ * publishing marks the rows with problems and links to the Draft tab.
  */
 export function ManualFactSetFactList({
   entryId,
   currentVersionId,
   draftContent,
+  draftValidation = null,
 }: ManualFactSetFactListProps) {
   const { t } = useTranslation('library');
   const { version, problem, mismatch, isLoading, refresh } =
@@ -31,9 +40,11 @@ export function ManualFactSetFactList({
     if (!draftContent) return <Note>{t('fact-list.empty')}</Note>;
     return (
       <FactList
+        entryId={entryId}
         content={draftContent}
         heading={t('fact-list.draft-heading')}
         isDraft
+        validation={draftValidation}
       />
     );
   }
@@ -62,6 +73,7 @@ export function ManualFactSetFactList({
 
   return (
     <FactList
+      entryId={entryId}
       content={version.content ?? null}
       heading={t('fact-list.version-heading', {
         no: String(version.version_no),
@@ -99,13 +111,17 @@ function text(value: unknown): string | null {
 }
 
 function FactList({
+  entryId,
   content,
   heading,
   isDraft,
+  validation = null,
 }: {
+  entryId: string;
   content: Record<string, unknown> | null;
   heading: string;
   isDraft: boolean;
+  validation?: Record<string, unknown> | null;
 }) {
   const { t } = useTranslation('library');
   const { setEntry } = useLibraryRoute();
@@ -115,7 +131,23 @@ function FactList({
     return <Note>{t('fact-list.unreadable')}</Note>;
   }
 
-  const rows = facts.filter(isFact);
+  // Indexes stay those of `content.facts`: the report's paths use them.
+  const rows = facts
+    .map((fact, index) => ({ fact, index }))
+    .filter((row): row is { fact: Fact; index: number } => isFact(row.fact));
+  const blocking = validation ? storedBlockingFindings(validation) : [];
+  const report = groupByFactRow(blocking);
+  const problemFields = new Map(
+    report.rows.map(({ index, findings }) => [
+      index,
+      Array.from(
+        new Set(
+          findings.map(({ field }) => field || t('draft.fact-rows.whole-fact'))
+        )
+      ),
+    ])
+  );
+  const showProblems = validation !== null && blocking.length > 0;
   const dataSourceId = text(content?.data_source_entry_id);
   const notSet = (
     <>
@@ -147,6 +179,28 @@ function FactList({
         </p>
       )}
 
+      {showProblems && (
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-950"
+          role="status"
+        >
+          <p className="text-sm text-red-800 dark:text-red-200">
+            {report.rows.length > 0
+              ? t('fact-list.problems.rows', {
+                  count: String(report.rows.length),
+                })
+              : t('fact-list.problems.draft')}
+          </p>
+          <button
+            type="button"
+            className="link link-error text-sm"
+            onClick={() => setEntry(entryId, 'draft')}
+          >
+            {t('fact-list.problems.open-draft')}
+          </button>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <Note>{t('fact-list.empty')}</Note>
       ) : (
@@ -155,6 +209,9 @@ function FactList({
             <thead>
               <tr>
                 <th scope="col">{t('fact-list.columns.fact-id')}</th>
+                {showProblems && (
+                  <th scope="col">{t('fact-list.columns.problems')}</th>
+                )}
                 <th scope="col">{t('fact-list.columns.fact-type')}</th>
                 <th scope="col">{t('fact-list.columns.market')}</th>
                 <th scope="col">{t('fact-list.columns.amount')}</th>
@@ -163,7 +220,7 @@ function FactList({
               </tr>
             </thead>
             <tbody>
-              {rows.map((fact, index) => {
+              {rows.map(({ fact, index }) => {
                 const amount = [text(fact.amount), text(fact.currency)]
                   .filter(Boolean)
                   .join(' ');
@@ -172,11 +229,40 @@ function FactList({
                 const others = Object.entries(fact).filter(
                   ([key, value]) => !LISTED_FIELDS.has(key) && text(value)
                 );
+                const fields = problemFields.get(index);
                 return (
-                  <tr key={index}>
+                  <tr
+                    key={index}
+                    className={
+                      fields ? 'bg-red-50 dark:bg-red-950/40' : undefined
+                    }
+                  >
                     <td className="font-mono text-xs break-all">
                       {text(fact.fact_id) ?? notSet}
                     </td>
+                    {showProblems && (
+                      <td
+                        className={
+                          fields
+                            ? 'text-xs text-red-700 dark:text-red-300'
+                            : 'text-xs'
+                        }
+                      >
+                        {fields ? (
+                          t('fact-list.problems.row', {
+                            row: String(index + 1),
+                            fields: fields.join(', '),
+                          })
+                        ) : (
+                          <>
+                            <span aria-hidden="true">—</span>
+                            <span className="sr-only">
+                              {t('fact-list.problems.none')}
+                            </span>
+                          </>
+                        )}
+                      </td>
+                    )}
                     <td className="font-mono text-xs">
                       {text(fact.fact_type) ?? notSet}
                     </td>

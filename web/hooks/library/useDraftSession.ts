@@ -53,6 +53,31 @@ function toFindings(
   }));
 }
 
+/**
+ * The ValidationReport the server stored on the draft (`DraftSummary.validation`,
+ * `app/library/service.py::_draft_dict`): the last validation of this
+ * revision, or the report a manual fact import wrote when it created the
+ * draft (#23). Saving the draft clears it, so it always belongs to the
+ * revision it arrives with.
+ */
+function storedValidation(draft: DraftData): ValidationResult | null {
+  const report = draft.validation;
+  if (!report || typeof report !== 'object') return null;
+  const {
+    blocking,
+    warnings,
+    content_hash: contentHash,
+  } = report as Partial<ValidateResponse>;
+  if (!Array.isArray(blocking) && !Array.isArray(warnings)) return null;
+  return {
+    blocking: toFindings(blocking, 'blocking'),
+    warnings: toFindings(warnings, 'warning'),
+    revision: draft.revision,
+    contentHash: typeof contentHash === 'string' ? contentHash : '',
+    acknowledged: new Set<string>(),
+  };
+}
+
 export interface ConflictState {
   serverRevision: number;
   serverContent: Record<string, unknown>;
@@ -105,6 +130,8 @@ interface DraftData {
   content?: Record<string, unknown>;
   content_hash?: string;
   etag?: string;
+  /** The stored ValidationReport of this revision, if any. */
+  validation?: Record<string, unknown> | null;
 }
 
 export function useDraftSession(
@@ -164,7 +191,7 @@ export function useDraftSession(
     setBuffer(parsed);
     setIsDirty(false);
     setSaveProblem(undefined);
-    setValidation(null);
+    setValidation(storedValidation(draft));
     setConflict(null);
   }, [draft, entryType, supported]);
 

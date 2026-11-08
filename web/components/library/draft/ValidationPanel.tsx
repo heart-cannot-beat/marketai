@@ -1,5 +1,6 @@
 import { useTranslation } from 'next-i18next';
 import { FindingText } from '@/components/library/FindingText';
+import { FactRowFindings } from './FactRowFindings';
 import type {
   ValidationFinding,
   ValidationResult,
@@ -8,11 +9,15 @@ import type {
 interface ValidationPanelProps {
   validation: ValidationResult;
   onAcknowledge: (code: string) => void;
+  /** Set for a Manual Fact Set: its blocking findings read row by row
+   * (#23), each row with its `fact_id` when the draft has one. */
+  factRows?: { factIds: ReadonlyArray<string | null> };
 }
 
 export function ValidationPanel({
   validation,
   onAcknowledge,
+  factRows,
 }: ValidationPanelProps) {
   const { t } = useTranslation('library');
   const { blocking, warnings, acknowledged } = validation;
@@ -47,11 +52,15 @@ export function ValidationPanel({
           <p className="mt-1 text-sm text-red-800 dark:text-red-200">
             {t('draft.validation-errors', { count: String(blocking.length) })}
           </p>
-          <ul className="mt-2 space-y-1" role="list">
-            {blocking.map((finding, i) => (
-              <FindingItem key={`${finding.code}-${i}`} finding={finding} />
-            ))}
-          </ul>
+          {factRows ? (
+            <FactRowFindings findings={blocking} factIds={factRows.factIds} />
+          ) : (
+            <ul className="mt-2 space-y-1" role="list">
+              {blocking.map((finding, i) => (
+                <FindingItem key={`${finding.code}-${i}`} finding={finding} />
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

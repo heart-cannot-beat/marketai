@@ -69,6 +69,7 @@ from .contracts import (
     ENTRY_TYPES,
     LIFECYCLE_ACTIVE,
     LIFECYCLE_ARCHIVED,
+    REL_FACT_SET_DATA_SOURCE,
     REL_SCHEMA_PRODUCT,
     RELATION_TARGET_TYPES,
     SEVERITY_WARNING,
@@ -853,6 +854,19 @@ def _validate_dependencies(
                 )
                 continue
             edge = DependencyEdge(product_entry.current_version_id, edge.relation, edge.path)
+        elif edge.relation == REL_FACT_SET_DATA_SOURCE:
+            # ManualFactSet.data_source_entry_id names the data source entry
+            # (the import writes it, #23), resolved like product_entry_id
+            # above. Content that holds a data source version ID instead
+            # still resolves as a version below.
+            source_entry = session.get(LibraryEntryRecord, edge.to_version_id)
+            if source_entry is not None and source_entry.workspace_id == context.workspace_id:
+                if not source_entry.current_version_id:
+                    findings.append(
+                        Finding("dependency_not_found", f"引用的数据源尚无已发布版本: {edge.to_version_id}", edge.path)
+                    )
+                    continue
+                edge = DependencyEdge(source_entry.current_version_id, edge.relation, edge.path)
         target = session.get(LibraryVersionRecord, edge.to_version_id)
         if target is None or target.workspace_id != context.workspace_id:
             findings.append(

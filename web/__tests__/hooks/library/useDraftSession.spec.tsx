@@ -576,6 +576,65 @@ describe('useDraftSession', () => {
     });
   });
 
+  describe('the report stored on the draft', () => {
+    // `DraftSummary.validation`: the last validation of this revision, or
+    // the row report a manual fact import wrote with the draft (#23).
+    it('shows the stored report of the revision it arrives with', () => {
+      const { result } = renderHook(() =>
+        useDraftSession(
+          'e1',
+          'product',
+          makeDraft({
+            revision: 4,
+            validation: validationBody(
+              VARIANT_LABEL_MISSING,
+              DEPENDENCY_WARNING
+            ),
+          })
+        )
+      );
+
+      expect(result.current.validation?.blocking).toEqual([
+        VARIANT_LABEL_MISSING,
+      ]);
+      expect(result.current.validation?.warnings).toEqual([DEPENDENCY_WARNING]);
+      expect(result.current.validation?.revision).toBe(4);
+      expect(result.current.validation?.contentHash).toBe('h1');
+      expect(result.current.validation?.acknowledged.size).toBe(0);
+      expect(mockValidateRun).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no report', undefined],
+      ['a cleared report', null],
+      ['a value that is no report', { ok: true }],
+    ])('shows nothing for %s', (_name, validation) => {
+      const { result } = renderHook(() =>
+        useDraftSession('e1', 'product', makeDraft({ validation }))
+      );
+      expect(result.current.validation).toBeNull();
+    });
+
+    it('drops the stored report when a saved revision arrives without one', () => {
+      const { result, rerender } = renderHook(
+        ({ draft }) => useDraftSession('e1', 'product', draft),
+        {
+          initialProps: {
+            draft: makeDraft({
+              validation: validationBody(VARIANT_LABEL_MISSING),
+            }),
+          },
+        }
+      );
+      expect(result.current.validation?.blocking).toHaveLength(1);
+
+      rerender({
+        draft: makeDraft({ revision: 2, etag: 'etag-2', validation: null }),
+      });
+      expect(result.current.validation).toBeNull();
+    });
+  });
+
   describe('validate response fixtures', () => {
     const validator = RESPONSE_VALIDATORS.get('validate_library_draft_200');
 

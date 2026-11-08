@@ -202,6 +202,11 @@ beforeEach(() => {
   });
 });
 
+/** A failed import is a problem with the file as a whole: rows never fail
+ * one (#23), they are reported on the draft. */
+const FILE_REJECTED =
+  'This file could not be imported: use a UTF-8 JSON file with a "facts" list, or a CSV file with a header row, holding 1 to 10,000 facts in no more than 10 MB.';
+
 describe('useManualFactImport', () => {
   it('uploads, imports and names the new fact set draft', async () => {
     const { result } = renderImport();
@@ -332,7 +337,7 @@ describe('useManualFactImport', () => {
           [UPLOAD_OP]: [operationIn(UPLOAD_OP, 'succeeded')],
           [IMPORT_OP]: [operationIn(IMPORT_OP, 'failed')],
         }),
-      'The fact import did not finish.',
+      FILE_REJECTED,
     ],
     [
       'an import that was cancelled',
@@ -341,7 +346,7 @@ describe('useManualFactImport', () => {
           [UPLOAD_OP]: [operationIn(UPLOAD_OP, 'succeeded')],
           [IMPORT_OP]: [operationIn(IMPORT_OP, 'cancelled')],
         }),
-      'The fact import did not finish.',
+      FILE_REJECTED,
     ],
     [
       'a file that failed its upload checks',

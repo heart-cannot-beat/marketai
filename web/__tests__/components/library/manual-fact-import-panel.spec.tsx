@@ -187,7 +187,7 @@ describe('ManualFactImportPanel', () => {
 
     expect(
       await screen.findByText(
-        'Facts imported into a new fact set draft. Review it there before publishing.'
+        'Facts imported into a new fact set draft. Its Draft tab lists any rows to fix before publishing.'
       )
     ).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/\d/);
@@ -208,21 +208,28 @@ describe('ManualFactImportPanel', () => {
 
     expect(
       await screen.findByText(
-        '事实已导入一份新的事实集草稿，请在那里检查后再发布。'
+        '事实已导入一份新的事实集草稿，草稿页签会列出发布前需要修改的行。'
       )
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '打开事实集' })).toBeEnabled();
     expect(container.textContent).not.toMatch(/[A-Za-z]/);
   });
 
-  it('says a failed import did not finish, in Chinese', async () => {
+  it('says a failed import could not read the file, in Chinese', async () => {
     importEndsIn('failed');
     const { container } = renderIn('zh-CN');
     chooseFile('选择要导入的事实文件');
 
-    expect(await screen.findByText('事实导入没有完成。')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        '这个文件无法导入：请使用 UTF-8 编码、带 facts 列表的 JSON 文件，或带表头行的 CSV 文件，包含 1 到 10,000 条事实，大小不超过 10 MB。'
+      )
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重试' })).toBeEnabled();
-    expect(container.textContent).not.toMatch(/[A-Za-z]/);
+    // Only the names of the file's formats and its `facts` key stay Latin.
+    expect(
+      (container.textContent ?? '').replace(/UTF-8|JSON|CSV|MB|facts/g, '')
+    ).not.toMatch(/[A-Za-z]/);
   });
 
   it('keeps an uncertain import apart from a failure', async () => {
@@ -310,7 +317,7 @@ describe('ManualFactImportPanel', () => {
 
     expect(
       await screen.findByText(
-        'Facts imported into a new fact set draft. Review it there before publishing.'
+        'Facts imported into a new fact set draft. Its Draft tab lists any rows to fix before publishing.'
       )
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open fact set' })).toBeNull();

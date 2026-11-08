@@ -19,7 +19,7 @@ from app.library.contracts import (
     validate_content,
 )
 from app.library.fact_types import FACT_FAMILIES, FACT_VALUE_FIELDS
-from app.library.manual_fact_import import _validate_facts
+from app.library.manual_fact_import import parse_manual_fact_payload
 from app.localization import claim_facts, fact_sources
 from app.localization.fact_sources import (
     AvailabilityFactValue,
@@ -87,6 +87,7 @@ def _row(fact_type: str, fact_id: str = "fact-1", **values: object) -> dict:
         "country_code": "DE",
         "valid_from": (now - timedelta(days=1)).isoformat(),
         "valid_to": (now + timedelta(days=30)).isoformat(),
+        "evidence_source": "Acme Charge price list",
         **values,
     }
 
@@ -297,17 +298,36 @@ class TestAdapterNeverRaisesOnARow(unittest.TestCase):
         self.assertEqual([f.code for f in result.failures], ["fact_value_invalid"])
 
 
-class TestManualFactImportVocabulary(unittest.TestCase):
+def _csv_text(value: object) -> str:
+    """A JSON value as a spreadsheet would write it into a CSV cell."""
+    return str(value).lower() if isinstance(value, bool) else str(value)
 
-    def test_import_accepts_every_family(self):
+
+class TestCsvImportPublishes(unittest.TestCase):
+    """#23: a CSV holds only strings; the import converts them by family (#50's gap)."""
+
+    def test_a_csv_row_of_every_family_passes_publish_validation(self):
         rows = [_row(family, f"fact-{i}", **_VALUES[family]) for i, family in enumerate(_FAMILIES)]
-        self.assertEqual(_validate_facts(rows), [])
+        columns = list(dict.fromkeys(key for row in rows for key in row))
+        lines = [",".join(columns)] + [
+            ",".join(_csv_text(row[column]) if column in row else "" for column in columns)
+            for row in rows
+        ]
+        imported = parse_manual_fact_payload("\n".join(lines).encode(), content_type="text/csv")
 
-    def test_import_rejects_tax(self):
-        errors = _validate_facts([_row("tax", rate="0.19")])
-        self.assertEqual(len(errors), 1)
-        self.assertIn("facts[0]", errors[0])
-        self.assertIn("fact_type", errors[0])
+        self.assertEqual(imported["facts"], rows)
+        self.assertEqual(_blocking(ENTRY_MANUAL_FACT_SET, _fact_set(*imported["facts"])), set())
+
+    def test_a_tax_row_is_reported_on_the_draft_not_rejected_by_the_import(self):
+        imported = parse_manual_fact_payload(
+            b"fact_id,fact_type,country_code,valid_from,valid_to,evidence_source,rate\n"
+            b"fact-1,tax,DE,2026-01-01,2026-12-31,tax table,0.19\n",
+            content_type="text/csv",
+        )
+        self.assertEqual(
+            _blocking(ENTRY_MANUAL_FACT_SET, _fact_set(*imported["facts"])),
+            {("fact_type_unknown", "facts[0].fact_type")},
+        )
 
 
 if __name__ == "__main__":

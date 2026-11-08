@@ -176,13 +176,14 @@ function version(content: unknown = CONTENT) {
   };
 }
 
-const draft = (content: unknown) => ({
+const draft = (content: unknown, validation: unknown = null) => ({
   id: 'drf_fs_1',
   entry_id: FACT_SET,
   revision: 1,
-  state: 'editing',
+  state: validation ? 'validation_failed' : 'editing',
   content_schema_version: 1,
   content,
+  validation,
 });
 
 function route(entryId: string, tab: LibraryTab | null): LibraryRouteState {
@@ -499,6 +500,237 @@ describe('Manual Fact Set Facts tab', () => {
     ]);
     expect(
       screen.getByRole('button', { name: '打开来源数据源' })
+    ).toBeInTheDocument();
+  });
+});
+
+/** An imported file whose rows have problems (#23): the import still created
+ * the draft, and stored the publish validation's report on it. */
+const IMPORTED_FACTS = [
+  {
+    fact_id: 'price-us',
+    fact_type: 'price',
+    country_code: 'US',
+    amount: '49.00',
+    valid_from: '2026-11-01',
+    valid_to: '2026-12-31',
+    evidence_source: 'Acme Charge price list',
+  },
+  {
+    fact_id: 'price-de',
+    fact_type: 'price',
+    country_code: 'DE',
+    amount: '49,00',
+    currency: 'EUR',
+    valid_from: '2026-12-31',
+    valid_to: '2026-11-01',
+  },
+  {
+    fact_id: 'ship-de',
+    fact_type: 'shipping',
+    country_code: 'DE',
+    method: 'standard',
+    cost: '4.90',
+    currency: 'EUR',
+    delivery_days_min: 2,
+    delivery_days_max: 5,
+    valid_from: '2026-11-01',
+    valid_to: '2026-12-31',
+    evidence_source: 'Kestrel Power carrier rates',
+  },
+  {
+    fact_id: 'tax-de',
+    fact_type: 'tax',
+    country_code: 'DE',
+    rate: '0.19',
+    valid_from: '2026-11-01',
+    valid_to: '2027-06-30',
+    evidence_source: 'tax table',
+  },
+];
+
+const blockingAt = (code: string, path: string, message = '') => ({
+  code,
+  message,
+  path,
+  severity: 'blocking',
+});
+
+const IMPORT_REPORT = {
+  entry_type: 'manual_fact_set',
+  content_hash: 'sha256:1111',
+  ok: false,
+  blocking: [
+    blockingAt(
+      'dependency_not_found',
+      'data_source_entry_id',
+      '引用的数据源尚无已发布版本'
+    ),
+    blockingAt('fact_value_missing', 'facts[0].currency', '缺少字段 currency'),
+    blockingAt(
+      'fact_valid_range',
+      'facts[1].valid_to',
+      'valid_to 必须晚于 valid_from'
+    ),
+    blockingAt(
+      'fact_evidence_source_required',
+      'facts[1].evidence_source',
+      '必须声明证据来源 evidence_source'
+    ),
+    blockingAt(
+      'fact_amount_parse',
+      'facts[1].amount',
+      "无法解析 amount: '49,00'"
+    ),
+    blockingAt(
+      'fact_type_unknown',
+      'facts[3].fact_type',
+      'fact_type 必须是…之一'
+    ),
+  ],
+  warnings: [],
+};
+
+function importedDraft(report: unknown = IMPORT_REPORT) {
+  known.getLibraryEntry.mockResolvedValue(
+    ok(
+      entry({
+        current_version_id: null,
+        draft: draft({ ...CONTENT, facts: IMPORTED_FACTS }, report),
+      })
+    )
+  );
+}
+
+/** Each row group of the Draft tab's report, as its text. */
+async function reportRows(label: string) {
+  const list = await screen.findByRole('list', { name: label });
+  return within(list)
+    .getAllByRole('listitem')
+    .filter((item) => item.parentElement === list)
+    .map((item) => item.textContent);
+}
+
+const CJK = /[㐀-鿿]/;
+
+describe('An imported draft whose rows have problems (#23)', () => {
+  it('marks the rows on the Facts tab and links to the Draft tab', async () => {
+    importedDraft();
+    renderDetail(FACT_SET, 'facts');
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '3 row(s) have problems that block publishing. The Draft tab lists each reason.'
+    );
+    expect(
+      screen.getAllByRole('columnheader').map((cell) => cell.textContent)
+    ).toEqual([
+      'Fact ID',
+      'Problems',
+      'Type',
+      'Market',
+      'Amount',
+      'Valid',
+      'Other values',
+    ]);
+    expect(factRows().map((cells) => cells[1])).toEqual([
+      'Row 1: currency',
+      'Row 2: valid_to, evidence_source, amount',
+      '—No problems',
+      'Row 4: fact_type',
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Draft tab' }));
+    expect(mockSetEntry).toHaveBeenCalledWith(FACT_SET, 'draft');
+  });
+
+  it('says the draft is blocked when only the fact set as a whole has a problem', async () => {
+    importedDraft({
+      ...IMPORT_REPORT,
+      blocking: IMPORT_REPORT.blocking.slice(0, 1),
+    });
+    renderDetail(FACT_SET, 'facts');
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'This draft has problems that block publishing.'
+    );
+    expect(factRows().map((cells) => cells[1])).toEqual([
+      '—No problems',
+      '—No problems',
+      '—No problems',
+      '—No problems',
+    ]);
+  });
+
+  it('marks nothing once the draft passes', async () => {
+    importedDraft({ ...IMPORT_REPORT, ok: true, blocking: [] });
+    renderDetail(FACT_SET, 'facts');
+
+    expect(await screen.findByText('Facts in the draft')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Problems' })).toBeNull();
+  });
+
+  it('lists each problem by row, field and reason on the Draft tab', async () => {
+    importedDraft();
+    renderDetail(FACT_SET, 'draft');
+
+    const results = await screen.findByRole('region', {
+      name: 'Validation results',
+    });
+    expect(within(results).getByRole('status')).toHaveTextContent(
+      'Validation failed'
+    );
+    expect(
+      screen.getByText(
+        '3 row(s) must be fixed before this fact set can be published. Row 1 is the first fact in the file (in a CSV file, the first line after the header).'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The referenced version does not exist or has not been published yet.',
+        { exact: false }
+      )
+    ).toHaveTextContent('data_source_entry_id:');
+    expect(await reportRows('Problems by row')).toEqual([
+      'Row 1price-uscurrency: This value is missing.',
+      'Row 2price-devalid_to: The fact must stop being valid later than it starts.' +
+        'evidence_source: Say where this fact comes from (evidence_source), such as the price list or contract it was taken from.' +
+        'amount: The amount is not a valid decimal number.',
+      'Row 4tax-defact_type: The fact type must be price, availability, discount, shipping, delivery or product_claim.',
+    ]);
+    expect(results.textContent).not.toMatch(CJK);
+  });
+
+  it('reads in Chinese', async () => {
+    importedDraft();
+    renderDetail(FACT_SET, 'draft', 'zh-CN');
+
+    const results = await screen.findByRole('region', { name: '校验结果' });
+    expect(within(results).getByRole('status')).toHaveTextContent('校验未通过');
+    expect(await reportRows('按行列出的问题')).toEqual([
+      '第 1 行price-uscurrency: 缺少这个值。',
+      '第 2 行price-devalid_to: 失效时间必须晚于生效时间。' +
+        'evidence_source: 请填写这条事实的证据来源（evidence_source），例如它取自哪份价目表或合同。' +
+        'amount: 金额不是有效的十进制数。',
+      '第 4 行tax-defact_type: 事实类型必须是 price、availability、discount、shipping、delivery 或 product_claim。',
+    ]);
+  });
+
+  it('marks the rows on the Facts tab in Chinese', async () => {
+    importedDraft();
+    renderDetail(FACT_SET, 'facts', 'zh-CN');
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '有 3 行的问题会阻止发布，草稿页签逐条列出了原因。'
+    );
+    expect(factRows().map((cells) => cells[1])).toEqual([
+      '第 1 行：currency',
+      '第 2 行：valid_to, evidence_source, amount',
+      '—没有问题',
+      '第 4 行：fact_type',
+    ]);
+    expect(
+      screen.getByRole('button', { name: '打开草稿页签' })
     ).toBeInTheDocument();
   });
 });
