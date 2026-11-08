@@ -7,6 +7,7 @@ import {
   type ImpactProjection,
 } from '@/hooks/library/useLibraryCommandImpact';
 import { errorMessage } from '@/lib/i18n/domain-errors';
+import { FindingText } from '@/components/library/FindingText';
 
 interface PublishDialogProps {
   entryId: string;
@@ -68,7 +69,7 @@ export function PublishDialog({
   // for every warning the impact projection reports and the caller has not
   // already acknowledged.
   const pendingWarningCodes = useMemo(() => {
-    const findings = impactHook.impact?.warningFindings ?? [];
+    const findings = impactHook.impact?.warnings ?? [];
     return findings
       .map((finding) => finding.code)
       .filter((code) => !acknowledgedWarnings.includes(code));
@@ -80,7 +81,7 @@ export function PublishDialog({
   const canConfirm =
     impactHook.impact &&
     !impactHook.isStale &&
-    impactHook.impact.blockingReasons.length === 0 &&
+    impactHook.impact.blocking.length === 0 &&
     (!needsAcknowledgement || warningsAcknowledgedHere);
 
   const handlePublish = async () => {
@@ -226,7 +227,7 @@ function ImpactSummary({
 
   return (
     <div className="mt-4 space-y-3">
-      {impact.blockingReasons.length > 0 && (
+      {impact.blocking.length > 0 && (
         <div
           className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20"
           role="alert"
@@ -235,8 +236,10 @@ function ImpactSummary({
             {t('commands.publish-blocked')}
           </p>
           <ul className="mt-1 list-disc pl-4 text-sm text-red-700 dark:text-red-400">
-            {impact.blockingReasons.map((r) => (
-              <li key={r}>{r}</li>
+            {impact.blocking.map((finding, i) => (
+              <li key={`${finding.code}-${i}`}>
+                <FindingText finding={finding} />
+              </li>
             ))}
           </ul>
         </div>
@@ -248,8 +251,10 @@ function ImpactSummary({
             {t('commands.publish-warnings')}
           </p>
           <ul className="mt-1 list-disc pl-4 text-sm text-amber-700 dark:text-amber-400">
-            {impact.warnings.map((w) => (
-              <li key={w}>{w}</li>
+            {impact.warnings.map((finding, i) => (
+              <li key={`${finding.code}-${i}`}>
+                <FindingText finding={finding} />
+              </li>
             ))}
           </ul>
           {needsAcknowledgement && (

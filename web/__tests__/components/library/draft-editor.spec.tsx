@@ -269,11 +269,14 @@ describe('DraftEditor', () => {
     ).toBeInTheDocument();
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(2);
+    // Each finding reads as its code's copy, after its path; a whole-draft
+    // finding shows no path. The server's own sentence is not shown.
     expect(items[0]).toHaveTextContent(
-      'facts[3].currency: currency must be an upper-case ISO 4217 code'
+      'facts[3].currency: library:validation-findings.fact_currency'
     );
-    expect(items[1]).toHaveTextContent('at least one fact is required');
-    expect(items[1].textContent).not.toContain(':');
+    expect(items[1].textContent).toBe(
+      'library:validation-findings.fact_set_empty'
+    );
   });
 
   it('shows validation panel with warnings and acknowledge button', () => {
@@ -307,8 +310,11 @@ describe('DraftEditor', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('library:draft.validation-failed')).toBeNull();
     expect(
-      screen.getByText('Referenced version is eligible with a warning')
+      screen.getByText('library:validation-findings.dependency_warning')
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Referenced version is eligible with a warning')
+    ).toBeNull();
     expect(
       screen.getByText(/reference_bindings\[0\]\.reference_version_id/)
     ).toBeInTheDocument();
