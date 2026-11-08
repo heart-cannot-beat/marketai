@@ -86,7 +86,7 @@ JOB_POLICIES: dict[str, JobPolicy] = {
     "generation.export_package": _policy(
         _NONE_REQUEUE, "只打 ZIP 写 BlobStore；最终写入在 ExportPackage 行锁下（#22）"),
     "scale_export": _policy(
-        _NONE_REQUEUE, "结果引用仍是占位；最终写入在 ScaleExport 行锁下（#22）。生产 Worker 尚不分发此类型"),
+        _NONE_REQUEUE, "结果引用仍是占位；最终写入在 ScaleExport 行锁下（#22）。生产 Worker 自 #55 起分发"),
     "localization.run_deterministic_qc": _policy(
         _NONE_REQUEUE, "本地检查，单事务，在 Item 行锁下（#22）"),
     "localization.finalize_item": _policy(

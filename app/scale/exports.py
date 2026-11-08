@@ -3,10 +3,11 @@
 Issue #87 Task 5.
 
 Creates a durable Operation for each export request and dispatches the
-build to a Job the Scale Worker (``app.scale.worker``) runs in its own
-capability-isolated composition root -- no Meta write port, matching every
-other module under ``app/scale`` (see ``app.scale.worker``'s module
-docstring; ``tests/test_scale_worker_isolation.py`` enforces this by AST
+build to a ``scale_export`` Job. The deployed Worker
+(``app.worker_runtime.WorkerRuntime``) runs it (#55); ``app.scale.worker``'s
+capability-isolated runtime dispatches it too but is not deployed. Neither
+hands this module a Meta write port, matching every other module under
+``app/scale`` (``tests/test_scale_worker_isolation.py`` enforces this by AST
 inspection). ``ScaleExportRecord.result_object_reference`` stores only a
 safe object reference after the Worker "commits" the export -- raw payloads
 and object keys never enter a Scale HTTP response; downloads go through the
@@ -15,8 +16,10 @@ platform's existing authorized download-intent seam
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,7 +36,7 @@ from app.platform.operations import (
     get_operation,
     transition_operation,
 )
-from app.platform.tenancy import TenantContext, tenant_scope
+from app.platform.tenancy import VALID_META_MODES, TenantContext, tenant_scope
 
 from .command_journal import claim_command, command_request_fingerprint
 from .models import ScaleEnrollmentRecord, ScaleEpisodeRecord, ScaleExportRecord
@@ -46,6 +49,7 @@ __all__ = [
     "DownloadIntentResult",
     "create_export",
     "create_export_download_intent",
+    "export_job_context",
     "run_scale_export",
 ]
 
@@ -192,7 +196,9 @@ def create_export(
             session,
             context=context,
             job_type="scale_export",
-            payload={"export_id": export_id},
+            # The Worker's claimed context is frozen from the Job row, which
+            # has no meta_mode; ``export_job_context`` reads it back from here.
+            payload={"export_id": export_id, "meta_mode": context.meta_mode},
             idempotency_key=f"scale_export_job:{export_id}",
             resource_type="scale_export",
             resource_id=export_id,
@@ -265,6 +271,23 @@ def _build_safe_result_reference(export: ScaleExportRecord) -> str:
     :func:`create_export_download_intent`.
     """
     return new_id("sblob")
+
+
+def export_job_context(context: TenantContext, payload: Mapping[str, Any]) -> TenantContext:
+    """The TenantContext a ``scale_export`` Job runs its export under (#55).
+
+    A claimed Job's context is frozen from the Job row, which records no
+    ``meta_mode``, and ``scale_exports``' RLS policy
+    (``marketai_meta_context_is_current(workspace_id, meta_mode)``) shows a
+    row only to a context that names its mode. Without it the export would
+    look missing and the Job would succeed having done nothing, so a payload
+    with no valid mode is refused here instead. Launch's Jobs carry their
+    mode the same way (``WorkerRuntime._launch_job_context``).
+    """
+    meta_mode = str(payload.get("meta_mode") or "")
+    if meta_mode not in VALID_META_MODES:
+        raise ExportError("missing_input", "缺少或无效的 meta_mode")
+    return replace(context, meta_mode=meta_mode)
 
 
 def run_scale_export(

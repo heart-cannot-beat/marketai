@@ -42,7 +42,7 @@ from app.adapters.persistence.database import SessionLocal, assert_runtime_role,
 from app.platform import jobs
 from app.platform.tenancy import TenantContext
 from app.scale.advice import AdviceLifecycleError, expire_advice_thread
-from app.scale.exports import ExportError, run_scale_export
+from app.scale.exports import ExportError, export_job_context, run_scale_export
 from app.scale.service import ScaleOrchestrationError, run_scale_evaluation
 
 _JOB_POLL_SECONDS = float(os.getenv("JOB_POLL_SECONDS", "0.5"))
@@ -179,20 +179,24 @@ class ScaleWorkerRuntime:
         lifecycle around it, matching ``_scale_evaluate``'s split.
         """
         export_id = str(job.payload.get("export_id") or "")
-        if not export_id:
+        try:
+            if not export_id:
+                raise ExportError("missing_input", "缺少 export_id")
+            context = export_job_context(job.context, job.payload)
+        except ExportError as exc:
             jobs.fail(
                 job.context,
                 job.id,
                 self.owner,
-                code="missing_input",
-                detail="缺少 export_id",
+                code=exc.code,
+                detail=str(exc),
                 retryable=False,
             )
             return
         jobs.mark_running(job.context, job.id, self.owner)
         try:
-            with tenant_session(job.context) as session:
-                run_scale_export(session, job.context, export_id)
+            with tenant_session(context) as session:
+                run_scale_export(session, context, export_id)
             jobs.succeed(job.context, job.id, self.owner)
         except ExportError as exc:
             jobs.fail(

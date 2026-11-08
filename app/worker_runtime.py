@@ -329,6 +329,9 @@ class WorkerRuntime:
         if job.type == "scale_evaluate":
             self._scale_evaluate(job)
             return True
+        if job.type == "scale_export":
+            self._scale_export(job)
+            return True
         if job.type in _LOCALIZATION_JOB_TYPES:
             await self._localization_job(job)
             return True
@@ -1756,6 +1759,59 @@ class WorkerRuntime:
                 job.id,
                 self.owner,
                 code="scale_evaluate_failed",
+                detail=str(exc),
+                retryable=False,
+            )
+
+    def _scale_export(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_export`` job (#55).
+
+        This Worker is the one deployed (``python -m worker.main``), so it
+        is the one that has to run Scale exports. Like ``_scale_evaluate``
+        it only delegates to ``app.scale``: ``run_scale_export`` never sees
+        this runtime's ``meta_client``/``launch_adapter``, and Scale makes
+        no Meta write. ``run_scale_export`` settles the Operation itself,
+        in one transaction under the export's row lock, so a rerun after a
+        crash (``crash=requeue`` in ``app.platform.job_policy``) finds the
+        export completed and only closes the Job.
+        """
+        from app.scale.exports import ExportError, export_job_context, run_scale_export
+
+        export_id = str(job.payload.get("export_id") or "")
+        try:
+            if not export_id:
+                raise ExportError("missing_input", "缺少 export_id")
+            context = export_job_context(job.context, job.payload)
+        except ExportError as exc:
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code=exc.code,
+                detail=str(exc),
+                retryable=False,
+            )
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            with tenant_session(context) as session:
+                run_scale_export(session, context, export_id)
+            jobs.succeed(job.context, job.id, self.owner)
+        except ExportError as exc:
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code=exc.code,
+                detail=str(exc),
+                retryable=False,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code="scale_export_failed",
                 detail=str(exc),
                 retryable=False,
             )

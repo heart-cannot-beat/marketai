@@ -570,6 +570,23 @@ class TestScaleExportCrashRecovery(ScaleExportFixture, CrashRecoveryCases):
         self.assertFalse(self.observe()["completed"])
 
 
+class DeployedWorkerScaleExportFixture(ScaleExportFixture):
+    """``scale_export`` run by ``WorkerRuntime``, the only Worker deployed (#55)."""
+
+    def runtime(self, owner: str):
+        return WorkerRuntime(owner=owner)
+
+    run_once = CrashRecoveryFixture.run_once
+
+
+class TestScaleExportCrashRecoveryOnTheDeployedWorker(
+    DeployedWorkerScaleExportFixture, CrashRecoveryCases,
+):
+    test_a_rerun_that_finds_the_operation_failed_writes_nothing = (
+        TestScaleExportCrashRecovery.test_a_rerun_that_finds_the_operation_failed_writes_nothing
+    )
+
+
 # ---------------------------------------------------------------------------
 # localization.run_deterministic_qc / finalize_item / fold_batch
 # ---------------------------------------------------------------------------
