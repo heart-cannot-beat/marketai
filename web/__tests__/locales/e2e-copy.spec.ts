@@ -41,7 +41,6 @@ const NOT_COPY: Readonly<Record<string, string>> = {
   'Golden Path Experiment': 'golden-path area driver Experiment name',
   'Golden Path Workspace': 'golden-path provisioned Workspace name',
   'E2E Controlled Mock Product': 'onboarding seeded Product',
-  'Cross-area journey': 'cross-area seeded Experiment name prefix',
   冰川白: 'colour in the pasted product text the intake suite submits',
   曜石黑: 'colour in the pasted product text the intake suite submits',
   // Data the page shows as the fixtures or the backend gave it.
@@ -60,8 +59,6 @@ const NOT_COPY: Readonly<Record<string, string>> = {
   'A Approve': 'review shortcut key A beside the Approve copy',
   'C Needs changes': 'review shortcut key C beside the Needs changes copy',
   'X Reject': 'review shortcut key X beside the Reject copy',
-  // Never-called golden-path driver code, removed by #28.
-  'Submit Draft': 'area-drivers/scale.ts observeAdviceAndConvertDraft',
 };
 
 type Case = 'sensitive' | 'insensitive';

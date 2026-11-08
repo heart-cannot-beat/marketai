@@ -42,7 +42,7 @@ export default defineConfig({
     },
     {
       name: 'tablet-chromium',
-      testIgnore: [/onboarding\//, /cross-area\//],
+      testIgnore: /onboarding\//,
       use: {
         ...devices['iPad Pro 11 landscape'],
         storageState: 'e2e/.auth/owner.json',
@@ -51,7 +51,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-chromium',
-      testIgnore: [/onboarding\//, /cross-area\//],
+      testIgnore: /onboarding\//,
       use: {
         ...devices['Pixel 7'],
         storageState: 'e2e/.auth/owner.json',
