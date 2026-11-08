@@ -26,6 +26,15 @@ export function isScaleMetaMode(value: unknown): value is ScaleMetaMode {
 }
 
 /**
+ * The `scale` key that words a Meta mode read from the server, the same
+ * `meta-mode.*` copy `MetaModeSelect` offers. A mode this build does not
+ * know reads as the generic `meta-mode.unknown`, never as its code (#58).
+ */
+export function metaModeLabelKey(mode: string): string {
+  return isScaleMetaMode(mode) ? `meta-mode.${mode}` : 'meta-mode.unknown';
+}
+
+/**
  * `meta_mode` is exclusively a URL path segment for every Scale route (spec
  * §3.10-§3.11, Issue #86 Task 6) -- never a query parameter or request-body
  * field. This mirrors `app.scale.v1_router`'s `mode_router`, mounted at

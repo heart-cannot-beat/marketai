@@ -100,8 +100,6 @@ for reasons outside the suites' copy and seeds:
 - Scale, controlled-mock journey step 07: creating a Target publication
   preview in `controlled_mock` returns 500 (the command is claimed without a
   `scenario_scope_key`). Steps 08–18 do not run.
-- Scale, Sandbox smoke step 3: the Enrollment page shows the raw Meta mode
-  (`customer_sandbox`) where the test expects the copy "Customer sandbox".
 
 ## Manual workflow
 
