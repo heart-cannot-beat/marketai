@@ -498,6 +498,24 @@
     "upload-rejected": "文件没有通过上传检查。请使用不超过 10 MB 的 CSV 或 JSON 文件。",
     "open-fact-set": "打开事实集"
   },
+  "fact-list": {
+    "version-heading": "版本 {{no}} 的事实",
+    "draft-heading": "草稿中的事实",
+    "draft-notice": "这是草稿，还没有发布。",
+    "open-source": "打开来源数据源",
+    "empty": "这个事实集还没有事实。",
+    "unreadable": "这里无法显示这些事实。",
+    "not-set": "未填写",
+    "valid-range": "{{from}} 至 {{to}}",
+    "columns": {
+      "fact-id": "事实 ID",
+      "fact-type": "类型",
+      "market": "市场",
+      "amount": "金额",
+      "valid": "有效期",
+      "other": "其他值"
+    }
+  },
   "contextual-create": {
     "new": "新建{{type}}",
     "title": "创建{{type}}",
