@@ -1,0 +1,143 @@
+{
+  "product": {
+    "name": "Acme Charge 65W",
+    "description": "65W GaN travel charger",
+    "audience": "Frequent travellers",
+    "selling_points": ["Compact", "Three ports"]
+  },
+  "offer": {
+    "product_version_id": "lv_acme_charge_65w_product_1",
+    "item": {
+      "sku": "ACME-65W",
+      "variant_label": "Black",
+      "quantity": 1,
+      "bundle_components": []
+    },
+    "landing_page_url": "https://acme-charge.example/65w",
+    "market_scope": ["US", "DE"],
+    "claim_constraints": ["No medical claims"],
+    "valid_from": "2026-01-01",
+    "valid_to": "2099-12-31"
+  },
+  "person": {
+    "name": "Nova",
+    "person_type": "fictional",
+    "age_expression": "25-30",
+    "prompt_fragments": ["calm presenter in business casual"],
+    "rights": {
+      "state": "granted",
+      "scope": "Fictional character",
+      "regions": ["US"],
+      "channels": ["meta"]
+    }
+  },
+  "reference_asset": {
+    "object_id": "obj_acme_charge_65w_front",
+    "source": "upload",
+    "file": {
+      "content_sha256": "3f2a9c1d5e7b8a604c2d1e9f8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b",
+      "mime_type": "image/png",
+      "byte_size": 20480,
+      "width": 1024,
+      "height": 1024
+    },
+    "rights": {
+      "state": "granted",
+      "scope": "global_paid_social",
+      "declared_by": "user_acme_owner",
+      "valid_to": "2099-12-31"
+    },
+    "gate_checks": [],
+    "derivative": {
+      "sha256": "9b0a1f2e3d4c5b6a7f8e9d0c1b2a3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a",
+      "mime_type": "image/webp",
+      "byte_size": 10240,
+      "width": 512,
+      "height": 512
+    }
+  },
+  "reference_group": {
+    "members": [
+      {
+        "reference_version_id": "lv_acme_charge_65w_front_1",
+        "role": "white_studio"
+      }
+    ]
+  },
+  "reference_selection_rule": {
+    "rules": [
+      {
+        "match": { "dimension_id": "scene", "value_id": "studio" },
+        "group_version_id": "lv_acme_charge_white_studio_1",
+        "priority": 0
+      }
+    ]
+  },
+  "market_source_mapping": {
+    "offer_version_id": "lv_acme_charge_65w_offer_1",
+    "data_source_version_id": "lv_acme_charge_shop_1",
+    "external_object": {
+      "kind": "variant",
+      "id": "gid://acme-charge.example/ProductVariant/1001"
+    },
+    "market": "US",
+    "execution_mode": "real"
+  },
+  "dimension_template": {
+    "dimensions": [
+      {
+        "id": "scene",
+        "name": "Scene",
+        "values": [
+          {
+            "id": "studio",
+            "positive_fragments": ["white studio"],
+            "negative_fragments": []
+          }
+        ]
+      }
+    ],
+    "constraints": [],
+    "combination_cardinality": "one_per_dimension"
+  },
+  "dimension_schema": {
+    "product_entry_id": "le_acme_charge_65w",
+    "dimensions": [{ "id": "scene", "values": ["studio"] }],
+    "combination_cardinality": "one_per_dimension"
+  },
+  "prompt_policy": {
+    "registered_tokens": [{ "name": "brand_name", "default": "Acme Charge" }],
+    "locked_phrases": ["Acme Charge"],
+    "allowed_template_entry_ids": []
+  },
+  "data_source": {
+    "adapter_kind": "manual",
+    "execution_mode": "real",
+    "config": { "markets": ["US"] }
+  },
+  "manual_fact_set": {
+    "data_source_entry_id": "le_acme_charge_manual_source",
+    "facts": [
+      {
+        "fact_id": "price-us-65w",
+        "fact_type": "price",
+        "country_code": "US",
+        "valid_from": "2026-01-01",
+        "valid_to": "2099-12-31",
+        "evidence_source": "https://acme-charge.example/pricing",
+        "amount": "39.99",
+        "currency": "USD"
+      }
+    ]
+  },
+  "truth_resolution_policy": {
+    "rules": [
+      {
+        "fact_type": "price",
+        "source_priority": ["manual"],
+        "max_staleness_seconds": 86400,
+        "on_failure": "block"
+      }
+    ]
+  }
+}

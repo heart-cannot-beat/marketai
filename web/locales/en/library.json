@@ -269,19 +269,6 @@
       "selling-point-item": "Selling point {{index}}",
       "add-selling-point": "Add selling point"
     },
-    "person": {
-      "display-name": "Display name",
-      "person-type": "Person type",
-      "person-type-fictional": "Fictional",
-      "person-type-licensed": "Licensed",
-      "age-expression": "Age expression",
-      "prompt-fragments": "Prompt fragments",
-      "prompt-fragment-item": "Fragment {{index}}",
-      "add-prompt-fragment": "Add fragment",
-      "rights-regions": "Rights regions",
-      "rights-region-item": "Region {{index}}",
-      "add-rights-region": "Add region"
-    },
     "dimension-template": {
       "dimensions": "Dimensions",
       "dimension-name": "Dimension name",
@@ -299,16 +286,6 @@
       "constraints": "Constraints",
       "constraints-count": "{{count}} rule(s) — edit through the JSON editor"
     },
-    "prompt-policy": {
-      "display-name": "Display name",
-      "registered-tokens": "Registered tokens",
-      "token-item": "Token {{index}}",
-      "add-token": "Add token",
-      "locked-phrases": "Locked phrases",
-      "phrase-item": "Phrase {{index}}",
-      "add-phrase": "Add phrase",
-      "brand-tone": "Brand tone"
-    },
     "data-source": {
       "display-name": "Display name",
       "adapter-kind": "Source type",
@@ -323,60 +300,6 @@
       "execution-mode-mismatch": "The saved execution mode does not match the source type. Choose the source type again.",
       "config": "Configuration",
       "config-empty": "No configuration"
-    },
-    "offer": {
-      "display-name": "Display name",
-      "item-semantics": "Item semantics",
-      "market-semantics": "Market semantics",
-      "claim-semantics": "Claim semantics",
-      "date-semantics": "Date semantics"
-    },
-    "reference-group": {
-      "display-name": "Display name",
-      "group-intent": "Group intent"
-    },
-    "reference-selection-rule": {
-      "display-name": "Display name",
-      "rule-expression": "Rule expression"
-    },
-    "dimension-schema": {
-      "display-name": "Display name",
-      "dimensions": "Dimensions",
-      "dimension-name": "Dimension name",
-      "dimension-values": "Values (comma-separated)",
-      "add-dimension": "Add dimension",
-      "remove-dimension": "Remove dimension",
-      "constraints": "Constraints"
-    },
-    "market-source-mapping": {
-      "display-name": "Display name",
-      "external-object-id": "External object ID",
-      "market-code": "Market code",
-      "execution-mode": "Execution mode",
-      "execution-mode-manual": "Manual",
-      "execution-mode-scheduled": "Scheduled",
-      "execution-mode-streaming": "Streaming"
-    },
-    "manual-fact-set": {
-      "display-name": "Display name",
-      "facts": "Facts",
-      "fact-key": "Key",
-      "fact-value": "Value",
-      "add-fact": "Add fact"
-    },
-    "truth-resolution-policy": {
-      "display-name": "Display name",
-      "priority-order": "Priority order",
-      "priority-item": "Priority {{index}}",
-      "add-priority": "Add priority",
-      "conflict-strategy": "Conflict strategy",
-      "strategy-first-wins": "First wins",
-      "strategy-last-wins": "Last wins",
-      "strategy-manual-review": "Manual review"
-    },
-    "reference-asset": {
-      "display-name": "Display name",
-      "asset-purpose": "Asset purpose"
     },
     "version": {
       "display-name": "Display name",

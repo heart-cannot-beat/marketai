@@ -269,19 +269,6 @@
       "selling-point-item": "卖点 {{index}}",
       "add-selling-point": "添加卖点"
     },
-    "person": {
-      "display-name": "显示名称",
-      "person-type": "人物类型",
-      "person-type-fictional": "虚构",
-      "person-type-licensed": "已授权",
-      "age-expression": "年龄表现",
-      "prompt-fragments": "Prompt 片段",
-      "prompt-fragment-item": "片段 {{index}}",
-      "add-prompt-fragment": "添加片段",
-      "rights-regions": "授权地区",
-      "rights-region-item": "地区 {{index}}",
-      "add-rights-region": "添加地区"
-    },
     "dimension-template": {
       "dimensions": "维度",
       "dimension-name": "维度名称",
@@ -299,16 +286,6 @@
       "constraints": "约束",
       "constraints-count": "{{count}} 条规则，请在 JSON 编辑器中修改"
     },
-    "prompt-policy": {
-      "display-name": "显示名称",
-      "registered-tokens": "已注册的 Token",
-      "token-item": "Token {{index}}",
-      "add-token": "添加 Token",
-      "locked-phrases": "锁定短语",
-      "phrase-item": "短语 {{index}}",
-      "add-phrase": "添加短语",
-      "brand-tone": "品牌语气"
-    },
     "data-source": {
       "display-name": "显示名称",
       "adapter-kind": "来源类型",
@@ -323,60 +300,6 @@
       "execution-mode-mismatch": "已保存的执行方式与来源类型不一致，请重新选择来源类型。",
       "config": "配置",
       "config-empty": "没有配置"
-    },
-    "offer": {
-      "display-name": "显示名称",
-      "item-semantics": "商品含义",
-      "market-semantics": "市场含义",
-      "claim-semantics": "声明含义",
-      "date-semantics": "日期含义"
-    },
-    "reference-group": {
-      "display-name": "显示名称",
-      "group-intent": "分组用途"
-    },
-    "reference-selection-rule": {
-      "display-name": "显示名称",
-      "rule-expression": "规则表达式"
-    },
-    "dimension-schema": {
-      "display-name": "显示名称",
-      "dimensions": "维度",
-      "dimension-name": "维度名称",
-      "dimension-values": "取值（用逗号分隔）",
-      "add-dimension": "添加维度",
-      "remove-dimension": "移除维度",
-      "constraints": "约束"
-    },
-    "market-source-mapping": {
-      "display-name": "显示名称",
-      "external-object-id": "外部对象 ID",
-      "market-code": "市场代码",
-      "execution-mode": "执行方式",
-      "execution-mode-manual": "手动",
-      "execution-mode-scheduled": "定时",
-      "execution-mode-streaming": "流式"
-    },
-    "manual-fact-set": {
-      "display-name": "显示名称",
-      "facts": "事实",
-      "fact-key": "键",
-      "fact-value": "值",
-      "add-fact": "添加事实"
-    },
-    "truth-resolution-policy": {
-      "display-name": "显示名称",
-      "priority-order": "优先级顺序",
-      "priority-item": "优先级 {{index}}",
-      "add-priority": "添加优先级",
-      "conflict-strategy": "冲突策略",
-      "strategy-first-wins": "先到者优先",
-      "strategy-last-wins": "后到者优先",
-      "strategy-manual-review": "人工复核"
-    },
-    "reference-asset": {
-      "display-name": "显示名称",
-      "asset-purpose": "素材用途"
     },
     "version": {
       "display-name": "显示名称",
