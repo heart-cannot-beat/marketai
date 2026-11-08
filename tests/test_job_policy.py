@@ -141,6 +141,16 @@ class TestRegistryCoversEveryJobType(unittest.TestCase):
         self.assertIn("generation.export_package", enqueued, "the source scan found the call sites")
         self.assertEqual(sorted(enqueued - set(JOB_POLICIES)), [])
 
+    def test_the_deployed_worker_dispatches_every_type_the_app_enqueues(self):
+        # Production and docker compose run only ``WorkerRuntime``
+        # (``python -m worker.main``). A type it cannot dispatch is failed as
+        # ``unknown_job_type`` and its Operation never leaves ``queued`` (#55).
+        from app.worker_runtime import WorkerRuntime
+
+        enqueued = _literal_enqueued_types()
+        self.assertIn("scale_export", enqueued, "the source scan found the Scale export enqueue")
+        self.assertEqual(sorted(enqueued - _dispatched_types(WorkerRuntime)), [])
+
 
 class TestRegisteredPolicies(unittest.TestCase):
     def test_the_six_local_job_types_are_requeued(self):

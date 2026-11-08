@@ -544,7 +544,8 @@ class PostgresArchitectureTests(unittest.TestCase):
     def _requeue_fixtures(self):
         from tests import test_job_crash_recovery as crash
         return (crash.ReferenceGateFixture, crash.ExportPackageFixture, crash.DeterministicQcFixture,
-                crash.FinalizeItemFixture, crash.FoldBatchFixture)
+                crash.FinalizeItemFixture, crash.FoldBatchFixture, crash.DeployedWorkerScaleExportFixture,
+                crash.ControlledMockScaleExportFixture, crash.ScaleExportFixture)
 
     def test_a_crashed_job_with_no_external_call_is_requeued_by_the_claim_and_settles_once(self):
         """mark_running, then the Worker dies: the claim requeues the Job (lease_expired, not paid_call_outcome_unknown) and the rerun settles the work once; a Worker that dies after the work committed leaves a Job the rerun only closes (#22)."""
@@ -594,20 +595,30 @@ class PostgresArchitectureTests(unittest.TestCase):
                 self.assertEqual(fixture.job_row().state, 'succeeded')
                 fixture.assert_settled_once(fixture.observe())
 
-    def test_a_crashed_scale_export_is_requeued_by_the_claim(self):
-        """Only the recovery half: the frozen Job context carries no meta_mode, which scale_exports' policy requires, so the Worker role cannot run the export itself yet (#22)."""
-        from tests.test_job_crash_recovery import ScaleExportFixture
-        fixture = self._crash_fixture(ScaleExportFixture)
+    def test_a_scale_export_job_runs_in_its_exports_meta_mode_and_reaches_no_other_workspace(self):
+        """The frozen Job context has no meta_mode and scale_exports' policy needs one: the deployed Worker takes it from the payload, settles A's export as the Worker role, and a forged payload naming B's export finds nothing under FORCE RLS (#55)."""
+        from tests.test_job_crash_recovery import DeployedWorkerScaleExportFixture
+        a = self._crash_fixture(DeployedWorkerScaleExportFixture)
+        b = self._crash_fixture(DeployedWorkerScaleExportFixture)
+        self._quarantine_others(a.workspace_id())
+        b_before = b.observe()
+        self.assertEqual((b_before['completed'], b_before['operation']), (False, 'queued'))
+        with patch('app.adapters.persistence.database.SessionLocal', self.sessions[0]):
+            with tenant_session(a.ctx) as session:
+                forged = jobs.enqueue_in_session(
+                    session, context=a.ctx, job_type='scale_export',
+                    payload={'export_id': b.export_id, 'meta_mode': b.ctx.meta_mode},
+                    idempotency_key='scale_export_job:ci-only-forged', resource_type='scale_export',
+                    resource_id=b.export_id,
+                ).id
         with self._as_worker():
-            claimed = jobs.claim_next('scale-crashed', job_types=('scale_export',))
-            self.assertEqual(claimed.id, fixture.job_id)
-            jobs.mark_running(claimed.context, claimed.id, 'scale-crashed')
-            fixture.expire_lease()
-            fixture.recover()
-        job = fixture.job_row()
-        self.assertTrue(job.safe_to_retry_after_crash)
-        self.assertEqual((job.state, job.error_code), ('queued', 'lease_expired'))
-        self.assertNotIn('job.uncertain', fixture.job_events())
+            self.assertEqual(a.drain(), 2)
+        self.assertEqual(a.job_row().state, 'succeeded')
+        a.assert_settled_once(a.observe())
+        a.job_id = forged
+        self.assertIn(a.job_row().state, ('succeeded', 'failed'), 'the forged Job is closed')
+        self.assertEqual(b.observe(), b_before, "B's export and Operation are untouched")
+        self.assertEqual(b.job_row().state, 'queued')
 
     def test_a_crashed_paid_job_is_still_left_uncertain_by_the_claim(self):
         from tests.test_job_crash_recovery import PaidJobFixture
