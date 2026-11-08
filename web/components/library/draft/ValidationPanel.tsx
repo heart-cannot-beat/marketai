@@ -14,9 +14,9 @@ export function ValidationPanel({
   onAcknowledge,
 }: ValidationPanelProps) {
   const { t } = useTranslation('library');
-  const { findings, acknowledged } = validation;
+  const { blocking, warnings, acknowledged } = validation;
 
-  if (findings.length === 0) {
+  if (blocking.length === 0 && warnings.length === 0) {
     return (
       <div
         className="rounded-lg border border-green-300 bg-green-50 p-4 dark:border-green-700 dark:bg-green-950"
@@ -29,22 +29,25 @@ export function ValidationPanel({
     );
   }
 
-  const errors = findings.filter((f) => f.severity === 'error');
-  const warnings = findings.filter((f) => f.severity === 'warning');
-
   return (
     <div
       className="space-y-3"
       role="region"
       aria-label={t('draft.validation-results')}
     >
-      {errors.length > 0 && (
+      {blocking.length > 0 && (
         <div className="rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950">
-          <p className="text-sm font-medium text-red-800 dark:text-red-200">
-            {t('draft.validation-errors', { count: String(errors.length) })}
+          <p
+            className="text-sm font-semibold text-red-800 dark:text-red-200"
+            role="status"
+          >
+            {t('draft.validation-failed')}
+          </p>
+          <p className="mt-1 text-sm text-red-800 dark:text-red-200">
+            {t('draft.validation-errors', { count: String(blocking.length) })}
           </p>
           <ul className="mt-2 space-y-1" role="list">
-            {errors.map((finding, i) => (
+            {blocking.map((finding, i) => (
               <FindingItem key={`${finding.code}-${i}`} finding={finding} />
             ))}
           </ul>
@@ -64,11 +67,7 @@ export function ValidationPanel({
               >
                 <div className="flex items-start justify-between gap-2">
                   <span>
-                    {finding.field && (
-                      <span className="font-mono text-xs">
-                        {finding.field}:{' '}
-                      </span>
-                    )}
+                    <FindingPath path={finding.path} />
                     {finding.message}
                   </span>
                   {!acknowledged.has(finding.code) && (
@@ -101,10 +100,14 @@ export function ValidationPanel({
 function FindingItem({ finding }: { finding: ValidationFinding }) {
   return (
     <li className="text-sm text-red-700 dark:text-red-300" role="listitem">
-      {finding.field && (
-        <span className="font-mono text-xs">{finding.field}: </span>
-      )}
+      <FindingPath path={finding.path} />
       {finding.message}
     </li>
   );
+}
+
+/** Where the finding sits in the draft content; a whole-draft finding has none. */
+function FindingPath({ path }: { path: string }) {
+  if (!path) return null;
+  return <span className="font-mono text-xs">{path}: </span>;
 }

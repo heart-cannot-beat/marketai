@@ -1,8 +1,55 @@
 /**
  * @jest-environment jsdom
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { renderHook, act } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
+import { RESPONSE_VALIDATORS } from '@/lib/domain-client/generated/validators';
+
+/** One finding as FastAPI sends it: `Finding.as_dict()` (`app/library/contracts.py`). */
+interface BackendFinding {
+  code: string;
+  message: string;
+  path: string;
+  severity: 'blocking' | 'warning';
+}
+
+const VARIANT_LABEL_MISSING: BackendFinding = {
+  code: 'product_variant_label',
+  message: '型号需要 label',
+  path: 'model_variants[1].label',
+  severity: 'blocking',
+};
+const DEPENDENCY_WARNING: BackendFinding = {
+  code: 'dependency_warning',
+  message: '引用的版本资格为 warning: lv_kestrel_01',
+  path: 'reference_bindings[0].reference_version_id',
+  severity: 'warning',
+};
+const PHRASE_RESTORED: BackendFinding = {
+  code: 'protected_phrase_restored',
+  message: "受保护短语 'acme_claim' 已被移除并自动恢复，发布前需重新确认。",
+  path: 'locked_phrases',
+  severity: 'warning',
+};
+
+/**
+ * `POST /library/entries/{id}/validate` as FastAPI answers it:
+ * `ValidationReport.as_dict()` through `LibraryValidationResult`
+ * (`app/library/response_models.py`) -- blocking findings and warnings in
+ * separate lists, with no `findings` list and no `revision`.
+ */
+function validationBody(...findings: BackendFinding[]) {
+  const blocking = findings.filter((f) => f.severity === 'blocking');
+  return {
+    entry_type: 'product',
+    ok: blocking.length === 0,
+    content_hash: 'h1',
+    blocking,
+    warnings: findings.filter((f) => f.severity === 'warning'),
+  };
+}
 
 let mockSaveOutcome: unknown = {
   kind: 'success',
@@ -11,9 +58,41 @@ let mockSaveOutcome: unknown = {
 };
 let mockValidateOutcome: unknown = {
   kind: 'success',
-  data: { findings: [], revision: 1, content_hash: 'h1' },
+  data: validationBody(),
   meta: {},
 };
+
+function validateSucceeds(...findings: BackendFinding[]) {
+  mockValidateOutcome = {
+    kind: 'success',
+    data: validationBody(...findings),
+    meta: {},
+  };
+}
+
+/**
+ * The OpenAPI schema types each finding as an open object, so the runtime
+ * validator cannot see a renamed finding key. The keys `Finding.as_dict()`
+ * writes and the `SEVERITY_*` values are read from the backend source instead.
+ */
+const CONTRACTS = fs.readFileSync(
+  path.resolve(__dirname, '../../../../app/library/contracts.py'),
+  'utf8'
+);
+const findingClass = (() => {
+  const start = CONTRACTS.search(/^class Finding:$/m);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = CONTRACTS.indexOf('\n\n\n', start);
+  return CONTRACTS.slice(start, end);
+})();
+const FINDING_KEYS = Array.from(
+  findingClass.matchAll(/"(\w+)": self\.\1\b/g),
+  (m) => m[1]
+);
+const SEVERITIES = Array.from(
+  CONTRACTS.matchAll(/^SEVERITY_[A-Z]+ = "(\w+)"$/gm),
+  (m) => m[1]
+);
 
 const mockSaveRun = jest.fn(async () => mockSaveOutcome);
 const mockSaveReset = jest.fn();
@@ -124,11 +203,7 @@ describe('useDraftSession', () => {
       data: { revision: 2 },
       meta: { etag: 'etag-2' },
     };
-    mockValidateOutcome = {
-      kind: 'success',
-      data: { findings: [], revision: 1, content_hash: 'h1' },
-      meta: {},
-    };
+    validateSucceeds();
   });
 
   it('initializes buffer from draft content', () => {
@@ -435,92 +510,119 @@ describe('useDraftSession', () => {
   });
 
   describe('validation', () => {
-    it('validates and stores result', async () => {
-      mockValidateOutcome = {
-        kind: 'success',
-        data: {
-          findings: [
-            {
-              code: 'missing_field',
-              severity: 'error',
-              field: 'audience',
-              message: 'Required',
-            },
-          ],
-          revision: 1,
-          content_hash: 'h1',
-        },
-        meta: {},
-      };
-
-      const { result } = renderHook(() =>
+    async function validated(...findings: BackendFinding[]) {
+      validateSucceeds(...findings);
+      const hook = renderHook(() =>
         useDraftSession('e1', 'product', makeDraft())
       );
-
-      let valid = false;
+      let valid: boolean | undefined;
       await act(async () => {
-        valid = await result.current.validate();
+        valid = await hook.result.current.validate();
       });
+      return { ...hook, valid };
+    }
+
+    it('reads blocking findings and their content path from the response', async () => {
+      const { result, valid } = await validated(
+        VARIANT_LABEL_MISSING,
+        DEPENDENCY_WARNING
+      );
 
       expect(valid).toBe(false);
-      expect(result.current.validation).toBeDefined();
-      expect(result.current.validation?.findings).toHaveLength(1);
-      expect(result.current.validation?.findings[0].severity).toBe('error');
+      expect(result.current.validation?.blocking).toEqual([
+        VARIANT_LABEL_MISSING,
+      ]);
+      expect(result.current.validation?.warnings).toEqual([DEPENDENCY_WARNING]);
     });
 
-    it('validates clean when no findings', async () => {
-      const { result } = renderHook(() =>
-        useDraftSession('e1', 'product', makeDraft())
-      );
-
-      let valid = false;
-      await act(async () => {
-        valid = await result.current.validate();
-      });
+    it('validates clean when there are no blocking findings or warnings', async () => {
+      const { result, valid } = await validated();
 
       expect(valid).toBe(true);
-      expect(result.current.validation?.findings).toHaveLength(0);
+      expect(result.current.validation?.blocking).toEqual([]);
+      expect(result.current.validation?.warnings).toEqual([]);
     });
 
-    it('acknowledges warnings', async () => {
-      mockValidateOutcome = {
-        kind: 'success',
-        data: {
-          findings: [
-            {
-              code: 'short_description',
-              severity: 'warning',
-              field: 'description',
-              message: 'Consider adding more detail',
-            },
-          ],
-          revision: 1,
-          content_hash: 'h1',
-        },
-        meta: {},
-      };
+    it('passes validation with warnings alone', async () => {
+      const { result, valid } = await validated(DEPENDENCY_WARNING);
 
-      const { result } = renderHook(() =>
-        useDraftSession('e1', 'product', makeDraft())
-      );
+      expect(valid).toBe(true);
+      expect(result.current.validation?.warnings).toEqual([DEPENDENCY_WARNING]);
+    });
 
-      await act(async () => {
-        await result.current.validate();
+    it('records the revision it validated, which the response does not carry', async () => {
+      const { result } = await validated();
+
+      expect(mockValidateRun).toHaveBeenCalledWith({
+        entry_id: 'e1',
+        ifMatch: 1,
       });
+      expect(result.current.validation?.revision).toBe(1);
+      expect(result.current.validation?.contentHash).toBe('h1');
+    });
+
+    it('acknowledges warnings by code', async () => {
+      const { result } = await validated(DEPENDENCY_WARNING);
 
       expect(result.current.validation?.acknowledged.size).toBe(0);
 
       act(() => {
-        result.current.acknowledgeWarning('short_description');
+        result.current.acknowledgeWarning(DEPENDENCY_WARNING.code);
       });
 
       expect(
-        result.current.validation?.acknowledged.has('short_description')
+        result.current.validation?.acknowledged.has(DEPENDENCY_WARNING.code)
       ).toBe(true);
     });
   });
 
+  describe('validate response fixtures', () => {
+    const validator = RESPONSE_VALIDATORS.get('validate_library_draft_200');
+
+    it.each([
+      ['clean', validationBody()],
+      ['blocking', validationBody(VARIANT_LABEL_MISSING, DEPENDENCY_WARNING)],
+      ['warnings only', validationBody(DEPENDENCY_WARNING, PHRASE_RESTORED)],
+    ])(
+      'the %s body passes the validate_library_draft_200 runtime validator',
+      (_name, body) => {
+        expect(validator).toBeDefined();
+        const accepted = validator!(body);
+        expect(validator!.errors ?? []).toEqual([]);
+        expect(accepted).toBe(true);
+      }
+    );
+
+    it('the runtime validator rejects a findings-only body', () => {
+      expect(validator!({ findings: [], revision: 1 })).toBe(false);
+    });
+
+    it('each finding carries exactly the keys and a severity of the backend Finding', () => {
+      expect(FINDING_KEYS).toEqual(['code', 'message', 'path', 'severity']);
+      expect(SEVERITIES).toEqual(['blocking', 'warning']);
+      for (const finding of [
+        VARIANT_LABEL_MISSING,
+        DEPENDENCY_WARNING,
+        PHRASE_RESTORED,
+      ]) {
+        expect(Object.keys(finding).sort()).toEqual([...FINDING_KEYS].sort());
+        expect(SEVERITIES).toContain(finding.severity);
+      }
+    });
+  });
+
   describe('canPublish', () => {
+    async function validated(...findings: BackendFinding[]) {
+      validateSucceeds(...findings);
+      const hook = renderHook(() =>
+        useDraftSession('e1', 'product', makeDraft())
+      );
+      await act(async () => {
+        await hook.result.current.validate();
+      });
+      return hook;
+    }
+
     it('returns false when dirty', () => {
       const { result } = renderHook(() =>
         useDraftSession('e1', 'product', makeDraft())
@@ -540,101 +642,81 @@ describe('useDraftSession', () => {
       expect(result.current.canPublish()).toBe(false);
     });
 
-    it('returns false with unacknowledged warnings', async () => {
-      mockValidateOutcome = {
-        kind: 'success',
-        data: {
-          findings: [
-            { code: 'w1', severity: 'warning', field: null, message: 'Warn' },
-          ],
-          revision: 1,
-          content_hash: 'h1',
-        },
-        meta: {},
-      };
-
-      const { result } = renderHook(() =>
-        useDraftSession('e1', 'product', makeDraft())
-      );
-
-      await act(async () => {
-        await result.current.validate();
-      });
-
-      expect(result.current.canPublish()).toBe(false);
-    });
-
-    it('returns true when clean, validated, and warnings acknowledged', async () => {
-      mockValidateOutcome = {
-        kind: 'success',
-        data: {
-          findings: [
-            { code: 'w1', severity: 'warning', field: null, message: 'Warn' },
-          ],
-          revision: 1,
-          content_hash: 'h1',
-        },
-        meta: {},
-      };
-
-      const { result } = renderHook(() =>
-        useDraftSession('e1', 'product', makeDraft())
-      );
-
-      await act(async () => {
-        await result.current.validate();
-      });
-
-      act(() => {
-        result.current.acknowledgeWarning('w1');
-      });
+    it('returns true when validated clean', async () => {
+      const { result } = await validated();
 
       expect(result.current.canPublish()).toBe(true);
     });
 
-    it('returns false with errors even if acknowledged', async () => {
-      mockValidateOutcome = {
-        kind: 'success',
-        data: {
-          findings: [
-            { code: 'e1', severity: 'error', field: null, message: 'Error' },
-          ],
-          revision: 1,
-          content_hash: 'h1',
-        },
-        meta: {},
-      };
+    it('returns false while the response has a blocking finding', async () => {
+      const { result } = await validated(VARIANT_LABEL_MISSING);
 
-      const { result } = renderHook(() =>
-        useDraftSession('e1', 'product', makeDraft())
-      );
+      expect(result.current.canPublish()).toBe(false);
+    });
 
-      await act(async () => {
-        await result.current.validate();
+    it('returns false with a blocking finding even if its code was acknowledged', async () => {
+      const { result } = await validated(VARIANT_LABEL_MISSING);
+
+      act(() => {
+        result.current.acknowledgeWarning(VARIANT_LABEL_MISSING.code);
       });
 
       expect(result.current.canPublish()).toBe(false);
     });
 
-    it('returns false when validation revision does not match snapshot', async () => {
-      mockValidateOutcome = {
-        kind: 'success',
-        data: {
-          findings: [],
-          revision: 999,
-          content_hash: 'h-different',
+    it('returns false with unacknowledged warnings', async () => {
+      const { result } = await validated(DEPENDENCY_WARNING);
+
+      expect(result.current.canPublish()).toBe(false);
+    });
+
+    it('returns true only once every warning is acknowledged', async () => {
+      const { result } = await validated(DEPENDENCY_WARNING, PHRASE_RESTORED);
+
+      act(() => {
+        result.current.acknowledgeWarning(DEPENDENCY_WARNING.code);
+      });
+      expect(result.current.canPublish()).toBe(false);
+
+      act(() => {
+        result.current.acknowledgeWarning(PHRASE_RESTORED.code);
+      });
+      expect(result.current.canPublish()).toBe(true);
+    });
+
+    it('returns false when the draft revision moved past the validated one', async () => {
+      const { result } = await validated();
+      expect(result.current.canPublish()).toBe(true);
+
+      mockSaveOutcome = {
+        kind: 'problem',
+        problem: {
+          type: 'conflict',
+          status: 409,
+          detail: 'revision conflict',
+          title: 'Conflict',
+          instance: '',
+          code: 'revision_conflict',
+          trace_id: '',
+          retryable: false,
+          field_errors: [],
+          server_revision: 3,
+          server_content: { name: 'Server Edit' },
         },
         meta: {},
       };
-
-      const { result } = renderHook(() =>
-        useDraftSession('e1', 'product', makeDraft())
-      );
-
+      act(() => {
+        result.current.updateField('name', 'Local Edit');
+      });
       await act(async () => {
-        await result.current.validate();
+        await result.current.save();
+      });
+      act(() => {
+        result.current.resolveConflictWithServer();
       });
 
+      expect(result.current.isDirty).toBe(false);
+      expect(result.current.validation?.revision).toBe(1);
       expect(result.current.canPublish()).toBe(false);
     });
   });
@@ -706,11 +788,7 @@ describe('useDraftSession', () => {
 
   describe('validation arriving after later edit', () => {
     it('save clears stale validation', async () => {
-      mockValidateOutcome = {
-        kind: 'success',
-        data: { findings: [], revision: 1, content_hash: 'h1' },
-        meta: {},
-      };
+      validateSucceeds();
 
       const { result } = renderHook(() =>
         useDraftSession('e1', 'product', makeDraft())

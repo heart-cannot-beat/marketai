@@ -121,6 +121,7 @@
     "validate": "Validate",
     "validating": "Validating…",
     "validation-passed": "Validation passed — no issues found",
+    "validation-failed": "Validation failed",
     "validation-results": "Validation results",
     "validation-errors": "{{count}} error(s) must be resolved before publishing",
     "validation-warnings": "{{count}} warning(s) require acknowledgement",

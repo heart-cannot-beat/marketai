@@ -228,16 +228,23 @@ describe('DraftEditor', () => {
     expect(screen.queryByText('Internal server error')).toBeNull();
   });
 
-  it('shows validation panel with errors', () => {
+  it('shows validation failed with each blocking finding and its path', () => {
     const validation: ValidationResult = {
-      findings: [
+      blocking: [
         {
-          code: 'missing',
-          severity: 'error',
-          field: 'audience',
-          message: 'Required field',
+          code: 'fact_currency',
+          severity: 'blocking',
+          path: 'facts[3].currency',
+          message: 'currency must be an upper-case ISO 4217 code',
+        },
+        {
+          code: 'fact_set_empty',
+          severity: 'blocking',
+          path: '',
+          message: 'at least one fact is required',
         },
       ],
+      warnings: [],
       revision: 1,
       contentHash: 'h1',
       acknowledged: new Set(),
@@ -254,19 +261,30 @@ describe('DraftEditor', () => {
     );
 
     expect(
-      screen.getByText(/library:draft\.validation-errors/)
+      screen.getByText('library:draft.validation-failed')
     ).toBeInTheDocument();
-    expect(screen.getByText('Required field')).toBeInTheDocument();
+    expect(screen.queryByText('library:draft.validation-passed')).toBeNull();
+    expect(
+      screen.getByText('library:draft.validation-errors')
+    ).toBeInTheDocument();
+    const items = screen.getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent(
+      'facts[3].currency: currency must be an upper-case ISO 4217 code'
+    );
+    expect(items[1]).toHaveTextContent('at least one fact is required');
+    expect(items[1].textContent).not.toContain(':');
   });
 
   it('shows validation panel with warnings and acknowledge button', () => {
     const validation: ValidationResult = {
-      findings: [
+      blocking: [],
+      warnings: [
         {
-          code: 'short_desc',
+          code: 'dependency_warning',
           severity: 'warning',
-          field: 'description',
-          message: 'Consider more detail',
+          path: 'reference_bindings[0].reference_version_id',
+          message: 'Referenced version is eligible with a warning',
         },
       ],
       revision: 1,
@@ -287,17 +305,26 @@ describe('DraftEditor', () => {
     expect(
       screen.getByText(/library:draft\.validation-warnings/)
     ).toBeInTheDocument();
-    expect(screen.getByText('Consider more detail')).toBeInTheDocument();
+    expect(screen.queryByText('library:draft.validation-failed')).toBeNull();
+    expect(
+      screen.getByText('Referenced version is eligible with a warning')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/reference_bindings\[0\]\.reference_version_id/)
+    ).toBeInTheDocument();
 
     const ackBtn = screen.getByLabelText(/library:draft\.acknowledge-warning/);
     fireEvent.click(ackBtn);
-    expect(session.acknowledgeWarning).toHaveBeenCalledWith('short_desc');
+    expect(session.acknowledgeWarning).toHaveBeenCalledWith(
+      'dependency_warning'
+    );
   });
 
   it('shows acknowledged badge for acknowledged warnings', () => {
     const validation: ValidationResult = {
-      findings: [
-        { code: 'w1', severity: 'warning', field: null, message: 'A warning' },
+      blocking: [],
+      warnings: [
+        { code: 'w1', severity: 'warning', path: '', message: 'A warning' },
       ],
       revision: 1,
       contentHash: 'h1',
@@ -317,9 +344,10 @@ describe('DraftEditor', () => {
     expect(screen.getByText('library:draft.acknowledged')).toBeInTheDocument();
   });
 
-  it('shows validation passed when no findings', () => {
+  it('shows validation passed when there are no findings', () => {
     const validation: ValidationResult = {
-      findings: [],
+      blocking: [],
+      warnings: [],
       revision: 1,
       contentHash: 'h1',
       acknowledged: new Set(),
