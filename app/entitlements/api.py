@@ -584,9 +584,12 @@ async def get_usage(
     request: Request,
     tenant: TenantContext = Depends(request_tenant_context),
 ) -> Response:
-    from app.entitlements.usage import UsageQuery
+    # No docstring: FastAPI would publish it in the OpenAPI description.
+    # ``total`` sums the real buckets only; Mock (controlled Mock included)
+    # is reported in ``by_execution_mode["mock"]`` and never in ``total``.
+    from app.entitlements.usage import PROVIDER_CALLS, UsageQuery
 
-    metric_key = request.query_params.get("metric_key", "provider_call")
+    metric_key = request.query_params.get("metric_key", PROVIDER_CALLS.key)
     window_start_str = request.query_params.get("window_start")
     window_end_str = request.query_params.get("window_end")
 
@@ -609,7 +612,7 @@ async def get_usage(
 
     query = UsageQuery()
     with tenant_session(tenant) as session:
-        total = query.aggregate(
+        summary = query.summarize(
             session, tenant,
             metric_key=metric_key,
             window_start=window_start,
@@ -621,7 +624,10 @@ async def get_usage(
         "metric_key": metric_key,
         "window_start": window_start.isoformat(),
         "window_end": window_end.isoformat(),
-        "total": str(total),
+        "total": str(summary.total),
+        "by_execution_mode": {
+            mode: str(quantity) for mode, quantity in summary.by_execution_mode.items()
+        },
     })
 
 

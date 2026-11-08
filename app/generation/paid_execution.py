@@ -16,11 +16,12 @@ from sqlalchemy import select
 
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import GenerationRunRecord, JobRecord, LibraryVersionRecord, WorkspaceRecord, new_id, utcnow
-from app.entitlements.cost_models import ProviderCostLedgerEntryRecord, SpendReservationRecord
+from app.entitlements.cost_models import ProviderCallAttemptRecord, ProviderCostLedgerEntryRecord, SpendReservationRecord
 from app.entitlements.credential_protector import CredentialProtector, CredentialEncryptionContext, EncryptedEnvelope
 from app.entitlements.quote_engine import CostQuoteEngine
 from app.entitlements.reservation_book import ReservationBook
 from app.entitlements.types import BillableCallSpec, ReservationPlan, GenerationReservationContext
+from app.entitlements.usage import record_provider_call
 from app.generation.models import GenerationRecipeSnapshotRecord, ProviderAttemptEventRecord, RunItemAssetVersionBindingRecord
 from app.generation.provider_attempt import prepare_attempt, append_event
 from app.generation.selection import authorize_paid, credential_binding, SelectionError
@@ -234,7 +235,6 @@ def record_execution_failure(ctx, job_id, item_id):
     """
     if not ctx.is_system:
         raise SelectionError("worker_required", "Only the Worker can settle an execution failure.")
-    from app.entitlements.cost_models import ProviderCallAttemptRecord
     with tenant_session(ctx) as session:
         item = _get_run_item(session, ctx, item_id)
         job = session.get(JobRecord, job_id)
@@ -370,6 +370,12 @@ async def execute_run_item(ctx, job_id, item_id, blob_store, *, adapter=None):
                     _settle(session, reservation, prepared["attempt_id"], called=False)
                 else:
                     reservation.state = "uncertain"
+            if result is not None:
+                # The provider answered and only its output is unusable (or
+                # could not be stored): the call happened. Without a result
+                # the call either never left or has an unknown outcome.
+                attempt = session.get(ProviderCallAttemptRecord, prepared["attempt_id"])
+                record_provider_call(session, ctx, attempt, occurred_at=utcnow())
             _sync_operation(session, ctx, prepared["run_id"])
         return
     # The board/gallery derivative is best effort: a failure is logged and leaves the version on its original.
@@ -377,7 +383,6 @@ async def execute_run_item(ctx, job_id, item_id, blob_store, *, adapter=None):
     thumbnail = await commit_thumbnail_best_effort(blob_store, ctx.workspace_id, content,
         log_context={"run_item_id": item_id, "object_key": blob.committed_key})
     with tenant_session(ctx) as session:
-        from app.entitlements.cost_models import ProviderCallAttemptRecord
         item = _get_run_item(session, ctx, item_id)
         attempt = session.get(ProviderCallAttemptRecord, prepared["attempt_id"])
         import hashlib
@@ -427,6 +432,8 @@ async def execute_run_item(ctx, job_id, item_id, blob_store, *, adapter=None):
         if recipe["execution_mode"] == "byok":
             reservation = session.get(SpendReservationRecord, prepared["reservation_id"])
             _settle(session, reservation, attempt.id, called=True)
+        # Counted for the Controlled Mock too, in its own ``mock`` bucket.
+        record_provider_call(session, ctx, attempt, occurred_at=utcnow())
         _sync_operation(session, ctx, prepared["run_id"])
 
 

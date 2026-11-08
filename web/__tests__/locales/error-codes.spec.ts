@@ -301,6 +301,22 @@ const NOT_SHOWN: Record<string, string> = {
     'an InvalidScaleSnapshot check, raised only inside the evaluation Worker',
   test_error: "a test's own made-up code (`tests/test_coordinator.py`)",
   some_code: "a test's own made-up code (`tests/test_delegated_identity.py`)",
+  usage_metric_unknown:
+    'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
+  usage_unit_mismatch:
+    'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
+  usage_quantity_invalid:
+    'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
+  usage_quantity_negative:
+    'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
+  usage_execution_mode_unknown:
+    'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
+  usage_semantic_key_invalid:
+    'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
+  usage_occurred_at_naive:
+    'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
+  usage_workspace_mismatch:
+    'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
 };
 
 const codesIn = (

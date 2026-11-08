@@ -27,7 +27,8 @@ $0.002), a stated risk.
 **Manual**: the Owner marks the page; a Worker Job settles it the same way
 (:func:`settle_uncertain_call`): ``certainty_resolved`` + ``usage_reported``
 + settle or release + ``reconciled`` on the attempt, which then reads as
-``failed`` with a known charge for later windows.
+``failed`` with a known charge for later windows. A charged page also counts
+one ``provider_calls`` Usage fact; a page that was not charged counts none.
 """
 from __future__ import annotations
 
@@ -39,6 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.entitlements.cost_models import ProviderCallAttemptRecord
+from app.entitlements.usage import record_provider_call
 from app.market_data.calls import MARKET_DATA_STEP_KIND, call_usage
 from app.market_data.pricing import MarketDataPrice
 from app.platform.tenancy import TenantContext
@@ -180,6 +182,8 @@ def settle_uncertain_call(
             ExternalCallCoordinator._settle_reservation(session, ctx, attempt=attempt, now=now, reported_cost=cost)
         else:
             ExternalCallCoordinator._release_reservation(session, ctx, attempt=attempt, now=now)
+    if charged:  # the provider charged the page, so it received the call
+        record_provider_call(session, ctx, attempt, occurred_at=now)
     append_event(
         session, workspace_id=ctx.workspace_id, provider_call_attempt_id=attempt.id,
         event_type="reconciled", payload={"outcome": "failed", "charged": charged, "source": source},

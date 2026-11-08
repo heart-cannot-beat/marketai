@@ -42,6 +42,7 @@ from app.adapters.persistence.models import (
     utcnow,
 )
 from app.entitlements.cost_models import ProviderCallAttemptRecord, SpendReservationRecord
+from app.entitlements.usage import record_provider_call
 from app.generation.execution_policy import StepAdmission, StepRejection, admit_external_step
 from app.generation.models import (
     GenerationRecipeSnapshotRecord,
@@ -164,6 +165,9 @@ def handle_run_item(
         )
     )
     session.flush()
+
+    # The Mock adapter answered: one call, counted in the ``mock`` bucket.
+    record_provider_call(session, ctx, attempt, occurred_at=utcnow())
 
     item = _transition_item(session, ctx, item, state="qc_pending")
 

@@ -776,15 +776,24 @@ class TestUsage:
         """
         from decimal import Decimal
 
+        from app.entitlements.usage import UsageSummary
+
         mock_query_instance = MagicMock()
-        mock_query_instance.aggregate.return_value = Decimal("42")
+        mock_query_instance.summarize.return_value = UsageSummary(
+            total=Decimal("42"),
+            by_execution_mode={"byok": Decimal("40"), "sandbox": Decimal("2"),
+                               "mock": Decimal("7"), "not_applicable": Decimal("0")},
+        )
 
         with patch(
             "app.entitlements.usage.UsageQuery",
             return_value=mock_query_instance,
         ):
-            resp = client.get("/api/v1/usage?metric_key=provider_call")
+            resp = client.get("/api/v1/usage?metric_key=provider_calls")
             assert resp.status_code == 200
             data = resp.json()
-            assert data["metric_key"] == "provider_call"
+            assert data["metric_key"] == "provider_calls"
             assert data["total"] == "42"
+            assert data["by_execution_mode"] == {
+                "byok": "40", "sandbox": "2", "mock": "7", "not_applicable": "0",
+            }

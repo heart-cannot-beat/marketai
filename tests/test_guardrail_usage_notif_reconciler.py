@@ -28,7 +28,7 @@ from app.entitlements.cost_reconciler import CostReconciler
 from app.entitlements.credentials import CredentialVersionRecord
 from app.entitlements.guardrail_admin import GuardrailAdmin
 from app.entitlements.notification_writer import CustomerNotificationWriter
-from app.entitlements.usage import UsageRecorder
+from app.entitlements.usage import UsageFact, UsageRecorder, usage_semantic_key
 from app.entitlements.usage_models import (
     CustomerNotificationOutboxRecord,
     UsageEventRecord,
@@ -282,6 +282,9 @@ class TestGuardrailAdminConfirm(unittest.TestCase):
 
 
 class TestUsageRecorder(unittest.TestCase):
+    """``record_many`` writes registry-shaped rows; ``tests/test_usage_provider_calls.py``
+    covers the registry's refusals, duplicates and every settlement point."""
+
     def setUp(self):
         self.engine = _make_engine()
         self.Session = sessionmaker(bind=self.engine)
@@ -292,46 +295,41 @@ class TestUsageRecorder(unittest.TestCase):
     def tearDown(self):
         self.session.close()
 
-    def test_record_creates_usage_event(self):
-        recorder = UsageRecorder()
-        event_id = recorder.record(
-            self.session,
-            OWNER_CTX,
-            metric_key="provider_call",
+    def _fact(self, source_id, occurred_at=NOW, mode="byok"):
+        return UsageFact(
+            metric_key="provider_calls",
             quantity=Decimal("1"),
             unit="call",
-            execution_mode="byok",
-            semantic_key_hash="hash_abc_123",
+            execution_mode=mode,
+            semantic_key_hash=usage_semantic_key("provider_calls", "provider_call_attempt", source_id),
+            occurred_at=occurred_at,
+            source_resource_type="provider_call_attempt",
+            source_resource_id=source_id,
         )
+
+    def test_record_many_creates_usage_event(self):
+        result = UsageRecorder().record_many(self.session, OWNER_CTX, [self._fact("pca_1")])
         self.session.commit()
 
-        self.assertTrue(event_id.startswith("ue_"))
-        event = self.session.get(UsageEventRecord, event_id)
-        self.assertIsNotNone(event)
+        self.assertEqual((result.written, result.duplicates), (1, 0))
+        event = self.session.query(UsageEventRecord).one()
+        self.assertTrue(event.id.startswith("ue_"))
         self.assertEqual(event.workspace_id, "ws_test")
-        self.assertEqual(event.metric_key, "provider_call")
-        self.assertEqual(event.measurement_kind, "counter")
+        self.assertEqual(event.metric_key, "provider_calls")
+        self.assertEqual(event.measurement_kind, "delta")
         self.assertEqual(event.direction, "increase")
         self.assertEqual(event.quantity, Decimal("1"))
         self.assertEqual(event.unit, "call")
         self.assertEqual(event.execution_mode, "byok")
+        self.assertEqual((event.source_resource_type, event.source_resource_id),
+                         ("provider_call_attempt", "pca_1"))
 
-    def test_record_uses_provided_occurred_at(self):
-        recorder = UsageRecorder()
+    def test_record_many_uses_provided_occurred_at(self):
         custom_time = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
-        event_id = recorder.record(
-            self.session,
-            OWNER_CTX,
-            metric_key="image_gen",
-            quantity=Decimal("3"),
-            unit="image",
-            execution_mode="sandbox",
-            semantic_key_hash="hash_custom_time",
-            occurred_at=custom_time,
-        )
+        UsageRecorder().record_many(self.session, OWNER_CTX, [self._fact("pca_2", custom_time, "sandbox")])
         self.session.commit()
 
-        event = self.session.get(UsageEventRecord, event_id)
+        event = self.session.query(UsageEventRecord).one()
         # SQLite strips timezone info; compare the naive datetime values
         expected = custom_time.replace(tzinfo=None)
         actual = event.occurred_at.replace(tzinfo=None) if event.occurred_at.tzinfo else event.occurred_at

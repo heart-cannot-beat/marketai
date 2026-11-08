@@ -5,7 +5,8 @@ httpx>=0.27
 python-dotenv>=1.0
 Pillow>=10.0
 python-multipart>=0.0.9
-SQLAlchemy>=2.0,<2.1
+# 2.0.28 added the preserve_rowcount execution option app/entitlements/usage.py relies on.
+SQLAlchemy>=2.0.28,<2.1
 alembic>=1.13,<2.0
 # PostgreSQL driver. Required by the control-plane/domain database-role
 # isolation test; the local SQLite path does not use it.
