@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigationBlocker } from '@/components/workspace/NavigationBlocker';
 import { useLibraryCommand } from './useLibraryCommand';
 import { useLibraryCache } from './useLibraryCache';
+import type { components } from '@/lib/domain-client/generated/domain-v1';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
 import type { LibraryEntryType } from '@/lib/library/navigation';
 import {
@@ -10,18 +11,46 @@ import {
   type ParsedDraft,
 } from '@/lib/library/draft-codecs';
 
+/**
+ * One finding of `POST /library/entries/{id}/validate`, as the server's
+ * `Finding.as_dict()` writes it (`app/library/contracts.py`). `path` locates
+ * it in the draft content (`facts[3].currency`); it is empty when the finding
+ * is about the draft as a whole.
+ */
 export interface ValidationFinding {
   code: string;
-  severity: 'error' | 'warning';
-  field: string | null;
   message: string;
+  path: string;
+  severity: 'blocking' | 'warning';
 }
 
+/**
+ * The server's verdict on one draft revision. Any blocking finding stops the
+ * publish; each warning code must be acknowledged first, as the publish
+ * command requires (`acknowledged_warnings`).
+ */
 export interface ValidationResult {
-  findings: ValidationFinding[];
+  blocking: ValidationFinding[];
+  warnings: ValidationFinding[];
+  /** The draft revision that was validated (sent as its precondition). */
   revision: number;
   contentHash: string;
   acknowledged: Set<string>;
+}
+
+type ValidateResponse = components['schemas']['LibraryValidationResult'];
+
+/** The schema types each finding as an open object; read the four fields. */
+function toFindings(
+  items: ValidateResponse['blocking'],
+  severity: ValidationFinding['severity']
+): ValidationFinding[] {
+  return (items ?? []).map((item) => ({
+    code: typeof item.code === 'string' ? item.code : '',
+    message: typeof item.message === 'string' ? item.message : '',
+    path: typeof item.path === 'string' ? item.path : '',
+    severity,
+  }));
 }
 
 export interface ConflictState {
@@ -266,28 +295,25 @@ export function useDraftSession(
     setIsValidating(true);
 
     try {
+      const revision = snapshotRef.current?.revision;
       const outcome = await validateCmd.run({
         entry_id: entryId,
-        ifMatch: snapshotRef.current?.revision,
+        ifMatch: revision,
       });
 
       if (outcome.kind === 'success') {
-        const result = outcome.data as {
-          findings?: ValidationFinding[];
-          revision?: number;
-          content_hash?: string;
-        };
-
-        const findings = result.findings ?? [];
+        const result = outcome.data as ValidateResponse;
+        const blocking = toFindings(result.blocking, 'blocking');
         setValidation({
-          findings,
-          revision: result.revision ?? snapshotRef.current?.revision ?? 0,
+          blocking,
+          warnings: toFindings(result.warnings, 'warning'),
+          revision: revision ?? 0,
           contentHash: result.content_hash ?? '',
           acknowledged: new Set<string>(),
         });
 
         validateCmd.reset();
-        return findings.every((f) => f.severity !== 'error');
+        return blocking.length === 0;
       }
 
       return false;
@@ -357,13 +383,12 @@ export function useDraftSession(
     if (isDirty) return false;
     if (!validation) return false;
 
-    const hasErrors = validation.findings.some((f) => f.severity === 'error');
-    if (hasErrors) return false;
+    if (validation.blocking.length > 0) return false;
 
-    const unacknowledgedWarnings = validation.findings.filter(
-      (f) => f.severity === 'warning' && !validation.acknowledged.has(f.code)
+    const unacknowledged = validation.warnings.some(
+      (f) => !validation.acknowledged.has(f.code)
     );
-    if (unacknowledgedWarnings.length > 0) return false;
+    if (unacknowledged) return false;
 
     if (snapshotRef.current) {
       if (validation.revision !== snapshotRef.current.revision) return false;
