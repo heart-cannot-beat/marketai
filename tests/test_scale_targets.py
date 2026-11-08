@@ -26,6 +26,7 @@ from app.adapters.persistence.database import Base
 from app.adapters.persistence.models import WorkspaceRecord, new_id, utcnow
 from app.platform.tenancy import TenantContext
 from app.scale.models import (
+    ScaleCommandJournalRecord,
     ScaleEnrollmentRecord,
     ScaleEpisodeRecord,
     ScaleTargetLifecycleEventRecord,
@@ -79,6 +80,16 @@ def _owner_context(ws_id: str) -> TenantContext:
         initiator_id="user-owner",
         executor="user-owner",
         meta_mode="customer_sandbox",
+    )
+
+
+def _mode_owner(ws_id: str, meta_mode: str) -> TenantContext:
+    return TenantContext(
+        workspace_id=ws_id,
+        role="owner",
+        initiator_id="user-owner",
+        executor="user-owner",
+        meta_mode=meta_mode,
     )
 
 
@@ -690,3 +701,113 @@ class TestReplaceActiveTarget:
             assert _events(session, old.id)[-1][:4] == (
                 "withdraw", "active", "withdrawn", f"replaced_by:{new.id}",
             )
+
+
+def _seed_enrollment(
+    session, ws_id: str, *, meta_mode: str, scenario: str, market_code: str = "US",
+    created_at: datetime | None = None,
+) -> None:
+    """A bare Enrollment row in one mode and scenario (no Episode, no
+    lineage): all the Target commands read from it is the scenario."""
+    session.add(ScaleEnrollmentRecord(
+        id=new_id("senr"), workspace_id=ws_id, meta_mode=meta_mode, meta_connection_id="conn-1",
+        scenario_scope_key=scenario, ad_account_id="act-1", winner_decision_id="wdec-1",
+        winner_confirmation_id="wconf-1", asset_version_id="asset-1", product_version_id="pv-1",
+        offer_version_id="ov-1", market_code=market_code, remote_binding_key=new_id("binding"),
+        lifecycle="active", creator_id="user-owner", original_initiator_id="user-owner",
+        created_at=created_at or utcnow(),
+    ))
+    session.flush()
+
+
+def _journal(session, ws_id: str) -> dict[str, tuple[str, str]]:
+    return {
+        row.command_type: (row.meta_mode, row.scenario_scope_key)
+        for row in session.query(ScaleCommandJournalRecord).filter_by(workspace_id=ws_id)
+    }
+
+
+def _publish_and_withdraw(session, ctx) -> None:
+    target = _publish(session, ctx, cpa="20.00", key="scope")
+    preview = create_withdrawal_preview(
+        session, ctx, target_id=target.id, reason="scope", idempotency_key="scope-withdrawal-preview",
+    )
+    withdraw_target(session, ctx, preview_id=preview.id, idempotency_key="scope-withdraw")
+
+
+_TARGET_COMMANDS = (
+    "create_target_publication_preview", "publish_scale_target",
+    "create_target_withdrawal_preview", "withdraw_scale_target",
+)
+
+
+class TestTargetCommandScenarioScope:
+    """#56: ``claim_command`` requires an explicit scenario under
+    ``controlled_mock``. A Target has none of its own, so its commands take
+    the scenario of the context's Enrollment in that mode; every other mode
+    keeps the no-scenario marker and needs no Enrollment."""
+
+    @pytest.mark.parametrize("meta_mode", ["customer_sandbox", "internal_validation"])
+    def test_other_modes_journal_no_scenario_and_need_no_enrollment(self, session, ws_id, meta_mode):
+        ctx = _mode_owner(ws_id, meta_mode)
+
+        _publish_and_withdraw(session, ctx)
+
+        assert _journal(session, ws_id) == {
+            command: (meta_mode, "__no_scenario__") for command in _TARGET_COMMANDS
+        }
+
+    def test_controlled_mock_journals_the_contexts_enrollment_scenario(self, session, ws_id):
+        _seed_enrollment(session, ws_id, meta_mode="controlled_mock", scenario="scn-1")
+        ctx = _mode_owner(ws_id, "controlled_mock")
+
+        _publish_and_withdraw(session, ctx)
+
+        assert _journal(session, ws_id) == {
+            command: ("controlled_mock", "scn-1") for command in _TARGET_COMMANDS
+        }
+
+    def test_the_most_recent_enrollment_in_this_mode_and_context_names_the_scenario(self, session, ws_id):
+        now = utcnow()
+        _seed_enrollment(session, ws_id, meta_mode="controlled_mock", scenario="scn-old",
+                         created_at=now - timedelta(days=2))
+        _seed_enrollment(session, ws_id, meta_mode="controlled_mock", scenario="scn-new",
+                         created_at=now - timedelta(days=1))
+        _seed_enrollment(session, ws_id, meta_mode="controlled_mock", scenario="scn-other-market",
+                         market_code="DE", created_at=now)
+        _seed_enrollment(session, ws_id, meta_mode="customer_sandbox", scenario="__no_scenario__",
+                         created_at=now)
+        ctx = _mode_owner(ws_id, "controlled_mock")
+
+        _publish(session, ctx, cpa="20.00", key="recent")
+
+        assert _journal(session, ws_id) == {
+            "create_target_publication_preview": ("controlled_mock", "scn-new"),
+            "publish_scale_target": ("controlled_mock", "scn-new"),
+        }
+
+    def test_controlled_mock_refuses_a_context_with_no_enrollment_in_that_mode(self, session, ws_id):
+        _seed_enrollment(session, ws_id, meta_mode="customer_sandbox", scenario="__no_scenario__")
+        ctx = _mode_owner(ws_id, "controlled_mock")
+
+        with pytest.raises(TargetLifecycleError) as refused:
+            _publish(session, ctx, cpa="20.00", key="no-enrollment")
+
+        assert refused.value.code == "no_controlled_mock_enrollment"
+        assert _journal(session, ws_id) == {}
+
+    def test_controlled_mock_withdraws_a_target_published_in_another_mode(self, session, ws_id):
+        """Targets are Workspace-wide: one published in Sandbox is withdrawn
+        in controlled_mock under that mode's Enrollment scenario."""
+        sandbox_target = _publish(session, _owner_context(ws_id), cpa="20.00", key="cross-mode")
+        _seed_enrollment(session, ws_id, meta_mode="controlled_mock", scenario="scn-1")
+        ctx = _mode_owner(ws_id, "controlled_mock")
+
+        preview = create_withdrawal_preview(
+            session, ctx, target_id=sandbox_target.id, reason="cross-mode",
+            idempotency_key="cross-mode-withdrawal-preview",
+        )
+        withdraw_target(session, ctx, preview_id=preview.id, idempotency_key="cross-mode-withdraw")
+
+        assert _journal(session, ws_id)["withdraw_scale_target"] == ("controlled_mock", "scn-1")
+        assert get_target(session, ctx, sandbox_target.id).lifecycle_state == "withdrawn"

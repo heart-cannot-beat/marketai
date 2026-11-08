@@ -1563,6 +1563,147 @@ class TestTargetWithdrawEligibilityByRole(ScaleProblemAssertions, ScaleRouterTes
         self._assert_problem(self.client.get(self._url(f"/targets/{target_id}")), 404, "target_not_found")
 
 
+class TestControlledMockTargetCommands(ScaleProblemAssertions, EnrollmentChainTestBase):
+    """#56: under ``controlled_mock`` every Target command is journaled with
+    the controlled-Mock scenario of the context's Enrollment in that mode
+    (``claim_command`` requires one), instead of failing with a 500."""
+
+    mode = "controlled_mock"
+
+    def setUp(self) -> None:
+        super().setUp()
+        enrollment = self._create()
+        self.scenario = enrollment["scenario_scope_key"]
+        self.assertNotEqual(self.scenario, "__no_scenario__")
+        self.context_body = {
+            "product_version_id": enrollment["product_version_id"],
+            "offer_version_id": enrollment["offer_version_id"],
+            "market_code": enrollment["market_code"],
+            "currency": "USD",
+        }
+
+    def _url(self, path: str) -> str:
+        return f"/api/v1/scale/{self.mode}{path}"
+
+    def _post(self, path: str, body: dict, key: str | None = None):
+        return self.client.post(
+            self._url(path), json=body,
+            headers={"Idempotency-Key": key or f"ci-only-ik-56-{new_id('k')}"},
+        )
+
+    def _as(self, context: TenantContext) -> None:
+        self.app.dependency_overrides[request_tenant_context] = lambda: context
+
+    def _journal(self, workspace_id: str | None = None) -> list[tuple[str, str, str]]:
+        from app.scale.models import ScaleCommandJournalRecord
+
+        with SessionLocal() as session:
+            return sorted(
+                (row.command_type, row.meta_mode, row.scenario_scope_key)
+                for row in session.query(ScaleCommandJournalRecord).filter_by(
+                    workspace_id=workspace_id or self.workspace_id,
+                ).filter(ScaleCommandJournalRecord.command_type.like("%target%"))
+            )
+
+    def _previews(self, workspace_id: str | None = None) -> int:
+        from app.scale.models import ScaleTargetPublicationPreviewRecord
+
+        with SessionLocal() as session:
+            return session.query(ScaleTargetPublicationPreviewRecord).filter_by(
+                workspace_id=workspace_id or self.workspace_id,
+            ).count()
+
+    def test_a_publication_preview_is_created_under_the_enrollments_scenario(self):
+        resp = self._post("/target-publication-previews", {**self.context_body, "target_cpa": "20.00"})
+
+        self.assertEqual(resp.status_code, 201, resp.text)
+        self.assertEqual(resp.json()["affected_enrollment_count"], 0)  # the Enrollment is a draft
+        self.assertEqual(self._journal(), [
+            ("create_target_publication_preview", "controlled_mock", self.scenario),
+        ])
+
+    def test_the_same_idempotency_key_replays_the_same_preview(self):
+        body = {**self.context_body, "target_cpa": "20.00"}
+        first = self._post("/target-publication-previews", body, "ci-only-ik-56-replay")
+        second = self._post("/target-publication-previews", body, "ci-only-ik-56-replay")
+
+        self.assertEqual((first.status_code, second.status_code), (201, 201), second.text)
+        # The replay is the stored preview, so its amount reads back at the
+        # column's scale ("20.000000000000"); every mode does this.
+        self.assertEqual(
+            [(r["id"], r["impact_hash"], Decimal(r["target_cpa"])) for r in (first.json(), second.json())],
+            [(first.json()["id"], first.json()["impact_hash"], Decimal("20.00"))] * 2,
+        )
+        self.assertEqual(self._previews(), 1)
+        self.assertEqual(len(self._journal()), 1)
+
+    def test_the_same_key_with_another_payload_is_an_idempotency_conflict(self):
+        key = "ci-only-ik-56-conflict"
+        first = self._post("/target-publication-previews", {**self.context_body, "target_cpa": "20.00"}, key)
+        self.assertEqual(first.status_code, 201, first.text)
+
+        resp = self._post("/target-publication-previews", {**self.context_body, "target_cpa": "999.00"}, key)
+        self._assert_problem(resp, 409, "idempotency_conflict")
+        self.assertEqual(self._previews(), 1)
+
+    def test_publish_and_withdraw_are_journaled_under_the_same_scenario(self):
+        preview = self._post("/target-publication-previews", {**self.context_body, "target_cpa": "20.00"})
+        self.assertEqual(preview.status_code, 201, preview.text)
+        target = self._post("/targets", {"publication_preview_id": preview.json()["id"]})
+        self.assertEqual(target.status_code, 201, target.text)
+        target_id = target.json()["id"]
+        withdrawal = self._post(f"/targets/{target_id}/withdrawal-previews", {"reason": "#56"})
+        self.assertEqual(withdrawal.status_code, 201, withdrawal.text)
+        withdrawn = self._post(f"/targets/{target_id}/withdraw", {"withdrawal_preview_id": withdrawal.json()["id"]})
+        self.assertEqual(withdrawn.status_code, 200, withdrawn.text)
+        self.assertEqual(withdrawn.json()["lifecycle_state"], "withdrawn")
+
+        self.assertEqual(self._journal(), sorted(
+            (command_type, "controlled_mock", self.scenario)
+            for command_type in (
+                "create_target_publication_preview", "publish_scale_target",
+                "create_target_withdrawal_preview", "withdraw_scale_target",
+            )
+        ))
+
+    def test_a_context_with_no_controlled_mock_enrollment_is_refused_and_nothing_is_written(self):
+        resp = self._post("/target-publication-previews", {
+            **self.context_body, "market_code": "ZZ", "target_cpa": "20.00",
+        })
+
+        self._assert_problem(resp, 409, "no_controlled_mock_enrollment")
+        self.assertEqual((self._previews(), self._journal()), (0, []))
+
+    def test_another_workspace_cannot_preview_publish_or_withdraw_this_workspaces_target(self):
+        preview = self._post("/target-publication-previews", {**self.context_body, "target_cpa": "20.00"})
+        self.assertEqual(preview.status_code, 201, preview.text)
+        unpublished = self._post("/target-publication-previews", {**self.context_body, "target_cpa": "30.00"})
+        self.assertEqual(unpublished.status_code, 201, unpublished.text)
+        target = self._post("/targets", {"publication_preview_id": preview.json()["id"]})
+        self.assertEqual(target.status_code, 201, target.text)
+        target_id = target.json()["id"]
+        withdrawal = self._post(f"/targets/{target_id}/withdrawal-previews", {"reason": "#56"})
+        self.assertEqual(withdrawal.status_code, 201, withdrawal.text)
+        journal_before = self._journal()
+
+        other_ws = self._switch_to_other_tenant()
+        resp = self._post("/target-publication-previews", {**self.context_body, "target_cpa": "20.00"})
+        self._assert_problem(resp, 409, "no_controlled_mock_enrollment")
+        resp = self._post("/targets", {"publication_preview_id": unpublished.json()["id"]})
+        self._assert_problem(resp, 404, "target_not_found")
+        resp = self._post(f"/targets/{target_id}/withdrawal-previews", {"reason": "#56"})
+        self._assert_problem(resp, 404, "target_not_found")
+        resp = self._post(f"/targets/{target_id}/withdraw", {"withdrawal_preview_id": withdrawal.json()["id"]})
+        self._assert_problem(resp, 404, "target_not_found")
+
+        self.assertEqual((self._previews(other_ws), self._journal(other_ws)), (0, []))
+        self.assertEqual(self._journal(), journal_before)
+        self._as(self.ctx)
+        resp = self.client.get(self._url(f"/targets/{target_id}"))
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual((resp.json()["lifecycle_state"], resp.json()["revision"]), ("active", 1))
+
+
 class TestScaleProblemResponsesOnAnEnrollment(ScaleProblemAssertions, EnrollmentChainTestBase):
     """The refusals that need a real active Enrollment and its Episode."""
 

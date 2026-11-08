@@ -2079,6 +2079,7 @@
   "error-no_active_invalidation": "There is no active invalidation to clear.",
   "error-no_attempt_output": "This attempt produced no output.",
   "error-no_candidates": "Choose at least one image.",
+  "error-no_controlled_mock_enrollment": "This context has no enrollment in controlled-mock mode, so its target can't be changed here.",
   "error-no_image_returned": "The AI provider returned no image.",
   "error-no_judgements": "Record at least one judgement before closing the experiment.",
   "error-no_manual_fact_set": "Import a manual fact set first.",

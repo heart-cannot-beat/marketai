@@ -1466,6 +1466,7 @@ _TARGET_ERROR_STATUS = {
     "preview_already_consumed": 409,
     "preview_hash_mismatch": 409,
     "invalid_lifecycle": 409,
+    "no_controlled_mock_enrollment": 409,
     "idempotency_result_missing": 400,
 }
 

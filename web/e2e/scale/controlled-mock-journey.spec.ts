@@ -361,6 +361,11 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     });
 
     const contextSelect = dialog.getByLabel('Context');
+    // The contexts load after the dialog opens: wait for the seed's own
+    // before reading the options.
+    await expect(
+      contextSelect.locator('option', { hasText: seed.productVersionId })
+    ).toHaveCount(1, { timeout: 15_000 });
     const options = await contextSelect.locator('option').allTextContents();
     const matchIndex = options.findIndex(
       (label) =>
@@ -408,13 +413,22 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     publishedTargetId = published.id;
     expect(publishedTargetId).toBeTruthy();
 
-    // Idempotent replay: the same Idempotency-Key against the publication
-    // preview endpoint must return the identical preview, not a new one.
+    // Idempotent replay: the same intent against the publication preview
+    // endpoint must return the identical preview, not a new one. The BFF
+    // derives the Idempotency-Key from `X-Intent-Id` and refuses a write
+    // without the page's Origin and CSRF token.
     const idemKey = `e2e-target-preview-${seed.tag}`;
+    const replayHeaders = {
+      Origin: new URL(page.url()).origin,
+      'X-CSRF-Token': (
+        await readJson<{ token: string }>(await page.request.get('/api/csrf'))
+      ).token,
+      'X-Intent-Id': idemKey,
+    };
     const first = await page.request.post(
       `${scaleBff('controlled_mock')}/target-publication-previews`,
       {
-        headers: { 'Idempotency-Key': idemKey },
+        headers: replayHeaders,
         data: {
           product_version_id: seed.productVersionId,
           offer_version_id: seed.offerVersionId,
@@ -428,7 +442,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     const second = await page.request.post(
       `${scaleBff('controlled_mock')}/target-publication-previews`,
       {
-        headers: { 'Idempotency-Key': idemKey },
+        headers: replayHeaders,
         data: {
           product_version_id: seed.productVersionId,
           offer_version_id: seed.offerVersionId,
@@ -764,8 +778,10 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     expect(duplicateCandidate.status()).not.toBe(201);
 
     // Reused idempotency key, different payload: the target-preview key
-    // from step 7 replayed with a different market_code must conflict,
-    // never silently substitute a different result.
+    // from step 7 replayed with a different target_cpa must conflict,
+    // never silently substitute a different result. (Same context: a
+    // context with no controlled-mock Enrollment is refused before the
+    // key is looked at.)
     const idemKey = `e2e-target-preview-${seed.tag}`;
     const conflicting = await page.request.post(
       `${scaleBff('controlled_mock')}/target-publication-previews`,
@@ -774,7 +790,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
         data: {
           product_version_id: seed.productVersionId,
           offer_version_id: seed.offerVersionId,
-          market_code: 'ZZ',
+          market_code: seed.marketCode,
           currency: 'USD',
           target_cpa: '999.00',
         },
