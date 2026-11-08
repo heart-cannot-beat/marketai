@@ -86,7 +86,6 @@ export type ExperimentClaimCode =
   | 'experiment_winner_confirmed';
 
 export type LocalizationClaimCode =
-  | 'localization_batch_submitted'
   | 'localization_outcomes_verified'
   | 'localization_retry_succeeded';
 
@@ -175,20 +174,6 @@ export interface ExperimentWinnerEvidence extends EvidenceEnvelope<
   experiment: EntityRef<'experiment'>;
   winnerAssetVersion: EntityRef<'asset_version'>;
   winnerDecision: EntityRef<'winner_decision'>;
-}
-
-export interface LocalizationBatchEvidence extends EvidenceEnvelope<
-  'localization',
-  LocalizationClaimCode
-> {
-  batch: EntityRef<'localization_batch'>;
-  itemOutcomes: Record<
-    string,
-    {
-      status: string;
-      localizedAssetVersion?: EntityRef<'asset_version'>;
-    }
-  >;
 }
 
 export interface LocalizationOutcomesEvidence extends EvidenceEnvelope<

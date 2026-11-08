@@ -9,16 +9,15 @@ pull request they get only `npm run check-types:e2e` and the copy guard
 
 ## Suites
 
-| Suite                                          | Backend                                            | How to run                                                        |
-| ---------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------- |
-| `golden-path/full-journey`, `products`, `i18n` | Compose stack                                      | `npx playwright test --project golden-path --workers 1` (CI)      |
-| `localization`                                 | Compose stack and its Worker                       | `npm run test:e2e:localization` (below)                           |
-| `scale`                                        | Compose stack, its API and Worker                  | `npm run test:e2e:scale` (below)                                  |
-| `experiments`, `library`, `workspace`          | Compose stack                                      | `chromium` project; experiments also need `E2E_EXPERIMENTS_*`     |
-| `competitors`                                  | `page.route` doubles; three specs need a real API¹ | `chromium` project                                                |
-| `assets`, `generation`                         | `page.route` doubles and a signed-in page          | `chromium` project                                                |
-| `onboarding`                                   | Compose stack                                      | `onboarding` project                                              |
-| `cross-area`                                   | —                                                  | Known issue #27: `test.fixme`, its Python helpers have never run. |
+| Suite                                          | Backend                                            | How to run                                                    |
+| ---------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------- |
+| `golden-path/full-journey`, `products`, `i18n` | Compose stack                                      | `npx playwright test --project golden-path --workers 1` (CI)  |
+| `localization`                                 | Compose stack and its Worker                       | `npm run test:e2e:localization` (below)                       |
+| `scale`                                        | Compose stack, its API and Worker                  | `npm run test:e2e:scale` (below)                              |
+| `experiments`, `library`, `workspace`          | Compose stack                                      | `chromium` project; experiments also need `E2E_EXPERIMENTS_*` |
+| `competitors`                                  | `page.route` doubles; three specs need a real API¹ | `chromium` project                                            |
+| `assets`, `generation`                         | `page.route` doubles and a signed-in page          | `chromium` project                                            |
+| `onboarding`                                   | Compose stack                                      | `onboarding` project                                          |
 
 ¹ With `C31_REAL_BACKEND` or `C32_REAL_BACKEND` set.
 

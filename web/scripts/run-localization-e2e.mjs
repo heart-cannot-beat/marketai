@@ -25,8 +25,6 @@ runSuite({
     // one Playwright worker; callers may still pass a later --workers value
     // explicitly for diagnostics.
     '--workers=1',
-    // The directory, not the word: the cross-area journey's file name also
-    // contains "localization".
     'e2e/localization/',
   ],
 });
