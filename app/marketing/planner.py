@@ -13,6 +13,7 @@ from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import JobRecord, new_id, utcnow
 from app.entitlements.cost_models import SpendReservationRecord, ProviderCallAttemptRecord
 from app.entitlements.credential_protector import CredentialProtector, CredentialEncryptionContext, EncryptedEnvelope
+from app.entitlements.usage import record_provider_call
 from app.generation.paid_execution import _settle
 from app.generation.selection import authorize_paid, credential_binding, SelectionError
 from app.llm import extract_json
@@ -428,9 +429,10 @@ async def execute_planning(ctx, call_id, *, complete=text_completion):
         reservation = _reservation(session, ctx, call)
         if reservation:
             _settle(session, reservation, attempt_id, called=True)
-        if attempt_id:
+        if attempt_id:  # only BYOK has an attempt; Controlled Mock never calls a provider
             attempt = session.get(ProviderCallAttemptRecord, attempt_id)
             attempt.dispatch_state, attempt.completed_at = "succeeded", utcnow()
+            record_provider_call(session, ctx, attempt, occurred_at=attempt.completed_at)
         row = service.get_project(session, ctx, frozen["project_id"])
         try:
             if isinstance(data, str):

@@ -42,6 +42,8 @@ interface EntryDetailData {
     state: string;
     content_schema_version: number;
     content?: Record<string, unknown>;
+    /** The draft's stored ValidationReport (`DraftSummary.validation`). */
+    validation?: Record<string, unknown> | null;
     created_at?: string;
     updated_at?: string;
   } | null;
@@ -270,6 +272,7 @@ function ActiveTabContent({
           entryType={entryType}
           currentVersionId={currentVersionId}
           draftContent={draft?.content ?? null}
+          draftValidation={draft?.validation ?? null}
         />
       );
     case 'resolution':

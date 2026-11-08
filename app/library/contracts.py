@@ -12,7 +12,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Iterable
 
 from .fact_types import FACT_FAMILIES, fact_value_problems
@@ -1074,6 +1074,40 @@ def _validate_data_source(content: dict, findings: list[Finding]) -> None:
         findings.append(Finding("ds_config_shape", "config 必须是对象", "config"))
 
 
+def _fact_date(value: str) -> datetime | None:
+    """A fact's ``valid_from``/``valid_to`` as Truth reads it, or None.
+
+    Same reading as ``app.localization.truth._parse_content_date``: an ISO
+    date or datetime, without an offset taken as UTC.
+    """
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
+def _validate_fact_window(fact: dict, fpath: str, findings: list[Finding]) -> None:
+    """Both ends of a fact's validity are ISO dates and it starts before it ends (#23).
+
+    Truth serves a fact while ``valid_from <= now < valid_to``, so an end on
+    or before the start is a fact that is never valid.
+    """
+    starts = ends = None
+    if not _is_str(fact.get("valid_from")):
+        findings.append(Finding("fact_valid_from", "必须声明 valid_from", f"{fpath}.valid_from"))
+    elif (starts := _fact_date(fact["valid_from"])) is None:
+        findings.append(Finding("fact_date_format",
+                                "valid_from 必须是 ISO 日期或时间，例如 2026-01-31", f"{fpath}.valid_from"))
+    if not _is_str(fact.get("valid_to")):
+        findings.append(Finding("fact_valid_to", "必须声明 valid_to", f"{fpath}.valid_to"))
+    elif (ends := _fact_date(fact["valid_to"])) is None:
+        findings.append(Finding("fact_date_format",
+                                "valid_to 必须是 ISO 日期或时间，例如 2026-01-31", f"{fpath}.valid_to"))
+    if starts is not None and ends is not None and starts >= ends:
+        findings.append(Finding("fact_valid_range", "valid_to 必须晚于 valid_from", f"{fpath}.valid_to"))
+
+
 def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
     if not _is_str(content.get("data_source_entry_id")):
         findings.append(Finding("fact_set_ds_required",
@@ -1090,9 +1124,9 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
             continue
         fact_id = fact.get("fact_id")
         if not _is_str(fact_id):
-            findings.append(Finding("fact_id_required", "事实需要稳定 fact_id", fpath))
+            findings.append(Finding("fact_id_required", "事实需要稳定 fact_id", f"{fpath}.fact_id"))
         elif fact_id in seen_ids:
-            findings.append(Finding("fact_duplicate_id", f"重复 fact_id: {fact_id}", fpath))
+            findings.append(Finding("fact_duplicate_id", f"重复 fact_id: {fact_id}", f"{fpath}.fact_id"))
         else:
             seen_ids.add(str(fact_id))
         fact_type = fact.get("fact_type")
@@ -1103,10 +1137,10 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
         cc = fact.get("country_code")
         if not isinstance(cc, str) or len(cc) != 2 or cc != cc.upper():
             findings.append(Finding("fact_country_code", "country_code 必须是大写 2 位 ISO", f"{fpath}.country_code"))
-        if not _is_str(fact.get("valid_from")):
-            findings.append(Finding("fact_valid_from", "必须声明 valid_from", f"{fpath}.valid_from"))
-        if not _is_str(fact.get("valid_to")):
-            findings.append(Finding("fact_valid_to", "必须声明 valid_to", f"{fpath}.valid_to"))
+        _validate_fact_window(fact, fpath, findings)
+        if not _is_str(fact.get("evidence_source")):
+            findings.append(Finding("fact_evidence_source_required",
+                                    "必须声明证据来源 evidence_source", f"{fpath}.evidence_source"))
         if known_type:
             # 值结构与 Truth 适配器解析时用的是同一张表、同一套规则。
             for problem in fact_value_problems(fact_type, fact):

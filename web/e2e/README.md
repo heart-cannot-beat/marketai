@@ -9,16 +9,15 @@ pull request they get only `npm run check-types:e2e` and the copy guard
 
 ## Suites
 
-| Suite                                          | Backend                                            | How to run                                                        |
-| ---------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------- |
-| `golden-path/full-journey`, `products`, `i18n` | Compose stack                                      | `npx playwright test --project golden-path --workers 1` (CI)      |
-| `localization`                                 | Compose stack and its Worker                       | `npm run test:e2e:localization` (below)                           |
-| `scale`                                        | Compose stack, its API and Worker                  | `npm run test:e2e:scale` (below)                                  |
-| `experiments`, `library`, `workspace`          | Compose stack                                      | `chromium` project; experiments also need `E2E_EXPERIMENTS_*`     |
-| `competitors`                                  | `page.route` doubles; three specs need a real API¹ | `chromium` project                                                |
-| `assets`, `generation`                         | `page.route` doubles and a signed-in page          | `chromium` project                                                |
-| `onboarding`                                   | Compose stack                                      | `onboarding` project                                              |
-| `cross-area`                                   | —                                                  | Known issue #27: `test.fixme`, its Python helpers have never run. |
+| Suite                                          | Backend                                            | How to run                                                    |
+| ---------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------- |
+| `golden-path/full-journey`, `products`, `i18n` | Compose stack                                      | `npx playwright test --project golden-path --workers 1` (CI)  |
+| `localization`                                 | Compose stack and its Worker                       | `npm run test:e2e:localization` (below)                       |
+| `scale`                                        | Compose stack, its API and Worker                  | `npm run test:e2e:scale` (below)                              |
+| `experiments`, `library`, `workspace`          | Compose stack                                      | `chromium` project; experiments also need `E2E_EXPERIMENTS_*` |
+| `competitors`                                  | `page.route` doubles; three specs need a real API¹ | `chromium` project                                            |
+| `assets`, `generation`                         | `page.route` doubles and a signed-in page          | `chromium` project                                            |
+| `onboarding`                                   | Compose stack                                      | `onboarding` project                                          |
 
 ¹ With `C31_REAL_BACKEND` or `C32_REAL_BACKEND` set.
 
@@ -99,12 +98,10 @@ for reasons outside the suites' copy and seeds:
   `daily_slot_missing` and its maturity is `insufficient`. (The golden path
   advances 14 days before it asserts maturity.) The journey is serial, so
   steps 07–18 do not run after it.
-- Scale, controlled-mock journey step 18: its hostile requests call the BFF
-  without the page's Origin, CSRF token and `X-Intent-Id`, so the first one
-  (the stale activation) is refused with 403 before it reaches the API
+- Scale, controlled-mock journey step 18 (#72): its hostile requests call the
+  BFF without the page's Origin, CSRF token and `X-Intent-Id`, so the first
+  one (the stale activation) is refused with 403 before it reaches the API
   instead of the 400, 409 or 428 the step expects.
-- Scale, Sandbox smoke step 3: the Enrollment page shows the raw Meta mode
-  (`customer_sandbox`) where the test expects the copy "Customer sandbox".
 
 ## Manual workflow
 

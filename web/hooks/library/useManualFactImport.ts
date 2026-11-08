@@ -5,11 +5,7 @@ import { useOperation } from '@/hooks/domain/useOperation';
 import { useUpload } from '@/hooks/domain/useUpload';
 import { useLibraryCache } from '@/hooks/library/useLibraryCache';
 import { useDomainGateway } from '@/lib/domain-client/gateway-provider';
-import {
-  errorCodeMessage,
-  errorMessage,
-  errorMessageOf,
-} from '@/lib/i18n/domain-errors';
+import { errorMessage, errorMessageOf } from '@/lib/i18n/domain-errors';
 
 /** `OperationResultRef.resource_type` of a finished import
  * (`app/worker_runtime.py` `_library_manual_fact_import`). */
@@ -223,10 +219,9 @@ export function useManualFactImport(dataSourceEntryId: string): {
           : null,
     };
   } else if (state && UNFINISHED.has(state))
-    view = {
-      step: 'error',
-      message: errorCodeMessage(t, 'manual_fact_import_failed'),
-    };
+    // Problems inside rows never fail an import: they are reported on the
+    // draft it creates (#23). What is left is the file as a whole.
+    view = { step: 'error', message: t('data-source-ops.import-rejected') };
   else view = { step: 'importing' };
 
   return { view, importFile, reset };

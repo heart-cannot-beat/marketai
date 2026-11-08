@@ -206,8 +206,8 @@ class TestUsageRecordedAfterSettlement(E2ETestBase):
 
         session.add(UsageEventRecord(
             id="ue_e2e_3", workspace_id=WORKSPACE_ID,
-            metric_key="provider_call", measurement_kind="count",
-            direction="increase", quantity=Decimal("1"), unit="calls",
+            metric_key="provider_calls", measurement_kind="delta",
+            direction="increase", quantity=Decimal("1"), unit="call",
             execution_mode="byok",
             source_resource_type="job", source_resource_id="job_e2e_3",
             semantic_key_hash="sk_ue_e2e_3",
@@ -223,7 +223,7 @@ class TestUsageRecordedAfterSettlement(E2ETestBase):
             )
         ).scalars().all()
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].metric_key, "provider_call")
+        self.assertEqual(events[0].metric_key, "provider_calls")
         self.assertEqual(events[0].quantity, Decimal("1"))
         session2.close()
 

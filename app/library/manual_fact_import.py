@@ -1,8 +1,16 @@
-"""Manual fact import: validate and convert Upload Intent payload into a Manual Fact Set draft.
+"""Manual fact import: turn a finalized Upload Intent into a Manual Fact Set draft.
 
 Spec §4.3 manual-fact-import path. Called by the Worker after the route
 enqueues the job. The Upload Intent must be finalized with purpose
 ``library_manual_fact_import`` before this module touches it.
+
+Only problems with the file as a whole fail the import (#23): its size,
+encoding, MIME, a JSON or CSV that does not parse, no ``facts`` list, no
+facts or more than ``MAX_FACT_COUNT``, and a target that is not an active
+data source. Problems inside a row never do. The draft is created anyway,
+carrying the same ValidationReport the publish command computes
+(``_build_report``), so the Owner reads it row by row (``facts[i].<field>``)
+on the draft before publishing (contract §11.4).
 """
 from __future__ import annotations
 
@@ -21,14 +29,16 @@ from ..adapters.persistence.models import (
 from ..platform.tenancy import TenantContext
 from ..platform.blob_store import BlobStore, CommittedBlobRef
 from .contracts import (
-    DRAFT_EDITING,
+    DRAFT_READY,
+    DRAFT_VALIDATION_FAILED,
     ENTRY_MANUAL_FACT_SET,
-    FACT_TYPES,
     LIFECYCLE_ACTIVE,
 )
+from .fact_types import FACT_VALUE_FIELDS, FieldKind
 from .service import (
     LibraryError,
     _audit,
+    _build_report,
     _emit,
     _entry,
     _entry_dict,
@@ -71,14 +81,12 @@ def parse_manual_fact_payload(
 
     if content_type == "text/csv":
         reader = csv.DictReader(io.StringIO(text, newline=""))
-        if not reader.fieldnames:
-            raise ManualFactImportError("Upload Intent CSV 缺少表头")
-        return {
-            "facts": [
-                {key: value for key, value in row.items() if key is not None}
-                for row in reader
-            ]
-        }
+        try:
+            if not reader.fieldnames:
+                raise ManualFactImportError("Upload Intent CSV 缺少表头")
+            return {"facts": [_csv_fact(row) for row in reader]}
+        except csv.Error as exc:
+            raise ManualFactImportError("Upload Intent CSV 格式无效") from exc
 
     raise ManualFactImportError(f"Upload Intent MIME 不受支持: {content_type}")
 
@@ -103,38 +111,53 @@ async def read_manual_fact_payload(
     )
 
 
-def _validate_facts(facts: list[dict]) -> list[str]:
-    """Return a list of validation error messages."""
-    errors: list[str] = []
+_CSV_BOOLS = {"true": True, "false": False}
+
+
+def _csv_value(kind: FieldKind, text: str) -> object:
+    """A CSV cell as its fact family's value type, or the cell itself.
+
+    A cell that does not convert stays as written: the draft's
+    ValidationReport then names it at ``facts[i].<field>``.
+    """
+    if kind == "bool":
+        return _CSV_BOOLS.get(text.strip().lower(), text)
+    if kind == "days":
+        digits = text.strip()
+        return int(digits) if digits.isascii() and digits.isdigit() else text
+    return text
+
+
+def _csv_fact(row: dict[str | None, str | None]) -> dict:
+    """One CSV row as a fact: CSV only has strings (#50).
+
+    An empty cell is no value, so a row of one fact family can share a file
+    with rows of others. Cells of the row's family that hold a boolean or a
+    number of days (``FACT_VALUE_FIELDS``) are converted; decimals,
+    currencies and text stay strings, as in a JSON file.
+    """
+    fact: dict[str, object] = {
+        key: value for key, value in row.items() if key is not None and value not in (None, "")
+    }
+    fact_type = fact.get("fact_type")
+    fields = FACT_VALUE_FIELDS.get(fact_type) if isinstance(fact_type, str) else None
+    for field, kind in (fields or {}).items():
+        value = fact.get(field)
+        if isinstance(value, str):
+            fact[field] = _csv_value(kind, value)
+    return fact
+
+
+def _file_facts(content_payload: dict) -> list:
+    """The file's fact rows, or the file-level reason it cannot be imported."""
+    facts = content_payload.get("facts")
+    if not isinstance(facts, list):
+        raise ManualFactImportError("Upload Intent 内容缺少 facts 列表")
     if not facts:
-        errors.append("至少需要一条事实")
-        return errors
+        raise ManualFactImportError("Upload Intent 内容至少需要一条事实")
     if len(facts) > MAX_FACT_COUNT:
-        errors.append(f"事实数量 {len(facts)} 超过限制 {MAX_FACT_COUNT}")
-        return errors
-    seen_ids: set[str] = set()
-    for i, fact in enumerate(facts):
-        if not isinstance(fact, dict):
-            errors.append(f"facts[{i}]: 事实必须是对象")
-            continue
-        fact_id = fact.get("fact_id")
-        if not isinstance(fact_id, str) or not fact_id:
-            errors.append(f"facts[{i}]: 事实需要稳定 fact_id")
-        elif fact_id in seen_ids:
-            errors.append(f"facts[{i}]: 重复 fact_id: {fact_id}")
-        else:
-            seen_ids.add(fact_id)
-        fact_type = fact.get("fact_type")
-        if not isinstance(fact_type, str) or fact_type not in FACT_TYPES:
-            errors.append(f"facts[{i}]: fact_type 必须是 {sorted(FACT_TYPES)} 之一")
-        cc = fact.get("country_code")
-        if not isinstance(cc, str) or len(cc) != 2 or cc != cc.upper():
-            errors.append(f"facts[{i}]: country_code 必须是大写 2 位 ISO")
-        if not isinstance(fact.get("valid_from"), str) or not fact.get("valid_from"):
-            errors.append(f"facts[{i}]: 必须声明 valid_from")
-        if not isinstance(fact.get("valid_to"), str) or not fact.get("valid_to"):
-            errors.append(f"facts[{i}]: 必须声明 valid_to")
-    return errors
+        raise ManualFactImportError(f"事实数量 {len(facts)} 超过限制 {MAX_FACT_COUNT}")
+    return facts
 
 
 def process_manual_fact_import(
@@ -144,12 +167,11 @@ def process_manual_fact_import(
     upload_intent_id: str,
     content_payload: dict | None = None,
 ) -> dict:
-    """Validate facts and create a Manual Fact Set entry with an editing draft.
+    """Create a Manual Fact Set entry whose draft carries the file's ValidationReport.
 
-    ``content_payload`` is the parsed JSON body from the finalized Upload
-    Intent. The Worker writes through :func:`write_manual_fact_set` inside
-    the transaction that settles its Operation; this wrapper commits on its
-    own.
+    ``content_payload`` is the parsed body of the finalized Upload Intent.
+    The Worker writes through :func:`write_manual_fact_set` inside the
+    transaction that settles its Operation; this wrapper commits on its own.
     """
     with tenant_session(context) as session:
         entry = write_manual_fact_set(
@@ -170,17 +192,12 @@ def write_manual_fact_set(
     upload_intent_id: str,
     content_payload: dict | None,
 ) -> LibraryEntryRecord:
-    """Validate facts and add a Manual Fact Set with its editing draft to ``session``'s transaction."""
-    if content_payload is None:
-        content_payload = {}
+    """Add a Manual Fact Set and its validated draft to ``session``'s transaction.
 
-    facts = content_payload.get("facts")
-    if not isinstance(facts, list):
-        raise ManualFactImportError("Upload Intent 内容缺少 facts 列表")
-
-    errors = _validate_facts(facts)
-    if errors:
-        raise ManualFactImportError(f"事实验证失败: {'; '.join(errors[:10])}")
+    Raises :class:`ManualFactImportError` only for the file as a whole; rows
+    with problems become blocking findings of the draft's ValidationReport.
+    """
+    facts = _file_facts(content_payload or {})
 
     _require_workspace(session, context.workspace_id)
     ds_entry = _entry(session, context, data_source_entry_id)
@@ -204,6 +221,13 @@ def write_manual_fact_set(
     )
     session.add(entry)
     session.flush()
+    # The row-by-row report is the one ``validate_draft`` would store for
+    # this revision; saving the draft clears it, validating writes it again.
+    # The Worker's database role may insert a draft but not update one
+    # (deploy/postgres/domain-tenant-roles.sql), so the draft row is written
+    # once, already carrying its report and the state that follows from it.
+    report, _resolved = _build_report(session, context, entry, content)
+    state = DRAFT_READY if report.ok else DRAFT_VALIDATION_FAILED
     session.add(
         LibraryDraftRecord(
             id=new_id("libdraft"),
@@ -211,14 +235,19 @@ def write_manual_fact_set(
             entry_id=entry.id,
             content_json=content,
             revision=1,
-            state=DRAFT_EDITING,
+            state=state,
+            validation_json=report.as_dict(),
             origin_command="manual_fact_import",
             source_version_id=None,
         )
     )
     _emit(
-        session, context, entry.id, "draft_created", to_state=DRAFT_EDITING,
+        session, context, entry.id, "draft_created", to_state=state,
         payload={"origin": "manual_fact_import", "upload_intent_id": upload_intent_id},
+    )
+    _emit(
+        session, context, entry.id, "validated", to_state=state,
+        payload={"blocking": len(report.blocking), "warnings": len(report.warnings)},
     )
     _audit(
         session, context, "manual_fact_import",
@@ -227,6 +256,9 @@ def write_manual_fact_set(
             "data_source_entry_id": data_source_entry_id,
             "upload_intent_id": upload_intent_id,
             "fact_count": len(facts),
+            "content_hash": report.content_hash,
+            "blocking": len(report.blocking),
+            "warnings": len(report.warnings),
         },
     )
     return entry

@@ -6,7 +6,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { DomainProxy } from '../../../../../lib/domain-client/proxy';
 import { OPERATION_REGISTRY } from '../../../../../lib/domain-client/generated/operation-registry';
 import { RESPONSE_VALIDATORS } from '../../../../../lib/domain-client/generated/validators';
-import type { DelegatedTokenIssuer } from '../../../../../lib/delegated-identity/token-issuer';
+import {
+  ApiError,
+  type DelegatedTokenIssuer,
+} from '../../../../../lib/delegated-identity/token-issuer';
 import type { AuthenticatedSession } from '../../../../../lib/requireSession';
 import type { CsrfVerifier } from '../../../../../lib/delegated-identity/csrf-verifier';
 
@@ -802,6 +805,102 @@ describe('BFF domain proxy catch-all — tracer integration (spec §8.1)', () =>
 
       expect(res.statusCode).toBe(502);
       expect(res._getJSONData().code).toBe('invalid_domain_response');
+    });
+  });
+
+  describe('Usage (#8)', () => {
+    /** What FastAPI's `get_usage` answers: provider calls per execution mode, Mock out of `total`. */
+    const USAGE = {
+      workspace_id: 'ws_1',
+      metric_key: 'provider_calls',
+      window_start: '2026-11-07T12:00:00+00:00',
+      window_end: '2026-11-08T12:00:00+00:00',
+      total: '3',
+      by_execution_mode: {
+        byok: '2',
+        sandbox: '1',
+        mock: '4',
+        not_applicable: '0',
+      },
+    };
+
+    function usageRequest(url = '/api/domain/v1/w/acme/usage') {
+      return mockGetRequest({
+        method: 'GET',
+        url,
+        query: { slug: 'acme', path: ['usage'] },
+        headers: { host: APP_HOST },
+      });
+    }
+
+    async function usageServer(): Promise<string[]> {
+      const received: string[] = [];
+      server = await startServer((req, res) => {
+        received.push(req.url ?? '');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(USAGE));
+      });
+      wireDomainProxy(server.url);
+      return received;
+    }
+
+    it('relays the parameterless read with its execution-mode buckets', async () => {
+      const received = await usageServer();
+      (getTokenIssuer as jest.Mock).mockReturnValue(fakeTokenIssuer());
+      const { req, res } = usageRequest();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res._getJSONData()).toEqual(USAGE);
+      expect(received).toEqual(['/api/v1/usage']);
+    });
+
+    it('refuses a query string: the contract declares no Usage parameters', async () => {
+      const received = await usageServer();
+      (getTokenIssuer as jest.Mock).mockReturnValue(fakeTokenIssuer());
+      const { req, res } = usageRequest(
+        '/api/domain/v1/w/acme/usage?metric_key=provider_calls'
+      );
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res._getJSONData().code).toBe('unexpected_query');
+      expect(received).toEqual([]);
+    });
+
+    it('answers 403 to a member of another Workspace and never reaches FastAPI', async () => {
+      const received = await usageServer();
+      // The issuer finds no membership of this user in the slug's Workspace.
+      (getTokenIssuer as jest.Mock).mockReturnValue({
+        issueForRequest: jest
+          .fn()
+          .mockRejectedValue(
+            new ApiError(403, 'workspace_membership_required')
+          ),
+      });
+      const { req, res } = usageRequest();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(403);
+      expect(res._getJSONData().code).toBe('workspace_membership_required');
+      expect(received).toEqual([]);
+    });
+
+    it('answers 401 without a session and never reaches FastAPI', async () => {
+      const received = await usageServer();
+      (requireSession as jest.Mock).mockRejectedValue(
+        new ApiError(401, 'unauthenticated')
+      );
+      const { req, res } = usageRequest();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(401);
+      expect(getTokenIssuer).not.toHaveBeenCalled();
+      expect(received).toEqual([]);
     });
   });
 
