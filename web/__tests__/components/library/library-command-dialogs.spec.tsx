@@ -112,9 +112,8 @@ function loadedImpactHook(overrides?: Record<string, unknown>) {
       contentHash: 'ch1',
       expiry: 9999,
       affectedSummaries: [],
-      blockingReasons: [],
+      blocking: [],
       warnings: [],
-      warningFindings: [],
       ...overrides,
     },
   };
@@ -259,12 +258,25 @@ describe('PublishDialog', () => {
 
   it('shows blocking reasons in alert', () => {
     mockUseLibraryCommandImpact.mockReturnValue(
-      loadedImpactHook({ blockingReasons: ['Draft not validated'] })
+      loadedImpactHook({
+        blocking: [
+          {
+            code: 'fact_set_empty',
+            message: '至少需要一条事实',
+            path: 'facts',
+          },
+        ],
+      })
     );
 
     render(createElement(PublishDialog, publishDialogProps()));
 
-    expect(screen.getByText('Draft not validated')).toBeInTheDocument();
+    // Worded through the finding's copy, never the server's own sentence.
+    expect(
+      screen.getByText('library:validation-findings.fact_set_empty')
+    ).toBeInTheDocument();
+    expect(screen.getByText('facts:', { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText('至少需要一条事实')).toBeNull();
     const alerts = screen.getAllByRole('alert', { hidden: true });
     expect(alerts.length).toBeGreaterThanOrEqual(1);
   });
@@ -280,8 +292,7 @@ describe('PublishDialog', () => {
             effect: 'cascade',
           },
         ],
-        warnings: ['Minor impact'],
-        warningFindings: [{ code: 'minor_impact', message: 'Minor impact' }],
+        warnings: [{ code: 'minor_impact', message: 'Minor impact', path: '' }],
       })
     );
 
@@ -289,7 +300,9 @@ describe('PublishDialog', () => {
 
     expect(screen.getByText('Dep A')).toBeInTheDocument();
     expect(screen.getByText('cascade')).toBeInTheDocument();
-    expect(screen.getByText('Minor impact')).toBeInTheDocument();
+    expect(
+      screen.getByText('library:validation-findings.minor_impact')
+    ).toBeInTheDocument();
   });
 
   describe('no MFA after login (ADR 0015)', () => {
@@ -322,10 +335,9 @@ describe('PublishDialog', () => {
   describe('non-blocking warnings', () => {
     const warned = () =>
       loadedImpactHook({
-        warnings: ['Minor impact', 'Check the audience'],
-        warningFindings: [
-          { code: 'minor_impact', message: 'Minor impact' },
-          { code: 'audience_review', message: 'Check the audience' },
+        warnings: [
+          { code: 'minor_impact', message: 'Minor impact', path: '' },
+          { code: 'audience_review', message: 'Check the audience', path: '' },
         ],
       });
 

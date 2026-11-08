@@ -4,6 +4,7 @@ import { useLibraryCommand } from '@/hooks/library/useLibraryCommand';
 import { useLibraryCache } from '@/hooks/library/useLibraryCache';
 import { useLibraryCommandImpact } from '@/hooks/library/useLibraryCommandImpact';
 import { errorMessage } from '@/lib/i18n/domain-errors';
+import { FindingText } from '@/components/library/FindingText';
 
 interface ArchiveDialogProps {
   entryId: string;
@@ -53,7 +54,7 @@ export function ArchiveDialog({
     confirmed &&
     impactHook.impact &&
     !impactHook.isStale &&
-    impactHook.impact.blockingReasons.length === 0;
+    impactHook.impact.blocking.length === 0;
 
   const handleArchive = async () => {
     if (!impactHook.impact) return;
@@ -118,14 +119,16 @@ export function ArchiveDialog({
           </div>
         )}
 
-        {impactHook.impact && impactHook.impact.blockingReasons.length > 0 && (
+        {impactHook.impact && impactHook.impact.blocking.length > 0 && (
           <div
             className="mt-3 rounded border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20"
             role="alert"
           >
             <ul className="list-disc pl-4 text-sm text-red-700 dark:text-red-400">
-              {impactHook.impact.blockingReasons.map((r) => (
-                <li key={r}>{r}</li>
+              {impactHook.impact.blocking.map((finding, i) => (
+                <li key={`${finding.code}-${i}`}>
+                  <FindingText finding={finding} />
+                </li>
               ))}
             </ul>
           </div>

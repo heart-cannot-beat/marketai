@@ -1,4 +1,5 @@
 import { useTranslation } from 'next-i18next';
+import { FindingText } from '@/components/library/FindingText';
 import type {
   ValidationFinding,
   ValidationResult,
@@ -67,8 +68,7 @@ export function ValidationPanel({
               >
                 <div className="flex items-start justify-between gap-2">
                   <span>
-                    <FindingPath path={finding.path} />
-                    {finding.message}
+                    <FindingText finding={finding} />
                   </span>
                   {!acknowledged.has(finding.code) && (
                     <button
@@ -100,14 +100,7 @@ export function ValidationPanel({
 function FindingItem({ finding }: { finding: ValidationFinding }) {
   return (
     <li className="text-sm text-red-700 dark:text-red-300" role="listitem">
-      <FindingPath path={finding.path} />
-      {finding.message}
+      <FindingText finding={finding} />
     </li>
   );
-}
-
-/** Where the finding sits in the draft content; a whole-draft finding has none. */
-function FindingPath({ path }: { path: string }) {
-  if (!path) return null;
-  return <span className="font-mono text-xs">{path}: </span>;
 }

@@ -74,8 +74,24 @@ describe('useLibraryCommandImpact', () => {
   it('uses the fresh publish preview endpoint and maps its projection', async () => {
     mockPreviewPublish.mockResolvedValue(
       successResult({
-        blocking: [{ code: 'required', message: 'A field is required' }],
-        warnings: [{ code: 'review', message: 'Review this value' }],
+        blocking: [
+          {
+            code: 'fact_currency',
+            message: '币种必须是大写 3 位 ISO 4217',
+            path: 'facts[0].currency',
+            severity: 'blocking',
+          },
+          // Read as a bare code with no sentence or location.
+          'content_shape',
+        ],
+        warnings: [
+          {
+            code: 'dependency_warning',
+            message: '引用的版本资格为 warning',
+            path: 'reference_bindings[0].reference_version_id',
+            severity: 'warning',
+          },
+        ],
         dependents: [
           {
             version_id: 'version-2',
@@ -102,11 +118,24 @@ describe('useLibraryCommandImpact', () => {
       targetId: 'entry-1',
       targetRevision: 3,
       contentHash: 'content-hash',
-      blockingReasons: ['A field is required'],
-      warnings: ['Review this value'],
-      // Codes travel with the messages so the publish dialog can send
-      // FastAPI the exact `acknowledged_warnings` it expects.
-      warningFindings: [{ code: 'review', message: 'Review this value' }],
+      // Findings keep their code and path: the dialogs word them through
+      // `FindingText`, and the publish dialog sends FastAPI the exact
+      // warning codes it expects in `acknowledged_warnings`.
+      blocking: [
+        {
+          code: 'fact_currency',
+          message: '币种必须是大写 3 位 ISO 4217',
+          path: 'facts[0].currency',
+        },
+        { code: 'content_shape', message: '', path: '' },
+      ],
+      warnings: [
+        {
+          code: 'dependency_warning',
+          message: '引用的版本资格为 warning',
+          path: 'reference_bindings[0].reference_version_id',
+        },
+      ],
       affectedSummaries: [
         {
           id: 'version-2',

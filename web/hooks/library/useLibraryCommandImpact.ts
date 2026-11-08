@@ -3,6 +3,10 @@ import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { useDomainGateway } from '@/lib/domain-client/gateway-provider';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
 import type { components } from '@/lib/domain-client/generated/domain-v1';
+import {
+  toLibraryFinding,
+  type LibraryFinding,
+} from '@/lib/library/validation-findings';
 
 type CommandImpactData = components['schemas']['CommandImpactProjection'];
 
@@ -15,16 +19,6 @@ export interface ImpactAffectedSummary {
   effect: string;
 }
 
-/**
- * A non-blocking validation warning from the publish-impact projection.
- * `code` is what FastAPI expects back in `acknowledged_warnings`; `message`
- * is what the user reads.
- */
-export interface ImpactWarning {
-  code: string;
-  message: string;
-}
-
 export interface ImpactProjection {
   impactId: string;
   impactHash: string;
@@ -34,11 +28,13 @@ export interface ImpactProjection {
   contentHash: string | null;
   expiry: number;
   affectedSummaries: ImpactAffectedSummary[];
-  blockingReasons: string[];
-  /** Human-readable warning messages (same order as `warningFindings`). */
-  warnings: string[];
-  /** Warnings with their acknowledgeable codes. */
-  warningFindings: ImpactWarning[];
+  /** Validation findings that stop the command; worded by `FindingText`. */
+  blocking: LibraryFinding[];
+  /**
+   * Non-blocking validation warnings. Each `code` is what FastAPI expects
+   * back in `acknowledged_warnings`.
+   */
+  warnings: LibraryFinding[];
 }
 
 export interface UseLibraryCommandImpactResult {
@@ -224,17 +220,9 @@ function toImpactProjection(
             : stringValue(dependent.eligibility, 'affected'),
       };
     }),
-    blockingReasons: blocking.map(findingMessage),
-    warnings: warnings.map(findingMessage),
-    warningFindings: warnings.map(impactWarning),
+    blocking: blocking.map(toLibraryFinding),
+    warnings: warnings.map(toLibraryFinding),
   };
-}
-
-function impactWarning(value: unknown): ImpactWarning {
-  const message = findingMessage(value);
-  if (typeof value === 'string') return { code: value, message };
-  const finding = asRecord(value);
-  return { code: stringValue(finding.code, message), message };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -245,10 +233,4 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function stringValue(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.length > 0 ? value : fallback;
-}
-
-function findingMessage(value: unknown): string {
-  if (typeof value === 'string') return value;
-  const finding = asRecord(value);
-  return stringValue(finding.message, stringValue(finding.code, 'unknown'));
 }
