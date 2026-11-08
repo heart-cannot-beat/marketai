@@ -241,7 +241,13 @@ function FactList({
                       {text(fact.fact_id) ?? notSet}
                     </td>
                     {showProblems && (
-                      <td className="text-xs text-red-700 dark:text-red-300">
+                      <td
+                        className={
+                          fields
+                            ? 'text-xs text-red-700 dark:text-red-300'
+                            : 'text-xs'
+                        }
+                      >
                         {fields ? (
                           t('fact-list.problems.row', {
                             row: String(index + 1),
