@@ -826,12 +826,14 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
               currency: 'USD',
             },
             {
-              fact_id: 'gp-tax-de',
-              fact_type: 'tax',
+              fact_id: 'gp-delivery-de',
+              fact_type: 'delivery',
               country_code: 'DE',
               valid_from: '2026-01-01',
               valid_to: '2026-12-31',
-              rate: '0.19',
+              delivery_days_min: 2,
+              delivery_days_max: 5,
+              region: 'DE',
             },
           ],
         })

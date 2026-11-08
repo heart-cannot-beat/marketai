@@ -1797,6 +1797,8 @@
   "error-extraction_invalid": "The AI could not build a complete product card from this content.",
   "error-fact_type_not_in_manual_set": "The manual fact set has no value for this fact.",
   "error-fact_type_not_in_mock_scenario": "The mock scenario has no value for this fact.",
+  "error-fact_type_unsupported": "This fact type is no longer supported. Publish the fact set and the Truth policy again with a current fact type.",
+  "error-fact_value_invalid": "This fact's value is incomplete or invalid. Correct it in the manual fact set and publish it again.",
   "error-factor_value_invalid": "A new value needs a label.",
   "error-file_encoding_invalid": "The file's encoding was not recognised. Save it as a UTF-8 CSV.",
   "error-file_too_large": "The file is larger than {{limit_mb}} MB.",

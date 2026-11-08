@@ -125,7 +125,7 @@ def _validate_facts(facts: list[dict]) -> list[str]:
         else:
             seen_ids.add(fact_id)
         fact_type = fact.get("fact_type")
-        if fact_type not in FACT_TYPES:
+        if not isinstance(fact_type, str) or fact_type not in FACT_TYPES:
             errors.append(f"facts[{i}]: fact_type 必须是 {sorted(FACT_TYPES)} 之一")
         cc = fact.get("country_code")
         if not isinstance(cc, str) or len(cc) != 2 or cc != cc.upper():
