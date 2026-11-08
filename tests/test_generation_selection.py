@@ -268,6 +268,70 @@ class TestGenerationSelection(LibraryFixtures):
         with tenant_session(self.context) as session:
             self.assertEqual(session.get(RunItemRecord, item_id).state, "uncertain")
 
+    # -- Usage provider_calls (#8): counted when the provider answered ------
+
+    def _provider_calls(self, item_id):
+        from app.entitlements.usage_models import UsageEventRecord
+        with tenant_session(self.context) as session:
+            attempt_ids = set(session.scalars(select(ProviderCallAttemptRecord.id).where(
+                ProviderCallAttemptRecord.workspace_id == self.context.workspace_id,
+                ProviderCallAttemptRecord.run_item_id == item_id)))
+            rows = session.scalars(select(UsageEventRecord).where(
+                UsageEventRecord.workspace_id == self.context.workspace_id)).all()
+            return [row.execution_mode for row in rows if row.source_resource_id in attempt_ids]
+
+    def _paid_item(self):
+        draft = self.draft("openai")
+        result = self.submit(draft, self.preview(draft))
+        self.assertEqual(result.status_code, 202, result.text)
+        return self.items(result.json()["generation_run_id"])[0]
+
+    def _run(self, item_id, job_id, adapter, times=1):
+        for _ in range(times):
+            asyncio.run(execute_run_item(self.context, job_id, item_id, self.blobs, adapter=adapter))
+
+    def test_usage_counts_one_byok_call_for_a_paid_image_and_none_on_replay(self):
+        self.paid_setup()
+        item_id, job_id = self._paid_item()
+        adapter = AsyncMock()
+        adapter.execute.return_value = ProviderCallResult(png_bytes(), "request-1", False)
+        self._run(item_id, job_id, adapter, times=2)
+        self.assertEqual(adapter.execute.await_count, 1)
+        self.assertEqual(self._provider_calls(item_id), ["byok"])
+
+    def test_usage_counts_a_paid_call_whose_output_is_unusable(self):
+        self.paid_setup()
+        item_id, job_id = self._paid_item()
+        adapter = AsyncMock()
+        adapter.execute.return_value = ProviderCallResult(b"not an image", "request-2", False)
+        self._run(item_id, job_id, adapter, times=2)
+        with tenant_session(self.context) as session:
+            reservation = session.scalar(select(SpendReservationRecord).where(SpendReservationRecord.run_item_id == item_id))
+            self.assertEqual(reservation.state, "settled")
+        self.assertEqual(self._provider_calls(item_id), ["byok"])
+
+    def test_usage_counts_nothing_for_a_paid_call_that_never_left_or_timed_out(self):
+        self.paid_setup(limit="50")
+        for certainty, expected in (("not_dispatched", "released"), ("may_have_dispatched", "uncertain")):
+            with self.subTest(certainty=certainty):
+                item_id, job_id = self._paid_item()
+                adapter = AsyncMock()
+                adapter.execute.side_effect = ProviderDispatchError(certainty, "refused or lost")
+                self._run(item_id, job_id, adapter)
+                with tenant_session(self.context) as session:
+                    reservation = session.scalar(select(SpendReservationRecord).where(SpendReservationRecord.run_item_id == item_id))
+                    self.assertEqual(reservation.state, expected)
+                self.assertEqual(self._provider_calls(item_id), [])
+
+    def test_usage_counts_a_controlled_mock_image_in_the_mock_bucket(self):
+        draft = self.draft()
+        result = self.submit(draft, self.preview(draft))
+        item_id, job_id = self.items(result.json()["generation_run_id"])[0]
+        adapter = AsyncMock()
+        adapter.execute.return_value = ProviderCallResult(png_bytes(), "mock-request", False)
+        self._run(item_id, job_id, adapter, times=2)
+        self.assertEqual(self._provider_calls(item_id), ["mock"])
+
     def test_real_wire_status_controls_ledger_and_resume_never_replays(self):
         """HTTP commands + real provider adapters; only vendor transport replaced."""
         import httpx

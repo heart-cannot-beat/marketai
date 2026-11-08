@@ -10,6 +10,7 @@ from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import JobRecord, new_id, utcnow
 from app.entitlements.cost_models import SpendReservationRecord, ProviderCallAttemptRecord
 from app.entitlements.credential_protector import CredentialProtector, CredentialEncryptionContext, EncryptedEnvelope
+from app.entitlements.usage import record_provider_call
 from app.generation.paid_execution import _settle
 from app.generation.selection import authorize_paid, credential_binding
 from app.platform.blob_store import CommittedBlobRef
@@ -158,9 +159,11 @@ async def execute_ai_qc(ctx, call_id, blob_store, *, complete=visual_completion)
         reservation = reservation_for(session, ctx, call)
         if reservation:
             _settle(session, reservation, attempt_id, called=True)
-        if attempt_id:
+        if attempt_id:  # only BYOK has an attempt; the Mock report is simulated locally
             attempt = session.get(ProviderCallAttemptRecord, attempt_id)
             attempt.dispatch_state, attempt.completed_at = "succeeded", utcnow()
+            # A refusal or invalid output is an answer too: the provider was called.
+            record_provider_call(session, ctx, attempt, occurred_at=attempt.completed_at)
         raw = data
         try:
             if known_error:

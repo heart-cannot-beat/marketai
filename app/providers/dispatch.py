@@ -18,10 +18,11 @@ call:
 3. **complete** (in a DB transaction) -- persist the outcome: append the
    append-only ProviderAttempt event(s), advance the CAS projection, settle
    or release the chargeable ``SpendReservation`` (appending a
-   ``ProviderCostLedgerEntryRecord`` on settlement), and -- for a success --
-   let the evidence recorder persist the durable typed result reference
-   into domain evidence, all in the same transaction as the ProviderAttempt
-   success event.
+   ``ProviderCostLedgerEntryRecord`` on settlement), count the call in
+   Usage (``provider_calls``) when the provider is known to have been
+   called, and -- for a success -- let the evidence recorder persist the
+   durable typed result reference into domain evidence, all in the same
+   transaction as the ProviderAttempt success event.
 
 This module is intentionally domain-agnostic: ``step_kind`` is metadata
 recorded on the attempt row, never a branch here, and this module never
@@ -69,6 +70,7 @@ from app.entitlements.cost_models import (
     SpendReservationRecord,
 )
 from app.entitlements.reservation_book import ledger_entry_key
+from app.entitlements.usage import record_provider_call
 from app.platform.tenancy import TenantContext
 from app.providers.adapter import ExternalCallAdapter, ProviderDispatchError, ReportedCost
 from app.providers.attempts import append_event, prepare_attempt
@@ -804,6 +806,7 @@ class ExternalCallCoordinator:
                 self._settle_reservation(
                     session, ctx, attempt=attempt, now=now, reported_cost=reported_cost,
                 )
+                record_provider_call(session, ctx, attempt, occurred_at=now)
             elif dispatch_result["dispatch_certainty"] in ("not_dispatched", "dispatched"):
                 # ``not_dispatched``: nothing was billed -- release.
                 # ``dispatched``: the provider answered and billed, but the
@@ -833,6 +836,10 @@ class ExternalCallCoordinator:
                     self._settle_reservation(
                         session, ctx, attempt=attempt, now=now, reported_cost=reported_cost,
                     )
+                    # The provider answered: the call happened. A
+                    # ``not_dispatched`` failure never reached it, and an
+                    # ``uncertain`` one is counted when reconcile() settles it.
+                    record_provider_call(session, ctx, attempt, occurred_at=now)
                 else:
                     self._release_reservation(session, ctx, attempt=attempt, now=now)
             else:

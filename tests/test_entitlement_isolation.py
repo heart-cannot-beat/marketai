@@ -186,9 +186,9 @@ class TestUsageEventIsolation(IsolationTestBase):
         session2 = self._session()
         session2.add(UsageEventRecord(
             id="ue_a1", workspace_id=WS_A,
-            metric_key="provider_call",
-            measurement_kind="count", direction="increase",
-            quantity=Decimal("1"), unit="calls",
+            metric_key="provider_calls",
+            measurement_kind="delta", direction="increase",
+            quantity=Decimal("1"), unit="call",
             execution_mode="byok",
             source_resource_type="job", source_resource_id="job_a2",
             semantic_key_hash="sk_ue_a1",
@@ -196,9 +196,9 @@ class TestUsageEventIsolation(IsolationTestBase):
         ))
         session2.add(UsageEventRecord(
             id="ue_b1", workspace_id=WS_B,
-            metric_key="provider_call",
-            measurement_kind="count", direction="increase",
-            quantity=Decimal("1"), unit="calls",
+            metric_key="provider_calls",
+            measurement_kind="delta", direction="increase",
+            quantity=Decimal("1"), unit="call",
             execution_mode="byok",
             source_resource_type="job", source_resource_id="job_b2",
             semantic_key_hash="sk_ue_b1",
