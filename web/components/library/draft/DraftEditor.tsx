@@ -8,6 +8,7 @@ import { ValidationPanel } from './ValidationPanel';
 import { ConflictDialog } from './ConflictDialog';
 import { RawJsonDraftEditor } from './RawJsonDraftEditor';
 import { errorMessage } from '@/lib/i18n/domain-errors';
+import { factIdsOf } from '@/lib/library/fact-rows';
 
 interface DraftEditorProps {
   entryId: string;
@@ -69,6 +70,17 @@ export function DraftEditor({
         <ValidationPanel
           validation={session.validation}
           onAcknowledge={session.acknowledgeWarning}
+          factRows={
+            entryType === 'manual_fact_set'
+              ? {
+                  // The report is about the saved revision: unsaved edits
+                  // may have moved the rows, so their IDs are left out.
+                  factIds: session.isDirty
+                    ? []
+                    : factIdsOf(session.buffer?.fields),
+                }
+              : undefined
+          }
         />
       )}
 

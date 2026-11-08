@@ -12,6 +12,9 @@ interface DraftSummary {
   /** `DraftSummary.content` (`app/library/service.py::_draft_dict`) -- the
    * editable content itself, which `GET /library/entries/{id}` embeds. */
   content?: Record<string, unknown>;
+  /** The ValidationReport stored for this revision, shown until the next
+   * validation (a manual fact import stores its row report here, #23). */
+  validation?: Record<string, unknown> | null;
   created_at?: string;
   updated_at?: string;
 }

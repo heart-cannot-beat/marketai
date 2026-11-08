@@ -824,6 +824,7 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
               valid_to: '2026-12-31',
               amount: '19.99',
               currency: 'USD',
+              evidence_source: 'Acme Charge US price list',
             },
             {
               fact_id: 'gp-delivery-de',
@@ -834,6 +835,7 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
               delivery_days_min: 2,
               delivery_days_max: 5,
               region: 'DE',
+              evidence_source: 'Acme Charge DE carrier rates',
             },
           ],
         })
@@ -842,6 +844,17 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
     await expect(
       page.getByText(en('library', 'data-source-ops.import-complete'))
     ).toBeVisible({ timeout: 120_000 });
+
+    // #23: the import checks every row and stores the report on the draft
+    // it opens; these rows, from a published data source, pass.
+    await page
+      .getByRole('button', {
+        name: en('library', 'data-source-ops.open-fact-set'),
+      })
+      .click();
+    await expect(
+      page.getByText(en('library', 'draft.validation-passed'))
+    ).toBeVisible({ timeout: 30_000 });
   });
 
   // =========================================================================

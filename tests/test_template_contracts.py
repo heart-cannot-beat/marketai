@@ -268,6 +268,43 @@ class TestManualFactSetValidation(unittest.TestCase):
         report = validate_content(ENTRY_MANUAL_FACT_SET, self._fact_content(facts=[fact]))
         self.assertFalse(report.ok)
 
+    def _blocking_with(self, **fields):
+        fact = {**self._fact_content()["facts"][0], **fields}
+        report = validate_content(ENTRY_MANUAL_FACT_SET, self._fact_content(facts=[fact]))
+        return {(f.code, f.path) for f in report.blocking}
+
+    def test_evidence_source_is_required(self):
+        # #23: contract §11.4 lists the evidence source among the required fields.
+        for missing in ("", "  ", None):
+            with self.subTest(evidence_source=missing):
+                self.assertEqual(
+                    self._blocking_with(evidence_source=missing),
+                    {("fact_evidence_source_required", "facts[0].evidence_source")},
+                )
+
+    def test_validity_must_start_before_it_ends(self):
+        cases = {
+            "reversed": ("2026-12-31", "2026-09-01"),
+            "empty window": ("2026-09-01", "2026-09-01"),
+            "same instant, two offsets": ("2026-09-01T02:00:00+02:00", "2026-09-01T00:00:00Z"),
+        }
+        for name, (valid_from, valid_to) in cases.items():
+            with self.subTest(name):
+                self.assertEqual(
+                    self._blocking_with(valid_from=valid_from, valid_to=valid_to),
+                    {("fact_valid_range", "facts[0].valid_to")},
+                )
+        self.assertEqual(
+            self._blocking_with(valid_from="2026-09-01", valid_to="2026-09-01T00:00:01Z"), set(),
+            "a date without an offset is UTC midnight, as Truth reads it",
+        )
+
+    def test_validity_dates_must_be_iso(self):
+        self.assertEqual(
+            self._blocking_with(valid_from="09/01/2026", valid_to="end of year"),
+            {("fact_date_format", "facts[0].valid_from"), ("fact_date_format", "facts[0].valid_to")},
+        )
+
 
 class TestTruthResolutionPolicyValidation(unittest.TestCase):
 
