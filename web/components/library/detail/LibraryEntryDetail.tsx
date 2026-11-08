@@ -264,7 +264,14 @@ function ActiveTabContent({
         />
       );
     case 'facts':
-      return <FactsTab entryId={entryId} />;
+      return (
+        <FactsTab
+          entryId={entryId}
+          entryType={entryType}
+          currentVersionId={currentVersionId}
+          draftContent={draft?.content ?? null}
+        />
+      );
     case 'resolution':
       return <ResolutionTab />;
     case 'settings':

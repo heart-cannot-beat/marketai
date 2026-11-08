@@ -499,6 +499,24 @@
     "upload-rejected": "The file did not pass the upload checks. Use a CSV or JSON file of up to 10 MB.",
     "open-fact-set": "Open fact set"
   },
+  "fact-list": {
+    "version-heading": "Facts in version {{no}}",
+    "draft-heading": "Facts in the draft",
+    "draft-notice": "This draft has not been published yet.",
+    "open-source": "Open the data source",
+    "empty": "This fact set has no facts yet.",
+    "unreadable": "These facts cannot be shown here.",
+    "not-set": "Not set",
+    "valid-range": "{{from}} to {{to}}",
+    "columns": {
+      "fact-id": "Fact ID",
+      "fact-type": "Type",
+      "market": "Market",
+      "amount": "Amount",
+      "valid": "Valid",
+      "other": "Other values"
+    }
+  },
   "contextual-create": {
     "new": "New {{type}}",
     "title": "Create {{type}}",
