@@ -1612,6 +1612,79 @@ class TestScaleProblemResponsesOnAnEnrollment(ScaleProblemAssertions, Enrollment
         self._assert_problem(self.client.get(breakdowns), 404, "enrollment_not_found")
         self._assert_problem(self._post("/exports", export_body), 404, "enrollment_not_found")
 
+    def _export_journal(self, workspace_id: str | None = None) -> list[tuple[str, str]]:
+        from app.scale.models import ScaleCommandJournalRecord
+
+        with SessionLocal() as session:
+            return [
+                (row.meta_mode, row.scenario_scope_key)
+                for row in session.query(ScaleCommandJournalRecord).filter_by(
+                    workspace_id=workspace_id or self.workspace_id, command_type="create_scale_export",
+                )
+            ]
+
+    def _exports(self, workspace_id: str | None = None) -> int:
+        from app.scale.models import ScaleExportRecord
+
+        with SessionLocal() as session:
+            return session.query(ScaleExportRecord).filter_by(
+                workspace_id=workspace_id or self.workspace_id,
+            ).count()
+
+    def test_an_export_is_journaled_under_its_enrollments_scenario_and_the_worker_completes_it(self):
+        import asyncio
+
+        from app.platform.operations import OperationRecord
+        from app.scale.models import ScaleExportRecord
+        from app.worker_runtime import WorkerRuntime
+        from tests.support.queue_hygiene import cancel_workspace_jobs, quarantine_foreign_jobs
+
+        self.addCleanup(cancel_workspace_jobs, self.workspace_id)
+        enrollment = self._active_enrollment()
+        scenario = enrollment["scenario_scope_key"]
+        if self.mode == "controlled_mock":
+            self.assertNotEqual(scenario, "__no_scenario__")
+        else:
+            self.assertEqual(scenario, "__no_scenario__")
+
+        created = self._post("/exports", {
+            "enrollment_id": enrollment["id"],
+            "episode_id": enrollment["current_episode_id"],
+            "export_kind": "evidence_summary",
+        })
+
+        self.assertEqual(created.status_code, 202, created.text)
+        self.assertEqual(self._export_journal(), [(self.mode, scenario)])
+        quarantine_foreign_jobs(self.workspace_id)
+        runtime = WorkerRuntime(owner=f"ci-only-worker-{new_id('w')}")
+        self.assertTrue(asyncio.run(runtime.run_once(job_types=("scale_export",))))
+        with SessionLocal() as session:
+            export = session.get(ScaleExportRecord, created.json()["id"])
+            operation = session.get(OperationRecord, created.json()["operation_id"])
+            self.assertIsNotNone(export.completed_at)
+            self.assertEqual(operation.state, "succeeded")
+
+    def test_another_workspace_cannot_create_an_export_for_this_ones_enrollment(self):
+        enrollment = self._active_enrollment()
+        other_ws = self._switch_to_other_tenant()
+
+        self._assert_problem(self._post("/exports", {
+            "enrollment_id": enrollment["id"],
+            "episode_id": enrollment["current_episode_id"],
+            "export_kind": "evidence_summary",
+        }), 404, "enrollment_not_found")
+
+        for workspace_id in (self.workspace_id, other_ws):
+            self.assertEqual((self._exports(workspace_id), self._export_journal(workspace_id)), (0, []))
+
+
+class TestControlledMockExports(TestScaleProblemResponsesOnAnEnrollment):
+    """#55 with #56's bug class: under ``controlled_mock`` an export is
+    journaled under its Enrollment's scenario (``claim_command`` requires
+    one) instead of failing with a 500. Every case above runs again here."""
+
+    mode = "controlled_mock"
+
 
 
 # ---------------------------------------------------------------------------

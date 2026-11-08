@@ -500,11 +500,13 @@ class TestExportPackageCrashRecovery(ExportPackageFixture, CrashRecoveryCases):
 class ScaleExportFixture(LibraryFixtures, CrashRecoveryFixture):
     JOB_TYPE = "scale_export"
     INTERLEAVE_AT = "app.scale.exports.get_operation"
+    META_MODE = "customer_sandbox"
+    SCENARIO = "__no_scenario__"
 
     def setUp(self):
         workspace_id = f"ws_crash_scale_{uuid.uuid4().hex}"
         self.provision_workspace(workspace_id)
-        self.ctx = scale_export_tests._owner_context(workspace_id)
+        self.ctx = scale_export_tests._owner_context(workspace_id, meta_mode=self.META_MODE)
         self.addCleanup(cancel_workspace_jobs, workspace_id)
 
     def workspace_id(self) -> str:
@@ -514,6 +516,7 @@ class ScaleExportFixture(LibraryFixtures, CrashRecoveryFixture):
         with tenant_session(self.ctx) as session:
             enrollment_id, episode_id = scale_export_tests._seed_enrollment_and_episode(
                 session, self.ctx.workspace_id,
+                meta_mode=self.META_MODE, scenario_scope_key=self.SCENARIO,
             )
             result = create_export(
                 session, self.ctx, enrollment_id=enrollment_id, episode_id=episode_id,
@@ -585,6 +588,18 @@ class TestScaleExportCrashRecoveryOnTheDeployedWorker(
     test_a_rerun_that_finds_the_operation_failed_writes_nothing = (
         TestScaleExportCrashRecovery.test_a_rerun_that_finds_the_operation_failed_writes_nothing
     )
+
+
+class ControlledMockScaleExportFixture(DeployedWorkerScaleExportFixture):
+    """The same Job requested under ``controlled_mock``: its export is
+    journaled under the Enrollment's scenario and runs in that mode."""
+
+    META_MODE = "controlled_mock"
+    SCENARIO = "scn_ci_only_crash"
+
+
+class TestControlledMockScaleExportCrashRecovery(ControlledMockScaleExportFixture, CrashRecoveryCases):
+    pass
 
 
 # ---------------------------------------------------------------------------

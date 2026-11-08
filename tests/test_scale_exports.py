@@ -14,11 +14,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.adapters.persistence.database import Base
-from app.adapters.persistence.models import WorkspaceRecord, new_id, utcnow
+from app.adapters.persistence.models import JobRecord, WorkspaceRecord, new_id, utcnow
 from app.platform.operations import OperationState, get_operation
 from app.platform.tenancy import TenantContext, tenant_scope
 from app.scale.exports import (
@@ -29,7 +29,12 @@ from app.scale.exports import (
     create_export_download_intent,
     run_scale_export,
 )
-from app.scale.models import ScaleEnrollmentRecord, ScaleEpisodeRecord, ScaleExportRecord
+from app.scale.models import (
+    ScaleCommandJournalRecord,
+    ScaleEnrollmentRecord,
+    ScaleEpisodeRecord,
+    ScaleExportRecord,
+)
 
 
 @pytest.fixture
@@ -67,13 +72,19 @@ def _owner_context(ws_id: str, meta_mode: str = "customer_sandbox") -> TenantCon
     )
 
 
-def _seed_enrollment_and_episode(session: Session, ws_id: str) -> tuple[str, str]:
+def _seed_enrollment_and_episode(
+    session: Session,
+    ws_id: str,
+    *,
+    meta_mode: str = "customer_sandbox",
+    scenario_scope_key: str = "__no_scenario__",
+) -> tuple[str, str]:
     enrollment = ScaleEnrollmentRecord(
         id=new_id("senr"),
         workspace_id=ws_id,
-        meta_mode="customer_sandbox",
+        meta_mode=meta_mode,
         meta_connection_id="conn-1",
-        scenario_scope_key="__no_scenario__",
+        scenario_scope_key=scenario_scope_key,
         ad_account_id="act-1",
         winner_decision_id="wdec-1",
         winner_confirmation_id="wconf-1",
@@ -92,7 +103,7 @@ def _seed_enrollment_and_episode(session: Session, ws_id: str) -> tuple[str, str
     episode = ScaleEpisodeRecord(
         id=new_id("sep"),
         workspace_id=ws_id,
-        meta_mode="customer_sandbox",
+        meta_mode=meta_mode,
         enrollment_id=enrollment.id,
         winner_decision_id="wdec-1",
         winner_confirmation_id="wconf-1",
@@ -101,7 +112,7 @@ def _seed_enrollment_and_episode(session: Session, ws_id: str) -> tuple[str, str
         offer_version_id="ov-1",
         market_code="US",
         meta_connection_id="conn-1",
-        scenario_scope_key="__no_scenario__",
+        scenario_scope_key=scenario_scope_key,
         ad_account_id="act-1",
         delivery_config_baseline_source_id="baseline-1",
         delivery_evidence_hash="hash-1",
@@ -118,6 +129,24 @@ def _seed_enrollment_and_episode(session: Session, ws_id: str) -> tuple[str, str
     session.add(episode)
     session.flush()
     return enrollment.id, episode.id
+
+
+def _journal(session: Session, ws_id: str) -> list[tuple[str, str]]:
+    return [
+        (row.meta_mode, row.scenario_scope_key)
+        for row in session.scalars(
+            select(ScaleCommandJournalRecord).where(
+                ScaleCommandJournalRecord.workspace_id == ws_id,
+                ScaleCommandJournalRecord.command_type == "create_scale_export",
+            )
+        )
+    ]
+
+
+def _job_id(session: Session, export_id: str) -> str:
+    return session.scalars(
+        select(JobRecord.id).where(JobRecord.type == "scale_export", JobRecord.resource_id == export_id)
+    ).one()
 
 
 class TestCreateExport:
@@ -194,6 +223,41 @@ class TestCreateExport:
                 export_kind="evidence_summary",
                 idempotency_key="export-4",
             )
+
+    def test_a_controlled_mock_export_is_journaled_under_its_enrollments_scenario(self, session, ws_id):
+        # claim_command requires an explicit scenario under controlled_mock;
+        # without one create_export raised ValueError, a 500 (#56's class).
+        ctx = _owner_context(ws_id, meta_mode="controlled_mock")
+        enrollment_id, episode_id = _seed_enrollment_and_episode(
+            session, ws_id, meta_mode="controlled_mock", scenario_scope_key="scn_ci_only_export",
+        )
+
+        first = create_export(
+            session, ctx, enrollment_id=enrollment_id, episode_id=episode_id,
+            export_kind="evidence_summary", idempotency_key="export-mock-1",
+        )
+        replay = create_export(
+            session, ctx, enrollment_id=enrollment_id, episode_id=episode_id,
+            export_kind="evidence_summary", idempotency_key="export-mock-1",
+        )
+
+        assert replay == first
+        assert _journal(session, ws_id) == [("controlled_mock", "scn_ci_only_export")]
+        assert session.get(JobRecord, _job_id(session, first.export_id)).payload_json == {
+            "export_id": first.export_id, "meta_mode": "controlled_mock",
+        }
+
+    @pytest.mark.parametrize("meta_mode", ["customer_sandbox", "internal_validation"])
+    def test_other_modes_are_journaled_without_a_scenario(self, session, ws_id, meta_mode):
+        ctx = _owner_context(ws_id, meta_mode=meta_mode)
+        enrollment_id, episode_id = _seed_enrollment_and_episode(session, ws_id, meta_mode=meta_mode)
+
+        create_export(
+            session, ctx, enrollment_id=enrollment_id, episode_id=episode_id,
+            export_kind="evidence_summary", idempotency_key=f"export-{meta_mode}",
+        )
+
+        assert _journal(session, ws_id) == [(meta_mode, "__no_scenario__")]
 
     def test_cross_tenant_enrollment_not_visible(self, session, ws_id):
         ctx = _owner_context(ws_id)

@@ -545,7 +545,7 @@ class PostgresArchitectureTests(unittest.TestCase):
         from tests import test_job_crash_recovery as crash
         return (crash.ReferenceGateFixture, crash.ExportPackageFixture, crash.DeterministicQcFixture,
                 crash.FinalizeItemFixture, crash.FoldBatchFixture, crash.DeployedWorkerScaleExportFixture,
-                crash.ScaleExportFixture)
+                crash.ControlledMockScaleExportFixture, crash.ScaleExportFixture)
 
     def test_a_crashed_job_with_no_external_call_is_requeued_by_the_claim_and_settles_once(self):
         """mark_running, then the Worker dies: the claim requeues the Job (lease_expired, not paid_call_outcome_unknown) and the rerun settles the work once; a Worker that dies after the work committed leaves a Job the rerun only closes (#22)."""

@@ -143,6 +143,13 @@ def create_export(
         deduplication_key=idempotency_key,
         result_id=export_id,
         request_fingerprint=fingerprint,
+        # ``claim_command`` requires a scenario under controlled_mock; the
+        # export is journaled under its Enrollment's, like the Enrollment
+        # lifecycle commands (``activate_enrollment``). Without it the
+        # request failed with a 500 (#56's bug class).
+        scenario_scope_key=(
+            enrollment.scenario_scope_key if context.meta_mode == "controlled_mock" else None
+        ),
         result_resource_type="export",
     )
     if claim.replay:
