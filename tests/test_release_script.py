@@ -570,6 +570,18 @@ class ReleaseEntryPointTests(unittest.TestCase):
         self.assertIn("'library_entries'", insert_worker)
         self.assertIn("'library_drafts'", insert_worker)
 
+    def test_domain_role_replay_lets_the_api_publish_an_adopted_localized_version(self):
+        # Adopting an isolated Localization output publishes its child
+        # AssetVersion in the API transaction (#46). Without this INSERT every
+        # adoption on PostgreSQL is a 500, and SQLite checks no grants.
+        sql = (REPO / "deploy" / "postgres" / "domain-tenant-roles.sql").read_text(
+            encoding="utf-8"
+        )
+        insert_api = sql.split("-- ---- INSERT: API ----", 1)[1]
+        insert_api = insert_api.split("-- ---- SELECT: Worker ----", 1)[0]
+
+        self.assertIn("'asset_versions'", insert_api)
+
     def test_the_cross_database_denials_are_applied_by_bootstrap_only(self):
         denials = REPO / "deploy" / "postgres" / "cross-database-denials.sql"
         bootstrap = (REPO / "deploy" / "postgres" / "apply-roles.sh").read_text(
