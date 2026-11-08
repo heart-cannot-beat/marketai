@@ -1,12 +1,12 @@
 name: E2E suites (manual)
 
-# The Localization and Scale real-backend Playwright suites on one Compose
-# stack (#19; web/e2e/README.md). Manual only: it never runs on pull
-# requests, pushes or a schedule, so it costs nothing until a maintainer
-# starts it, and it uses the standard GitHub runner rather than ci.yml's
-# runner budget. Most of its time is installs and the Compose build, as in
-# ci.yml's golden-path-e2e. Retries are off so a flaky step shows as a
-# failure instead of passing on a second try.
+# The Localization and Scale (#19) and Experiments (#6) real-backend
+# Playwright suites on one Compose stack (web/e2e/README.md). Manual only: it
+# never runs on pull requests, pushes or a schedule, so it costs nothing until
+# a maintainer starts it, and it uses the standard GitHub runner rather than
+# ci.yml's runner budget. Most of its time is installs and the Compose
+# build, as in ci.yml's golden-path-e2e. Retries are off so a flaky step shows
+# as a failure instead of passing on a second try.
 on:
   workflow_dispatch:
     inputs:
@@ -17,6 +17,7 @@ on:
           - localization-and-scale
           - localization
           - scale
+          - experiments
         default: localization-and-scale
 
 concurrency:
@@ -28,7 +29,7 @@ permissions:
 
 jobs:
   suites:
-    name: Localization and Scale E2E
+    name: Real-backend E2E suites
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -53,6 +54,8 @@ jobs:
       E2E_LOCALIZATION_CONTROL_OWNER_DATABASE_URL: postgresql+psycopg://marketai_control_owner:compose_control_owner@localhost:5432/marketai_control
       E2E_SCALE_ALLOW_MUTATIONS: "1"
       E2E_SCALE_COMPOSE_PROJECT: e2e-suites
+      E2E_EXPERIMENTS_ALLOW_MUTATIONS: "1"
+      E2E_EXPERIMENTS_COMPOSE_PROJECT: e2e-suites
 
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +96,7 @@ jobs:
         run: npx playwright test --project identities --reporter=list
 
       - name: Localization suite
-        if: inputs.suites != 'scale'
+        if: inputs.suites == 'localization-and-scale' || inputs.suites == 'localization'
         working-directory: web
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/localization-report.json
@@ -104,7 +107,9 @@ jobs:
           --output=test-results/localization
 
       - name: Scale suite
-        if: ${{ !cancelled() && inputs.suites != 'localization' }}
+        if: >-
+          !cancelled() &&
+          (inputs.suites == 'localization-and-scale' || inputs.suites == 'scale')
         working-directory: web
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/scale-report.json
@@ -113,6 +118,17 @@ jobs:
           --retries=0
           --reporter=list,json
           --output=test-results/scale
+
+      - name: Experiments suite
+        if: inputs.suites == 'experiments'
+        working-directory: web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/experiments-report.json
+        run: >
+          npm run test:e2e:experiments --
+          --retries=0
+          --reporter=list,json
+          --output=test-results/experiments
 
       - name: Upload test results
         if: ${{ !cancelled() }}

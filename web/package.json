@@ -32,6 +32,7 @@
     "test:e2e": "playwright test --config playwright.config.ts",
     "test:e2e:localization": "node scripts/run-localization-e2e.mjs",
     "test:e2e:scale": "node scripts/run-scale-e2e.mjs",
+    "test:e2e:experiments": "node scripts/run-experiments-e2e.mjs",
     "i18n:missing": "node scripts/i18n-missing.mjs",
     "inventory:licenses": "node scripts/license-inventory.mjs",
     "inventory:licenses:check": "node scripts/license-inventory.mjs --check",

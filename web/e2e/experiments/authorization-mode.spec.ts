@@ -37,11 +37,9 @@ type ProblemDetails = components['schemas']['ProblemDetails'];
  * (Task 11) and `launch-recovery.spec.ts` (Task 12).
  *
  * This suite never intercepts `/api/domain/**` or manufactures Experiment,
- * launch-preview, or provisioning state in browser memory. It cannot run
- * without a live Postgres/API/Worker stack; it is written to be structurally
- * correct and type-safe against the real OpenAPI contract
- * (`lib/domain-client/generated/domain-v1.d.ts`) and the real
- * component/service source, not to be executed in this sandbox.
+ * launch-preview, or provisioning state in browser memory. It needs a live
+ * Postgres/API/Worker stack; run it with `npm run test:e2e:experiments`
+ * (`e2e/README.md`).
  */
 
 const LAUNCH_BFF = `/api/domain/v1/w/${WORKSPACE_SLUG}/launch`;
@@ -61,19 +59,16 @@ const EXECUTE_ACK_TEXT_PREFIX = 'Execute this exact';
 const MEMBER_STORAGE_STATE = 'e2e/.auth/member.json';
 
 /**
- * `workspace-b` is this repo's established "foreign Workspace" fixture: the
- * default `owner.json` Playwright session
- * (`e2e/workspace/fixtures.ts`/`playwright.config.ts`'s `chromium` project)
- * has no membership there -- see `e2e/assets/cross-workspace.spec.ts` and
- * `e2e/workspace/owner-member.spec.ts`, which assert exactly this same
- * no-membership boundary against the same slug. Unlike those, an Experiments
- * BFF resource read/write for an id outside the caller's Workspace resolves
- * `404` (RLS scopes it out entirely), the same pattern
- * `assets/cross-workspace.spec.ts`'s asset-version-detail check documents --
- * not the `200` + "Access Denied" props pattern `getWorkspacePageProps()`
- * uses for a bare page navigation.
+ * An existing, active Workspace the `owner.json` session has no membership
+ * in. The `identities` project provisions one with an Owner of its own and
+ * writes its slug; otherwise this is `workspace-b`, the foreign Workspace
+ * that `e2e/assets/cross-workspace.spec.ts` and
+ * `e2e/workspace/owner-member.spec.ts` assume. It has to exist: for an
+ * unknown slug the page and the BFF both answer `404`, which proves nothing
+ * about membership.
  */
-const FOREIGN_WORKSPACE_SLUG = 'workspace-b';
+const FOREIGN_WORKSPACE_SLUG =
+  process.env.E2E_EXPERIMENTS_FOREIGN_WORKSPACE_SLUG ?? 'workspace-b';
 
 /** Mirrors `toDraftContext` in `ExperimentsWorkspace.tsx` and satisfies
  * `app.experiments.service._validate_draft_context`'s schema-2 rules. */
@@ -293,28 +288,38 @@ test.describe('Authorization and mode contamination', () => {
     expect(ownerFrozen.state).toBe('frozen');
 
     // 3. Cross-Workspace access attempt: the Owner session has no
-    //    membership in `workspace-b`. Both the (would-be) analysis read and
-    //    the freeze write resolve `404` -- RLS scopes the experiment id out
-    //    of that Workspace entirely rather than leaking a `403` that would
-    //    confirm the id exists somewhere else (same rationale
-    //    `assets/cross-workspace.spec.ts` documents for asset-version reads).
+    //    membership in the foreign Workspace. The BFF refuses to issue a
+    //    delegated identity for it, so both the (would-be) analysis read and
+    //    the freeze write stop at `403` `workspace_membership_required`
+    //    before FastAPI sees the Experiment id. The integration contract
+    //    forbids masking a cross-tenant denial as `404`, and the denial says
+    //    nothing about whether the id exists anywhere.
     const foreignAnalysis = await page.request.get(
       `/api/domain/v1/w/${FOREIGN_WORKSPACE_SLUG}/experiments/${ownerCreated.id}/duplicate-analysis`
     );
-    expect(foreignAnalysis.status()).toBe(404);
+    expect(foreignAnalysis.status()).toBe(403);
+    expect(((await foreignAnalysis.json()) as ProblemDetails).code).toBe(
+      'workspace_membership_required'
+    );
 
     const foreignFreeze = await page.request.post(
       `/api/domain/v1/w/${FOREIGN_WORKSPACE_SLUG}/experiments/${ownerCreated.id}/freeze`,
       {
         headers: await domainMutationHeaders(page),
+        // The BFF validates the body against the contract before it
+        // resolves the Workspace, so the probe hash must have the contract's
+        // 64 characters to reach the membership check at all.
         data: {
           expected_revision: ownerCreated.revision,
-          analyzed_candidate_set_hash: 'foreign-workspace-probe',
+          analyzed_candidate_set_hash: '0'.repeat(64),
           concept_resolution_plan: [],
         },
       }
     );
-    expect(foreignFreeze.status()).toBe(404);
+    expect(foreignFreeze.status()).toBe(403);
+    expect(((await foreignFreeze.json()) as ProblemDetails).code).toBe(
+      'workspace_membership_required'
+    );
 
     // 4. A foreign Workspace identifier in the page's own URL is also
     //    rejected server-side, not client-side -- `getWorkspacePageProps()`

@@ -45,6 +45,7 @@ yarn-error.log*
 .env.migrate
 .env.e2e.localization
 .env.e2e.scale
+.env.e2e.experiments
 
 # Tests
 /report
