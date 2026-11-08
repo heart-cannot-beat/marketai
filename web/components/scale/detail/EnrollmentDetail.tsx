@@ -22,6 +22,7 @@ import { BreakdownTable } from '@/components/scale/detail/BreakdownTable';
 import { ActivateEnrollmentDialog } from '@/components/scale/detail/ActivateEnrollmentDialog';
 import { LifecycleReasonDialog } from '@/components/scale/detail/LifecycleReasonDialog';
 import { AdviceThreadList } from '@/components/scale/advice/AdviceThreadList';
+import { metaModeLabelKey } from '@/lib/scale/meta-mode';
 import type { ScaleMetaMode } from '@/lib/scale/meta-mode';
 import { errorMessage } from '@/lib/i18n/domain-errors';
 
@@ -293,7 +294,7 @@ export function EnrollmentDetail({
           <dt className="text-xs text-base-content/60">
             {t('detail.meta-mode')}
           </dt>
-          <dd>{enrollment.meta_mode}</dd>
+          <dd>{t(metaModeLabelKey(enrollment.meta_mode))}</dd>
         </div>
         <div>
           <dt className="text-xs text-base-content/60">

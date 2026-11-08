@@ -9,7 +9,8 @@
     "label": "Meta 模式",
     "customer_sandbox": "客户 Sandbox",
     "controlled_mock": "受控 Mock",
-    "internal_validation": "内部只读验证"
+    "internal_validation": "内部只读验证",
+    "unknown": "未知的 Meta 模式"
   },
   "lifecycle": {
     "enrollment": {

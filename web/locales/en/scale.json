@@ -9,7 +9,8 @@
     "label": "Meta mode",
     "customer_sandbox": "Customer sandbox",
     "controlled_mock": "Controlled mock",
-    "internal_validation": "Internal validation"
+    "internal_validation": "Internal validation",
+    "unknown": "Unknown Meta mode"
   },
   "lifecycle": {
     "enrollment": {
