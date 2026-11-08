@@ -96,10 +96,12 @@ for reasons outside the suites' copy and seeds:
   from the Episode's first day, while the snapshot needs every day of its
   14-day window, so each evaluation before day 14 is blocked by
   `daily_slot_missing` and its maturity is `insufficient`. (The golden path
-  advances 14 days before it asserts maturity.)
-- Scale, controlled-mock journey step 07: creating a Target publication
-  preview in `controlled_mock` returns 500 (the command is claimed without a
-  `scenario_scope_key`). Steps 08–18 do not run.
+  advances 14 days before it asserts maturity.) The journey is serial, so
+  steps 07–18 do not run after it.
+- Scale, controlled-mock journey step 18 (#72): its hostile requests call the
+  BFF without the page's Origin, CSRF token and `X-Intent-Id`, so the first
+  one (the stale activation) is refused with 403 before it reaches the API
+  instead of the 400, 409 or 428 the step expects.
 
 ## Manual workflow
 

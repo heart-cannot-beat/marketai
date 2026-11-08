@@ -42,11 +42,11 @@ from app.library.contracts import ROLE_OWNER
 from app.main import app
 from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
+from app.scale.models import ScaleEnrollmentRecord
 from app.scale.targets import TargetLifecycleError, publish_target, withdraw_target
 
 URLS = [os.getenv(key) for key in ("DOMAIN_OWNER_DATABASE_URL", "DOMAIN_API_DATABASE_URL")]
 MODE = "customer_sandbox"
-BASE = f"/api/v1/scale/{MODE}"
 _TIMEOUT = 30
 
 
@@ -79,10 +79,11 @@ class ScaleTargetReplacementPostgresTests(unittest.TestCase):
         return TenantContext(workspace_id=workspace_id, role=role, initiator_id=actor,
                              initiator_role=role, request_id="test-req", trace_id="trace-test")
 
-    def _post(self, caller: TenantContext, path: str, body: dict, key: str | None = None):
+    def _post(self, caller: TenantContext, path: str, body: dict, key: str | None = None,
+              mode: str = MODE):
         self.current = caller
         with self._as_api():
-            return self.client.post(f"{BASE}{path}", json=body,
+            return self.client.post(f"/api/v1/scale/{mode}{path}", json=body,
                                     headers={"Idempotency-Key": key or f"ci-only-ik-398-{uuid.uuid4().hex}"})
 
     def _preview(self, caller: TenantContext, cpa: str, currency: str = "USD") -> str:
@@ -382,6 +383,58 @@ class ScaleTargetReplacementPostgresTests(unittest.TestCase):
         self.assertFalse(self._consumed(preview_id))
         self.assertEqual(self._journaled(ctx, key), 0)
         self.assertEqual(self._active(ctx), [active])
+
+    # -- controlled_mock (#56) ------------------------------------------------
+
+    def test_controlled_mock_journals_target_commands_under_the_enrollment_scenario(self):
+        """As the API role under RLS: each Target command reads the scenario
+        of the context's controlled-mock Enrollment and journals under it;
+        another Workspace, which has no such Enrollment, writes nothing."""
+        ctx = self._workspace("ws_stgt_pg_mock")
+        stranger = self._workspace("ws_stgt_pg_mock_b", "owner_b")
+        mock = "controlled_mock"
+        with self._as_owner(), tenant_session(replace(ctx, meta_mode=mock)) as session:
+            session.add(ScaleEnrollmentRecord(
+                id=f"senr_{uuid.uuid4().hex[:10]}", workspace_id=ctx.workspace_id, meta_mode=mock,
+                meta_connection_id="mcon_56", scenario_scope_key="scn_pg_56", ad_account_id="act_56",
+                winner_decision_id="wd_56", winner_confirmation_id="wc_56", asset_version_id="av_56",
+                product_version_id="pv_398", offer_version_id="ov_398", market_code="US",
+                remote_binding_key="binding_56", lifecycle="active",
+                creator_id="owner_a", original_initiator_id="owner_a",
+            ))
+        body = {"product_version_id": "pv_398", "offer_version_id": "ov_398", "market_code": "US",
+                "currency": "USD", "target_cpa": "20.00"}
+
+        preview = self._post(ctx, "/target-publication-previews", body, "ci-only-ik-56-pg", mode=mock)
+        self.assertEqual(preview.status_code, 201, preview.text)
+        self.assertEqual(preview.json()["affected_enrollment_count"], 1)
+        replay = self._post(ctx, "/target-publication-previews", body, "ci-only-ik-56-pg", mode=mock)
+        self.assertEqual((replay.status_code, replay.json()["id"]), (201, preview.json()["id"]))
+        target = self._post(ctx, "/targets", {"publication_preview_id": preview.json()["id"]}, mode=mock)
+        self.assertEqual(target.status_code, 201, target.text)
+        target_id = target.json()["id"]
+        withdrawal = self._post(ctx, f"/targets/{target_id}/withdrawal-previews", {"reason": "#56"}, mode=mock)
+        self.assertEqual(withdrawal.status_code, 201, withdrawal.text)
+
+        self._refused(self._post(stranger, "/target-publication-previews", body, mode=mock),
+                      409, "no_controlled_mock_enrollment")
+        self._refused(self._post(stranger, f"/targets/{target_id}/withdraw",
+                                 {"withdrawal_preview_id": withdrawal.json()["id"]}, mode=mock),
+                      404, "target_not_found")
+
+        withdrawn = self._post(ctx, f"/targets/{target_id}/withdraw",
+                               {"withdrawal_preview_id": withdrawal.json()["id"]}, mode=mock)
+        self.assertEqual((withdrawn.status_code, withdrawn.json()["lifecycle_state"]), (200, "withdrawn"))
+        with self.owner.connect() as connection:
+            journal = connection.execute(text(
+                "SELECT workspace_id, command_type, meta_mode, scenario_scope_key "
+                "FROM scale_command_journal WHERE workspace_id IN (:a, :b) ORDER BY command_type"
+            ), {"a": ctx.workspace_id, "b": stranger.workspace_id}).all()
+        self.assertEqual([tuple(row) for row in journal], [
+            (ctx.workspace_id, command, mock, "scn_pg_56")
+            for command in ("create_target_publication_preview", "create_target_withdrawal_preview",
+                            "publish_scale_target", "withdraw_scale_target")
+        ])
 
 
 if __name__ == "__main__":

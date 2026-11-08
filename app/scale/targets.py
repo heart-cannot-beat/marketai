@@ -119,6 +119,50 @@ def _for_update(session: Session, stmt):
     return stmt
 
 
+def _scenario_scope_key(
+    session: Session,
+    context: TenantContext,
+    product_version_id: str,
+    offer_version_id: str,
+    market_code: str,
+) -> str | None:
+    """The ``scenario_scope_key`` a Target command claims its journal row
+    under (#56).
+
+    ``claim_command`` requires an explicit one under ``controlled_mock``. A
+    Target is Workspace-wide and has no scenario of its own, so, like the
+    other Scale commands that read it from the row they act on, this reads
+    the scenario of the context's Enrollment in this mode (the most recent
+    one, should the context have Enrollments under several scenarios). The
+    read takes no lock, so it may run before the claim (``command_journal``
+    module docstring). A context with no Enrollment in ``controlled_mock``
+    has no controlled-Mock scenario to journal under and is refused.
+
+    Every other mode returns ``None``: the claim's no-scenario marker, with
+    no Enrollment required.
+    """
+    if context.meta_mode != "controlled_mock":
+        return None
+    scenario_scope_key = session.execute(
+        select(ScaleEnrollmentRecord.scenario_scope_key)
+        .filter_by(
+            workspace_id=context.workspace_id,
+            meta_mode=context.meta_mode,
+            product_version_id=product_version_id,
+            offer_version_id=offer_version_id,
+            market_code=market_code,
+        )
+        .order_by(ScaleEnrollmentRecord.created_at.desc(), ScaleEnrollmentRecord.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if scenario_scope_key is None:
+        raise TargetLifecycleError(
+            "no_controlled_mock_enrollment",
+            f"{product_version_id}/{offer_version_id}/{market_code}",
+        )
+    return scenario_scope_key
+
+
 def _amount(value: Decimal | None) -> str | None:
     """One spelling per amount: the request's ``20.00`` and the column's
     ``20.000000000000`` must hash alike when publish recomputes the hash."""
@@ -305,6 +349,9 @@ def create_publication_preview(
         deduplication_key=idempotency_key,
         result_id=preview_id,
         request_fingerprint=fingerprint,
+        scenario_scope_key=_scenario_scope_key(
+            session, context, product_version_id, offer_version_id, market_code,
+        ),
         result_resource_type="target_publication_preview",
     )
     if claim.replay:
@@ -359,12 +406,28 @@ def publish_target(
 
     target_id = new_id("stgt")
     fingerprint = command_request_fingerprint(preview_id=preview_id)
+    scenario_scope_key = None
+    if context.meta_mode == "controlled_mock":
+        # Columns, not the row: the preview is locked after the claim, and
+        # an ORM read here would answer that locked read from the identity
+        # map instead of the locked row.
+        subject = session.execute(
+            select(
+                ScaleTargetPublicationPreviewRecord.product_version_id,
+                ScaleTargetPublicationPreviewRecord.offer_version_id,
+                ScaleTargetPublicationPreviewRecord.market_code,
+            ).filter_by(workspace_id=context.workspace_id, id=preview_id)
+        ).one_or_none()
+        if subject is None:
+            raise TargetNotFoundError(preview_id)
+        scenario_scope_key = _scenario_scope_key(session, context, *subject)
     claim = claim_command(
         session, context,
         command_type="publish_scale_target",
         deduplication_key=idempotency_key,
         result_id=target_id,
         request_fingerprint=fingerprint,
+        scenario_scope_key=scenario_scope_key,
         result_resource_type="target_version",
     )
     if claim.replay:
@@ -542,6 +605,10 @@ def create_withdrawal_preview(
         deduplication_key=idempotency_key,
         result_id=preview_id,
         request_fingerprint=fingerprint,
+        scenario_scope_key=_scenario_scope_key(
+            session, context,
+            target.product_version_id, target.offer_version_id, target.market_code,
+        ),
         result_resource_type="target_withdrawal_preview",
     )
     if claim.replay:
@@ -583,12 +650,34 @@ def withdraw_target(
     _require_owner(context)
 
     fingerprint = command_request_fingerprint(preview_id=preview_id)
+    scenario_scope_key = None
+    if context.meta_mode == "controlled_mock":
+        # Columns, not rows: the Target is locked after the claim (see
+        # ``publish_target``).
+        subject = session.execute(
+            select(
+                ScaleTargetVersionRecord.product_version_id,
+                ScaleTargetVersionRecord.offer_version_id,
+                ScaleTargetVersionRecord.market_code,
+            ).join(
+                ScaleTargetWithdrawalPreviewRecord,
+                ScaleTargetWithdrawalPreviewRecord.target_version_id == ScaleTargetVersionRecord.id,
+            ).filter(
+                ScaleTargetWithdrawalPreviewRecord.workspace_id == context.workspace_id,
+                ScaleTargetWithdrawalPreviewRecord.id == preview_id,
+                ScaleTargetVersionRecord.workspace_id == context.workspace_id,
+            )
+        ).one_or_none()
+        if subject is None:
+            raise TargetNotFoundError(preview_id)
+        scenario_scope_key = _scenario_scope_key(session, context, *subject)
     claim = claim_command(
         session, context,
         command_type="withdraw_scale_target",
         deduplication_key=idempotency_key,
         result_id=preview_id,
         request_fingerprint=fingerprint,
+        scenario_scope_key=scenario_scope_key,
         result_resource_type="target_withdrawal_preview",
     )
     if claim.replay:

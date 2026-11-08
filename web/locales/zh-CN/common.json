@@ -2079,6 +2079,7 @@
   "error-no_active_invalidation": "没有可以解除的失效状态。",
   "error-no_attempt_output": "这次尝试没有产出。",
   "error-no_candidates": "请至少选择一张图片。",
+  "error-no_controlled_mock_enrollment": "这个上下文在受控模拟模式下没有放量记录，不能在这里更改它的目标。",
   "error-no_image_returned": "AI 服务没有返回图片。",
   "error-no_judgements": "关闭实验前请至少记录一次判定。",
   "error-no_manual_fact_set": "请先导入手填事实集。",
