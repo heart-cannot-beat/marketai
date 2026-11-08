@@ -1,6 +1,7 @@
 """Board projection: comparison scope, execution progress and matrix identity come from the server."""
 import json
 import random
+import re
 import unittest
 
 from sqlalchemy import select
@@ -50,12 +51,21 @@ def by_version(result):
     return {x["asset_version_id"]: x for x in executions_of(result)}
 
 
+# The local blob store signs in the path (`/_local_blob/{signature}/{key}`), and the
+# signature covers an expiry counted in whole seconds.
+LOCAL_SIGNATURE = re.compile(r"/_local_blob/[0-9a-f]{64}/")
+
+
 def unsigned(result):
-    """The board with each thumbnail link cut to its object path: expiry and signature change per request."""
+    """The board with each thumbnail link cut to its object path: expiry and signature change per request,
+    so two reads that straddle a second differ in the query and, for the local store, in the path."""
     result = json.loads(json.dumps(result))
     for node in executions_of(result):
         if node["thumbnail"]:
-            node["thumbnail"] = node["thumbnail"]["url"].split("?")[0]
+            path = node["thumbnail"]["url"].split("?")[0]
+            # A changed link format must fail here, not bring the flake back.
+            assert "/_local_blob/" not in path or LOCAL_SIGNATURE.search(path), path
+            node["thumbnail"] = LOCAL_SIGNATURE.sub("/_local_blob/", path)
     return result
 
 
