@@ -530,6 +530,7 @@
     "group_members": "参考素材组至少需要一个成员。",
     "mapping_data_source": "必须明确指定数据源版本，没有默认数据源。",
     "mapping_execution_mode": "必须明确指定执行方式。",
+    "mapping_execution_mode_mismatch": "执行方式必须和引用的数据源版本一致，Mock 和真实不能混用。",
     "mapping_external_id": "请填写外部对象 ID，不会根据标题或第一个变体推断。",
     "mapping_external_kind": "外部对象类型必须是 product、variant、price_list 或 shipping_rule。",
     "mapping_external_object": "必须明确指定映射的外部对象。",
