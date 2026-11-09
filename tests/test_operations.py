@@ -130,6 +130,16 @@ class TestOperationStateMachineCompleteness(unittest.TestCase):
                     validate_transition(OperationState.ADMITTED, forbidden)
                 )
 
+    def test_queued_reaches_running_and_the_no_dispatch_terminals(self):
+        """``queued`` is the unpriced entry state: a Job may start, be
+        cancelled, or be rejected before dispatch under a revoked
+        authorization epoch (#22). Like ``admitted``, it never reaches a
+        success or ``uncertain`` without first recording ``running``."""
+        self.assertEqual(
+            VALID_TRANSITIONS[OperationState.QUEUED],
+            {OperationState.RUNNING, OperationState.CANCELLED, OperationState.FAILED},
+        )
+
     def test_no_state_transitions_back_into_admitted(self):
         for frm, targets in VALID_TRANSITIONS.items():
             with self.subTest(frm=frm):

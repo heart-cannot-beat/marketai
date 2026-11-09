@@ -313,36 +313,32 @@ def reconcile_admitted_operations(limit: int = 100) -> int:
     reconciler for exactly that gap: it is idempotent, bounded, and folds
     only Operations that already have their complete terminal Job set.
 
+    Candidates are listed across Workspaces -- on PostgreSQL by
+    ``marketai_admitted_operation_candidates_v1``, ids and the Workspace's
+    current epoch only, because the Worker role's untenanted session sees no
+    row at all (before #22 this sweep therefore never found anything there)
+    -- and each one is folded in its own transaction under a TenantContext
+    signed for that epoch.
+
     Returns the number of Operations this pass moved.
     """
     moved = 0
     with platform_session() as session:
-        candidates = session.scalars(
-            select(OperationRecord)
-            .where(
-                OperationRecord.admission_contract_version
-                >= AGGREGATED_ADMISSION_CONTRACT_VERSION,
-                OperationRecord.state.in_(
-                    tuple(state.value for state in NON_TERMINAL_STATES)
-                ),
+        candidates = _admitted_operation_candidates(session, limit)
+    for workspace_id, authorization_epoch, operation_id in candidates:
+        context = system_context(
+            workspace_id, initiator_id=None, authorization_epoch=authorization_epoch
+        )
+        with tenant_session(context) as session:
+            changed = aggregate_operation_from_jobs(
+                session,
+                operation_id,
+                actor=context.executor,
+                context=context,
+                reason="reconciled from terminal sibling Jobs",
             )
-            .order_by(OperationRecord.updated_at)
-            .limit(limit)
-        ).all()
-        for operation in candidates:
-            context = system_context(
-                operation.workspace_id, initiator_id=operation.initiator_id
-            )
-            with tenant_scope(session, context):
-                changed = aggregate_operation_from_jobs(
-                    session,
-                    operation.id,
-                    actor=context.executor,
-                    context=context,
-                    reason="reconciled from terminal sibling Jobs",
-                )
-            if changed is not None:
-                moved += 1
+        if changed is not None:
+            moved += 1
     if moved:
         from .ops_alerts import AlertCategory, Severity, emit as ops_emit
 
@@ -353,6 +349,38 @@ def reconcile_admitted_operations(limit: int = 100) -> int:
             details={"folded": moved},
         )
     return moved
+
+
+def _admitted_operation_candidates(session, limit: int) -> list[tuple[str, int, str]]:
+    """``(workspace_id, current authorization epoch, operation_id)`` to fold."""
+    if session.get_bind().dialect.name == "postgresql":
+        rows = session.execute(
+            text(
+                "SELECT workspace_id, authorization_epoch, operation_id "
+                "FROM public.marketai_admitted_operation_candidates_v1("
+                "CAST(:candidate_limit AS integer))"
+            ),
+            {"candidate_limit": limit},
+        ).all()
+    else:
+        rows = session.execute(
+            select(
+                OperationRecord.workspace_id,
+                WorkspaceRecord.authorization_epoch,
+                OperationRecord.id,
+            )
+            .join(WorkspaceRecord, WorkspaceRecord.id == OperationRecord.workspace_id)
+            .where(
+                OperationRecord.admission_contract_version
+                >= AGGREGATED_ADMISSION_CONTRACT_VERSION,
+                OperationRecord.state.in_(
+                    tuple(state.value for state in NON_TERMINAL_STATES)
+                ),
+            )
+            .order_by(OperationRecord.updated_at, OperationRecord.id)
+            .limit(limit)
+        ).all()
+    return [(str(ws), int(epoch), str(op_id)) for ws, epoch, op_id in rows]
 
 
 def _reject_stale_sqlite_jobs(now: datetime) -> int:

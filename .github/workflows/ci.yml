@@ -368,6 +368,18 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_postgres_architecture -v
 
+      # #22: the Worker role lists reconciliation candidates through the
+      # worker-only functions and settles every legacy command's Operation
+      # under FORCE RLS; other roles cannot execute the functions.
+      - name: Idle reconcilers settle Operations under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_legacy_operations_pg -v
+
       # SQLite cannot see a missing grant (#284): every competitor write
       # command runs here as the role that serves it in production.
       - name: Competitor API and Worker writes hold under the real roles

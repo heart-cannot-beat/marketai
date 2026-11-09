@@ -159,7 +159,7 @@ Operation 是面向用户的持久化状态，不等同于单个 Worker Job。�
 | 源状态 | 可达目标 |
 |---|---|
 | `admitted` | `running`、`cancelled`、`failed`、`uncertain` |
-| `queued` | `running`、`cancelled` |
+| `queued` | `running`、`cancelled`、`failed` |
 | `running` | `succeeded`、`failed`、`partially_succeeded`、`cancelled`、`uncertain` |
 | `uncertain` | `succeeded`、`partially_succeeded`、`failed`、`cancelled`、`running` |
 | `succeeded` | — |
@@ -167,7 +167,7 @@ Operation 是面向用户的持久化状态，不等同于单个 Worker Job。�
 | `partially_succeeded` | — |
 | `cancelled` | — |
 
-`admitted` 不能直接到达 `succeeded` 或 `partially_succeeded`：成功意味着调度，聚合器会先插入显式 `admitted → running` 事件再应用终态。`admitted` 进入 `cancelled`/`failed`/`uncertain` 覆盖的场景：授权 epoch 被撤销、Worker 领取前取消、以及调度结果不确定。
+`admitted` 不能直接到达 `succeeded` 或 `partially_succeeded`：成功意味着调度，聚合器会先插入显式 `admitted → running` 事件再应用终态。`admitted` 进入 `cancelled`/`failed`/`uncertain` 覆盖的场景：授权 epoch 被撤销、Worker 领取前取消、以及调度结果不确定。`queued → failed` 出于同一理由：非付费命令的 Job 在调度前因授权 epoch 被撤销而被拒绝，命令未运行即失败（#22）。
 
 状态迁移必须符合显式状态机并追加审计历史，不得静默倒退；`uncertain` 只能通过对账进入确定结果，不能按普通失败盲目重试。确定终态不会因刷新或重启消失。首版使用带退避的 HTTP 轮询，响应提供 `ETag` 和适用的 `Retry-After`。没有证据表明轮询不足前，不引入 WebSocket；未来若需要服务端推送，SSE 只能作为同一 Operation Interface 的附加 Adapter。
 

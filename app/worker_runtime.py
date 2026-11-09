@@ -257,6 +257,11 @@ class WorkerRuntime:
             # exactly when there is no queued work competing for the row lock.
             if job_types is None:
                 await asyncio.to_thread(jobs.reconcile_admitted_operations)
+                # Legacy Operations only their handlers settle (#22): fold
+                # the ones whose Job ended without that handler ever running.
+                from . import legacy_operations
+
+                await asyncio.to_thread(legacy_operations.reconcile_legacy_operations_if_due)
             return False
         if job.type == "meta_read_ingestion":
             await self._meta_read_ingestion(job)
