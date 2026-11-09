@@ -37,6 +37,6 @@ This repository will be public. Treat every file, commit message, PR description
 - Generation, Assets or six-area completion: `docs/product/v9-functional-alignment-acceptance.md`.
 - Creative Library: `docs/product/creative-library-ownership-and-reuse-contract.md` and ADR 0007.
 - Localization: `docs/product/localization-truth-package-contract.md` and ADR 0006.
-- Scale: `docs/product/scale-advice-semantics-contract.md` and ADR 0008.
+- Scale: `docs/product/scale-advice-semantics-contract.md` and ADR 0008. Scale handlers may run in the shared Worker only while it has no Meta write capability (ADR 0017).
 - Front flow (two-config home, product intake, test-plan drafting, external-asset tagging): `docs/product/front-flow-two-config-contract.md` and ADR 0011.
 - Competitor ad scan (竞品扫描: competitor list and Meta page confirmation, paid scans, observations, assessments, snapshots, planner advisories): `docs/product/competitor-scan-spec.md`, ADR 0014 and Epic [#265](https://github.com/heart-cannot-beat/marketai-archive/issues/265) (slices; release record and rollback in `docs/product/ai-marketing-production-release.md`).

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import inspect
 import logging
 import os
 import signal
@@ -28,7 +29,7 @@ from .platform.job_outcomes import (
 from .providers.base import ProviderError
 from .providers.router import get_provider
 from .adapters.meta.client import MetaApiError, MetaClient
-from .adapters.meta.write_client import MetaWriteError, MetaWritePort
+from .adapters.meta.write_client import HttpMetaWriteAdapter, MetaWriteError, MetaWritePort
 from .meta import service as meta_service
 from .launch import service as launch_service
 from .launch.recovery import RecoveryError, execute_recovery
@@ -1726,13 +1727,12 @@ class WorkerRuntime:
         """Dispatch fence for the ``scale_evaluate`` job (spec §3.8, Issue #25
         Task 14). This shared Worker's ``run_scale_evaluation`` call is a pure
         delegation to ``app.scale.service`` -- Scale itself never touches this
-        module's ``meta_client``/``launch_adapter``, and this handler is the
-        one place the two composition roots' responsibilities meet: the
-        dedicated ``app.scale.worker.ScaleWorkerRuntime`` (capability-scoped,
-        no write adapter reachable at all) is the deployment target for Scale
-        job processing; this branch exists so a single-process/local/test
-        deployment that runs one Worker for every job type still has a
-        working dispatch path.
+        module's ``meta_client``/``launch_adapter``. This Worker is the one
+        deployed, so it runs Scale jobs; ADR 0017 allows that only while the
+        process has no Meta write capability, which ``_main`` checks at
+        startup (``assert_no_meta_write_capability``). The capability-scoped
+        ``app.scale.worker.ScaleWorkerRuntime`` is the runtime to split out
+        once that no longer holds.
         """
         from app.scale.service import ScaleOrchestrationError, run_scale_evaluation
 
@@ -1778,7 +1778,8 @@ class WorkerRuntime:
         is the one that has to run Scale exports. Like ``_scale_evaluate``
         it only delegates to ``app.scale``: ``run_scale_export`` never sees
         this runtime's ``meta_client``/``launch_adapter``, and Scale makes
-        no Meta write. ``run_scale_export`` settles the Operation itself,
+        no Meta write (ADR 0017 sets the conditions under which this shared
+        Worker may run it). ``run_scale_export`` settles the Operation itself,
         in one transaction under the export's row lock, so a rerun after a
         crash (``crash=requeue`` in ``app.platform.job_policy``) finds the
         export completed and only closes the Job.
@@ -2289,6 +2290,70 @@ def _warn_if_onboarding_delivery_unconfigured(base_url: str, service_token: str)
     )
 
 
+# ADR 0017: this Worker runs Scale handlers (`scale_evaluate`, `scale_export`),
+# so the process must hold no Meta write capability. Every concrete Meta write
+# client in the codebase is listed here; each refuses construction without the
+# write configuration (`config.meta_write_ready()`, which needs a non-empty
+# `META_WRITE_ACCESS_TOKEN`). `tests/test_shared_worker_meta_write_tripwire.py`
+# fails when a write client appears that this tuple does not list.
+_META_WRITE_CLIENTS: tuple[type, ...] = (HttpMetaWriteAdapter,)
+# An object whose class has one of these methods is a Meta write port:
+# `MetaWritePort.ensure_step` (Launch canary) or `MetaAdapterPort.ensure_object`
+# (the Launch provisioning saga's adapter).
+_META_WRITE_PORT_METHODS = ("ensure_step", "ensure_object")
+
+
+class MetaWriteCapabilityError(RuntimeError):
+    """The Worker that runs Scale handlers could write to Meta (ADR 0017)."""
+
+
+def meta_write_capability_findings(runtime: WorkerRuntime) -> list[str]:
+    """Name every way this Worker process could write to Meta (ADR 0017).
+
+    Three conditions, each checked against the running process rather than
+    the deployment contract: no write Token in the environment or config, no
+    write port held by the composed runtime, and no write client that can be
+    constructed under this process's configuration. That last check is also
+    the Launch dispatch condition: `launch_canary` builds the write client
+    itself when no port is injected, so it reaches Meta only if
+    `HttpMetaWriteAdapter()` succeeds. The provisioning and recovery sagas use
+    the sandbox adapter only. Findings name the condition, never a value.
+    """
+    findings: list[str] = []
+    if os.environ.get("META_WRITE_ACCESS_TOKEN", "").strip() or config.META_WRITE_ACCESS_TOKEN:
+        findings.append("meta_write_access_token_set")
+    for name, value in sorted(vars(runtime).items()):
+        if value is not None and any(
+            inspect.getattr_static(type(value), method, None) is not None
+            for method in _META_WRITE_PORT_METHODS
+        ):
+            findings.append(f"meta_write_port_held:{name}")
+    for client in _META_WRITE_CLIENTS:
+        try:
+            client()
+        except MetaWriteError:
+            continue
+        findings.append(f"meta_write_client_constructible:{client.__name__}")
+    return findings
+
+
+def assert_no_meta_write_capability(runtime: WorkerRuntime) -> None:
+    """Refuse to run Scale handlers in a Worker that could write to Meta.
+
+    ADR 0017 lets Scale share this Worker only while the process has no Meta
+    write capability; once it has one, the Scale Worker must be split out
+    first. Failing at startup keeps a misconfigured process from claiming any
+    Job.
+    """
+    findings = meta_write_capability_findings(runtime)
+    if findings:
+        raise MetaWriteCapabilityError(
+            "this Worker runs Scale handlers and must have no Meta write capability "
+            "(ADR 0017); split out the Scale Worker before enabling Meta writes: "
+            + ", ".join(findings)
+        )
+
+
 async def _main(once: bool) -> None:
     assert_runtime_role("marketai_domain_worker")
     # Unconditional: production Worker contracts deny `DELEGATED_JWKS_URL`, so
@@ -2297,13 +2362,14 @@ async def _main(once: bool) -> None:
         config.CONTROL_PLANE_INTERNAL_BASE_URL, config.DOMAIN_TO_CONTROL_PLANE_SYNC_TOKEN
     )
     runtime = WorkerRuntime()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, runtime._begin_drain)
-        except NotImplementedError:  # pragma: no cover - Windows
-            pass
     try:
+        assert_no_meta_write_capability(runtime)
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, runtime._begin_drain)
+            except NotImplementedError:  # pragma: no cover - Windows
+                pass
         if once:
             await runtime.run_once()
         else:

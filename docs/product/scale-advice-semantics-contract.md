@@ -2,7 +2,7 @@
 
 状态：Accepted
 定案日期：2026-08-26
-本次修订：2026-09-08
+本次修订：2026-11-09（§20 与验收第 23 条按 ADR 0017 允许 Scale handler 在没有 Meta 写能力的共享 Worker 里运行）
 适用范围：v9 放量功能区、Meta 只读指标消费和建议到生成草稿的跨区流程
 
 ## 1. 目标与不变量
@@ -387,7 +387,15 @@ Approved、Winner、Offer、Truth、MarketAssetBinding、Reference 权利或 Wor
 
 上游拥有模块必须在 Withdraw 同一事务写入带 semantic event ID 的 durable event/outbox；Scale 通过幂等 inbox 或同事务 in-process handler 消费。仅做 best-effort callback 或依赖轮询都不满足撤销安全语义。每次 Evaluation 和 Advice conversion 仍在事务内重查资格，以封住事件消费竞态。
 
-Scale 服务、专用 capability-scoped Worker 和 API 不加载 Meta 写 Token，不暴露 remote mutation route，也不复用或可达 Launch 写侧客户端。Scale Worker 使用不含写环境变量、Launch dispatch 和写侧数据库权限的独立 composition root；把 Scale handler 放进已加载 Meta write port 的共享 Worker 不满足本合同。它永远不自动暂停、启用、删除或修改真实广告/预算。
+Scale 服务和 API 不加载 Meta 写 Token，不暴露 remote mutation route；Scale 代码不复用、也到不了 Launch 写侧客户端。Scale 永远不自动暂停、启用、删除或修改真实广告/预算。
+
+Scale handler 可以运行在共享 Worker 里（[ADR 0017](../adr/0017-scale-handlers-may-share-a-worker-without-meta-write-capability.md)），前提是这个进程同时满足：
+
+- 没有 Meta 写端口和写侧客户端：composition root 不注入写端口，按进程配置也构造不出写侧客户端；
+- 没有 Launch dispatch：进程里没有能到达真实 Meta 写客户端的 Launch Job 路径；
+- 没有 `META_WRITE_ACCESS_TOKEN`：进程环境和配置里的写 Token 都为空。
+
+共享 Worker 启动时检查这三条，任一条不满足就拒绝启动；守护测试在 CI 里证明这项检查有效。任一条不再成立时，必须先拆出独立的 Scale Worker（不含写环境变量、Launch dispatch 和写侧数据库权限的独立 composition root），再改动共享 Worker。
 
 ## 21. 权限、API 与审计
 
@@ -446,7 +454,7 @@ Controlled-Mock scenario、seed、mode 和 contract 进入证据及指纹。`con
 20. UnobservedFactor 与 unknown DeliveryDiagnostic 不被估算；已知 learning limited 阻止扩量但不冒充疲劳。
 21. 上游资格撤销关闭 Episode 与 Enrollment、释放当前绑定、阻止新动作并保留历史；资格恢复后必须新建 Enrollment，且系统不自动修改真实广告。
 22. Owner/Member、ScaleTarget、跨 Workspace、对象下载、导出脱敏和 RLS 负向测试通过。
-23. Scale API/专用 Worker 无 Meta mutation route、不可传递到 Launch job、无写侧数据库授权，也不读取或传递写 Token；AST、transitive import closure、部署环境、启动断言与运行 spy 共同证明零远端写能力。
+23. Scale API 和运行 Scale handler 的 Worker 无 Meta mutation route，Scale 代码不可传递到 Launch job，也不读取或传递写 Token；共享 Worker 满足 §20 的三条条件，独立 Scale Worker 另外无写侧数据库授权；AST、transitive import closure、部署环境、启动断言与运行 spy 共同证明零远端写能力。
 24. `customer_sandbox`/`controlled_mock` 完整跑通领域路径，只能形成同 mode 的非生产 Advice/测试 Outcome，不能进入或晋升为 `internal_validation`/真实经营的 Advice、Pattern、汇总或 Outcome。
 25. Playwright 从已确认 Winner 显式建立 Enrollment，经历 warming、数据质量阻断、健康、疲劳 Advice、dismiss/snooze、GenerationDraft 转换和后续 Outcome 链，刷新及重启后状态一致。
 
