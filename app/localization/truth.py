@@ -38,6 +38,7 @@ from sqlalchemy.orm import Session
 from ..adapters.persistence.models import (
     FactLibraryDependencyRecord,
     FactMarketPolicyDependencyRecord,
+    LibraryEntryRecord,
     LibraryVersionRecord,
     MarketPolicyRecord,
     MarketPolicyVersionRecord,
@@ -51,9 +52,12 @@ from ..adapters.persistence.models import (
 )
 from ..library.contracts import (
     ADAPTER_KINDS,
+    ENTRY_DATA_SOURCE,
     EXECUTION_MODES,
+    LIFECYCLE_ARCHIVED,
     ON_FAILURE_MODES,
     PRICE_FORBIDDEN_ON_FAILURE,
+    VERSION_EFFECTIVE,
 )
 from ..platform.tenancy import TenantContext
 from .evidence_tier import EvidenceTier, derive_evidence_tier
@@ -945,8 +949,10 @@ def assess_truth_freshness(
 # content parsing. `prepare_truth_resolution_command()` is the missing piece
 # spec §2C step 1-2 actually describes ("derive sources from policy and
 # mappings; callers do not provide arbitrary source version IDs"): it loads
-# the effective TruthResolutionPolicyVersion and DataSourceVersion rows,
-# reads their `content_json` using the shapes `app/library/contracts.py`
+# the effective TruthResolutionPolicyVersion, follows its
+# `rules[].source_priority` DataSource entries to their current effective
+# DataSourceVersions (#70), reads their `content_json` using the shapes
+# `app/library/contracts.py`
 # already validates at publish time (`_validate_truth_resolution_policy`,
 # `_validate_data_source`, `_validate_manual_fact_set`), and builds the
 # `SourceStep`/`FactPolicy`/`MarketResolutionCommand` objects the existing
@@ -1010,11 +1016,11 @@ def _validate_policy_rule(rule: object) -> dict:
     source_priority = rule.get("source_priority")
     if not isinstance(source_priority, list) or not source_priority:
         raise TruthResolutionError(f"TruthResolutionPolicy rule {fact_type!r} has an empty source_priority")
-    for kind in source_priority:
-        if kind not in ADAPTER_KINDS:
+    for reference in source_priority:
+        if not isinstance(reference, str) or not reference.strip():
             raise TruthResolutionError(
-                f"TruthResolutionPolicy rule {fact_type!r} references unknown adapter_kind "
-                f"{kind!r} (valid: {sorted(ADAPTER_KINDS)})"
+                f"TruthResolutionPolicy rule {fact_type!r} has a source_priority item that is not "
+                f"a DataSource entry id: {reference!r}"
             )
     on_failure = rule.get("on_failure")
     if on_failure not in ON_FAILURE_MODES:
@@ -1046,6 +1052,79 @@ def _validate_data_source_content(content: object, version_id: str) -> dict:
             f"(valid: {sorted(EXECUTION_MODES)})"
         )
     return content
+
+
+def _policy_data_source(
+    session: Session, ctx: TenantContext, reference: str, fact_type: str
+) -> tuple[str, LibraryVersionRecord]:
+    """Resolve one `source_priority` item to `(entry_id, current effective DataSourceVersion)`.
+
+    The item is a DataSource entry id (#70). A DataSourceVersion id -- the
+    only form Library publish accepted before #70 -- maps back to its entry,
+    so a policy published that way keeps working without a republish. Either
+    way the entry's *current* effective version is read, so republishing the
+    DataSource never strands a policy, and `truth_source_attempts` records
+    the version actually used. Library publish resolves the same way
+    (`library.service._truth_policy_source_edge`).
+    """
+    reference = reference.strip()
+    if reference in ADAPTER_KINDS:
+        raise TruthResolutionError(
+            f"TruthResolutionPolicy rule {fact_type!r} lists adapter_kind {reference!r}; "
+            "source_priority lists DataSource entry ids"
+        )
+    entry = (
+        session.query(LibraryEntryRecord)
+        .filter(
+            LibraryEntryRecord.workspace_id == ctx.workspace_id,
+            LibraryEntryRecord.id == reference,
+        )
+        .one_or_none()
+    )
+    if entry is None:
+        legacy_version = (
+            session.query(LibraryVersionRecord)
+            .filter(
+                LibraryVersionRecord.workspace_id == ctx.workspace_id,
+                LibraryVersionRecord.id == reference,
+            )
+            .one_or_none()
+        )
+        if legacy_version is not None:
+            entry = (
+                session.query(LibraryEntryRecord)
+                .filter(
+                    LibraryEntryRecord.workspace_id == ctx.workspace_id,
+                    LibraryEntryRecord.id == legacy_version.entry_id,
+                )
+                .one_or_none()
+            )
+    if entry is None:
+        raise TruthResolutionError(
+            f"TruthResolutionPolicy rule {fact_type!r} lists {reference!r}, "
+            "which is not a DataSource in this Workspace"
+        )
+    if entry.entry_type != ENTRY_DATA_SOURCE:
+        raise TruthResolutionError(
+            f"TruthResolutionPolicy rule {fact_type!r} lists {reference!r}, "
+            f"which is a {entry.entry_type!r} entry, not a DataSource"
+        )
+    if entry.lifecycle == LIFECYCLE_ARCHIVED:
+        raise TruthResolutionError(f"DataSource {entry.id!r} is archived")
+    version = (
+        session.query(LibraryVersionRecord)
+        .filter(
+            LibraryVersionRecord.workspace_id == ctx.workspace_id,
+            LibraryVersionRecord.entry_id == entry.id,
+            LibraryVersionRecord.state == VERSION_EFFECTIVE,
+        )
+        .one_or_none()
+    )
+    if version is None:
+        raise TruthResolutionError(
+            f"DataSource {entry.id!r} has no effective version (never published or withdrawn)"
+        )
+    return entry.id, version
 
 
 def _manual_fact_set_for_market(
@@ -1150,7 +1229,6 @@ def prepare_truth_resolution_command(
     product_version_id: str,
     offer_version_id: str,
     truth_resolution_policy_version_id: str,
-    data_source_version_ids: tuple[str, ...],
     markets: tuple[MarketResolutionInput, ...],
     manual_fact_set_version_id: str | None = None,
     allow_fallback: bool = True,
@@ -1158,11 +1236,12 @@ def prepare_truth_resolution_command(
 ) -> TruthResolutionCommand:
     """Derive a `TruthResolutionCommand` from persisted policy/source content.
 
-    Callers supply only version ids (per spec §2C step 2: "callers do not
-    provide arbitrary source version IDs" -- they name which
-    TruthResolutionPolicyVersion and DataSourceVersions are in scope, and
-    this function derives which adapter serves which fact type, in what
-    order, from the policy's own `rules[].source_priority`).
+    Sources come from the policy alone (spec §2C step 2: "callers do not
+    provide arbitrary source version IDs"): `rules[].source_priority` lists
+    DataSource entry ids in priority order (#70). Each entry is read at its
+    current effective DataSourceVersion, whose `adapter_kind` selects the
+    adapter; that version is what `truth_source_attempts` records. Callers
+    still name the ManualFactSetVersion a `manual` DataSource reads.
 
     All fact-type rules in the policy must share one `source_priority`: the
     resolution algorithm (`resolve_or_reuse_truth_package`, unchanged by
@@ -1183,39 +1262,50 @@ def prepare_truth_resolution_command(
         )
     rules = [_validate_policy_rule(rule) for rule in rules]
 
-    source_priorities = {tuple(rule["source_priority"]) for rule in rules}
-    if len(source_priorities) > 1:
+    # Resolve every rule's list before comparing them, so a rule written
+    # with a legacy DataSourceVersion id still agrees with one that names
+    # the same DataSource by entry id.
+    data_sources: dict[str, LibraryVersionRecord] = {}
+    priorities: set[tuple[str, ...]] = set()
+    for rule in rules:
+        entry_ids: list[str] = []
+        for reference in rule["source_priority"]:
+            entry_id, version = _policy_data_source(session, ctx, reference, rule["fact_type"])
+            if entry_id in entry_ids:
+                raise TruthResolutionError(
+                    f"TruthResolutionPolicy rule {rule['fact_type']!r} lists DataSource "
+                    f"{entry_id!r} more than once"
+                )
+            entry_ids.append(entry_id)
+            data_sources[entry_id] = version
+        priorities.add(tuple(entry_ids))
+    if len(priorities) > 1:
         raise TruthResolutionError(
             "prepare_truth_resolution_command does not support a "
             "TruthResolutionPolicy whose rules disagree on source_priority: "
-            f"{sorted(source_priorities)}"
+            f"{sorted(priorities)}"
         )
-    source_priority = next(iter(source_priorities))
+    source_priority = next(iter(priorities))
     max_staleness_seconds = min(int(rule["max_staleness_seconds"]) for rule in rules)
     fact_policies = tuple(
         FactPolicy(fact_type=rule["fact_type"], on_failure=rule["on_failure"]) for rule in rules
     )
 
-    data_sources: dict[str, tuple[str, dict]] = {}
-    for version_id in data_source_version_ids:
-        version = _load_effective_version(session, ctx, version_id, "DataSourceVersion")
-        content = _validate_data_source_content(version.content_json, version_id)
-        adapter_kind = content["adapter_kind"]
-        if adapter_kind in data_sources:
-            raise TruthResolutionError(
-                f"multiple DataSourceVersions supplied for adapter_kind {adapter_kind!r}"
-            )
-        data_sources[adapter_kind] = (version_id, content)
+    sources: list[tuple[str, str, dict]] = []
+    for entry_id in source_priority:
+        version = data_sources[entry_id]
+        content = _validate_data_source_content(version.content_json, version.id)
+        sources.append((content["adapter_kind"], version.id, content))
 
-    missing = [kind for kind in source_priority if kind not in data_sources]
-    if missing:
+    manual_kinds = [kind for kind, _version_id, _content in sources if kind == "manual"]
+    if len(manual_kinds) > 1:
+        # One request names one ManualFactSetVersion, so two manual
+        # DataSources could not be told apart.
         raise TruthResolutionError(
-            f"no DataSourceVersion supplied for adapter_kind(s) {missing!r} "
-            f"referenced by TruthResolutionPolicyVersion {truth_resolution_policy_version_id!r}"
+            "TruthResolutionPolicy lists more than one 'manual' DataSource"
         )
-
     manual_fact_set_content: dict | None = None
-    if "manual" in source_priority:
+    if manual_kinds:
         if manual_fact_set_version_id is None:
             raise TruthResolutionError(
                 "TruthResolutionPolicy requires the 'manual' adapter_kind but no "
@@ -1226,7 +1316,7 @@ def prepare_truth_resolution_command(
         )
         manual_fact_set_content = manual_version.content_json
 
-    truth_data_mode = data_sources[source_priority[0]][1]["execution_mode"]
+    truth_data_mode = sources[0][2]["execution_mode"]
 
     market_commands: list[MarketResolutionCommand] = []
     for market_input in markets:
@@ -1239,16 +1329,17 @@ def prepare_truth_resolution_command(
                 f"MarketPolicyVersion {market_input.market_policy_version_id!r} has no MarketPolicy"
             )
 
-        sources = tuple(
+        steps = tuple(
             _build_source_step(
                 adapter_kind,
-                *data_sources[adapter_kind],
+                version_id,
+                content,
                 manual_fact_set_version_id=manual_fact_set_version_id,
                 manual_fact_set_content=manual_fact_set_content,
                 market_country=market_policy_version.country,
                 market_source_mapping_version_id=market_input.market_source_mapping_version_id,
             )
-            for adapter_kind in source_priority
+            for adapter_kind, version_id, content in sources
         )
 
         market_commands.append(
@@ -1258,7 +1349,7 @@ def prepare_truth_resolution_command(
                 country=market_policy_version.country,
                 currency=market_policy_version.currency,
                 market_policy_version_id=market_input.market_policy_version_id,
-                sources=sources,
+                sources=steps,
                 fact_policies=fact_policies,
                 allow_fallback=allow_fallback,
             )

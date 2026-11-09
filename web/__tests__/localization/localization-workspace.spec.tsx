@@ -335,9 +335,16 @@ describe('Localization workspace evidence views', () => {
     expect(request.pathParams).toEqual({ batch_id: 'batch-1' });
     expect(request.body).toMatchObject({
       truth_resolution_policy_version_id: 'truth-policy-v1',
-      data_source_version_ids: ['data-source-v1'],
     });
+    // The DataSources come from the policy's source_priority (#70).
+    expect(request.body).not.toHaveProperty('data_source_version_ids');
     expect(request.body).not.toHaveProperty('truth_command');
+    expect(
+      screen.queryByLabelText(/fact data source version/i)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/fact data sources come from the policy/i)
+    ).toBeInTheDocument();
     expect(onRefresh).toHaveBeenCalled();
   });
 

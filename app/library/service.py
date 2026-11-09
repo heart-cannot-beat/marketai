@@ -61,6 +61,7 @@ from .contracts import (
     ELIGIBILITY_BLOCKED,
     ELIGIBILITY_ELIGIBLE,
     ELIGIBILITY_WARNING,
+    ENTRY_DATA_SOURCE,
     ENTRY_DIMENSION_SCHEMA,
     ENTRY_PERSON,
     ENTRY_PRODUCT,
@@ -71,6 +72,7 @@ from .contracts import (
     LIFECYCLE_ARCHIVED,
     REL_FACT_SET_DATA_SOURCE,
     REL_SCHEMA_PRODUCT,
+    REL_TRUTH_POLICY_DATA_SOURCE,
     RELATION_TARGET_TYPES,
     SEVERITY_WARNING,
     VERSION_EFFECTIVE,
@@ -867,6 +869,11 @@ def _validate_dependencies(
                     )
                     continue
                 edge = DependencyEdge(source_entry.current_version_id, edge.relation, edge.path)
+        elif edge.relation == REL_TRUTH_POLICY_DATA_SOURCE:
+            source_edge = _truth_policy_source_edge(session, context, edge, findings)
+            if source_edge is None:
+                continue
+            edge = source_edge
         target = session.get(LibraryVersionRecord, edge.to_version_id)
         if target is None or target.workspace_id != context.workspace_id:
             findings.append(
@@ -915,6 +922,63 @@ def _validate_dependencies(
         resolved.append((edge, target))
     _check_circular(session, context, entry, resolved, findings)
     return resolved
+
+
+def _truth_policy_source_edge(
+    session,
+    context: TenantContext,
+    edge: DependencyEdge,
+    findings: list[Finding],
+) -> DependencyEdge | None:
+    """One TruthResolutionPolicy ``rules[].source_priority`` item (#70).
+
+    The item names a data source entry and resolves to that entry's current
+    version, like ``product_entry_id`` above, so the stored edge stays
+    version-to-version and withdrawing that version lists the policy in its
+    impact preview. A data source version ID -- the only form publish
+    accepted before #70 -- maps back to its entry and resolves the same way,
+    which is also what Truth resolution reads (``truth._policy_data_source``).
+    The common checks below (withdrawn, archived, blocked) then run on the
+    resolved version. ``None`` means a blocking finding was recorded.
+    """
+    reference = edge.to_version_id
+    source_entry = session.get(LibraryEntryRecord, reference)
+    if source_entry is None or source_entry.workspace_id != context.workspace_id:
+        source_entry = None
+        legacy_version = session.get(LibraryVersionRecord, reference)
+        if legacy_version is not None and legacy_version.workspace_id == context.workspace_id:
+            source_entry = session.get(LibraryEntryRecord, legacy_version.entry_id)
+    if source_entry is None or source_entry.workspace_id != context.workspace_id:
+        findings.append(Finding("dependency_not_found", f"引用的数据源不存在: {reference}", edge.path))
+        return None
+    if source_entry.entry_type != ENTRY_DATA_SOURCE:
+        findings.append(
+            Finding(
+                "dependency_type_mismatch",
+                f"{edge.relation} 需要 {ENTRY_DATA_SOURCE} 条目，实际为 {source_entry.entry_type}",
+                edge.path,
+            )
+        )
+        return None
+    if not source_entry.current_version_id:
+        # No current version: never published, or its current version was
+        # withdrawn (withdraw clears current_version_id).
+        latest = session.scalars(
+            select(LibraryVersionRecord)
+            .where(LibraryVersionRecord.entry_id == source_entry.id)
+            .order_by(LibraryVersionRecord.version_no.desc())
+            .limit(1)
+        ).first()
+        if latest is not None and latest.state == VERSION_WITHDRAWN:
+            findings.append(
+                Finding("dependency_withdrawn", f"引用的数据源当前版本已被 Withdraw: {latest.id}", edge.path)
+            )
+        else:
+            findings.append(
+                Finding("dependency_not_found", f"引用的数据源尚无已发布版本: {reference}", edge.path)
+            )
+        return None
+    return DependencyEdge(source_entry.current_version_id, edge.relation, edge.path)
 
 
 def _check_reference_rights(

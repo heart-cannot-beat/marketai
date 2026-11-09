@@ -21,6 +21,7 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from tests.support.library_fixtures import LibraryFixtures
+from tests.support.truth_sources import publish_truth_sources
 from tests.test_localization_batch import (
     _build_confirmed_winner,
     _ensure_workspace,
@@ -192,35 +193,20 @@ class TestLocalizationPermissions(LibraryFixtures):
             )
 
         now = datetime.now(timezone.utc)
+        # Only an Owner publishes the DataSource and the policy that lists it
+        # by entry id (#70); the Member then starts preparation with it.
+        sources = publish_truth_sources(
+            owner,
+            tag,
+            data_source_content={"adapter_kind": "manual", "execution_mode": "real"},
+            fact_rules={"price": "skip", "availability": "skip"},
+            max_staleness_seconds=86400 * 30,
+        )
         with tenant_session(owner) as s:
             country = s.get(
                 MarketPolicyVersionRecord,
                 draft["market_policy_version_id"],
             ).country
-            policy_version_id = _make_version(
-                s,
-                owner.workspace_id,
-                "truth_resolution_policy",
-                tag,
-                content={
-                    "rules": [
-                        {
-                            "fact_type": fact_type,
-                            "source_priority": ["manual"],
-                            "on_failure": "skip",
-                            "max_staleness_seconds": 86400 * 30,
-                        }
-                        for fact_type in ("price", "availability")
-                    ]
-                },
-            )
-            data_source_version_id = _make_version(
-                s,
-                owner.workspace_id,
-                "data_source",
-                tag,
-                content={"adapter_kind": "manual", "execution_mode": "real"},
-            )
             manual_fact_set_version_id = _make_version(
                 s,
                 owner.workspace_id,
@@ -250,8 +236,7 @@ class TestLocalizationPermissions(LibraryFixtures):
             )
 
         body = {
-            "truth_resolution_policy_version_id": policy_version_id,
-            "data_source_version_ids": [data_source_version_id],
+            "truth_resolution_policy_version_id": sources.policy_version_id,
             "manual_fact_set_version_id": manual_fact_set_version_id,
             "analysis_recipe_hash": recipe_hash,
             "analysis_provider": "mock-vision",

@@ -208,7 +208,7 @@ def _validate_daily_observation(obs: DailyObservation) -> None:
     else:
         if obs.metrics is not None:
             raise InvalidScaleSnapshot(
-                "evidence_metrics_mismatch", "missing day forbids metrics"
+                "evidence_metrics_mismatch", f"{obs.evidence_state.value} day forbids metrics"
             )
 
 
@@ -353,6 +353,30 @@ def _validate_freshness(snapshot: ScaleEvidenceSnapshot) -> None:
         )
 
 
+def _validate_before_episode_days(snapshot: ScaleEvidenceSnapshot) -> None:
+    """`before_episode` days can only open the 14-day span (baseline, then
+    current), and the as-of day itself must belong to the Episode; breakdown
+    days never carry the state."""
+    span = (*snapshot.baseline_7d.daily, *snapshot.current_7d.daily)
+    in_episode = False
+    for obs in span:
+        if obs.evidence_state == DailyEvidenceState.BEFORE_EPISODE:
+            if in_episode:
+                raise InvalidScaleSnapshot("invalid_before_episode_day", obs.local_date.isoformat())
+        else:
+            in_episode = True
+    if not in_episode:
+        raise InvalidScaleSnapshot("invalid_before_episode_day", "as_of_before_episode")
+    for segment in snapshot.breakdowns:
+        for obs in segment.daily or ():
+            if obs.evidence_state == DailyEvidenceState.BEFORE_EPISODE:
+                raise InvalidScaleSnapshot("invalid_or_unsorted_breakdown", segment.segment_key)
+
+
+def _window_opens_before_episode(snapshot: ScaleEvidenceSnapshot) -> bool:
+    return snapshot.baseline_7d.daily[0].evidence_state == DailyEvidenceState.BEFORE_EPISODE
+
+
 def _validate_snapshot(snapshot: ScaleEvidenceSnapshot) -> None:
     """Phase 0 (spec §2.3, §2.5 Phase 0). The persistence assembler is the
     primary integrity gate; the evaluator nevertheless validates every
@@ -370,6 +394,8 @@ def _validate_snapshot(snapshot: ScaleEvidenceSnapshot) -> None:
     if snapshot.baseline_7d.end_date_exclusive != snapshot.current_7d.start_date:
         raise InvalidScaleSnapshot("invalid_window_boundary", "baseline_7d")
     _validate_window(snapshot.baseline_7d, 7)
+
+    _validate_before_episode_days(snapshot)
 
     _validate_exact_window(snapshot.current_exact_7d, snapshot.current_7d)
     _validate_exact_window(snapshot.baseline_exact_7d, snapshot.baseline_7d)
@@ -676,33 +702,38 @@ def _primitive_signals(
         snapshot, "roas_worsening", current_totals, baseline_totals, roas_threshold, metric="roas",
     )
 
-    # -- configuration_drift -------------------------------------------------
+    results["configuration_drift"] = _configuration_drift_signal(snapshot)
+    results["no_delivery_complete_day"] = _no_delivery_complete_day_signal(snapshot)
+
+    return _PrimitiveSignals(results=results, stable_ctr=stable_ctr, stable_cvr=stable_cvr)
+
+
+def _configuration_drift_signal(snapshot: ScaleEvidenceSnapshot) -> SignalResult:
     # A blocking incompatibility would already have short-circuited in
     # Phase 1; reaching here means any hash difference is a permitted drift.
     drift = (
         snapshot.delivery_config.baseline_configuration_hash
         != snapshot.delivery_config.current_configuration_hash
     )
-    results["configuration_drift"] = _signal(
+    return _signal(
         "configuration_drift",
         SignalState.HIT if drift else SignalState.MISS,
         reason_code="ok",
     )
 
-    # -- no_delivery_complete_day ---------------------------------------------
+
+def _no_delivery_complete_day_signal(snapshot: ScaleEvidenceSnapshot) -> SignalResult:
     last_day = snapshot.current_7d.daily[-1]
     no_delivery_hit = (
         last_day.metrics is not None
         and last_day.metrics.delivered is False
         and last_day.metrics.impressions == 0
     )
-    results["no_delivery_complete_day"] = _signal(
+    return _signal(
         "no_delivery_complete_day",
         SignalState.HIT if no_delivery_hit else SignalState.MISS,
         reason_code="ok",
     )
-
-    return _PrimitiveSignals(results=results, stable_ctr=stable_ctr, stable_cvr=stable_cvr)
 
 
 def _bootstrap_economic_signal(
@@ -1566,6 +1597,69 @@ def _result_hash(
 # ---------------------------------------------------------------------------
 
 
+def _evaluate_episode_window_incomplete(
+    snapshot: ScaleEvidenceSnapshot,
+    quality_state: DataQualityState,
+    current_compat: StreakCompatibility,
+) -> ScaleEvaluation:
+    """The Episode is younger than the 14-day span (Issue #57, contract §8
+    and §9.1): the days before its start are explained, not missing, so the
+    result is `warming`, not `insufficient`.
+
+    Every current-vs-baseline comparison (and the exact-window frequency
+    level, whose window also opens before the Episode) is `unavailable`
+    with `episode_window_incomplete`, so no health signal can hit and no
+    Advice is assembled. The two signals that read only the Episode's own
+    days still run: `configuration_drift`, and `no_delivery_complete_day`,
+    which keeps counting the contract's 7-day no-delivery streak from the
+    Episode's first day. Health is `not_delivering` when the Episode's days
+    in the current window have no impressions, as on the full-window path;
+    otherwise it is withheld with the same reason code.
+    """
+    signals_by_id = {
+        key: _signal(key, SignalState.UNAVAILABLE, reason_code="episode_window_incomplete")
+        for key in _CORE_HEALTH_SIGNAL_KEYS
+    }
+    signals_by_id["configuration_drift"] = _configuration_drift_signal(snapshot)
+    signals_by_id["no_delivery_complete_day"] = _no_delivery_complete_day_signal(snapshot)
+
+    if _is_not_delivering(snapshot, _totals(snapshot.current_7d.daily)):
+        health_result = _HealthResult(ScaleHealth.NOT_DELIVERING, "", False, False)
+    else:
+        health_result = _HealthResult(None, "episode_window_incomplete", False, False)
+
+    reset_resolution = _resolve_streak_reset(snapshot, current_compat, quality_blocked=False)
+    hit_keys = frozenset(
+        key for key, result in signals_by_id.items() if result.state == SignalState.HIT
+    )
+    streak_state = _reduce_streaks(
+        current_compat, reset_resolution, health=health_result.health,
+        hit_keys=hit_keys, extra_known_keys=frozenset(),
+    )
+
+    signals = tuple(
+        signals_by_id[key]
+        for key in (*_CORE_SIGNAL_KEYS[:-1], "configuration_drift", "no_delivery_complete_day")
+    )
+    maturity = EvidenceMaturity.WARMING
+    result_hash = _result_hash(
+        snapshot, CURRENT_ALGORITHM_VERSION, maturity, quality_state, health_result.health,
+        health_result.health_reason, signals, (), streak_state,
+    )
+    return ScaleEvaluation(
+        snapshot_canonical_hash=snapshot.canonical_hash,
+        algorithm_version=CURRENT_ALGORITHM_VERSION,
+        maturity=maturity,
+        data_quality_state=quality_state,
+        health=health_result.health,
+        health_reason=health_result.health_reason,
+        signals=signals,
+        advice_candidates=(),
+        streak_state=streak_state,
+        result_hash=result_hash,
+    )
+
+
 @_register(CURRENT_ALGORITHM_VERSION)
 def _evaluate_beta_v1(snapshot: ScaleEvidenceSnapshot) -> ScaleEvaluation:
     with localcontext() as ctx:
@@ -1603,6 +1697,9 @@ def _evaluate_beta_v1(snapshot: ScaleEvidenceSnapshot) -> ScaleEvaluation:
                 streak_state=streak_state,
                 result_hash=result_hash,
             )
+
+        if _window_opens_before_episode(snapshot):
+            return _evaluate_episode_window_incomplete(snapshot, quality_state, current_compat)
 
         current_totals = _totals(snapshot.current_7d.daily)
         baseline_totals = _totals(snapshot.baseline_7d.daily)

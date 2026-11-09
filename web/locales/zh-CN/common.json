@@ -1605,6 +1605,7 @@
   "error-adapter_not_enabled": "这个事实来源尚未配置。",
   "error-algorithm_not_allowed": "无法验证当前会话，请重新登录。",
   "error-already_imported_ad_day": "这些广告/日期的数据已经导入过。请选择要替换的批次。",
+  "error-as_of_before_episode_start": "评估日期早于这个周期的开始日期。",
   "error-aspect_ratio_unsupported": "这个模型不支持该画幅。",
   "error-assertion_error": "这个值无效。",
   "error-asset_blob_unavailable": "这张图片的文件不可用。",

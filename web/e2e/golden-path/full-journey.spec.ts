@@ -2122,7 +2122,6 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
       slug,
       batchId,
       locInfra.truthPolicyVersionId,
-      locInfra.dataSourceVersionId,
       locInfra.inventoryId,
       locInfra.markets.length
     );

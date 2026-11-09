@@ -251,14 +251,16 @@
       "conflicting_signals": "未判定健康状态：点击率下降，但 CPA 或 ROAS 明显改善，信号方向相反。",
       "partial_adverse_signals": "未判定健康状态：部分信号不利，但不符合任何一种健康类型。",
       "signal_unavailable": "未判定健康状态：有必需的信号无法计算。",
-      "quality_blocked": "未判定健康状态：数据质量阻塞。"
+      "quality_blocked": "未判定健康状态：数据质量阻塞。",
+      "episode_window_incomplete": "暂未判定健康状态：这个观察段已有 {{days}} 个完整日的数据，7 天对比需要 14 个。满 14 个完整日后才开始判定健康状态和给出建议。"
     },
     "signal-reason": {
       "frequency_unavailable": "没有频次数据",
       "unavailable_baseline": "没有可用的基线",
       "explained_by_pause": "投放暂停可以解释，不计为命中",
       "bootstrap_unavailable": "有效抽样不足，无法计算区间",
-      "data_quality_blocked": "数据质量阻塞，未计算"
+      "data_quality_blocked": "数据质量阻塞，未计算",
+      "episode_window_incomplete": "未计算：观察段还不满 14 天窗口"
     },
     "streak-counters": "连续计数",
     "unknown-signal": "未知信号"

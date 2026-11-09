@@ -1176,7 +1176,7 @@ Issue #24 defines one shared `FactSourceAdapter` interface and ships exactly two
 - `ManualFactSourceAdapter`
 - `ControlledMockFactSourceAdapter`
 
-Do not add Shopify, Product Claim, or Shipping Policy stub classes. A future ticket adds a new adapter at this seam and registers it. `TruthResolutionPolicyVersion.source_priority` already references DataSource versions, so adding a future adapter does not require a TruthPackage schema migration.
+Do not add Shopify, Product Claim, or Shipping Policy stub classes. A future ticket adds a new adapter at this seam and registers it. `TruthResolutionPolicyVersion.source_priority` already references DataSource entries, read at their current effective DataSourceVersion (#70), so adding a future adapter does not require a TruthPackage schema migration.
 
 The Creative Library may recognize a reserved `adapter_kind` before an executable adapter is installed. Publication validates the content schema and known kind. Resolution reports `adapter_not_enabled` when the current deployment has no registered implementation; an explicitly configured same-mode fallback may then run. No adapter silently changes modes.
 

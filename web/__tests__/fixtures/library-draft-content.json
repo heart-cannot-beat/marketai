@@ -134,7 +134,7 @@
     "rules": [
       {
         "fact_type": "price",
-        "source_priority": ["manual"],
+        "source_priority": ["le_acme_charge_manual_source"],
         "max_staleness_seconds": 86400,
         "on_failure": "block"
       }

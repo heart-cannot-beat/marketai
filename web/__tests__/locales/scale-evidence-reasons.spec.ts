@@ -56,9 +56,12 @@ const UNWORDED = ['ok'];
 test('reads every health reason the evaluator writes', () => {
   // A call this pattern cannot read fails here instead of dropping a reason.
   expect(healthResults).toHaveLength(source.match(/_HealthResult\(/g)!.length);
-  expect(healthKeywords.filter((value) => !value.startsWith('"'))).toEqual([
-    'health_result.health_reason',
-  ]);
+  // Both evaluation paths forward a `_HealthResult`, which is read above.
+  expect(
+    Array.from(
+      new Set(healthKeywords.filter((value) => !value.startsWith('"')))
+    )
+  ).toEqual(['health_result.health_reason']);
   expect(healthReasons).toEqual(
     expect.arrayContaining([
       'conflicting_signals',
