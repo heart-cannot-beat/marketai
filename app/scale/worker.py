@@ -17,10 +17,14 @@ This module, and every other module under ``app/scale``, must never import
 ``app.launch`` in any form -- ``tests/test_scale_worker_isolation.py``
 enforces this with AST inspection (Gates 23-24) and a transitive
 import-closure check (Gate 25), rather than trusting a docstring promise.
-Putting a Scale job handler inside the shared ``WorkerRuntime`` (which *does*
-hold a ``MetaWritePort`` for Launch jobs) would not satisfy that contract --
-the isolation has to be a separate process/composition root, not a shared
-one with an unreachable code path.
+
+This runtime is not deployed. The deployed shared ``WorkerRuntime`` runs the
+Scale jobs as well, which ADR 0017 allows only while that process has no Meta
+write capability (no write Token, no write port, no constructible write
+client); ``app.worker_runtime._main`` refuses to start otherwise. Once that
+stops holding, Scale moves to this runtime -- after it learns to claim only
+Scale job types (``jobs.claim_next(..., job_types=...)``); today it claims
+every type and would fail the rest as ``unsupported_job_type``.
 
 Scale never performs Meta writes: this Worker dispatches only
 ``scale_evaluate`` (spec §3.1/§3.4, ``app.scale.service.run_scale_evaluation``),
