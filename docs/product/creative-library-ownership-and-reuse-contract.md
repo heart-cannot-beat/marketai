@@ -251,6 +251,8 @@ DependencyIndex 记录 LibraryVersion 到 Generation Draft/Run、AssetVersion、
 - Credential 轮换：不触发内容失效；
 - Offer、Mapping 或商业事实变化：只 supersede 真正依赖的 TruthPackage，并按本地化契约传播 `stale_truth`。
 
+按条目引用的依赖按条目判断影响。这类内容写的是条目 ID，发布时解析到该条目的当前版本，例如 TruthResolutionPolicy 的 `source_priority`、ManualFactSet 的 `data_source_entry_id` 和事实行的 `offer_entry_id`、DimensionSchema 的 `product_entry_id`。它们的依赖边仍指向发布时的版本，不迁移，也不改写。Withdraw 和 Archive 的影响分析把版本归到它的条目，列出引用该条目任一版本的依赖对象；Withdraw 按同一结果把依赖对象投影为 blocked。其余依赖仍按所引用的准确版本判断。
+
 发布、撤销和归档前 UI 展示影响分析。已发出的不可分割 Provider 调用允许返回并保存证据，结果是否可采用取决于当前资格；系统不自动删除素材、不改历史实验，也不自动暂停或修改真实广告。
 
 ## 15. 删除、保留与 Workspace 生命周期
