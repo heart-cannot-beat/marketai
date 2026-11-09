@@ -1955,7 +1955,7 @@
   "error-library_bind_entry_required": "请选择要绑定参考素材的条目。",
   "error-library_bind_reference_invalid": "只能绑定参考图版本。",
   "error-library_bind_target_invalid": "只有产品和人物条目可以绑定参考图。",
-  "error-library_clone_field_forbidden": "部分所选内容不能复制，请单独创建。",
+  "error-library_clone_field_forbidden": "销售方案、价格、市场来源映射和落地页不会被复制，请为新产品另行创建。",
   "error-library_clone_field_unknown": "部分所选字段不能复制。",
   "error-library_clone_source_invalid": "只能复制产品版本。",
   "error-library_command_failed": "创意库操作没有完成。",

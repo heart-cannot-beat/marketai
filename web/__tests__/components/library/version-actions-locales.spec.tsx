@@ -16,11 +16,14 @@ import fixtures from '../../fixtures/library-versions.json';
  * `tests/test_library_version_web_fixtures.py`), in the real en and zh-CN
  * copy: an Owner withdraws after reading the impact analysis, a Member sees
  * Withdraw held back with its reason, Fork and Clone Product open the entry
- * they create, and another Workspace's version id reads as a sentence.
+ * they create, a Clone Product refused for asking to copy Offers tells the
+ * reader to create them separately (ADR 0016), and another Workspace's
+ * version id reads as a sentence.
  */
 let mockRun: jest.Mock;
 let mockPreview: jest.Mock;
 let mockQuery: { data?: unknown; problem?: unknown };
+let mockCloneProblem: unknown;
 
 jest.mock('@/components/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({
@@ -72,7 +75,7 @@ jest.mock('@/hooks/library/useLibraryCommand', () => ({
     reset: jest.fn(),
     dismiss: jest.fn(),
     isPending: false,
-    problem: undefined,
+    problem: kind === 'clone' ? mockCloneProblem : undefined,
     reconciliation: undefined,
   }),
 }));
@@ -116,6 +119,8 @@ const COPY = {
     confirmClone: 'Clone',
     neverCopied:
       'Offers, prices, market mappings and landing pages are never copied. Create them for the new product separately.',
+    cloneRefused:
+      'Offers, prices, market mappings and landing pages are never copied. Create them for the new product separately.',
     notFound: "This version doesn't exist, or you don't have access to it.",
   },
   'zh-CN': {
@@ -142,6 +147,8 @@ const COPY = {
     confirmClone: '克隆',
     neverCopied:
       '销售方案、价格、市场来源映射和落地页永远不会被复制，请为新产品另行创建。',
+    cloneRefused:
+      '销售方案、价格、市场来源映射和落地页不会被复制，请为新产品另行创建。',
     notFound: '找不到这个版本，或你没有访问权限。',
   },
 } as const;
@@ -204,6 +211,7 @@ beforeEach(() => {
     data: fixtures.owner_withdraw_impact,
   });
   mockQuery = { data: fixtures.owner_effective_product };
+  mockCloneProblem = undefined;
 });
 
 describe.each(Object.keys(COPY) as Locale[])('%s', (locale) => {
@@ -325,6 +333,21 @@ describe.each(Object.keys(COPY) as Locale[])('%s', (locale) => {
       'display_name',
       'include_optional',
     ]);
+  });
+
+  it('words a Clone Product refused for copying Offers as create them separately', () => {
+    mockCloneProblem = fixtures.clone_with_offers_refused;
+    renderIn(locale);
+    clickInToolbar(copy.clone);
+
+    const dialog = screen.getByRole('dialog', { hidden: true });
+    expect(screen.getByRole('alert', { hidden: true })).toHaveTextContent(
+      copy.cloneRefused
+    );
+    expect(dialog.textContent).not.toContain(
+      fixtures.clone_with_offers_refused.detail
+    );
+    expectNoRawCodes(dialog);
   });
 
   it("words another Workspace's version id as not found", () => {

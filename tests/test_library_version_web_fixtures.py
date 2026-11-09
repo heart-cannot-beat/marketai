@@ -1,8 +1,9 @@
 """The web's Library version fixture is what FastAPI really answers, so the version toolbar cannot drift from the server (#25).
 
 `web/__tests__/fixtures/library-versions.json` holds `GET /library/versions/{id}`
-for an Owner and a Member, a Withdraw impact preview, a withdrawn version and
-the 404 for another Workspace's version id. Ids, hashes and times are replaced
+for an Owner and a Member, a Withdraw impact preview, a withdrawn version,
+the 404 for another Workspace's version id and the refusal of a Clone Product
+asked to copy Offers (ADR 0016). Ids, hashes and times are replaced
 by stable placeholders; everything else is the response as sent.
 
 After a deliberate change to these responses, regenerate and format:
@@ -102,6 +103,13 @@ def responses(fx: LibraryFixtures) -> dict:
         impact = as_(owner).post(f"/api/v1/library/versions/{product['id']}/withdraw-impact")
         fx.assertEqual(impact.status_code, 201, impact.text)
         result["owner_withdraw_impact"] = impact.json()
+        # ADR 0016: Offers, prices, mappings and landing pages are never copied.
+        refused_clone = as_(owner).post(
+            f"/api/v1/library/versions/{product['id']}/clone-product",
+            json={"display_name": "Acme Charge 65W (copy)", "include_optional": ["offers"]},
+            headers={"Idempotency-Key": f"ik-fixture-clone-{new_id('k')}"},
+        )
+        fx.assertEqual(refused_clone.status_code, 400, refused_clone.text)
         withdrawn = as_(owner).post(
             f"/api/v1/library/versions/{product['id']}/withdraw",
             json={"reason": "Recalled for legal review",
@@ -115,6 +123,7 @@ def responses(fx: LibraryFixtures) -> dict:
         missing = as_(other).get(f"/api/v1/library/versions/{product['id']}")
         fx.assertEqual(missing.status_code, 404, missing.text)
         result["other_workspace_not_found"] = missing.json()
+        result["clone_with_offers_refused"] = refused_clone.json()
         return _normalize(result, {})
     finally:
         app.dependency_overrides.pop(request_tenant_context, None)
@@ -139,6 +148,7 @@ class TestLibraryVersionWebFixture(LibraryFixtures):
         self.assertEqual(stored["owner_withdrawn_product"]["state"], "withdrawn")
         self.assertEqual(stored["owner_withdraw_impact"]["projection"]["dependent_count"], 1)
         self.assertEqual(stored["other_workspace_not_found"]["status"], 404)
+        self.assertEqual(stored["clone_with_offers_refused"]["code"], "library_clone_field_forbidden")
 
 
 def write():
