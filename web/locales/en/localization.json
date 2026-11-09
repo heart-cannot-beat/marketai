@@ -311,7 +311,7 @@
     "not-ready": "Publish an eligible Truth Resolution Policy and Data Source, and ensure every target has an explicit locale, country, and currency before resolving this batch.",
     "policy-version": "Truth policy version",
     "select-version": "Select a published version",
-    "data-source-version": "Fact data source version",
+    "sources-from-policy": "Fact data sources come from the policy's source priority; each one is read at its current published version.",
     "start": "Resolve Truth and analyze sources",
     "unavailable": "Unavailable: {{reason}}",
     "server-policy": "server policy",

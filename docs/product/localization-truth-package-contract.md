@@ -124,6 +124,13 @@ Member 可以编辑 Draft；只有 Owner 能在二次确认和审计下发布或
 
 策略按事实类型规定允许来源、优先级、最大年龄和失败行为。不同来源可以组成一个 TruthPackage，但每条 Fact 必须保留 source kind、source version、external object reference、requested context、observed_at、valid_until、raw evidence hash 和解析规则版本。
 
+`rules[].source_priority` 按优先顺序列出数据源**条目** id（DataSourceDefinition 的稳定身份），不是 Adapter kind，也不是某个 DataSourceVersion（#70）。
+
+- 发布策略时，每一项解析到该数据源的当前版本，依赖边仍是版本到版本；撤回这个版本时，影响预览会列出该策略版本。数据源未发布、已撤回、已归档或属于其他 Workspace 时，发布被拒。
+- 解析 Truth 时，按顺序读取每个条目**当前 effective** 的 DataSourceVersion，由它的 Adapter kind 选择 Adapter，并把实际用到的版本记入 `truth_source_attempts`。数据源重新发布后，策略不用重发。数据源已撤回或归档时，解析返回 422。
+- 开始准备的请求只指定策略版本，以及 manual 来源要读的 ManualFactSetVersion；调用方不指定数据源版本。
+- 旧写法：写 Adapter kind（如 `mock`）的，发布时报 `trp_source_priority_adapter_kind`；#70 之前发布、写数据源版本 id 的策略继续有效，该 id 映射回所属条目，同样读取当前 effective 版本。
+
 Adapter 失败不能临时选择未配置来源。已配置备用来源只在它自身有效、满足同一 Offer/市场语义且页面明确展示 provenance 时使用；不得用汇率、默认市场或模型补齐缺失价格。
 
 ## 7. TruthPackage

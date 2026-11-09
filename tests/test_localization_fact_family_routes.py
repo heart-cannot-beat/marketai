@@ -22,9 +22,15 @@ from app.adapters.persistence.models import (
     TruthPackageMarketRecord,
     TruthSourceAttemptRecord,
 )
+from app.library.contracts import FACT_TYPES
 from app.main import app
 from app.platform.http_identity import request_tenant_context
 from tests import test_localization_routes as legacy_routes
+from tests.support.truth_sources import (
+    publish_data_source,
+    publish_truth_sources,
+    truth_policy_content,
+)
 from tests.test_localization_batch import _make_version
 
 _TAGS = itertools.count(1)
@@ -43,25 +49,30 @@ def _row(fact_id: str, fact_type: str, country: str, **values: object) -> dict:
 
 
 def _sources(ctx, tag: str, country: str, *, rules: dict[str, str], extra_rows: list[dict]):
-    """Publish (pre-#26 style, without publish validation) a Manual-only
-    policy, its DataSource and a ManualFactSet with a valid price row."""
+    """Publish a Manual DataSource and a policy listing it by entry id (#70),
+    then insert (pre-#26 style, without publish validation) a ManualFactSet
+    with a valid price row, so pre-#26 fact types can still be exercised."""
+    if any(fact_type not in FACT_TYPES for fact_type in rules):
+        # A pre-#26 policy (`tax`, `delivery_time`) cannot pass publish
+        # validation any more; it can only exist as an already-stored version.
+        data_source_entry_id, _ = publish_data_source(
+            ctx, f"Data source {tag}", {"adapter_kind": "manual", "execution_mode": "real"}
+        )
+        with tenant_session(ctx) as session:
+            policy_id = _make_version(
+                session, ctx.workspace_id, "truth_resolution_policy", tag,
+                content=truth_policy_content(
+                    [data_source_entry_id], rules, max_staleness_seconds=86400 * 30
+                ),
+            )
+    else:
+        policy_id = publish_truth_sources(
+            ctx, tag,
+            data_source_content={"adapter_kind": "manual", "execution_mode": "real"},
+            fact_rules=rules,
+            max_staleness_seconds=86400 * 30,
+        ).policy_version_id
     with tenant_session(ctx) as session:
-        policy_id = _make_version(
-            session, ctx.workspace_id, "truth_resolution_policy", tag,
-            content={"rules": [
-                {
-                    "fact_type": fact_type,
-                    "source_priority": ["manual"],
-                    "on_failure": on_failure,
-                    "max_staleness_seconds": 86400 * 30,
-                }
-                for fact_type, on_failure in rules.items()
-            ]},
-        )
-        data_source_id = _make_version(
-            session, ctx.workspace_id, "data_source", tag,
-            content={"adapter_kind": "manual", "execution_mode": "real"},
-        )
         fact_set_id = _make_version(
             session, ctx.workspace_id, "manual_fact_set", tag,
             content={"facts": [
@@ -69,7 +80,7 @@ def _sources(ctx, tag: str, country: str, *, rules: dict[str, str], extra_rows: 
                 *extra_rows,
             ]},
         )
-    return policy_id, data_source_id, fact_set_id
+    return policy_id, fact_set_id
 
 
 class _Batch:
@@ -96,14 +107,13 @@ class _Batch:
     def revision(self) -> int:
         return self.client.get(f"/api/v1/localization/batches/{self.batch_id}").json()["revision"]
 
-    def start(self, policy_id: str, data_source_id: str, fact_set_id: str, *, revision=None):
+    def start(self, policy_id: str, fact_set_id: str, *, revision=None):
         if revision is None:
             revision = self.revision()
         return self.client.post(
             f"/api/v1/localization/batches/{self.batch_id}/start-preparation",
             json={
                 "truth_resolution_policy_version_id": policy_id,
-                "data_source_version_ids": [data_source_id],
                 "manual_fact_set_version_id": fact_set_id,
                 "analysis_recipe_hash": self.recipe_hash,
                 "analysis_provider": "mock-vision",
@@ -203,15 +213,15 @@ def test_unresolvable_manual_fact_follows_on_failure_instead_of_500(
 
 def test_start_preparation_cannot_read_another_workspaces_fact_set(batch):
     other = batch.harness._make_context(role="owner")
-    policy_id, data_source_id, _ = _sources(
+    policy_id, _ = _sources(
         batch.ctx, batch.tag, batch.country, rules={"price": "block"}, extra_rows=[],
     )
-    _, _, foreign_fact_set_id = _sources(
+    _, foreign_fact_set_id = _sources(
         other, f"{batch.tag}-other", batch.country, rules={"price": "block"},
         extra_rows=[_row("tax-1", "tax", batch.country, rate="0.19")],
     )
 
-    response = batch.start(policy_id, data_source_id, foreign_fact_set_id)
+    response = batch.start(policy_id, foreign_fact_set_id)
 
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "truth_configuration_invalid"

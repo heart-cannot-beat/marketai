@@ -101,7 +101,7 @@ def _policy(*fact_types: str, on_failure: str = "block") -> dict:
         "rules": [
             {
                 "fact_type": fact_type,
-                "source_priority": ["manual"],
+                "source_priority": ["lib_ds_acme"],
                 "allow_fallback": False,
                 "max_staleness_seconds": 86400,
                 "on_failure": on_failure,

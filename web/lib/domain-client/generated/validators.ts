@@ -11078,11 +11078,6 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
   StartPreparationInput: {
     properties: {
       truth_resolution_policy_version_id: { type: 'string' },
-      data_source_version_ids: {
-        items: { type: 'string' },
-        type: 'array',
-        minItems: 1,
-      },
       manual_fact_set_version_id: {
         anyOf: [{ type: 'string' }, { type: 'null' }],
       },
@@ -11095,7 +11090,6 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: [
       'truth_resolution_policy_version_id',
-      'data_source_version_ids',
       'analysis_recipe_hash',
       'analysis_provider',
       'analysis_model',
@@ -20393,11 +20387,6 @@ const SCHEMAS: Record<string, object> = {
   start_localization_preparation_request: {
     properties: {
       truth_resolution_policy_version_id: { type: 'string' },
-      data_source_version_ids: {
-        items: { type: 'string' },
-        type: 'array',
-        minItems: 1,
-      },
       manual_fact_set_version_id: {
         anyOf: [{ type: 'string' }, { type: 'null' }],
       },
@@ -20410,7 +20399,6 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: [
       'truth_resolution_policy_version_id',
-      'data_source_version_ids',
       'analysis_recipe_hash',
       'analysis_provider',
       'analysis_model',

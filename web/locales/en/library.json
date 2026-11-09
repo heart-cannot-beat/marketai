@@ -659,6 +659,7 @@
     "trp_price_no_degrade": "A price rule cannot use degrade on failure.",
     "trp_rule_shape": "Each rule must be an object.",
     "trp_rules_required": "Add at least one rule.",
+    "trp_source_priority_adapter_kind": "List data source entries in the source priority, not adapter types such as manual or mock.",
     "trp_source_priority_dups": "The source priority lists a source more than once.",
     "trp_source_priority_empty": "List at least one source in the source priority.",
     "trp_staleness": "The maximum staleness must be 0 seconds or more.",

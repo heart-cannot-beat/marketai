@@ -291,8 +291,9 @@ class CreateDraftInput(BaseModel):
 class StartPreparationInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # The DataSources come from the policy's `source_priority` (#70); the
+    # request names only the policy and, for a `manual` source, the fact set.
     truth_resolution_policy_version_id: str
-    data_source_version_ids: list[str] = Field(min_length=1)
     manual_fact_set_version_id: str | None = None
     analysis_recipe_hash: str
     analysis_provider: str
@@ -493,7 +494,6 @@ def start_preparation(
             truth_resolution_policy_version_id=(
                 body.truth_resolution_policy_version_id
             ),
-            data_source_version_ids=tuple(body.data_source_version_ids),
             manual_fact_set_version_id=body.manual_fact_set_version_id,
             analysis_recipe_hash=body.analysis_recipe_hash,
             analysis_provider=body.analysis_provider,

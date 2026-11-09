@@ -1192,11 +1192,14 @@ def _authoritative_truth_command(
     batch: LocalizationBatchRecord,
     targets: Sequence[LocalizationBatchMarketTargetRecord],
     truth_resolution_policy_version_id: str,
-    data_source_version_ids: tuple[str, ...],
     manual_fact_set_version_id: str | None,
     now: datetime,
 ) -> TruthResolutionCommand:
-    """Build Truth input from persisted Batch and Library identities only."""
+    """Build Truth input from persisted Batch and Library identities only.
+
+    The DataSources come from the policy's `source_priority` (#70), never
+    from the request.
+    """
 
     return prepare_truth_resolution_command(
         session,
@@ -1204,7 +1207,6 @@ def _authoritative_truth_command(
         product_version_id=batch.product_version_id,
         offer_version_id=batch.offer_version_id,
         truth_resolution_policy_version_id=truth_resolution_policy_version_id,
-        data_source_version_ids=data_source_version_ids,
         markets=tuple(
             MarketResolutionInput(
                 market_policy_version_id=target.market_policy_version_id
@@ -1262,7 +1264,6 @@ def start_preparation(
     actor_id: str,
     admission: PaidOperationAdmission,
     truth_resolution_policy_version_id: str | None = None,
-    data_source_version_ids: tuple[str, ...] = (),
     manual_fact_set_version_id: str | None = None,
     now: datetime | None = None,
 ) -> StartPreparationResult:
@@ -1297,13 +1298,15 @@ def start_preparation(
         _analysis_recipe_state(batch)
     )
     if truth_command is None:
-        if truth_resolution_policy_version_id is None or not data_source_version_ids:
+        if truth_resolution_policy_version_id is None:
             raise BatchValidationError(("missing_truth_configuration_versions",))
+        # The DataSourceVersions are derived from the policy (#70) and frozen
+        # as `truth_data_source_version_ids`; a replay compares only what the
+        # caller chose, and never re-derives them.
         requested_selection: dict[str, object] = {
             "truth_resolution_policy_version_id": (
                 truth_resolution_policy_version_id
             ),
-            "truth_data_source_version_ids": sorted(data_source_version_ids),
             "truth_manual_fact_set_version_ids": (
                 [manual_fact_set_version_id]
                 if manual_fact_set_version_id is not None
@@ -1382,7 +1385,6 @@ def start_preparation(
             truth_resolution_policy_version_id=(
                 truth_resolution_policy_version_id
             ),
-            data_source_version_ids=tuple(data_source_version_ids),
             manual_fact_set_version_id=manual_fact_set_version_id,
             now=now,
         )

@@ -343,7 +343,6 @@ test('v9 Beta golden path', async ({
         workspaceSlug,
         batchId,
         localizationInfra.truthPolicyVersionId,
-        localizationInfra.dataSourceVersionId,
         localizationInfra.inventoryId,
         targetMarkets.length
       );

@@ -177,7 +177,6 @@ def start_localization_preparation(
             truth_resolution_policy_version_id=(
                 body.truth_resolution_policy_version_id
             ),
-            data_source_version_ids=tuple(body.data_source_version_ids),
             manual_fact_set_version_id=body.manual_fact_set_version_id,
             analysis_recipe_hash=body.analysis_recipe_hash,
             analysis_provider=body.analysis_provider,

@@ -414,7 +414,7 @@ Content:
 Validation:
 - One rule per `fact_type` (no duplicates).
 - `source_priority` must be nonempty with unique entries.
-- All referenced `data_source_entry_id`s must exist and be active in the same Workspace.
+- All referenced `data_source_entry_id`s must exist and be active in the same Workspace. Publish resolves each entry to its current version and records a version-to-version `truth_policy_data_source` edge; resolution reads each entry's current effective version, not the version recorded at publish (#70).
 - `max_staleness_seconds` ≥ 0.
 - `on_failure` restricted by `fact_type`: price cannot use `degrade` (which would preserve source-market truth for a missing price).
 

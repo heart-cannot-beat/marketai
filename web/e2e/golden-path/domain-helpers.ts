@@ -551,19 +551,17 @@ export async function prepareLocalizationBatchThroughUi(
   slug: string,
   batchId: string,
   truthPolicyVersionId: string,
-  dataSourceVersionId: string,
   inventoryId: string,
   pairCount: number
 ): Promise<string> {
   const preparation = page
     .getByRole('heading', { name: 'Truth and claim preparation' })
     .locator('xpath=ancestor::section');
+  // The policy's source_priority names the DataSource (#70); there is no
+  // separate data source choice.
   await preparation
     .getByLabel('Truth policy version')
     .selectOption(truthPolicyVersionId);
-  await preparation
-    .getByLabel('Fact data source version')
-    .selectOption(dataSourceVersionId);
 
   const [startResponse] = await Promise.all([
     page.waitForResponse(
