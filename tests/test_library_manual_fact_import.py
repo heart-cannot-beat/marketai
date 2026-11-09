@@ -23,6 +23,7 @@ from sqlalchemy import event, select
 from sqlalchemy.engine import Engine
 
 from tests.support.library_fixtures import LibraryFixtures
+from tests.support.offers import publish_offers
 
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import LibraryDependencyRecord
@@ -47,8 +48,8 @@ from app.platform.blob_store import CommittedBlobRef
 from app.platform.http_identity import request_tenant_context
 
 
-def _valid_fact(fact_id="f1", fact_type="price", country="US"):
-    return {
+def _valid_fact(fact_id="f1", fact_type="price", country="US", offer=None):
+    fact = {
         "fact_id": fact_id,
         "fact_type": fact_type,
         "country_code": country,
@@ -59,6 +60,16 @@ def _valid_fact(fact_id="f1", fact_type="price", country="US"):
         "currency": "USD",
         "evidence_source": "Acme Charge price list",
     }
+    if offer is not None:
+        # Every row names its Offer entry to publish (#54).
+        fact["offer_entry_id"] = offer
+    return fact
+
+
+def _us_offer(owner) -> str:
+    """A published Offer entry of ``owner``'s Workspace that sells in US."""
+    [(offer_entry_id, _version_id)] = publish_offers(owner, markets=["US"])
+    return offer_entry_id
 
 
 def _csv(*rows: str) -> dict:
@@ -300,7 +311,7 @@ class TestProcessManualFactImport(LibraryFixtures):
         result = process_manual_fact_import(
             ctx, data_source_entry_id=ds["id"],
             upload_intent_id="ui_test_clean",
-            content_payload={"facts": [_valid_fact()]},
+            content_payload={"facts": [_valid_fact(offer=_us_offer(ctx))]},
         )
         self.assertEqual(result["draft"]["state"], DRAFT_READY)
         self.assertEqual(result["draft"]["validation"]["blocking"], [])
@@ -336,7 +347,7 @@ class TestProcessManualFactImport(LibraryFixtures):
         result = process_manual_fact_import(
             member, data_source_entry_id=ds["id"],
             upload_intent_id="ui_test_member",
-            content_payload={"facts": [_valid_fact()]},
+            content_payload={"facts": [_valid_fact(offer=_us_offer(owner))]},
         )
         self.assertEqual(result["draft"]["validation"]["blocking"], [])
         with self.assertRaises(service.LibraryForbidden):
@@ -384,7 +395,7 @@ class TestFactSetDataSourceDependency(LibraryFixtures):
     def _fact_set_report(self, ctx, data_source_ref):
         entry = service.create_entry(
             ctx, entry_type=ENTRY_MANUAL_FACT_SET, display_name="Facts",
-            content={"data_source_entry_id": data_source_ref, "facts": [_valid_fact()]},
+            content={"data_source_entry_id": data_source_ref, "facts": [_valid_fact(offer=_us_offer(ctx))]},
         )
         report = service.validate_draft(ctx, entry["id"], expected_revision=entry["draft"]["revision"])
         return entry, [(f["code"], f["path"]) for f in report["blocking"]]
@@ -398,7 +409,10 @@ class TestFactSetDataSourceDependency(LibraryFixtures):
         with tenant_session(ctx) as session:
             edges = session.execute(
                 select(LibraryDependencyRecord.to_version_id, LibraryDependencyRecord.relation)
-                .where(LibraryDependencyRecord.from_version_id == version["id"])
+                .where(
+                    LibraryDependencyRecord.from_version_id == version["id"],
+                    LibraryDependencyRecord.relation == "fact_set_data_source",
+                )
             ).all()
         self.assertEqual([tuple(edge) for edge in edges], [(ds_version, "fact_set_data_source")])
 

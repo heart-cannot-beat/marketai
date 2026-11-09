@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib as _hashlib
 import json as _json
+from dataclasses import replace as _dataclass_replace
 from datetime import date
 from pathlib import Path
 from typing import Iterable
@@ -63,7 +64,9 @@ from .contracts import (
     ELIGIBILITY_WARNING,
     ENTRY_DATA_SOURCE,
     ENTRY_DIMENSION_SCHEMA,
+    ENTRY_MANUAL_FACT_SET,
     ENTRY_MARKET_MAPPING,
+    ENTRY_OFFER,
     ENTRY_PERSON,
     ENTRY_PRODUCT,
     ENTRY_REFERENCE_ASSET,
@@ -72,6 +75,7 @@ from .contracts import (
     LIFECYCLE_ACTIVE,
     LIFECYCLE_ARCHIVED,
     REL_FACT_SET_DATA_SOURCE,
+    REL_FACT_SET_OFFER,
     REL_MAPPING_DATA_SOURCE,
     REL_SCHEMA_PRODUCT,
     REL_TRUTH_POLICY_DATA_SOURCE,
@@ -87,6 +91,7 @@ from .contracts import (
     diff_content,
     extract_dependencies,
     extract_reference_bindings,
+    fact_offer_market_findings,
     mapping_data_source_findings,
     validate_content,
 )
@@ -840,6 +845,8 @@ def _validate_dependencies(
     today: date,
 ) -> list[tuple[DependencyEdge, LibraryVersionRecord]]:
     resolved: list[tuple[DependencyEdge, LibraryVersionRecord]] = []
+    # Up to 10,000 fact rows may name the same few Offers: resolve each once.
+    offer_targets: dict[str, str | Finding] = {}
     for edge in edges:
         # REL_SCHEMA_PRODUCT is the one relation whose edge carries an Entry ID
         # (DimensionSchema.product_entry_id: the product binding is a stable
@@ -877,6 +884,15 @@ def _validate_dependencies(
             if source_edge is None:
                 continue
             edge = source_edge
+        elif edge.relation == REL_FACT_SET_OFFER:
+            reference = edge.to_version_id
+            if reference not in offer_targets:
+                offer_targets[reference] = _fact_set_offer_target(session, context, reference)
+            outcome = offer_targets[reference]
+            if isinstance(outcome, Finding):
+                findings.append(_dataclass_replace(outcome, path=edge.path))
+                continue
+            edge = DependencyEdge(outcome, edge.relation, edge.path)
         target = session.get(LibraryVersionRecord, edge.to_version_id)
         if target is None or target.workspace_id != context.workspace_id:
             findings.append(
@@ -984,6 +1000,38 @@ def _truth_policy_source_edge(
     return DependencyEdge(source_entry.current_version_id, edge.relation, edge.path)
 
 
+def _fact_set_offer_target(session, context: TenantContext, reference: str) -> str | Finding:
+    """The OfferVersion a manual fact row's ``offer_entry_id`` stands for (#54).
+
+    A row names the Offer *entry*, the way a TruthResolutionPolicy names its
+    data sources (#70): it resolves to the entry's current effective version,
+    so the stored edge stays version-to-version and withdrawing that version
+    lists the fact set in its impact preview. Republishing the Offer leaves
+    the row valid: Truth matches rows by the entry of the batch's
+    OfferVersion. The common checks (withdrawn, blocked, archived) then run
+    on the resolved version.
+
+    Anything that is not an Offer entry of this Workspace reads alike, so an
+    id guessed from another Workspace learns nothing. The caller adds the
+    row's path to a returned Finding.
+    """
+    entry = session.get(LibraryEntryRecord, reference)
+    if entry is None or entry.workspace_id != context.workspace_id or entry.entry_type != ENTRY_OFFER:
+        return Finding("fact_offer_not_found", f"offer_entry_id 不是本 Workspace 的 Offer 条目: {reference}")
+    current = _effective_version(session, entry)
+    if current is not None:
+        return current.id
+    latest = session.scalars(
+        select(LibraryVersionRecord)
+        .where(LibraryVersionRecord.entry_id == entry.id)
+        .order_by(LibraryVersionRecord.version_no.desc())
+        .limit(1)
+    ).first()
+    if latest is not None and latest.state == VERSION_WITHDRAWN:
+        return Finding("dependency_withdrawn", f"引用的 Offer 当前版本已被 Withdraw: {latest.id}")
+    return Finding("fact_offer_unpublished", f"引用的 Offer 尚无已发布版本: {reference}")
+
+
 def _check_reference_rights(
     target: LibraryVersionRecord, findings: list[Finding], edge: DependencyEdge, *, today: date
 ) -> None:
@@ -1055,6 +1103,15 @@ def _build_report(
         for edge, target in resolved:
             if edge.relation == REL_MAPPING_DATA_SOURCE:
                 report.findings.extend(mapping_data_source_findings(content, target.content_json))
+    elif entry.entry_type == ENTRY_MANUAL_FACT_SET:
+        # Only rows whose Offer resolved to a usable OfferVersion of this
+        # Workspace are compared with its market scope (#54).
+        offers = {
+            edge.path: target.content_json
+            for edge, target in resolved
+            if edge.relation == REL_FACT_SET_OFFER
+        }
+        report.findings.extend(fact_offer_market_findings(content, offers))
     return report, resolved
 
 

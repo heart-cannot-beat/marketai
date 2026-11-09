@@ -228,7 +228,7 @@ class TestManualFactSetValidation(unittest.TestCase):
                 {
                     "fact_id": "fact-001",
                     "fact_type": "price",
-                    "offer_version_id": "lib_offer_v1",
+                    "offer_entry_id": "lib_offer_001",
                     "country_code": "US",
                     "amount": "29.99",
                     "currency": "USD",
@@ -305,6 +305,15 @@ class TestManualFactSetValidation(unittest.TestCase):
             {("fact_date_format", "facts[0].valid_from"), ("fact_date_format", "facts[0].valid_to")},
         )
 
+    def test_every_row_names_its_offer(self):
+        # #54: contract §11.4 lists the Offer among the fields of every row.
+        for missing in ("", "  ", None, 7):
+            with self.subTest(offer_entry_id=missing):
+                self.assertEqual(
+                    self._blocking_with(offer_entry_id=missing),
+                    {("fact_offer_required", "facts[0].offer_entry_id")},
+                )
+
 
 class TestTruthResolutionPolicyValidation(unittest.TestCase):
 
@@ -376,6 +385,30 @@ class TestDependencyExtraction(unittest.TestCase):
         edges = extract_dependencies(ENTRY_MANUAL_FACT_SET, content)
         relations = {e.relation for e in edges}
         self.assertIn("fact_set_data_source", relations)
+
+    def test_each_fact_row_names_an_offer_entry(self):
+        # #54: one edge per row; publish resolves each to the Offer's current
+        # version and stores one edge per distinct version.
+        content = {
+            "data_source_entry_id": "lib_ds_001",
+            "facts": [
+                {"fact_id": "a", "offer_entry_id": "lib_offer_a"},
+                "not a row",
+                {"fact_id": "b", "offer_entry_id": "lib_offer_b"},
+                {"fact_id": "c", "offer_entry_id": "lib_offer_a"},
+                {"fact_id": "d"},
+            ],
+        }
+        edges = extract_dependencies(ENTRY_MANUAL_FACT_SET, content)
+        self.assertEqual(
+            [(e.to_version_id, e.relation, e.path) for e in edges],
+            [
+                ("lib_ds_001", "fact_set_data_source", "data_source_entry_id"),
+                ("lib_offer_a", "fact_set_offer", "facts[0].offer_entry_id"),
+                ("lib_offer_b", "fact_set_offer", "facts[2].offer_entry_id"),
+                ("lib_offer_a", "fact_set_offer", "facts[3].offer_entry_id"),
+            ],
+        )
 
     def test_truth_resolution_policy_dependencies(self):
         content = {

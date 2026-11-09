@@ -336,19 +336,37 @@ def _build_confirmed_winner(
     asset_language: str = "en",
     source_market_snapshot: dict[str, str] | None = _SOURCE_MARKET_SNAPSHOT,
     product_id: str | None = None,
+    offer_markets: tuple[str, ...] = ("US",),
+    library_versions: tuple[str, str] | None = None,
 ) -> dict:
     """Drive a real experiment to a confirmed material 'win' Decision.
 
     Mirrors `tests/test_localization_eligibility.py::_build_confirmed_winner`.
+    `offer_markets` is the Offer's `market_scope`; the first one is the
+    Winner's source market. `library_versions` is a `(ProductVersion,
+    OfferVersion)` pair already published through the Library to use
+    instead of seeding new ones; `govern_product_offer_versions` still fits
+    that Offer's market, landing page and validity fields to the
+    Experiments chain, as it does for seeded versions.
     """
-    product_id = product_id or _product_id(ws_id)
     with tenant_session(ctx) as s:
-        pv_id, ov_id = _seed_library_versions(
-            s,
-            ws_id,
-            tag,
-            source_market_snapshot=source_market_snapshot,
-        )
+        if library_versions is not None:
+            pv_id, ov_id = library_versions
+            # Library publish bridged the Product entry to its own `products` row.
+            product_id = product_id or s.scalar(
+                select(ProductRecord.id).where(
+                    ProductRecord.workspace_id == ws_id,
+                    ProductRecord.product_profile_entry_id == s.get(LibraryVersionRecord, pv_id).entry_id,
+                )
+            )
+        else:
+            product_id = product_id or _product_id(ws_id)
+            pv_id, ov_id = _seed_library_versions(
+                s,
+                ws_id,
+                tag,
+                source_market_snapshot=source_market_snapshot,
+            )
         avs = _seed_asset_versions(
             s, ws_id, tag, language=asset_language, product_id=product_id
         )
@@ -358,6 +376,7 @@ def _build_confirmed_winner(
             product_id=product_id,
             product_version_id=pv_id,
             offer_version_id=ov_id,
+            markets=offer_markets,
         )
         govern_asset_versions(
             s,
@@ -397,7 +416,7 @@ def _build_confirmed_winner(
         decision = s.get(ExperimentDecisionRecord, real_decision_id)
         return {
             "tag": tag, "decision_id": decision.id, "asset_version_id": avs[0],
-            "product_version_id": pv_id, "offer_version_id": ov_id,
+            "product_version_id": pv_id, "offer_version_id": ov_id, "product_id": product_id,
         }
 
 

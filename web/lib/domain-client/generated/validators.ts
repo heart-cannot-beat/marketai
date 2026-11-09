@@ -8508,6 +8508,11 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         minLength: 1,
         default: 'library_manual_fact_import',
       },
+      default_offer_entry_id: {
+        anyOf: [{ type: 'string', maxLength: 64 }, { type: 'null' }],
+        description:
+          'Offer entry given to every row that names no offer_entry_id (#54). A row that names its own Offer keeps it.',
+      },
     },
     type: 'object',
     required: ['upload_intent_id'],
@@ -18351,6 +18356,11 @@ const SCHEMAS: Record<string, object> = {
         maxLength: 100,
         minLength: 1,
         default: 'library_manual_fact_import',
+      },
+      default_offer_entry_id: {
+        anyOf: [{ type: 'string', maxLength: 64 }, { type: 'null' }],
+        description:
+          'Offer entry given to every row that names no offer_entry_id (#54). A row that names its own Offer keeps it.',
       },
     },
     type: 'object',

@@ -14,6 +14,7 @@ import uuid
 from datetime import timedelta
 from unittest.mock import patch
 
+from tests.support.offers import publish_offers
 from tests.support.queue_hygiene import cancel_workspace_jobs
 from tests.test_library_manual_fact_import_worker import ManualFactImportFixtures
 
@@ -90,6 +91,16 @@ GOOD_CSV = CSV_HEADER + (
 
 
 class FactRowReportFixtures(ManualFactImportFixtures):
+    def offer(self):
+        """A published Offer of the Workspace selling in US and DE: its entry id.
+
+        Every row names its Offer to publish (#54); these imports give it to
+        the rows as the import's default Offer.
+        """
+        if getattr(self, "_offer_entry_id", None) is None:
+            [(self._offer_entry_id, _version)] = publish_offers(self.ctx, markets=["US", "DE"])
+        return self._offer_entry_id
+
     def published_data_source(self):
         entry = service.create_entry(
             self.ctx, entry_type=ENTRY_DATA_SOURCE, display_name="Acme Charge manual facts",
@@ -120,8 +131,10 @@ class FactRowReportFixtures(ManualFactImportFixtures):
         return intent_id
 
     def import_file(self, data_source_id, raw: bytes, extension: str):
-        """Import ``raw`` and run the Worker; returns the import's Operation."""
-        accepted = self.import_(data_source_id, self.upload_file(data_source_id, raw, extension))
+        """Import ``raw`` with the fixture Offer as default and run the Worker; returns the Operation."""
+        accepted = self.import_(
+            data_source_id, self.upload_file(data_source_id, raw, extension), default_offer=self.offer(),
+        )
         self.assertEqual(accepted.status_code, 202, accepted.text)
         self.drain()
         return self.operation(accepted.json()["operation_id"])
@@ -159,7 +172,11 @@ class TestRowsDoNotFailTheImport(FactRowReportFixtures):
         fact_set_id, draft = self.imported_draft(operation)
         self.assertEqual(draft["state"], DRAFT_VALIDATION_FAILED)
         self.assertEqual(self.findings(draft["validation"]), BAD_JSON_FINDINGS)
-        self.assertEqual(draft["content"]["facts"], BAD_JSON["facts"], "a JSON import keeps its rows as written")
+        self.assertEqual(
+            draft["content"]["facts"],
+            [{**fact, "offer_entry_id": self.offer()} for fact in BAD_JSON["facts"]],
+            "a JSON import keeps its rows as written, with the default Offer where they name none",
+        )
 
         blocked = self.command(fact_set_id, "publish", draft["revision"])
         self.assertEqual(blocked.status_code, 422, blocked.text)
@@ -220,8 +237,8 @@ class TestFixAndPublish(FactRowReportFixtures):
 
         fixed = dict(draft["content"])
         fixed["facts"] = [
-            _fact("price-us", amount="19.99", currency="USD"),
-            _fact("price-de", amount="17.99", currency="EUR", country_code="DE"),
+            _fact("price-us", amount="19.99", currency="USD", offer_entry_id=self.offer()),
+            _fact("price-de", amount="17.99", currency="EUR", country_code="DE", offer_entry_id=self.offer()),
         ]
         saved = self.save(fact_set_id, draft["revision"], fixed)
         self.assertIsNone(saved["validation"], "saving clears the import's report")

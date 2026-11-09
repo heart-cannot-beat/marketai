@@ -91,11 +91,16 @@ def _shipping(fact_id: str, country: str, window: dict) -> dict:
     )
 
 
-def _evidence(fact_id: str, row: int, window: tuple[str, str], status: str, used: bool) -> dict:
+def _evidence(fact_id: str, row: int, window: tuple[str, str], status: str, used: bool, offer: str) -> dict:
+    """One row as the attempt records it; each row names the Batch's Offer (#54)."""
     return {
         "fact_id": fact_id, "row": row, "valid_from": window[0], "valid_to": window[1],
-        "status": status, "used": used,
+        "status": status, "used": used, "offer_entry_id": offer, "offer_match": "row",
     }
+
+
+def _of_offer(rows: list[dict], offer: str) -> list[dict]:
+    return [{**row, "offer_entry_id": offer} for row in rows]
 
 
 def _window_of(row: dict) -> tuple[str, str]:
@@ -129,25 +134,30 @@ class RowValidityFixtures(LibraryFixtures):
         )
         return data_source_entry_id, policy_version_id
 
-    def _fact_set(self, data_source_entry_id: str, rows: list[dict], ctx=None) -> tuple[str, str]:
-        """Create and publish a fact set: ``(entry id, version id)``.
+    def _fact_set(
+        self, data_source_entry_id: str, rows: list[dict], *, offer: str, ctx=None
+    ) -> tuple[str, str]:
+        """Create and publish a fact set whose rows name ``offer``: ``(entry id, version id)``.
 
         Rows that already ended are a publish warning (#60), acknowledged here.
         """
         ctx = ctx or self.owner
         entry = service.create_entry(
             ctx, entry_type=ENTRY_MANUAL_FACT_SET, display_name=f"Facts {self.tag}-{next(_TAGS)}",
-            content={"data_source_entry_id": data_source_entry_id, "facts": rows},
+            content={"data_source_entry_id": data_source_entry_id, "facts": _of_offer(rows, offer)},
         )
         version = service.publish(
             ctx, entry["id"], entry["draft"]["revision"], acknowledged_warnings=["fact_expired"],
         )
         return entry["id"], version["id"]
 
-    def _republish_fact_set(self, entry_id: str, data_source_entry_id: str, rows: list[dict]) -> str:
+    def _republish_fact_set(
+        self, entry_id: str, data_source_entry_id: str, rows: list[dict], *, offer: str
+    ) -> str:
         revision = service.get_entry(self.owner, entry_id)["draft"]["revision"]
         draft = service.save_draft(
-            self.owner, entry_id, {"data_source_entry_id": data_source_entry_id, "facts": rows},
+            self.owner, entry_id,
+            {"data_source_entry_id": data_source_entry_id, "facts": _of_offer(rows, offer)},
             expected_revision=revision,
         )
         return service.publish(
@@ -155,8 +165,11 @@ class RowValidityFixtures(LibraryFixtures):
         )["id"]
 
     def _batch(self, harness=None) -> dict:
+        """A Batch whose Offer sells in the Batch's market, so fact rows can name it (#54)."""
         harness = harness or self.harness
-        draft = harness._create_draft_via_http(f"{self.tag}-{next(_TAGS)}")
+        draft = harness._create_draft_via_http(
+            f"{self.tag}-{next(_TAGS)}", offer_markets=("US", legacy_routes.MARKET_COUNTRY),
+        )
         draft["recipe_hash"] = harness._analysis_recipe_hash(draft["batch_id"])
         harness._seed_analysis(draft["winner"], draft["recipe_hash"], draft["batch_id"])
         with tenant_session(harness.ctx) as session:
@@ -233,7 +246,7 @@ class RowValidityFixtures(LibraryFixtures):
 class TestRowsAreJudgedOneByOne(RowValidityFixtures):
     def test_an_expired_row_leaves_the_rows_still_in_force_usable(self):
         draft = self._batch()
-        country = draft["country"]
+        country, offer = draft["country"], draft["offer_entry_id"]
         data_source, policy = self._sources({"price": "block", "availability": "skip", "shipping": "skip"})
         price_now, availability_now = _in_force(hours=6), _in_force(hours=12)
         rows = [
@@ -244,7 +257,7 @@ class TestRowsAreJudgedOneByOne(RowValidityFixtures):
             _price("price-old", country, EXPIRED, amount="24.99"),
             _shipping("shipping-old", country, EXPIRED),
         ]
-        _entry_id, fact_set = self._fact_set(data_source, rows)
+        _entry_id, fact_set = self._fact_set(data_source, rows, offer=offer)
 
         body = self._prepared(draft, policy, fact_set)
 
@@ -266,22 +279,22 @@ class TestRowsAreJudgedOneByOne(RowValidityFixtures):
 
         self.assertEqual(package["attempts"]["price"]["outcome"], "accepted")
         self.assertEqual(package["attempts"]["price"]["rows"], [
-            _evidence("price-now", 0, _window_of(rows[0]), "in_force", True),
-            _evidence("price-old", 2, EXPIRED_WINDOW, "expired", False),
+            _evidence("price-now", 0, _window_of(rows[0]), "in_force", True, offer),
+            _evidence("price-old", 2, EXPIRED_WINDOW, "expired", False, offer),
         ])
         self.assertEqual(package["attempts"]["availability"]["rows"], [
-            _evidence("availability-now", 1, _window_of(rows[1]), "in_force", True),
+            _evidence("availability-now", 1, _window_of(rows[1]), "in_force", True, offer),
         ])
         self.assertEqual(package["attempts"]["shipping"], {
             "outcome": "failed",
             "failure_code": "manual_fact_expired",
             "skip_code": None,
-            "rows": [_evidence("shipping-old", 3, EXPIRED_WINDOW, "expired", False)],
+            "rows": [_evidence("shipping-old", 3, EXPIRED_WINDOW, "expired", False, offer)],
         })
 
     def test_a_row_not_yet_in_force_is_left_out(self):
         draft = self._batch()
-        country = draft["country"]
+        country, offer = draft["country"], draft["offer_entry_id"]
         data_source, policy = self._sources({"price": "block", "availability": "skip"})
         price_now = _in_force(hours=6)
         rows = [
@@ -289,7 +302,7 @@ class TestRowsAreJudgedOneByOne(RowValidityFixtures):
             _price("price-next", country, NOT_YET, amount="17.99"),
             _availability("availability-next", country, NOT_YET),
         ]
-        _entry_id, fact_set = self._fact_set(data_source, rows)
+        _entry_id, fact_set = self._fact_set(data_source, rows, offer=offer)
 
         body = self._prepared(draft, policy, fact_set)
 
@@ -301,14 +314,14 @@ class TestRowsAreJudgedOneByOne(RowValidityFixtures):
         self.assertEqual(package["facts"]["price"]["value"], {"amount": "19.99", "currency": "USD"})
         self.assertEqual(package["valid_until"], datetime.fromisoformat(price_now["valid_to"]))
         self.assertEqual(package["attempts"]["price"]["rows"], [
-            _evidence("price-now", 0, _window_of(rows[0]), "in_force", True),
-            _evidence("price-next", 1, NOT_YET_WINDOW, "not_yet_valid", False),
+            _evidence("price-now", 0, _window_of(rows[0]), "in_force", True, offer),
+            _evidence("price-next", 1, NOT_YET_WINDOW, "not_yet_valid", False, offer),
         ])
         self.assertEqual(package["attempts"]["availability"], {
             "outcome": "failed",
             "failure_code": "manual_fact_not_yet_valid",
             "skip_code": None,
-            "rows": [_evidence("availability-next", 2, NOT_YET_WINDOW, "not_yet_valid", False)],
+            "rows": [_evidence("availability-next", 2, NOT_YET_WINDOW, "not_yet_valid", False, offer)],
         })
 
     def test_with_no_row_in_force_each_family_follows_its_on_failure(self):
@@ -330,7 +343,7 @@ class TestRowsAreJudgedOneByOne(RowValidityFixtures):
                 _entry_id, fact_set = self._fact_set(data_source, [
                     _price("price-old", country, EXPIRED),
                     _availability("availability-old", country, EXPIRED),
-                ])
+                ], offer=draft["offer_entry_id"])
 
                 response = self._start(draft, policy, fact_set)
 
@@ -355,17 +368,18 @@ class TestEarlierPackagesStayAsResolved(RowValidityFixtures):
         entry_id, version_1 = self._fact_set(data_source, [
             _price("price-now", country, price_now),
             _availability("availability-now", country, _in_force(hours=12)),
-        ])
+        ], offer=first["offer_entry_id"])
         first_body = self._prepared(first, policy, version_1)
         self.assertEqual(first_body["truth_status"], "full")
         resolved = self._package(first_body["truth_package_id"])
 
-        # The fact set's next version holds an expired availability row.
+        # The fact set's next version holds an expired availability row, for
+        # the second Batch's Offer (each fixture Batch has its own Offer).
+        second = self._batch()
         version_2 = self._republish_fact_set(entry_id, data_source, [
             _price("price-now", country, price_now),
             _availability("availability-old", country, EXPIRED),
-        ])
-        second = self._batch()
+        ], offer=second["offer_entry_id"])
         second_country = second["country"]
         self.assertEqual(second_country, country, "both fixture markets are RT* markets")
         second_body = self._prepared(second, policy, version_2)
@@ -386,7 +400,7 @@ class TestTenantBoundary(RowValidityFixtures):
         data_source, _policy = self._sources({"price": "block"})
         _entry_id, own_fact_set = self._fact_set(data_source, [
             _price("price-now", own_draft["country"], _in_force(hours=6)),
-        ])
+        ], offer=own_draft["offer_entry_id"])
 
         # A second Workspace, with its own published DataSource and policy,
         # names the first Workspace's fact set version.

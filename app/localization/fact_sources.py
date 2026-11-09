@@ -51,13 +51,26 @@ ROW_IN_FORCE = "in_force"
 ROW_EXPIRED = "expired"
 ROW_NOT_YET_VALID = "not_yet_valid"
 
+# How a manual row was matched to the request's Offer (#54).
+#: The row names the Offer entry of the request's OfferVersion.
+OFFER_MATCH_ROW = "row"
+#: The row names no Offer (a set published before #54), and the request's
+#: Offer is the only Offer of the Workspace in the row's market.
+OFFER_MATCH_ONLY_OFFER = "only_offer_in_market"
+#: The row names no Offer, and other Offers of the Workspace cover its
+#: market too: it cannot be told whose fact it is.
+OFFER_MATCH_AMBIGUOUS = "ambiguous"
+
 
 @dataclass(frozen=True)
 class ManualFactRow:
     """One row of a ManualFactSetVersion for one market, with its own window (#60).
 
     `index` is the row's position in the version's `facts`. A row is in
-    force while `valid_from <= at < valid_to`.
+    force while `valid_from <= at < valid_to`. `offer_entry_id` is the Offer
+    entry the row names (None on a set published before #54), and
+    `offer_match` how it was matched to the request's Offer
+    (`OFFER_MATCH_*`; None when built without one).
     """
 
     index: int
@@ -66,6 +79,8 @@ class ManualFactRow:
     valid_from: datetime
     valid_to: datetime
     raw: Mapping[str, object]
+    offer_entry_id: str | None = None
+    offer_match: str | None = None
 
     def status_at(self, at: datetime) -> str:
         if at < self.valid_from:
@@ -84,6 +99,11 @@ class ManualFactSet:
     `facts` (one row per fact type) with one `valid_from`/`valid_to` for all
     of them, is a set whose rows share a window: it is in force as a whole or
     not at all (`manual_fact_set_expired`).
+
+    `rows` are the rows of the request's Offer (#54). `unattributed_rows`
+    are rows of the market that name no Offer and cannot be attributed to
+    it: a fact type that has only those fails `manual_fact_offer_ambiguous`
+    instead of taking another Offer's fact.
     """
 
     version_id: str
@@ -91,6 +111,7 @@ class ManualFactSet:
     valid_from: datetime | None = None
     valid_to: datetime | None = None
     rows: tuple[ManualFactRow, ...] = ()
+    unattributed_rows: tuple[ManualFactRow, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -316,7 +337,7 @@ class ManualFactSourceAdapter:
 
         manual = request.manual_fact_set
         now = datetime.now(timezone.utc)
-        if manual.rows:
+        if manual.rows or manual.unattributed_rows:
             return self._resolve_rows(request, manual, now)
         return self._resolve_shared_window(request, manual, now)
 
@@ -339,6 +360,27 @@ class ManualFactSourceAdapter:
             )
 
             if not rows:
+                unattributed = [row for row in manual.unattributed_rows if row.fact_type == fact_type]
+                if unattributed:
+                    # Never another Offer's fact (#54): the set predates rows
+                    # naming their Offer, and the market has several Offers.
+                    failures.append(
+                        FactSourceFailure(
+                            fact_type=fact_type,
+                            scope_key=scope_key,
+                            code="manual_fact_offer_ambiguous",
+                            message=(
+                                f"The {fact_type} rows of ManualFactSet {manual.version_id} name no Offer, "
+                                f"and other Offers sell in {request.market.country}; import facts whose "
+                                "rows name their offer_entry_id"
+                            ),
+                            is_transient=False,
+                            source_rows=tuple(
+                                _row_evidence(row, row.status_at(now), used=False) for row in unattributed
+                            ),
+                        )
+                    )
+                    continue
                 failures.append(
                     FactSourceFailure(
                         fact_type=fact_type,
@@ -485,8 +527,12 @@ class ManualFactSourceAdapter:
 
 
 def _row_evidence(row: ManualFactRow, status: str, *, used: bool) -> dict[str, object]:
-    """How one manual row stood at resolution time, as the Truth attempt records it (#60)."""
-    return {
+    """How one manual row stood at resolution time, as the Truth attempt records it (#60).
+
+    With the Offer the row names and how it matched the request's Offer
+    when Truth recorded it (#54).
+    """
+    evidence: dict[str, object] = {
         "fact_id": row.fact_id,
         "row": row.index,
         "valid_from": row.valid_from.isoformat(),
@@ -494,6 +540,10 @@ def _row_evidence(row: ManualFactRow, status: str, *, used: bool) -> dict[str, o
         "status": status,
         "used": used,
     }
+    if row.offer_match is not None:
+        evidence["offer_entry_id"] = row.offer_entry_id
+        evidence["offer_match"] = row.offer_match
+    return evidence
 
 
 class ControlledMockFactSourceAdapter:

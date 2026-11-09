@@ -113,10 +113,13 @@ class ManualFactImportFixtures(LibraryFixtures):
             ))
         return intent_id
 
-    def import_(self, data_source_id, upload_id, key=None):
+    def import_(self, data_source_id, upload_id, key=None, default_offer=None):
+        body = {"upload_intent_id": upload_id}
+        if default_offer is not None:
+            body["default_offer_entry_id"] = default_offer
         return self.client.post(
             f"/api/v1/library/entries/{data_source_id}/manual-fact-imports",
-            json={"upload_intent_id": upload_id},
+            json=body,
             headers={"Idempotency-Key": key or f"ci-only-factimport-{uuid.uuid4().hex}"},
         )
 
