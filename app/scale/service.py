@@ -98,6 +98,7 @@ from app.scale.models import (
     ScaleManifestItemRecord,
 )
 from app.scale.types import RunOutcomeKind
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 __all__ = [
     "ScaleEvaluationRequest",
@@ -332,6 +333,7 @@ def request_scale_evaluation(
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def run_scale_evaluation(
     session: Session, context: TenantContext, evaluation_run_id: str,
 ) -> ScaleRunOutcome:

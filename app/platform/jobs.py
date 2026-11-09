@@ -32,6 +32,7 @@ from .operations import (
     transition_operation,
 )
 from .tenancy import TenantContext, current_context, system_context, tenant_scope
+from .runtime_role import WORKER_ROLE, runs_as
 
 
 @dataclass(frozen=True)
@@ -302,6 +303,7 @@ def recover_expired_jobs(now: datetime | None = None) -> dict[str, int]:
     return {"recovered": recovered, "uncertain": uncertain}
 
 
+@runs_as(WORKER_ROLE)
 def reconcile_admitted_operations(limit: int = 100) -> int:
     """Fold Operations whose Jobs all went terminal without a Python caller.
 
@@ -423,6 +425,7 @@ def _reject_stale_sqlite_jobs(now: datetime) -> int:
     return rejected
 
 
+@runs_as(WORKER_ROLE)
 def claim_next(owner: str, lease_seconds: int | None = None, *,
                job_types: tuple[str, ...] | None = None, exclude_types: tuple[str, ...] = ()) -> ClaimedJob | None:
     now = utcnow()

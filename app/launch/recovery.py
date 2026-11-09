@@ -55,6 +55,7 @@ from .models import (
     LaunchSagaStepAttemptRecord,
     MetaLaunchPreviewRecord,
 )
+from ..platform.runtime_role import WORKER_ROLE, runs_as
 
 __all__ = [
     "RecoveryError",
@@ -175,6 +176,7 @@ def create_recovery_operation(
 # Recovery execution: read back adapter state, never re-execute writes
 # ---------------------------------------------------------------------------
 
+@runs_as(WORKER_ROLE)
 def execute_recovery(
     session: Session,
     context: TenantContext,

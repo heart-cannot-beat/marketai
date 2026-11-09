@@ -22,6 +22,7 @@ from .contracts import COMPETITOR_KINDS, Understanding, TestPlan
 from .models import PlanningCallRecord
 from . import service
 from .planning_schema import openai_format, domain_document
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 
 class CompletionText(str):
@@ -349,6 +350,7 @@ def _end_operation(session, ctx, call, state):
             else OperationResultRef("marketing_project", call.project_id))
 
 
+@runs_as(WORKER_ROLE)
 async def execute_planning(ctx, call_id, *, complete=text_completion):
     """Worker entry. Returning from an uncertain fence never dispatches again."""
     credential = None

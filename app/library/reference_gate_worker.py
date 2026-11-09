@@ -49,6 +49,7 @@ from ..platform.blob_store import (
 from ..platform.tenancy import TenantContext
 from . import references
 from .service import _audit
+from ..platform.runtime_role import WORKER_ROLE, runs_as
 
 #: Stream granularity cap: the gate never buffers more than the hard byte
 #: limit plus one chunk, however large the committed object is (the purpose
@@ -192,6 +193,7 @@ def _decided_outcome(record: ReferenceObjectRecord) -> GateOutcome | None:
     return None
 
 
+@runs_as(WORKER_ROLE)
 async def run_reference_gate(
     context: TenantContext,
     blob_store: BlobStore,

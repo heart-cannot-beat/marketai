@@ -60,6 +60,14 @@ make web-verify    # 控制面 format / lint / types / 单测 / 生产构建 / C
 make verify-all    # 两者
 ```
 
+SQLite 没有数据库角色，所以 `make verify` 带一个授权守护（#59，`tests/support/grant_guard.py`）：
+测试里的每个 HTTP 请求按 `marketai_domain_api` 运行，Worker 的 `run_once` 和 Job handler 按
+`marketai_domain_worker` 运行（`app/platform/runtime_role.py` 的 `@runs_as`，只在测试里生效）。
+它们发出的每条 INSERT、UPDATE（按列）和 DELETE，都要在 `deploy/postgres/domain-tenant-roles.sql`
+里有授权，否则第一个触发它的测试会在 teardown 报错，并写明角色、表、操作和发出写入的代码行。
+修法是补授权（连同需要它的迁移）；PostgreSQL 走另一条路径的写入，登记到 `SQLITE_ONLY_WRITES`。
+新增 Worker handler 时，给它加上 `@runs_as(WORKER_ROLE)`。
+
 控制面健康检查：`GET /api/health`（liveness）、`GET /api/readiness`（配置与数据库）。
 控制面不持有领域数据库凭据，也不实现领域规则。
 

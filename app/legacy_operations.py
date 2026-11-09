@@ -46,6 +46,7 @@ from .platform.operations import (
     transition_operation,
 )
 from .platform.tenancy import TenantContext, system_context, tenant_scope
+from .platform.runtime_role import WORKER_ROLE, runs_as
 
 logger = logging.getLogger(__name__)
 
@@ -699,6 +700,7 @@ def _legacy_candidates(session: Session, limit: int) -> list[tuple[str, int, str
     return [(str(ws), int(epoch), str(job_id)) for ws, epoch, job_id in rows]
 
 
+@runs_as(WORKER_ROLE)
 def reconcile_legacy_operations(limit: int = 200) -> int:
     """Fold every handler-less legacy Job's Operation, newest first.
 
@@ -732,6 +734,7 @@ _sweep_lock = threading.Lock()
 _last_sweep: float | None = None
 
 
+@runs_as(WORKER_ROLE)
 def reconcile_legacy_operations_if_due(now: float | None = None) -> int:
     """The Worker's idle-tick entry: at most one sweep per interval per process."""
     global _last_sweep
