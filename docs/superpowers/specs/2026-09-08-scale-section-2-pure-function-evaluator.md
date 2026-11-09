@@ -114,7 +114,7 @@ class DailyMetricValues:
 @dataclass(frozen=True)
 class DailyObservation:
     local_date: date
-    evidence_state: DailyEvidenceState  # present | missing
+    evidence_state: DailyEvidenceState  # present | missing | before_episode
     metrics: DailyMetricValues | None
 ```
 
@@ -124,6 +124,15 @@ snapshot currency. `evidence_state='present'` requires metrics;
 `evidence_state='missing'` requires metrics to be absent and a matching typed
 gap DataQualityItem. A missing day is never represented by invented zero
 metrics.
+
+`evidence_state='before_episode'` (snapshot schema `scale-snapshot-v2`, Issue
+#57) marks a window day before the Episode's `started_local_day`. It has no
+metrics and no DataQualityItem: the Episode's own start explains it (product
+contract §8). Such days may only open the 14-day span (baseline, then
+current); the as-of day always belongs to the Episode, and breakdown days
+never carry the state. Snapshots sealed as `scale-snapshot-v1` keep recording
+those days as `missing` with a blocking `daily_slot_missing`, and reassemble
+that way.
 
 ```python
 @dataclass(frozen=True)
@@ -670,6 +679,17 @@ evaluation when Platform floors are met, but it does prevent
 
 Evidence below monitorable maturity is `warming` and produces no deterministic
 business Advice. Structurally valid but blocked evidence is `insufficient`.
+
+A span that opens with `before_episode` days is `warming` whatever the day
+counts say, because the 7-day comparison needs both windows inside the
+Episode. After the quality gate it skips Phases 4–8: every current-versus-
+baseline signal and `frequency_high` are `unavailable` with reason
+`episode_window_incomplete`, `configuration_drift` and
+`no_delivery_complete_day` are computed as usual (so the seven-day
+no-delivery streak counts from the Episode's first day), health is
+`not_delivering` when the Episode's current-window days have no impressions
+and is otherwise withheld with `episode_window_incomplete`, and there is no
+Advice.
 
 ### Phase 4: primitive signals
 

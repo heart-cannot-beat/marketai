@@ -140,8 +140,18 @@ class RunOutcomeKind(str, Enum):
 
 
 class DailyEvidenceState(str, Enum):
+    """One account-local day in a snapshot window.
+
+    ``BEFORE_EPISODE`` (snapshot schema v2, Issue #57) marks a window day
+    that precedes the Episode's ``started_local_day``. The Episode's own
+    start explains it (contract §8), so it carries no metrics and no
+    DataQualityIssue; it can only open a window, never follow a day of the
+    Episode.
+    """
+
     PRESENT = "present"
     MISSING = "missing"
+    BEFORE_EPISODE = "before_episode"
 
 
 class MetricContractType(str, Enum):

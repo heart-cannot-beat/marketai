@@ -130,7 +130,11 @@ from app.scale.types import (
     WindowRole,
 )
 
-CANONICAL_SCHEMA_VERSION = "scale-snapshot-v1"
+# v2 (Issue #57): window days before the Episode's `started_local_day` are
+# sealed as `before_episode` instead of a blocking `daily_slot_missing`.
+# Snapshots sealed as v1 keep v1 assembly rules (see `_before_episode_cutoff`).
+CANONICAL_SCHEMA_VERSION = "scale-snapshot-v2"
+_SNAPSHOT_SCHEMA_V1 = "scale-snapshot-v1"
 SNAPSHOT_HASH_DOMAIN = "scale-evidence-snapshot-v1"
 CLAIM_HASH_DOMAIN = "scale-snapshot-claim-v1"
 CONTRACT_SET_HASH_DOMAIN = "scale-metric-contract-set-v1"
@@ -457,6 +461,9 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
             raise SnapshotSealingError("target_not_found", run.target_version_id)
 
     as_of = run.target_local_day
+    if as_of < episode.started_local_day:
+        raise SnapshotSealingError("as_of_before_episode_start", run.id)
+    before_episode_until = _before_episode_cutoff(CANONICAL_SCHEMA_VERSION, episode)
     current_start = as_of - timedelta(days=6)
     current_end = as_of + timedelta(days=1)
     baseline_start = current_start - timedelta(days=7)
@@ -475,10 +482,10 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
         }
 
         current_daily, quality_issues = _build_daily_window(
-            session, item_by_key, current_start, current_end
+            session, item_by_key, current_start, current_end, before_episode_until
         )
         baseline_daily, more_issues = _build_daily_window(
-            session, item_by_key, baseline_start, baseline_end
+            session, item_by_key, baseline_start, baseline_end, before_episode_until
         )
         quality_issues += more_issues
 
@@ -654,7 +661,7 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
 
         child_rows: list[Any] = []
         child_rows.extend(
-            _source_link_rows(snapshot_id, context, item_by_key)
+            _source_link_rows(snapshot_id, context, item_by_key, before_episode_until)
         )
         child_rows.extend(
             _quality_issue_rows(snapshot_id, context, quality_issues)
@@ -736,18 +743,54 @@ def _quality_sort_key(item: DataQualityItem):
     )
 
 
+def _before_episode_cutoff(schema_version: str, episode: ScaleEpisodeRecord) -> date | None:
+    """The first local day that belongs to the Episode under the given
+    snapshot schema, or ``None`` when that schema has no ``before_episode``
+    days (v1 sealed every window day without a fulfilled slot as missing).
+
+    Sealing and assembly both call this, so a snapshot reassembles under the
+    rule it was sealed with. ``started_local_day`` is frozen on the Episode
+    (contract §4.1), so reading it again at assembly time is deterministic.
+    """
+    if schema_version == _SNAPSHOT_SCHEMA_V1:
+        return None
+    return episode.started_local_day
+
+
+def _is_before_episode(local_day: date | None, before_episode_until: date | None) -> bool:
+    return (
+        before_episode_until is not None
+        and local_day is not None
+        and local_day < before_episode_until
+    )
+
+
 def _build_daily_window(
     session: Session,
     item_by_key: dict[tuple, ScaleManifestItemRecord],
     start: date,
     end_exclusive: date,
+    before_episode_until: date | None,
 ) -> tuple[tuple[DailyObservation, ...], list[DataQualityItem]]:
+    """One 7-day window of daily observations.
+
+    A day before the Episode started is ``before_episode`` whatever the
+    manifest says about it: daily rows are Episode-scoped, and the Episode's
+    start explains the absence (contract §8). Every Episode day without a
+    fulfilled slot is still a blocking ``daily_slot_missing``.
+    """
     days: list[DailyObservation] = []
     issues: list[DataQualityItem] = []
     d = start
     while d < end_exclusive:
         item = item_by_key.get((MetricContractType.DAILY.value, None, d, None))
-        if item is not None and item.state == "fulfilled":
+        if _is_before_episode(d, before_episode_until):
+            days.append(
+                DailyObservation(
+                    local_date=d, evidence_state=DailyEvidenceState.BEFORE_EPISODE, metrics=None,
+                )
+            )
+        elif item is not None and item.state == "fulfilled":
             row = session.get(ScaleDailyMetricSourceRecord, item.source_record_id)
             days.append(
                 DailyObservation(
@@ -1075,11 +1118,19 @@ def _prior_streak_columns(
 
 
 def _source_link_rows(
-    snapshot_id: str, context: TenantContext, item_by_key: dict[tuple, ScaleManifestItemRecord],
+    snapshot_id: str,
+    context: TenantContext,
+    item_by_key: dict[tuple, ScaleManifestItemRecord],
+    before_episode_until: date | None,
 ) -> list[ScaleEvidenceSourceLinkRecord]:
     rows = []
     for (contract_type, window_role, local_day, segment_key), item in item_by_key.items():
         if item.state != "fulfilled":
+            continue
+        # A pre-Episode daily slot is not evidence this snapshot used.
+        if contract_type == MetricContractType.DAILY.value and _is_before_episode(
+            local_day, before_episode_until
+        ):
             continue
         rows.append(
             ScaleEvidenceSourceLinkRecord(
@@ -1236,9 +1287,14 @@ def assemble_snapshot(
     baseline_start = snapshot_row.baseline_window_start_local_day
     baseline_end = snapshot_row.baseline_window_end_local_day
 
+    before_episode_until = _before_episode_cutoff(snapshot_row.canonical_schema_version, episode)
     try:
-        current_daily = _assemble_daily_window(session, link_by_key, current_start, current_end)
-        baseline_daily = _assemble_daily_window(session, link_by_key, baseline_start, baseline_end)
+        current_daily = _assemble_daily_window(
+            session, link_by_key, current_start, current_end, before_episode_until
+        )
+        baseline_daily = _assemble_daily_window(
+            session, link_by_key, baseline_start, baseline_end, before_episode_until
+        )
         current_exact = _assemble_exact_window(session, link_by_key, WindowRole.CURRENT_7D)
         baseline_exact = _assemble_exact_window(session, link_by_key, WindowRole.BASELINE_7D)
         rolling_exact = _assemble_exact_window(session, link_by_key, WindowRole.ROLLING_14D)
@@ -1347,13 +1403,23 @@ def assemble_snapshot(
 
 
 def _assemble_daily_window(
-    session: Session, link_by_key: dict[tuple, ScaleEvidenceSourceLinkRecord], start: date, end_exclusive: date,
+    session: Session,
+    link_by_key: dict[tuple, ScaleEvidenceSourceLinkRecord],
+    start: date,
+    end_exclusive: date,
+    before_episode_until: date | None,
 ) -> tuple[DailyObservation, ...]:
     days = []
     d = start
     while d < end_exclusive:
         link = link_by_key.get((MetricContractType.DAILY.value, None, d, None))
-        if link is None:
+        if _is_before_episode(d, before_episode_until):
+            if link is not None:
+                raise SnapshotAssemblyError("provenance_mismatch", f"daily_before_episode:{d.isoformat()}")
+            days.append(
+                DailyObservation(local_date=d, evidence_state=DailyEvidenceState.BEFORE_EPISODE, metrics=None)
+            )
+        elif link is None:
             days.append(
                 DailyObservation(local_date=d, evidence_state=DailyEvidenceState.MISSING, metrics=None)
             )

@@ -103,6 +103,8 @@ export function EvidenceTimeline({
         <p className="text-sm text-base-content/70">
           {t(`evidence.health-reason.${evidence.health_reason}`, {
             defaultValue: evidence.health_reason,
+            // `episode_window_incomplete` says how many days are in so far.
+            days: evidence.complete_local_days_in_episode,
           })}
         </p>
       )}

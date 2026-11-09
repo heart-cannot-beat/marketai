@@ -106,12 +106,6 @@ minutes, five of them in Scenario 5c, which waits out the Worker's default
 On a local Compose stack each suite finishes in about a minute. These fail
 for reasons outside the suites' copy and seeds:
 
-- Scale, controlled-mock journey step 06: the seed writes daily evidence only
-  from the Episode's first day, while the snapshot needs every day of its
-  14-day window, so each evaluation before day 14 is blocked by
-  `daily_slot_missing` and its maturity is `insufficient`. (The golden path
-  advances 14 days before it asserts maturity.) The journey is serial, so
-  steps 07–18 do not run after it.
 - Scale, controlled-mock journey step 18 (#72): its hostile requests call the
   BFF without the page's Origin, CSRF token and `X-Intent-Id`, so the first
   one (the stale activation) is refused with 403 before it reaches the API

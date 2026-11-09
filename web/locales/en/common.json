@@ -1605,6 +1605,7 @@
   "error-adapter_not_enabled": "This fact source is not set up.",
   "error-algorithm_not_allowed": "Your session could not be verified. Sign in again.",
   "error-already_imported_ad_day": "These ad/day rows are already imported. Select the batch to replace.",
+  "error-as_of_before_episode_start": "This evaluation is for a day before the period started.",
   "error-aspect_ratio_unsupported": "This model does not support that aspect ratio.",
   "error-assertion_error": "This value is invalid.",
   "error-asset_blob_unavailable": "This image's file is not available.",
