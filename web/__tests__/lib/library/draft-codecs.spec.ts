@@ -7,6 +7,27 @@ import {
   LIBRARY_ENTRY_TYPES,
   type LibraryEntryType,
 } from '@/lib/library/navigation';
+import serverContent from '../../fixtures/library-draft-content.json';
+
+/**
+ * One draft content per entry type, written with the server's field names
+ * only; `tests/test_library_web_draft_content.py` checks that each passes the
+ * server's content validator.
+ */
+const SERVER_CONTENT = serverContent as Record<
+  LibraryEntryType,
+  Record<string, unknown>
+>;
+
+/** The entry types with a mounted form (`entry-types/draft-editors.ts`). */
+const FORM_TYPES: LibraryEntryType[] = [
+  'product',
+  'dimension_template',
+  'data_source',
+];
+const JSON_ONLY_TYPES = LIBRARY_ENTRY_TYPES.filter(
+  (entryType) => !FORM_TYPES.includes(entryType)
+);
 
 describe('draft-codecs', () => {
   describe('every type has a codec', () => {
@@ -94,27 +115,6 @@ describe('draft-codecs', () => {
       };
       const serialized = codec.serialize(codec.parse(raw));
       expect(serialized).toEqual(raw);
-    });
-  });
-
-  describe('person codec', () => {
-    const codec = getCodec('person');
-
-    it('parses known person fields', () => {
-      const raw = {
-        display_name: 'Jane Doe',
-        person_type: 'licensed',
-        age_expression: '25-34',
-        prompt_fragments: ['friendly tone'],
-        rights_regions: ['US', 'EU'],
-      };
-      const parsed = codec.parse(raw);
-      expect(parsed.fields).toEqual(raw);
-    });
-
-    it('defaults person_type to fictional', () => {
-      const parsed = codec.parse({});
-      expect(parsed.fields.person_type).toBe('fictional');
     });
   });
 
@@ -212,23 +212,20 @@ describe('draft-codecs', () => {
 
   describe('complete replacement content', () => {
     it('serialize emits all known and unknown fields', () => {
-      const codec = getCodec('prompt_policy');
+      const codec = getCodec('product');
       const raw = {
-        display_name: 'Strict Policy',
-        registered_tokens: ['brand_name'],
-        locked_phrases: ['No refunds'],
-        brand_tone: 'professional',
-        _server_metadata: { internal: true },
+        ...SERVER_CONTENT.product,
+        must_match: [{ id: 'mm_logo', type: 'logo' }],
       };
 
       const parsed = codec.parse(raw);
-      parsed.fields.brand_tone = 'casual';
+      parsed.fields.audience = 'Commuters';
 
       const serialized = codec.serialize(parsed);
-      expect(serialized.brand_tone).toBe('casual');
-      expect(serialized._server_metadata).toEqual({ internal: true });
-      expect(serialized.display_name).toBe('Strict Policy');
-      expect(serialized.registered_tokens).toEqual(['brand_name']);
+      expect(serialized.audience).toBe('Commuters');
+      expect(serialized.must_match).toEqual([{ id: 'mm_logo', type: 'logo' }]);
+      expect(serialized.name).toBe('Acme Charge 65W');
+      expect(serialized.selling_points).toEqual(['Compact', 'Three ports']);
     });
   });
 
@@ -263,5 +260,67 @@ describe('draft-codecs', () => {
         expect(serialized).not.toBeNull();
       }
     );
+  });
+
+  describe('server-shaped content (#21)', () => {
+    it('has a fixture for every entry type', () => {
+      expect(Object.keys(SERVER_CONTENT).sort()).toEqual(
+        [...LIBRARY_ENTRY_TYPES].sort()
+      );
+    });
+
+    it.each(LIBRARY_ENTRY_TYPES.map((t) => [t]))(
+      '%s round-trips content with only server fields unchanged',
+      (entryType: string) => {
+        const codec = getCodec(entryType as LibraryEntryType);
+        const content = SERVER_CONTENT[entryType as LibraryEntryType];
+        expect(codec.serialize(codec.parse(content))).toEqual(content);
+      }
+    );
+  });
+
+  describe('entry types edited as JSON only (#21)', () => {
+    it('are every entry type without a form', () => {
+      expect(JSON_ONLY_TYPES).toHaveLength(10);
+    });
+
+    it.each(JSON_ONLY_TYPES.map((t) => [t]))(
+      '%s adds no key to an empty draft',
+      (entryType: string) => {
+        const codec = getCodec(entryType as LibraryEntryType);
+        const parsed = codec.parse({});
+        expect(parsed.fields).toEqual({});
+        expect(codec.serialize(parsed)).toEqual({});
+      }
+    );
+
+    it.each(JSON_ONLY_TYPES.map((t) => [t]))(
+      '%s passes the content through exactly, key order included',
+      (entryType: string) => {
+        const codec = getCodec(entryType as LibraryEntryType);
+        const content = SERVER_CONTENT[entryType as LibraryEntryType];
+        const parsed = codec.parse(content);
+        expect(parsed.fields).toEqual({});
+        expect(parsed._unknown).toEqual(content);
+        // The JSON editor shows `JSON.stringify(serialize(buffer))`.
+        expect(JSON.stringify(codec.serialize(parsed), null, 2)).toBe(
+          JSON.stringify(content, null, 2)
+        );
+      }
+    );
+
+    it('no longer fills in the sketch field names of a market source mapping', () => {
+      const codec = getCodec('market_source_mapping');
+      const serialized = codec.serialize(
+        codec.parse(SERVER_CONTENT.market_source_mapping)
+      );
+      for (const sketchKey of [
+        'display_name',
+        'external_object_id',
+        'market_code',
+      ]) {
+        expect(serialized).not.toHaveProperty(sketchKey);
+      }
+    });
   });
 });

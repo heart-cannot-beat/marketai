@@ -16,12 +16,16 @@ export interface DraftCodec<T = FieldShape> {
 /**
  * Field shapes mirror `app/library/contracts.py`'s content validators for
  * the entry types the in-app editor renders a form for (`product`,
- * `dimension_template`, `data_source`); every other key of the draft rides
- * along untouched in `_unknown` and is edited through the raw JSON editor.
- * The remaining shapes below are sketches that have not been aligned with
- * their server validator yet (`_validate_person`, `_validate_offer`, …),
- * which is why their editors are not mounted (`components/library/
- * entry-types/draft-editors.ts`).
+ * `dimension_template`, `data_source`, mounted by `components/library/
+ * entry-types/draft-editors.ts`); every other key of their drafts rides along
+ * untouched in `_unknown` and is edited through the raw JSON editor.
+ *
+ * Every other entry type is edited as JSON only, and its codec passes the
+ * content straight through: no known keys and no defaults, so the JSON
+ * editor shows the draft exactly as the server stores it and Save writes back
+ * exactly what was typed (#21). The server's validator stays the one list of
+ * their fields; each of its findings names the `path` that is missing or
+ * wrong.
  */
 export interface ProductFields {
   /** `_validate_product`: `name`, not `display_name` -- the display name is
@@ -30,44 +34,6 @@ export interface ProductFields {
   description: string;
   audience: string;
   selling_points: string[];
-}
-
-export interface OfferFields {
-  display_name: string;
-  item_semantics: string;
-  market_semantics: string;
-  claim_semantics: string;
-  date_semantics: string;
-}
-
-export interface PersonFields {
-  display_name: string;
-  person_type: string;
-  age_expression: string;
-  prompt_fragments: string[];
-  rights_regions: string[];
-}
-
-export interface ReferenceAssetFields {
-  display_name: string;
-  asset_purpose: string;
-}
-
-export interface ReferenceGroupFields {
-  display_name: string;
-  group_intent: string;
-}
-
-export interface ReferenceSelectionRuleFields {
-  display_name: string;
-  rule_expression: string;
-}
-
-export interface MarketSourceMappingFields {
-  display_name: string;
-  external_object_id: string;
-  market_code: string;
-  execution_mode: string;
 }
 
 /** One selectable value of a template dimension (`_validate_dimension_template`).
@@ -96,23 +62,6 @@ export interface DimensionTemplateFields {
 
 export const DEFAULT_COMBINATION_CARDINALITY = 'one_per_dimension';
 
-export interface DimensionSchemaFields {
-  display_name: string;
-  dimensions: Array<{
-    id: string;
-    name: string;
-    values: string[];
-    constraints: Record<string, unknown>;
-  }>;
-}
-
-export interface PromptPolicyFields {
-  display_name: string;
-  registered_tokens: string[];
-  locked_phrases: string[];
-  brand_tone: string;
-}
-
 /** `_validate_data_source`. The display name is a property of the entry; the
  * execution mode is written with the source type it pairs with
  * (`ADAPTER_EXECUTION_MODES`, #396). */
@@ -122,47 +71,26 @@ export interface DataSourceFields {
   config: Record<string, unknown>;
 }
 
-export interface ManualFactSetFields {
-  display_name: string;
-  facts: Array<{ id: string; key: string; value: string }>;
-}
+/** An entry type edited as JSON only has no fields of its own: its whole
+ * content is `_unknown`. */
+export type JsonOnlyFields = Record<string, never>;
 
-export interface TruthResolutionPolicyFields {
-  display_name: string;
-  priority_order: string[];
-  conflict_strategy: string;
-}
-
-export type FieldShape =
-  | ProductFields
-  | OfferFields
-  | PersonFields
-  | ReferenceAssetFields
-  | ReferenceGroupFields
-  | ReferenceSelectionRuleFields
-  | MarketSourceMappingFields
-  | DimensionTemplateFields
-  | DimensionSchemaFields
-  | PromptPolicyFields
-  | DataSourceFields
-  | ManualFactSetFields
-  | TruthResolutionPolicyFields;
-
-export interface EntryFieldMap {
+interface FormFieldMap {
   product: ProductFields;
-  offer: OfferFields;
-  person: PersonFields;
-  reference_asset: ReferenceAssetFields;
-  reference_group: ReferenceGroupFields;
-  reference_selection_rule: ReferenceSelectionRuleFields;
-  market_source_mapping: MarketSourceMappingFields;
   dimension_template: DimensionTemplateFields;
-  dimension_schema: DimensionSchemaFields;
-  prompt_policy: PromptPolicyFields;
   data_source: DataSourceFields;
-  manual_fact_set: ManualFactSetFields;
-  truth_resolution_policy: TruthResolutionPolicyFields;
 }
+
+/** The entry types whose codec knows fields, one per mounted form editor. */
+export type FormEntryType = keyof FormFieldMap;
+
+export type EntryFieldMap = {
+  [K in LibraryEntryType]: K extends FormEntryType
+    ? FormFieldMap[K]
+    : JsonOnlyFields;
+};
+
+export type FieldShape = FormFieldMap[FormEntryType] | JsonOnlyFields;
 
 function extractKnown<T>(
   raw: Record<string, unknown>,
@@ -210,6 +138,14 @@ function makeCodec<T>(
   };
 }
 
+/** The codec of an entry type edited as JSON only: `parse` keeps the content
+ * as it is, `serialize` gives it back unchanged. */
+function jsonOnlyCodec(
+  entryType: LibraryEntryType
+): DraftCodec<JsonOnlyFields> {
+  return makeCodec<JsonOnlyFields>(entryType, [], {});
+}
+
 const PRODUCT_KEYS = [
   'name',
   'description',
@@ -223,67 +159,6 @@ const PRODUCT_DEFAULTS: ProductFields = {
   selling_points: [],
 };
 
-const OFFER_KEYS = [
-  'display_name',
-  'item_semantics',
-  'market_semantics',
-  'claim_semantics',
-  'date_semantics',
-] as const;
-const OFFER_DEFAULTS: OfferFields = {
-  display_name: '',
-  item_semantics: '',
-  market_semantics: '',
-  claim_semantics: '',
-  date_semantics: '',
-};
-
-const PERSON_KEYS = [
-  'display_name',
-  'person_type',
-  'age_expression',
-  'prompt_fragments',
-  'rights_regions',
-] as const;
-const PERSON_DEFAULTS: PersonFields = {
-  display_name: '',
-  person_type: 'fictional',
-  age_expression: '',
-  prompt_fragments: [],
-  rights_regions: [],
-};
-
-const REF_ASSET_KEYS = ['display_name', 'asset_purpose'] as const;
-const REF_ASSET_DEFAULTS: ReferenceAssetFields = {
-  display_name: '',
-  asset_purpose: '',
-};
-
-const REF_GROUP_KEYS = ['display_name', 'group_intent'] as const;
-const REF_GROUP_DEFAULTS: ReferenceGroupFields = {
-  display_name: '',
-  group_intent: '',
-};
-
-const REF_RULE_KEYS = ['display_name', 'rule_expression'] as const;
-const REF_RULE_DEFAULTS: ReferenceSelectionRuleFields = {
-  display_name: '',
-  rule_expression: '',
-};
-
-const MSM_KEYS = [
-  'display_name',
-  'external_object_id',
-  'market_code',
-  'execution_mode',
-] as const;
-const MSM_DEFAULTS: MarketSourceMappingFields = {
-  display_name: '',
-  external_object_id: '',
-  market_code: '',
-  execution_mode: '',
-};
-
 const DIM_TEMPLATE_KEYS = [
   'dimensions',
   'constraints',
@@ -295,25 +170,6 @@ const DIM_TEMPLATE_DEFAULTS: DimensionTemplateFields = {
   combination_cardinality: DEFAULT_COMBINATION_CARDINALITY,
 };
 
-const DIM_SCHEMA_KEYS = ['display_name', 'dimensions'] as const;
-const DIM_SCHEMA_DEFAULTS: DimensionSchemaFields = {
-  display_name: '',
-  dimensions: [],
-};
-
-const PROMPT_POLICY_KEYS = [
-  'display_name',
-  'registered_tokens',
-  'locked_phrases',
-  'brand_tone',
-] as const;
-const PROMPT_POLICY_DEFAULTS: PromptPolicyFields = {
-  display_name: '',
-  registered_tokens: [],
-  locked_phrases: [],
-  brand_tone: '',
-};
-
 const DATA_SOURCE_KEYS = ['adapter_kind', 'execution_mode', 'config'] as const;
 const DATA_SOURCE_DEFAULTS: DataSourceFields = {
   adapter_kind: '',
@@ -321,73 +177,24 @@ const DATA_SOURCE_DEFAULTS: DataSourceFields = {
   config: {},
 };
 
-const FACT_SET_KEYS = ['display_name', 'facts'] as const;
-const FACT_SET_DEFAULTS: ManualFactSetFields = {
-  display_name: '',
-  facts: [],
-};
-
-const RESOLUTION_KEYS = [
-  'display_name',
-  'priority_order',
-  'conflict_strategy',
-] as const;
-const RESOLUTION_DEFAULTS: TruthResolutionPolicyFields = {
-  display_name: '',
-  priority_order: [],
-  conflict_strategy: '',
-};
-
 const CODEC_MAP: { [K in LibraryEntryType]: DraftCodec<EntryFieldMap[K]> } = {
   product: makeCodec('product', PRODUCT_KEYS, PRODUCT_DEFAULTS),
-  offer: makeCodec('offer', OFFER_KEYS, OFFER_DEFAULTS),
-  person: makeCodec('person', PERSON_KEYS, PERSON_DEFAULTS),
-  reference_asset: makeCodec(
-    'reference_asset',
-    REF_ASSET_KEYS,
-    REF_ASSET_DEFAULTS
-  ),
-  reference_group: makeCodec(
-    'reference_group',
-    REF_GROUP_KEYS,
-    REF_GROUP_DEFAULTS
-  ),
-  reference_selection_rule: makeCodec(
-    'reference_selection_rule',
-    REF_RULE_KEYS,
-    REF_RULE_DEFAULTS
-  ),
-  market_source_mapping: makeCodec(
-    'market_source_mapping',
-    MSM_KEYS,
-    MSM_DEFAULTS
-  ),
+  offer: jsonOnlyCodec('offer'),
+  person: jsonOnlyCodec('person'),
+  reference_asset: jsonOnlyCodec('reference_asset'),
+  reference_group: jsonOnlyCodec('reference_group'),
+  reference_selection_rule: jsonOnlyCodec('reference_selection_rule'),
+  market_source_mapping: jsonOnlyCodec('market_source_mapping'),
   dimension_template: makeCodec(
     'dimension_template',
     DIM_TEMPLATE_KEYS,
     DIM_TEMPLATE_DEFAULTS
   ),
-  dimension_schema: makeCodec(
-    'dimension_schema',
-    DIM_SCHEMA_KEYS,
-    DIM_SCHEMA_DEFAULTS
-  ),
-  prompt_policy: makeCodec(
-    'prompt_policy',
-    PROMPT_POLICY_KEYS,
-    PROMPT_POLICY_DEFAULTS
-  ),
+  dimension_schema: jsonOnlyCodec('dimension_schema'),
+  prompt_policy: jsonOnlyCodec('prompt_policy'),
   data_source: makeCodec('data_source', DATA_SOURCE_KEYS, DATA_SOURCE_DEFAULTS),
-  manual_fact_set: makeCodec(
-    'manual_fact_set',
-    FACT_SET_KEYS,
-    FACT_SET_DEFAULTS
-  ),
-  truth_resolution_policy: makeCodec(
-    'truth_resolution_policy',
-    RESOLUTION_KEYS,
-    RESOLUTION_DEFAULTS
-  ),
+  manual_fact_set: jsonOnlyCodec('manual_fact_set'),
+  truth_resolution_policy: jsonOnlyCodec('truth_resolution_policy'),
 };
 
 export function getCodec<K extends LibraryEntryType>(

@@ -43,12 +43,8 @@ jest.mock('@/components/workspace/WorkspaceProvider', () => ({
 import type { UseDraftSessionResult } from '@/hooks/library/useDraftSession';
 import { ProductDraftEditor } from '@/components/library/entry-types/product/ProductDraftEditor';
 import { ProductVersionViewer } from '@/components/library/entry-types/product/ProductVersionViewer';
-import { PersonDraftEditor } from '@/components/library/entry-types/person/PersonDraftEditor';
-import { PersonVersionViewer } from '@/components/library/entry-types/person/PersonVersionViewer';
 import { DimensionTemplateDraftEditor } from '@/components/library/entry-types/dimension-template/DimensionTemplateDraftEditor';
 import { DimensionTemplateVersionViewer } from '@/components/library/entry-types/dimension-template/DimensionTemplateVersionViewer';
-import { PromptPolicyDraftEditor } from '@/components/library/entry-types/prompt-policy/PromptPolicyDraftEditor';
-import { PromptPolicyVersionViewer } from '@/components/library/entry-types/prompt-policy/PromptPolicyVersionViewer';
 import { DataSourceDraftEditor } from '@/components/library/entry-types/data-source/DataSourceDraftEditor';
 import { DataSourceVersionViewer } from '@/components/library/entry-types/data-source/DataSourceVersionViewer';
 
@@ -184,99 +180,6 @@ describe('ProductVersionViewer', () => {
     };
 
     render(createElement(ProductVersionViewer, { version }));
-
-    const emptyMarkers = screen.getAllByText('library:fields.version.no-value');
-    expect(emptyMarkers.length).toBeGreaterThanOrEqual(1);
-  });
-});
-
-// ── PersonDraftEditor ──────────────────────────────────────────────
-
-describe('PersonDraftEditor', () => {
-  it('returns null when buffer is null', () => {
-    const session = makeSession({ buffer: null as any });
-    const { container } = render(createElement(PersonDraftEditor, { session }));
-    expect(container.innerHTML).toBe('');
-  });
-
-  it('renders person fields with correct values', () => {
-    const session = makeSession({
-      buffer: {
-        fields: {
-          display_name: 'Persona A',
-          person_type: 'fictional',
-          age_expression: '25-34',
-          prompt_fragments: ['friendly', 'casual'],
-          rights_regions: ['US', 'EU'],
-        },
-        _unknown: {},
-      },
-    });
-
-    render(createElement(PersonDraftEditor, { session }));
-
-    expect(screen.getByDisplayValue('Persona A')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('25-34')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('friendly')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('casual')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('US')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('EU')).toBeInTheDocument();
-  });
-
-  it('calls updateField on age_expression change', () => {
-    const session = makeSession({
-      buffer: {
-        fields: {
-          display_name: '',
-          person_type: 'fictional',
-          age_expression: '',
-          prompt_fragments: [],
-          rights_regions: [],
-        },
-        _unknown: {},
-      },
-    });
-
-    render(createElement(PersonDraftEditor, { session }));
-
-    const ageInput = screen
-      .getByText('library:fields.person.age-expression')
-      .closest('label')!
-      .querySelector('input')!;
-    fireEvent.change(ageInput, { target: { value: '18-24' } });
-    expect(session.updateField).toHaveBeenCalledWith('age_expression', '18-24');
-  });
-});
-
-describe('PersonVersionViewer', () => {
-  it('renders version fields', () => {
-    const version = {
-      display_name: 'Persona B',
-      person_type: 'licensed',
-      age_expression: '30-44',
-      prompt_fragments: ['formal'],
-      rights_regions: ['UK'],
-    };
-
-    render(createElement(PersonVersionViewer, { version }));
-
-    expect(screen.getByText('Persona B')).toBeInTheDocument();
-    expect(screen.getByText('licensed')).toBeInTheDocument();
-    expect(screen.getByText('30-44')).toBeInTheDocument();
-    expect(screen.getByText('formal')).toBeInTheDocument();
-    expect(screen.getByText('UK')).toBeInTheDocument();
-  });
-
-  it('shows fallback for empty fields', () => {
-    const version = {
-      display_name: '',
-      person_type: '',
-      age_expression: '',
-      prompt_fragments: [],
-      rights_regions: [],
-    };
-
-    render(createElement(PersonVersionViewer, { version }));
 
     const emptyMarkers = screen.getAllByText('library:fields.version.no-value');
     expect(emptyMarkers.length).toBeGreaterThanOrEqual(1);
@@ -436,95 +339,6 @@ describe('DimensionTemplateVersionViewer', () => {
     const version = { dimensions: [] };
 
     render(createElement(DimensionTemplateVersionViewer, { version }));
-
-    const emptyMarkers = screen.getAllByText('library:fields.version.no-value');
-    expect(emptyMarkers.length).toBeGreaterThanOrEqual(1);
-  });
-});
-
-// ── PromptPolicyDraftEditor ────────────────────────────────────────
-
-describe('PromptPolicyDraftEditor', () => {
-  it('returns null when buffer is null', () => {
-    const session = makeSession({ buffer: null as any });
-    const { container } = render(
-      createElement(PromptPolicyDraftEditor, { session })
-    );
-    expect(container.innerHTML).toBe('');
-  });
-
-  it('renders policy fields with correct values', () => {
-    const session = makeSession({
-      buffer: {
-        fields: {
-          display_name: 'Brand Policy',
-          registered_tokens: ['{{product_name}}', '{{tagline}}'],
-          locked_phrases: ['Always fresh'],
-          brand_tone: 'Professional',
-        },
-        _unknown: {},
-      },
-    });
-
-    render(createElement(PromptPolicyDraftEditor, { session }));
-
-    expect(screen.getByDisplayValue('Brand Policy')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Professional')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('{{product_name}}')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('{{tagline}}')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Always fresh')).toBeInTheDocument();
-  });
-
-  it('calls updateField on brand_tone change', () => {
-    const session = makeSession({
-      buffer: {
-        fields: {
-          display_name: '',
-          registered_tokens: [],
-          locked_phrases: [],
-          brand_tone: '',
-        },
-        _unknown: {},
-      },
-    });
-
-    render(createElement(PromptPolicyDraftEditor, { session }));
-
-    const toneInput = screen
-      .getByText('library:fields.prompt-policy.brand-tone')
-      .closest('label')!
-      .querySelector('textarea')!;
-    fireEvent.change(toneInput, { target: { value: 'Casual' } });
-    expect(session.updateField).toHaveBeenCalledWith('brand_tone', 'Casual');
-  });
-});
-
-describe('PromptPolicyVersionViewer', () => {
-  it('renders version fields', () => {
-    const version = {
-      display_name: 'Brand Policy v1',
-      registered_tokens: ['{{name}}'],
-      locked_phrases: ['Stay cool'],
-      brand_tone: 'Friendly',
-    };
-
-    render(createElement(PromptPolicyVersionViewer, { version }));
-
-    expect(screen.getByText('Brand Policy v1')).toBeInTheDocument();
-    expect(screen.getByText('{{name}}')).toBeInTheDocument();
-    expect(screen.getByText('Stay cool')).toBeInTheDocument();
-    expect(screen.getByText('Friendly')).toBeInTheDocument();
-  });
-
-  it('shows fallback for empty fields', () => {
-    const version = {
-      display_name: '',
-      registered_tokens: [],
-      locked_phrases: [],
-      brand_tone: '',
-    };
-
-    render(createElement(PromptPolicyVersionViewer, { version }));
 
     const emptyMarkers = screen.getAllByText('library:fields.version.no-value');
     expect(emptyMarkers.length).toBeGreaterThanOrEqual(1);

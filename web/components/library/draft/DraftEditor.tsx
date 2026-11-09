@@ -9,6 +9,7 @@ import { ConflictDialog } from './ConflictDialog';
 import { RawJsonDraftEditor } from './RawJsonDraftEditor';
 import { errorMessage } from '@/lib/i18n/domain-errors';
 import { factIdsOf } from '@/lib/library/fact-rows';
+import { getCodec } from '@/lib/library/draft-codecs';
 
 interface DraftEditorProps {
   entryId: string;
@@ -75,9 +76,14 @@ export function DraftEditor({
               ? {
                   // The report is about the saved revision: unsaved edits
                   // may have moved the rows, so their IDs are left out.
-                  factIds: session.isDirty
-                    ? []
-                    : factIdsOf(session.buffer?.fields),
+                  // The whole content, not `fields`: a fact set is edited
+                  // as JSON only, so its codec knows no fields (#21).
+                  factIds:
+                    session.isDirty || !session.buffer
+                      ? []
+                      : factIdsOf(
+                          getCodec(entryType).serialize(session.buffer)
+                        ),
                 }
               : undefined
           }

@@ -540,10 +540,11 @@ describe('DraftEditor', () => {
   });
 
   it('edits entry types without an aligned form as JSON only', () => {
+    // A JSON-only codec keeps the whole content in `_unknown` (#21).
     const session = makeSession({
       buffer: {
-        fields: { display_name: 'Jane', person_type: 'fictional' },
-        _unknown: { rights: { regions: ['US'] } },
+        fields: {},
+        _unknown: { name: 'Jane', rights: { regions: ['US'] } },
       },
     });
     render(
@@ -564,8 +565,8 @@ describe('DraftEditor', () => {
     const json = screen.getByLabelText(
       'library:draft.json-label'
     ) as HTMLTextAreaElement;
-    expect(JSON.parse(json.value)).toMatchObject({
-      display_name: 'Jane',
+    expect(JSON.parse(json.value)).toEqual({
+      name: 'Jane',
       rights: { regions: ['US'] },
     });
 

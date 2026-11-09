@@ -13,7 +13,10 @@ interface RawJsonDraftEditorProps {
  * Edits the whole draft content as JSON -- every key the server validates
  * (`app/library/contracts.py`), not only the ones a form renders. It is the
  * editor for entry types without an aligned form and the escape hatch for
- * the ones with one (template `constraints`, product `must_match`, …).
+ * the ones with one (template `constraints`, product `must_match`, …). For
+ * an entry type without a form the codec passes the content through, so the
+ * text is the stored draft and nothing else: no key the server does not read
+ * is filled in (#21).
  *
  * Text is local until it parses: an unparsable buffer is reported inline and
  * never written to the session, so Save keeps working on the last valid
