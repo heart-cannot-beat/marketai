@@ -647,9 +647,12 @@ BEGIN
   END LOOP;
 
   -- ---- Scale evidence, evaluation and advice (f5eeeab4e9b9, ad2) ----
-  -- Mirrors f5eeeab4e9b9's GRANT_MATRIX row for row: every runtime role
+  -- Mirrors f5eeeab4e9b9's GRANT_MATRIX row for row, plus the Worker's
+  -- INSERT on scale_episodes (zzb1e2f3a4b5, #92): an evaluation that sees
+  -- the delivery configuration change closes the Episode and opens the next
+  -- one in the Worker (Scale contract §1 item 4, §16.2). Every runtime role
   -- reads every Scale table, INSERT/UPDATE go to exactly the roles listed
-  -- (table, API, Worker), and no role gets DELETE. The migration grants the
+  -- (table, API, Worker), and no role gets DELETE. The migrations grant the
   -- same matrix, but this file revokes everything on every release and only
   -- the grants repeated here survive the "4/4 runtime grants" pass: without
   -- them a released cluster denies every Scale enrollment, evidence and
@@ -661,7 +664,7 @@ BEGIN
       ARRAY['scale_policy_versions', 'INSERT, UPDATE', ''],
       ARRAY['scale_enrollments', 'INSERT, UPDATE', 'UPDATE'],
       ARRAY['scale_enrollment_events', 'INSERT', 'INSERT'],
-      ARRAY['scale_episodes', 'INSERT, UPDATE', 'UPDATE'],
+      ARRAY['scale_episodes', 'INSERT, UPDATE', 'INSERT, UPDATE'],
       ARRAY['scale_episode_events', 'INSERT', 'INSERT'],
       ARRAY['scale_target_versions', 'INSERT, UPDATE', ''],
       ARRAY['scale_target_lifecycle_events', 'INSERT', ''],
