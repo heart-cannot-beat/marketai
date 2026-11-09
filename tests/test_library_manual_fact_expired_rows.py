@@ -30,7 +30,11 @@ NOT_YET = {"valid_from": "2099-01-01", "valid_to": "2099-12-31"}
 
 
 def _content(*facts: dict) -> dict:
-    return {"data_source_entry_id": "lib_ds_acme", "facts": list(facts)}
+    # Every row names its Offer (#54); content validation checks only that it does.
+    return {
+        "data_source_entry_id": "lib_ds_acme",
+        "facts": [{"offer_entry_id": "lib_offer_acme", **fact} for fact in facts],
+    }
 
 
 class TestTheWarningIsPartOfTheRowReport(unittest.TestCase):
@@ -69,9 +73,12 @@ class TestPublishWithAnExpiredRow(FactRowReportFixtures):
             ctx, entry_type=ENTRY_MANUAL_FACT_SET, display_name=f"Acme Charge facts {uuid.uuid4().hex[:6]}",
             content={
                 "data_source_entry_id": self.published_data_source(),
-                "facts": rows or [
-                    _fact("price-now", amount="19.99", currency="USD", **IN_FORCE),
-                    _fact("price-old", amount="24.99", currency="USD", **EXPIRED),
+                "facts": [
+                    {**fact, "offer_entry_id": self.offer()}
+                    for fact in rows or [
+                        _fact("price-now", amount="19.99", currency="USD", **IN_FORCE),
+                        _fact("price-old", amount="24.99", currency="USD", **EXPIRED),
+                    ]
                 ],
             },
         )

@@ -1304,6 +1304,8 @@ class WorkerRuntime:
         operation_id = str(job.payload.get("operation_id") or "")
         data_source_entry_id = str(job.payload.get("data_source_entry_id") or "")
         upload_intent_id = str(job.payload.get("upload_intent_id") or "")
+        # Jobs queued before #54 carry no default Offer.
+        default_offer_entry_id = job.payload.get("default_offer_entry_id") or None
         if not operation_id or not data_source_entry_id or not upload_intent_id:
             jobs.fail(
                 job.context, job.id, self.owner,
@@ -1367,6 +1369,7 @@ class WorkerRuntime:
                         data_source_entry_id=data_source_entry_id,
                         upload_intent_id=upload_intent_id,
                         content_payload=content_payload,
+                        default_offer_entry_id=default_offer_entry_id,
                     )
                     transition_operation(
                         session, operation_id, OperationState.SUCCEEDED,

@@ -8876,6 +8876,8 @@ export interface components {
       upload_intent_id: string;
       /** @default library_manual_fact_import */
       purpose: string;
+      /** @description Offer entry given to every row that names no offer_entry_id (#54). A row that names its own Offer keeps it. */
+      default_offer_entry_id?: string | null;
     };
     /**
      * @description One ad's results over a date range. Identify the image by its asset

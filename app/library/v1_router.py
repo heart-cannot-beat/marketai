@@ -1029,6 +1029,14 @@ def get_connection_check(
 class ManualFactImportInput(BaseModel):
     upload_intent_id: str
     purpose: str = Field(default="library_manual_fact_import", min_length=1, max_length=100)
+    default_offer_entry_id: str | None = Field(
+        default=None,
+        max_length=64,
+        description=(
+            "Offer entry given to every row that names no offer_entry_id (#54). "
+            "A row that names its own Offer keeps it."
+        ),
+    )
 
 
 @router.post(
@@ -1051,13 +1059,16 @@ def import_manual_facts(
     # initiator are all the same; anything else under that key is
     # ``409 idempotency_key_reused``. An upload another key already imports is
     # ``409 upload_intent_consumed`` unless that import failed or was
-    # cancelled. (A docstring here would become the OpenAPI description.)
+    # cancelled. A default Offer that is not a published, active Offer of
+    # this Workspace is ``422 default_offer_invalid`` (#54). (A docstring
+    # here would become the OpenAPI description.)
     from sqlalchemy import select
 
     from ..adapters.persistence.database import tenant_session
     from ..adapters.persistence.models import JobRecord
     from ..platform.jobs import enqueue_in_session
     from ..platform.operations import create_operation, get_operation
+    from .manual_fact_import import default_offer_problem
 
     if body.purpose != "library_manual_fact_import":
         raise HTTPException(
@@ -1067,6 +1078,7 @@ def import_manual_facts(
 
     job_type = "library.manual_fact_import"
     job_key = f"manual_fact_import:{idempotency_key}"
+    default_offer_entry_id = (body.default_offer_entry_id or "").strip() or None
     with tenant_session(context) as session:
         replayed = session.scalar(
             select(JobRecord).where(
@@ -1078,6 +1090,7 @@ def import_manual_facts(
             if (
                 replayed.resource_id != data_source_entry_id
                 or replayed.payload_json.get("upload_intent_id") != body.upload_intent_id
+                or (replayed.payload_json.get("default_offer_entry_id") or None) != default_offer_entry_id
                 or (replayed.initiator_id or "") != (context.initiator_id or "")
             ):
                 raise service.IdempotencyConflict(
@@ -1091,6 +1104,12 @@ def import_manual_facts(
         raise HTTPException(status_code=422, detail={"code": "entry_type_mismatch", "message": "条目不是数据源"})
     if entry.get("lifecycle") != LIFECYCLE_ACTIVE:
         raise HTTPException(status_code=409, detail={"code": "entry_archived", "message": "数据源已归档"})
+    if default_offer_entry_id is not None:
+        problem = default_offer_problem(context, default_offer_entry_id)
+        if problem is not None:
+            raise HTTPException(
+                status_code=422, detail={"code": "default_offer_invalid", "message": problem}
+            )
 
     with tenant_session(context) as session:
         consumed = session.scalar(
@@ -1114,6 +1133,7 @@ def import_manual_facts(
             job_type=job_type,
             payload={
                 "data_source_entry_id": data_source_entry_id,
+                "default_offer_entry_id": default_offer_entry_id,
                 "operation_id": operation.id,
                 "upload_intent_id": body.upload_intent_id,
             },

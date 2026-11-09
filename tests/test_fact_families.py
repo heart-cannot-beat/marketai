@@ -38,6 +38,8 @@ from app.localization.fact_sources import (
 )
 from app.localization.truth import _manual_fact_set_for_market
 
+# The Offer entry every row names (#54); content validation checks only that it does.
+_OFFER = "lib_offer_acme"
 _FAMILIES = ("price", "availability", "discount", "shipping", "delivery", "product_claim")
 _LEGACY_NAMES = ("tax", "shipping_availability", "delivery_time")
 
@@ -84,6 +86,7 @@ def _row(fact_type: str, fact_id: str = "fact-1", **values: object) -> dict:
     return {
         "fact_id": fact_id,
         "fact_type": fact_type,
+        "offer_entry_id": _OFFER,
         "country_code": "DE",
         "valid_from": (now - timedelta(days=1)).isoformat(),
         "valid_to": (now + timedelta(days=30)).isoformat(),
@@ -117,7 +120,9 @@ def _blocking(entry_type: str, content: dict) -> set[tuple[str, str]]:
 
 
 def _resolve_manual(content: dict, *requested: str):
-    manual = _manual_fact_set_for_market("mfs_acme_v1", content, "DE")
+    manual = _manual_fact_set_for_market(
+        "mfs_acme_v1", content, "DE", offer_entry_id=_OFFER, other_market_offers=frozenset(),
+    )
     request = FactResolutionRequest(
         requested_fact_types=tuple(requested),
         offer=OfferContext(offer_version_id="ov_acme", product_version_id="pv_acme"),
@@ -320,8 +325,8 @@ class TestCsvImportPublishes(unittest.TestCase):
 
     def test_a_tax_row_is_reported_on_the_draft_not_rejected_by_the_import(self):
         imported = parse_manual_fact_payload(
-            b"fact_id,fact_type,country_code,valid_from,valid_to,evidence_source,rate\n"
-            b"fact-1,tax,DE,2026-01-01,2026-12-31,tax table,0.19\n",
+            b"fact_id,fact_type,offer_entry_id,country_code,valid_from,valid_to,evidence_source,rate\n"
+            b"fact-1,tax,lib_offer_acme,DE,2026-01-01,2026-12-31,tax table,0.19\n",
             content_type="text/csv",
         )
         self.assertEqual(

@@ -200,6 +200,15 @@ TruthPackage 的 `valid_until` 取全部依赖事实的最短有效期。Beta �
 - 每次 manual 来源尝试在 `requested_context_json.manual_fact_rows` 里记录该市场该事实族的每一行：`fact_id`、行号、`valid_from`、`valid_to`、解析时的状态（`in_force` / `expired` / `not_yet_valid`）和是否被使用。只追加，#60 之前解析的包不改写。
 - 发布含已过期行的事实集时，该行给 `fact_expired` warning（按 warning 确认后发布），不阻断；尚未生效的行不提示。
 
+人工事实集的每一行写明所属 Offer（#54，创意库契约 §11.4、验收第 12 和 13 条）：
+
+- 行里的 `offer_entry_id` 写 Offer **条目** id，和 `source_priority` 写数据源条目 id 的做法一致（#70）。导入时可以选一个默认 Offer，填给没写 Offer 的行；已经写了的行保持不变。
+- 发布时，每行的 Offer 必须是本 Workspace 已发布、未撤回、未归档的 Offer，且该行市场在它当前 OfferVersion 的 `market_scope` 内；否则在 `facts[i].offer_entry_id` 上给阻断项（`fact_offer_required`、`fact_offer_not_found`、`fact_offer_unpublished`、`fact_offer_market_scope`，或通用的 `dependency_withdrawn`、`dependency_archived`）。导入时这些照样是行级问题，草稿照建。
+- 每个不同的 OfferVersion 登记一条 `fact_set_offer` 依赖边：撤回这个版本时，影响预览列出该事实集版本；没有行写到的 Offer 不会列出它。
+- 解析 Truth 时，只用 `offer_entry_id` 等于批次 OfferVersion 所属条目的行，其他 Offer 的行不读；Offer 重新发布后事实集不用重发。某个市场没有该 Offer 的行时，和没有该市场的行一样返回 422。
+- #54 之前发布、行里没有 Offer 的事实集不改写。只有本 Workspace 没有其他 Offer 在该市场销售时（当前 effective 版本的 `market_scope` 含该市场；已归档的 Offer 也算），这些行才用于批次；否则该市场每个事实族失败为 `manual_fact_offer_ambiguous`，按策略的 `on_failure` 处理，不静默选行。
+- `requested_context_json.manual_fact_rows` 的每一行另记 `offer_entry_id` 和 `offer_match`（`row`、`only_offer_in_market` 或 `ambiguous`）。
+
 DataSource 配置、MarketSourceMapping、Offer 或事实变化创建新版本，并只将真实依赖包标为 superseded；CredentialVersion 单纯轮换不使历史事实失效。历史包和 AssetVersion 不修改，旧包不能创建新批次。Worker 在每个图片编辑调用前检查 freshness：调用前过期则暂停；调用已经发出则保存结果并标记 stale，重新确认前不得发布。
 
 FactDependencyIndex 将数据变化传播到依赖的 MarketAssetBinding，标记 `stale_truth` 并阻止新实验和新 Launch。已冻结实验保留历史事实并告警；MarketAI 不自动暂停真实广告或改图。

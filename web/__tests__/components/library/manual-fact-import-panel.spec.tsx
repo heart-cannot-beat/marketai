@@ -19,6 +19,7 @@ const mockGateway = {
   finalizeUpload: jest.fn(),
   pollOperation: jest.fn(),
   importLibraryManualFacts: jest.fn(),
+  listLibraryEntries: jest.fn(),
 };
 const mockSetEntry = jest.fn();
 
@@ -46,6 +47,29 @@ const UPLOAD_OP = 'op_upload_1';
 const IMPORT_OP = 'op_import_1';
 const FACT_SET = 'lib_fs_1';
 const META = { etag: null, retryAt: 0, location: null };
+
+/** The Workspace's Offers: only a published one can be the default (#54). */
+const offerSummary = (
+  id: string,
+  displayName: string,
+  currentVersionId: string | null
+) => ({
+  id,
+  entry_type: 'offer',
+  display_name: displayName,
+  lifecycle: 'active',
+  current_version_id: currentVersionId,
+  current_version_no: currentVersionId ? 1 : null,
+  current_version_state: currentVersionId ? 'effective' : null,
+  draft_revision: 1,
+  draft_state: 'editing',
+  updated_at: '2026-11-07T08:00:00+00:00',
+});
+const OFFERS = [
+  offerSummary('lib_offer_65w', 'Acme Charge 65W single', 'libver_65w_1'),
+  offerSummary('lib_offer_100w', 'Acme Charge 100W bundle', 'libver_100w_2'),
+  offerSummary('lib_offer_draft', 'Acme Charge 30W draft', null),
+];
 
 const blobClient = {
   upload: jest.fn(),
@@ -164,7 +188,20 @@ beforeEach(() => {
     resource_type: 'manual_fact_set_draft',
     resource_id: FACT_SET,
   });
+  mockGateway.listLibraryEntries.mockResolvedValue({
+    kind: 'ok',
+    status: 200,
+    data: { items: OFFERS, next_cursor: null },
+    meta: META,
+  });
 });
+
+/** The body the panel sent with the import. */
+const importBody = () =>
+  mockGateway.importLibraryManualFacts.mock.calls[0][0].body as Record<
+    string,
+    unknown
+  >;
 
 describe('ManualFactImportPanel', () => {
   it('says each import makes a new draft, and takes CSV or JSON', () => {
@@ -308,6 +345,89 @@ describe('ManualFactImportPanel', () => {
         'Import facts from a CSV or JSON file. Each import creates a new fact set draft.'
       )
     ).toBeInTheDocument();
+  });
+
+  it('offers the published Offers as the default and sends the chosen one', async () => {
+    renderIn('en');
+    const picker = screen.getByLabelText('Default offer') as HTMLSelectElement;
+    expect(
+      await screen.findByRole('option', { name: 'Acme Charge 65W single' })
+    ).toBeInTheDocument();
+    expect(
+      Array.from(picker.options).map((option) => option.textContent)
+    ).toEqual([
+      'None: every row names its offer',
+      'Acme Charge 65W single',
+      'Acme Charge 100W bundle',
+    ]);
+    expect(mockGateway.listLibraryEntries).toHaveBeenCalledWith(
+      expect.objectContaining({ entryType: 'offer' })
+    );
+    expect(picker).toHaveAccessibleDescription(
+      'Rows that name no offer (offer_entry_id) get this one. A row that names its own offer keeps it.'
+    );
+
+    fireEvent.change(picker, { target: { value: 'lib_offer_100w' } });
+    chooseFile('Select fact file to import');
+
+    expect(
+      await screen.findByText(
+        'Facts imported into a new fact set draft. Its Draft tab lists any rows to fix before publishing.'
+      )
+    ).toBeInTheDocument();
+    expect(importBody()).toEqual({
+      upload_intent_id: 'upi_1',
+      purpose: 'library_manual_fact_import',
+      default_offer_entry_id: 'lib_offer_100w',
+    });
+  });
+
+  it('sends no default when none is chosen', async () => {
+    renderIn('en');
+    await screen.findByRole('option', { name: 'Acme Charge 65W single' });
+    chooseFile('Select fact file to import');
+
+    await screen.findByRole('button', { name: 'Open fact set' });
+    expect(importBody()).toEqual({
+      upload_intent_id: 'upi_1',
+      purpose: 'library_manual_fact_import',
+    });
+  });
+
+  it('still imports when the Offers cannot be listed, and says each row names its own', async () => {
+    mockGateway.listLibraryEntries.mockResolvedValue({
+      kind: 'problem',
+      status: 503,
+      problem: {
+        type: 'about:blank',
+        title: 'Unavailable',
+        status: 503,
+        code: 'service_unavailable',
+        detail: 'down',
+        trace_id: 'trace_1',
+        retryable: true,
+      },
+    });
+    renderIn('en');
+
+    expect(
+      await screen.findByText(
+        'Offers could not be loaded. Each row must name its offer.'
+      )
+    ).toBeInTheDocument();
+    chooseFile('Select fact file to import');
+    await screen.findByRole('button', { name: 'Open fact set' });
+    expect(importBody()).not.toHaveProperty('default_offer_entry_id');
+  });
+
+  it('words the default Offer in Chinese', async () => {
+    renderIn('zh-CN');
+    const picker = screen.getByLabelText('默认销售方案') as HTMLSelectElement;
+    await screen.findByRole('option', { name: 'Acme Charge 65W single' });
+    expect(picker.options[0].textContent).toBe('不选：每行自己写明销售方案');
+    expect(picker).toHaveAccessibleDescription(
+      '没有写明销售方案（offer_entry_id）的行使用这个销售方案；已经写明的行保持不变。'
+    );
   });
 
   it('offers no link when the result names no fact set', async () => {

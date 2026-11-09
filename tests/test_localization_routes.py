@@ -49,9 +49,13 @@ from app.platform.tenancy import TenantContext
 # and `market_policies.market_id` is unique across it.
 _MARKET_ID_COUNTER = itertools.count(1)
 
+#: The country of every market this harness creates: `_make_market_policy_version`
+#: takes it from the first two letters of the market id.
+MARKET_COUNTRY = "RT"
+
 
 def _next_market_id() -> str:
-    return f"RT{next(_MARKET_ID_COUNTER):04d}"[:10]
+    return f"{MARKET_COUNTRY}{next(_MARKET_ID_COUNTER):04d}"[:10]
 
 
 class TestLocalizationRoutes(LibraryFixtures):
@@ -91,9 +95,17 @@ class TestLocalizationRoutes(LibraryFixtures):
                     created_at=now, updated_at=now, updated_by="user_1",
                 ))
 
-    def _winner(self, tag: str) -> dict:
-        winner = _build_confirmed_winner(self.ctx.workspace_id, self.ctx, tag)
-        _seed_review(self.ctx, winner["asset_version_id"])
+    def _winner(
+        self,
+        tag: str,
+        offer_markets: tuple[str, ...] = ("US",),
+        library_versions: tuple[str, str] | None = None,
+    ) -> dict:
+        winner = _build_confirmed_winner(
+            self.ctx.workspace_id, self.ctx, tag,
+            offer_markets=offer_markets, library_versions=library_versions,
+        )
+        _seed_review(self.ctx, winner["asset_version_id"], product_id=winner["product_id"])
         return winner
 
     def _market_target(self) -> tuple[str, str]:
@@ -106,8 +118,21 @@ class TestLocalizationRoutes(LibraryFixtures):
             mp = s.get(MarketPolicyRecord, row.market_policy_id)
             return row.id, mp.market_id
 
-    def _create_draft_via_http(self, tag: str) -> dict:
-        winner = self._winner(tag)
+    def _create_draft_via_http(
+        self,
+        tag: str,
+        offer_markets: tuple[str, ...] = ("US",),
+        library_versions: tuple[str, str] | None = None,
+    ) -> dict:
+        """A Batch draft; `offer_markets` is its Offer's `market_scope`.
+
+        Manual fact rows name the Offer entry (`offer_entry_id`) and publish
+        only for an Offer whose scope covers their market (#54): pass
+        `("US", MARKET_COUNTRY)` to publish facts for the Batch's market.
+        `library_versions` runs the Batch on a `(ProductVersion,
+        OfferVersion)` pair published through the Library.
+        """
+        winner = self._winner(tag, offer_markets, library_versions)
         mpv_id, market = self._market_target()
         body = {
             "product_version_id": winner["product_version_id"],
@@ -129,6 +154,8 @@ class TestLocalizationRoutes(LibraryFixtures):
         data["winner"] = winner
         data["market_policy_version_id"] = mpv_id
         data["market"] = market
+        with tenant_session(self.ctx) as s:
+            data["offer_entry_id"] = s.get(LibraryVersionRecord, winner["offer_version_id"]).entry_id
         return data
 
     def _analysis_recipe_hash(self, tag: str) -> str:

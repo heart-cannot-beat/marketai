@@ -1,7 +1,11 @@
 import { useTranslation } from 'next-i18next';
-import { useCallback, useRef } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { useLibraryEntries } from '@/hooks/library/useLibraryEntries';
 import { useLibraryRoute } from '@/hooks/library/useLibraryRoute';
 import { useManualFactImport } from '@/hooks/library/useManualFactImport';
+
+/** One request lists them all: the route's page limit. */
+const OFFER_PAGE_SIZE = 100;
 
 interface ManualFactImportPanelProps {
   dataSourceEntryId: string;
@@ -12,6 +16,10 @@ interface ManualFactImportPanelProps {
  * Fact Set draft next to the data source; the draft is reviewed and
  * published there. Every outcome reads as a sentence, and an import whose
  * outcome is uncertain says how to check before importing again.
+ *
+ * Every fact row names its Offer (#54). A default Offer, chosen before the
+ * file, is given to the rows that name none; only the Workspace's published
+ * Offers are offered, the ones the import accepts.
  */
 export function ManualFactImportPanel({
   dataSourceEntryId,
@@ -20,13 +28,22 @@ export function ManualFactImportPanel({
   const { setEntry } = useLibraryRoute();
   const { view, importFile, reset } = useManualFactImport(dataSourceEntryId);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [defaultOffer, setDefaultOffer] = useState('');
+  const offerFieldId = useId();
+  const offerList = useLibraryEntries('offer', {
+    pageSize: OFFER_PAGE_SIZE,
+  });
+  const offers = useMemo(
+    () => offerList.items.filter((offer) => offer.current_version_id),
+    [offerList.items]
+  );
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file) void importFile(file);
+      if (file) void importFile(file, defaultOffer || null);
     },
-    [importFile]
+    [importFile, defaultOffer]
   );
 
   const startOver = useCallback(() => {
@@ -121,6 +138,39 @@ export function ManualFactImportPanel({
       <p className="text-sm text-gray-700 dark:text-gray-300">
         {t('data-source-ops.import-description')}
       </p>
+      <div className="mt-3 flex max-w-md flex-col gap-1">
+        <label
+          htmlFor={offerFieldId}
+          className="text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          {t('data-source-ops.default-offer-label')}
+        </label>
+        <select
+          id={offerFieldId}
+          className="select select-bordered select-sm w-full"
+          value={defaultOffer}
+          onChange={(e) => setDefaultOffer(e.target.value)}
+          aria-describedby={`${offerFieldId}-help`}
+          disabled={offerList.isLoading}
+        >
+          <option value="">{t('data-source-ops.default-offer-none')}</option>
+          {offers.map((offer) => (
+            <option key={offer.id} value={offer.id}>
+              {offer.display_name}
+            </option>
+          ))}
+        </select>
+        <p
+          id={`${offerFieldId}-help`}
+          className="text-xs text-gray-500 dark:text-gray-400"
+        >
+          {offerList.isLoading
+            ? t('data-source-ops.default-offer-loading')
+            : offerList.problem
+              ? t('data-source-ops.default-offer-unavailable')
+              : t('data-source-ops.default-offer-help')}
+        </p>
+      </div>
       <button
         type="button"
         className="btn btn-primary btn-sm mt-3"

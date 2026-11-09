@@ -810,6 +810,11 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
 
   await test.step('Import manual facts into DataSource entry', async () => {
     await page.getByRole('tab', { name: /^Facts$/i }).click();
+    // #54: every row names its Offer. The rows below name none, so the
+    // import gives them the Offer published above as its default.
+    await page
+      .getByLabel(en('library', 'data-source-ops.default-offer-label'))
+      .selectOption({ label: 'GP E2E Offer' });
     await page.getByLabel(/select fact file to import/i).setInputFiles({
       name: 'golden-path-facts.json',
       mimeType: 'application/json',
@@ -827,15 +832,16 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
               evidence_source: 'Acme Charge US price list',
             },
             {
-              fact_id: 'gp-delivery-de',
+              // A market the Offer sells in (market_scope US, GB).
+              fact_id: 'gp-delivery-gb',
               fact_type: 'delivery',
-              country_code: 'DE',
+              country_code: 'GB',
               valid_from: '2026-01-01',
               valid_to: '2099-12-31',
               delivery_days_min: 2,
               delivery_days_max: 5,
-              region: 'DE',
-              evidence_source: 'Acme Charge DE carrier rates',
+              region: 'GB',
+              evidence_source: 'Acme Charge GB carrier rates',
             },
           ],
         })
@@ -846,7 +852,8 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
     ).toBeVisible({ timeout: 120_000 });
 
     // #23: the import checks every row and stores the report on the draft
-    // it opens; these rows, from a published data source, pass.
+    // it opens; these rows, from a published data source and for an Offer
+    // that sells in their markets, pass.
     await page
       .getByRole('button', {
         name: en('library', 'data-source-ops.open-fact-set'),

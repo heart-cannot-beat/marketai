@@ -13,7 +13,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from .fact_types import FACT_FAMILIES, fact_value_problems
 
@@ -1177,6 +1177,12 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
         cc = fact.get("country_code")
         if not isinstance(cc, str) or len(cc) != 2 or cc != cc.upper():
             findings.append(Finding("fact_country_code", "country_code 必须是大写 2 位 ISO", f"{fpath}.country_code"))
+        if not _is_str(fact.get("offer_entry_id")):
+            # Contract §11.4: every row names its Offer (#54). The service
+            # resolves the entry and checks its market scope.
+            findings.append(Finding("fact_offer_required",
+                                    "必须声明这行事实所属的 Offer（offer_entry_id）",
+                                    f"{fpath}.offer_entry_id"))
         _validate_fact_window(fact, fpath, findings, now=now)
         if not _is_str(fact.get("evidence_source")):
             findings.append(Finding("fact_evidence_source_required",
@@ -1185,6 +1191,48 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
             # 值结构与 Truth 适配器解析时用的是同一张表、同一套规则。
             for problem in fact_value_problems(fact_type, fact):
                 findings.append(Finding(problem.code, problem.message, f"{fpath}.{problem.field}"))
+
+
+def offer_market_scope(offer_content: Any) -> frozenset[str] | None:
+    """The upper-case countries an OfferVersion lists in ``market_scope``.
+
+    ``None`` when the content lists none: publish validation requires the
+    list (``offer_market_scope``), so only content that never passed it
+    lacks one, and its scope is unknown rather than empty.
+    """
+    markets = offer_content.get("market_scope") if isinstance(offer_content, dict) else None
+    if not isinstance(markets, list):
+        return None
+    return frozenset(market.strip().upper() for market in markets if _is_str(market))
+
+
+def fact_offer_market_findings(content: dict, offers_by_path: Mapping[str, Any]) -> list[Finding]:
+    """Each row's market against the scope of the OfferVersion it names (#54).
+
+    ``offers_by_path`` maps a row's ``facts[i].offer_entry_id`` path to the
+    content of the OfferVersion it resolved to; a row whose Offer did not
+    resolve is already blocking and is skipped, as is a row whose
+    ``country_code`` is already ``fact_country_code``. Contract §11.4: a row
+    whose scope cannot be mapped is a blocking error.
+    """
+    facts = content.get("facts") if isinstance(content, dict) else None
+    findings: list[Finding] = []
+    for i, fact in enumerate(facts if isinstance(facts, list) else []):
+        path = f"facts[{i}].offer_entry_id"
+        if not isinstance(fact, dict) or path not in offers_by_path:
+            continue
+        country = fact.get("country_code")
+        if not isinstance(country, str) or len(country) != 2 or country != country.upper():
+            continue
+        scope = offer_market_scope(offers_by_path[path])
+        if scope is None or country in scope:
+            continue
+        findings.append(Finding(
+            "fact_offer_market_scope",
+            f"这行事实的市场 {country} 不在所引用 Offer 的市场范围 {sorted(scope)} 内",
+            path,
+        ))
+    return findings
 
 
 def _validate_truth_resolution_policy(content: dict, findings: list[Finding]) -> None:
@@ -1323,6 +1371,7 @@ REL_SCHEMA_TEMPLATE = "schema_template"
 REL_SCHEMA_PRODUCT = "schema_product"
 REL_POLICY_TEMPLATE = "policy_template"
 REL_FACT_SET_DATA_SOURCE = "fact_set_data_source"
+REL_FACT_SET_OFFER = "fact_set_offer"
 REL_TRUTH_POLICY_DATA_SOURCE = "truth_policy_data_source"
 
 
@@ -1389,6 +1438,11 @@ def extract_dependencies(entry_type: str, content: dict) -> list[DependencyEdge]
             add(template_id, REL_POLICY_TEMPLATE, f"allowed_template_entry_ids[{index}]")
     elif entry_type == ENTRY_MANUAL_FACT_SET:
         add(content.get("data_source_entry_id"), REL_FACT_SET_DATA_SOURCE, "data_source_entry_id")
+        # Each row names an Offer entry (#54); the service resolves it to the
+        # entry's current OfferVersion, one stored edge per distinct version.
+        for i, fact in enumerate(items(content.get("facts"))):
+            if isinstance(fact, dict):
+                add(fact.get("offer_entry_id"), REL_FACT_SET_OFFER, f"facts[{i}].offer_entry_id")
     elif entry_type == ENTRY_TRUTH_RESOLUTION_POLICY:
         for i, rule in enumerate(items(content.get("rules"))):
             if not isinstance(rule, dict):
@@ -1426,6 +1480,7 @@ RELATION_TARGET_TYPES = {
     REL_SCHEMA_PRODUCT: ENTRY_PRODUCT,
     REL_POLICY_TEMPLATE: ENTRY_DIMENSION_TEMPLATE,
     REL_FACT_SET_DATA_SOURCE: ENTRY_DATA_SOURCE,
+    REL_FACT_SET_OFFER: ENTRY_OFFER,
     REL_TRUTH_POLICY_DATA_SOURCE: ENTRY_DATA_SOURCE,
 }
 
