@@ -2159,7 +2159,7 @@ def clone_product(
     request_fingerprint: str | None = None,
     command_identity: str | None = None,
 ) -> dict:
-    """Clone Product：安全默认只复制低风险内容（§5.2、§12）。
+    """Clone Product：安全默认只复制低风险内容（§5.2、§12、ADR 0016）。
 
     Offer、价格、DataSource Mapping 和 Landing Page 是独立稳定身份，
     Clone Product 永不携带；``include_optional`` 只能追加白名单内的可选字段。

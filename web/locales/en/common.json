@@ -1955,7 +1955,7 @@
   "error-library_bind_entry_required": "Choose the entry to bind the reference to.",
   "error-library_bind_reference_invalid": "Only a reference image version can be bound.",
   "error-library_bind_target_invalid": "Only product and person entries can have reference images.",
-  "error-library_clone_field_forbidden": "Some of the chosen content cannot be copied. Create it separately.",
+  "error-library_clone_field_forbidden": "Offers, prices, market mappings and landing pages are never copied. Create them for the new product separately.",
   "error-library_clone_field_unknown": "Some of the chosen fields cannot be copied.",
   "error-library_clone_source_invalid": "Only a product version can be cloned.",
   "error-library_command_failed": "The library action did not finish.",

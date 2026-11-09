@@ -296,5 +296,16 @@
     "trace_id": "req_01",
     "retryable": false,
     "field_errors": []
+  },
+  "clone_with_offers_refused": {
+    "type": "urn:marketai:error:library-clone-field-forbidden",
+    "title": "library_clone_field_forbidden",
+    "status": 400,
+    "detail": "Clone Product 不复制这些内容，必须另行创建: ['offers']",
+    "instance": "/library/versions/{version_id}/clone-product",
+    "code": "library_clone_field_forbidden",
+    "trace_id": "req_02",
+    "retryable": false,
+    "field_errors": []
   }
 }
