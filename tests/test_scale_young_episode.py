@@ -39,6 +39,7 @@ from app.scale.models import (
     ScaleEvaluationStreakCounterRecord,
     ScaleEvidenceSnapshotRecord,
     ScaleEvidenceSourceLinkRecord,
+    ScaleManifestItemRecord,
     ScaleSnapshotQualityIssueRecord,
 )
 from app.scale.service import run_scale_evaluation
@@ -186,7 +187,11 @@ class TestYoungEpisodeIsWarming(YoungEpisodeBase):
 class TestGapsAfterTheEpisodeStartStillBlock(YoungEpisodeBase):
     def test_missing_day_after_the_start_blocks_with_daily_slot_missing(self):
         gap = EPISODE_START + timedelta(days=2)
-        days = [EPISODE_START + timedelta(days=i) for i in range(EPISODE_DAYS) if EPISODE_START + timedelta(days=i) != gap]
+        days = [
+            EPISODE_START + timedelta(days=i)
+            for i in range(EPISODE_DAYS)
+            if EPISODE_START + timedelta(days=i) != gap
+        ]
         evaluation, snapshot = self._evaluate(self._seed_young_manifest(in_episode_days=days))
 
         self.assertEqual(self._quality_codes(snapshot.id), [("daily_slot_missing", gap, True)])
@@ -205,7 +210,7 @@ class TestGapsAfterTheEpisodeStartStillBlock(YoungEpisodeBase):
     def test_failed_in_episode_slot_blocks_even_when_pre_episode_slots_are_present(self):
         manifest = self._seed_young_manifest(pre_episode_item_state="missing")
         last = self.session.execute(
-            select(evidence_module.ScaleManifestItemRecord).filter_by(
+            select(ScaleManifestItemRecord).filter_by(
                 manifest_id=manifest.id, contract_type="daily", local_day=AS_OF,
             )
         ).scalar_one()
