@@ -193,6 +193,13 @@ TruthPackage 的 `valid_until` 取全部依赖事实的最短有效期。Beta �
 - 人工商业事实：发布时必须填写有效期，默认最长 30 天；
 - 稳定产品声明：持续到来源版本被替换。
 
+人工事实集按行判断有效期（#60）：
+
+- 解析时只排除不在有效期内的行（已过期或尚未生效），同一市场的其他行照常使用；某个事实族在该市场没有生效的行时，按策略的 `on_failure` 处理（来源失败码 `manual_fact_expired` 或 `manual_fact_not_yet_valid`）。同一事实族有多行同时生效时，用事实集中靠后的那行。
+- TruthPackage 的 `valid_until` 只取实际用到的行的最短有效期。
+- 每次 manual 来源尝试在 `requested_context_json.manual_fact_rows` 里记录该市场该事实族的每一行：`fact_id`、行号、`valid_from`、`valid_to`、解析时的状态（`in_force` / `expired` / `not_yet_valid`）和是否被使用。只追加，#60 之前解析的包不改写。
+- 发布含已过期行的事实集时，该行给 `fact_expired` warning（按 warning 确认后发布），不阻断；尚未生效的行不提示。
+
 DataSource 配置、MarketSourceMapping、Offer 或事实变化创建新版本，并只将真实依赖包标为 superseded；CredentialVersion 单纯轮换不使历史事实失效。历史包和 AssetVersion 不修改，旧包不能创建新批次。Worker 在每个图片编辑调用前检查 freshness：调用前过期则暂停；调用已经发出则保存结果并标记 stale，重新确认前不得发布。
 
 FactDependencyIndex 将数据变化传播到依赖的 MarketAssetBinding，标记 `stale_truth` 并阻止新实验和新 Launch。已冻结实验保留历史事实并告警；MarketAI 不自动暂停真实广告或改图。

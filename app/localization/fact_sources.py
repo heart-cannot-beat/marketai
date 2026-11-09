@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal, Mapping, Protocol
@@ -47,12 +47,50 @@ class DataSourceConfig:
     data_source_version_id: str
 
 
+ROW_IN_FORCE = "in_force"
+ROW_EXPIRED = "expired"
+ROW_NOT_YET_VALID = "not_yet_valid"
+
+
 @dataclass(frozen=True)
-class ManualFactSet:
-    version_id: str
-    facts: dict
+class ManualFactRow:
+    """One row of a ManualFactSetVersion for one market, with its own window (#60).
+
+    `index` is the row's position in the version's `facts`. A row is in
+    force while `valid_from <= at < valid_to`.
+    """
+
+    index: int
+    fact_id: str | None
+    fact_type: str
     valid_from: datetime
     valid_to: datetime
+    raw: Mapping[str, object]
+
+    def status_at(self, at: datetime) -> str:
+        if at < self.valid_from:
+            return ROW_NOT_YET_VALID
+        if at >= self.valid_to:
+            return ROW_EXPIRED
+        return ROW_IN_FORCE
+
+
+@dataclass(frozen=True)
+class ManualFactSet:
+    """The rows of one ManualFactSetVersion that a market can use.
+
+    Truth builds it with `rows` (#60): every row of the market, each with its
+    own window, judged one by one at resolution time. The other form,
+    `facts` (one row per fact type) with one `valid_from`/`valid_to` for all
+    of them, is a set whose rows share a window: it is in force as a whole or
+    not at all (`manual_fact_set_expired`).
+    """
+
+    version_id: str
+    facts: dict = field(default_factory=dict)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    rows: tuple[ManualFactRow, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -131,6 +169,10 @@ class RawSourceFact:
     source_valid_until: datetime | None
     mock_scenario: str | None
     mock_version: str | None
+    # Every source row of this fact considered for the market, with its
+    # window and whether it was in force and used (#60). Not part of
+    # `evidence_hash`, which covers the row actually used.
+    source_rows: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -140,6 +182,7 @@ class FactSourceFailure:
     code: str
     message: str
     is_transient: bool
+    source_rows: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -244,18 +287,18 @@ def _build_fact_value(
 class ManualFactSourceAdapter:
     """Persistence-free adapter that returns raw facts from a ManualFactSet.
 
-    Manual facts are valid only when
-    `valid_from <= resolution_time < valid_to`; the adapter enforces the
-    interval at resolution time (publication enforces it separately,
-    outside this adapter).
+    A manual row is valid only while `valid_from <= resolution_time <
+    valid_to`; the adapter enforces it at resolution time (publication only
+    warns about rows that already ended, #60). Rows are judged one by one: a
+    fact type is served from a row of the market in force now, so a row out
+    of force leaves the others usable, and a fact type with no row in force
+    fails alone (`manual_fact_expired` / `manual_fact_not_yet_valid`) for the
+    policy's `on_failure` to decide.
     """
 
     adapter_kind = "manual"
 
     def resolve(self, request: FactResolutionRequest) -> FactSourceResult:
-        facts: list[RawSourceFact] = []
-        failures: list[FactSourceFailure] = []
-
         if request.manual_fact_set is None:
             return FactSourceResult(
                 facts=(),
@@ -273,7 +316,92 @@ class ManualFactSourceAdapter:
 
         manual = request.manual_fact_set
         now = datetime.now(timezone.utc)
-        is_valid_interval = manual.valid_from <= now < manual.valid_to
+        if manual.rows:
+            return self._resolve_rows(request, manual, now)
+        return self._resolve_shared_window(request, manual, now)
+
+    def _resolve_rows(
+        self, request: FactResolutionRequest, manual: ManualFactSet, now: datetime
+    ) -> FactSourceResult:
+        facts: list[RawSourceFact] = []
+        failures: list[FactSourceFailure] = []
+
+        for fact_type in request.requested_fact_types:
+            scope_key = _scope_key(request, fact_type)
+            rows = [row for row in manual.rows if row.fact_type == fact_type]
+            statuses = [row.status_at(now) for row in rows]
+            in_force = [row for row, status in zip(rows, statuses) if status == ROW_IN_FORCE]
+            # Two rows in force for one fact: the later row of the version
+            # wins, as the last row of a fact type always did.
+            used = in_force[-1] if in_force else None
+            source_rows = tuple(
+                _row_evidence(row, status, used=row is used) for row, status in zip(rows, statuses)
+            )
+
+            if not rows:
+                failures.append(
+                    FactSourceFailure(
+                        fact_type=fact_type,
+                        scope_key=scope_key,
+                        code="fact_type_not_in_manual_set",
+                        message=f"Manual fact set {manual.version_id} has no entry for {fact_type}",
+                        is_transient=False,
+                    )
+                )
+                continue
+
+            if used is None:
+                if ROW_NOT_YET_VALID in statuses:
+                    failures.append(
+                        FactSourceFailure(
+                            fact_type=fact_type,
+                            scope_key=scope_key,
+                            code="manual_fact_not_yet_valid",
+                            message=(
+                                f"No {fact_type} row of ManualFactSet {manual.version_id} is valid "
+                                f"at {now.isoformat()}; the next one starts later"
+                            ),
+                            is_transient=False,
+                            source_rows=source_rows,
+                        )
+                    )
+                else:
+                    failures.append(
+                        FactSourceFailure(
+                            fact_type=fact_type,
+                            scope_key=scope_key,
+                            code="manual_fact_expired",
+                            message=(
+                                f"Every {fact_type} row of ManualFactSet {manual.version_id} "
+                                f"ended before {now.isoformat()}"
+                            ),
+                            is_transient=False,
+                            source_rows=source_rows,
+                        )
+                    )
+                continue
+
+            outcome = self._fact(
+                request, manual, fact_type, used.raw, scope_key=scope_key, now=now,
+                source_valid_until=used.valid_to,
+            )
+            if isinstance(outcome, FactSourceFailure):
+                failures.append(replace(outcome, source_rows=source_rows))
+            else:
+                facts.append(replace(outcome, source_rows=source_rows))
+
+        return FactSourceResult(facts=tuple(facts), failures=tuple(failures))
+
+    def _resolve_shared_window(
+        self, request: FactResolutionRequest, manual: ManualFactSet, now: datetime
+    ) -> FactSourceResult:
+        facts: list[RawSourceFact] = []
+        failures: list[FactSourceFailure] = []
+        is_valid_interval = (
+            manual.valid_from is not None
+            and manual.valid_to is not None
+            and manual.valid_from <= now < manual.valid_to
+        )
 
         for fact_type in request.requested_fact_types:
             scope_key = _scope_key(request, fact_type)
@@ -286,7 +414,7 @@ class ManualFactSourceAdapter:
                         code="manual_fact_set_expired",
                         message=(
                             f"ManualFactSet {manual.version_id} is not valid at {now.isoformat()} "
-                            f"(valid_from={manual.valid_from.isoformat()}, valid_to={manual.valid_to.isoformat()})"
+                            f"(valid_from={manual.valid_from}, valid_to={manual.valid_to})"
                         ),
                         is_transient=False,
                     )
@@ -306,37 +434,66 @@ class ManualFactSourceAdapter:
                 )
                 continue
 
-            value = _build_fact_value(fact_type, raw, scope_key=scope_key)
-            if isinstance(value, FactSourceFailure):
-                failures.append(value)
-                continue
-            requested_context = _requested_context(request)
-            evidence_hash = _canonical_hash(
-                {
-                    "adapter_kind": self.adapter_kind,
-                    "manual_fact_set_version_id": manual.version_id,
-                    "fact_type": fact_type,
-                    "scope_key": scope_key,
-                    "value": raw,
-                    "requested_context": requested_context,
-                }
+            outcome = self._fact(
+                request, manual, fact_type, raw, scope_key=scope_key, now=now,
+                source_valid_until=manual.valid_to,
             )
-            facts.append(
-                RawSourceFact(
-                    fact_type=fact_type,
-                    scope_key=scope_key,
-                    value=value,
-                    evidence_hash=evidence_hash,
-                    external_object_ref=f"manual_fact_set:{manual.version_id}",
-                    requested_context=requested_context,
-                    observed_at=now,
-                    source_valid_until=manual.valid_to,
-                    mock_scenario=None,
-                    mock_version=None,
-                )
-            )
+            if isinstance(outcome, FactSourceFailure):
+                failures.append(outcome)
+            else:
+                facts.append(outcome)
 
         return FactSourceResult(facts=tuple(facts), failures=tuple(failures))
+
+    def _fact(
+        self,
+        request: FactResolutionRequest,
+        manual: ManualFactSet,
+        fact_type: str,
+        raw: Mapping[str, object],
+        *,
+        scope_key: str,
+        now: datetime,
+        source_valid_until: datetime | None,
+    ) -> RawSourceFact | FactSourceFailure:
+        value = _build_fact_value(fact_type, raw, scope_key=scope_key)
+        if isinstance(value, FactSourceFailure):
+            return value
+        requested_context = _requested_context(request)
+        evidence_hash = _canonical_hash(
+            {
+                "adapter_kind": self.adapter_kind,
+                "manual_fact_set_version_id": manual.version_id,
+                "fact_type": fact_type,
+                "scope_key": scope_key,
+                "value": raw,
+                "requested_context": requested_context,
+            }
+        )
+        return RawSourceFact(
+            fact_type=fact_type,
+            scope_key=scope_key,
+            value=value,
+            evidence_hash=evidence_hash,
+            external_object_ref=f"manual_fact_set:{manual.version_id}",
+            requested_context=requested_context,
+            observed_at=now,
+            source_valid_until=source_valid_until,
+            mock_scenario=None,
+            mock_version=None,
+        )
+
+
+def _row_evidence(row: ManualFactRow, status: str, *, used: bool) -> dict[str, object]:
+    """How one manual row stood at resolution time, as the Truth attempt records it (#60)."""
+    return {
+        "fact_id": row.fact_id,
+        "row": row.index,
+        "valid_from": row.valid_from.isoformat(),
+        "valid_to": row.valid_to.isoformat(),
+        "status": status,
+        "used": used,
+    }
 
 
 class ControlledMockFactSourceAdapter:
