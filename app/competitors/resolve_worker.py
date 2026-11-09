@@ -63,6 +63,7 @@ from app.market_data.pricing import MarketDataPricingError, price_table
 from app.platform import audit, jobs
 from app.platform.tenancy import TenantContext
 from app.providers.dispatch import DispatchCoordinatorError, ExternalCallCoordinator
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 logger = logging.getLogger(__name__)
 
@@ -570,6 +571,7 @@ def _protector(runtime) -> CredentialProtector:
     return protector
 
 
+@runs_as(WORKER_ROLE)
 async def handle_resolve_job(runtime, job) -> None:
     """Fence for one resolve run; the aggregated Operation folds from the Job.
 

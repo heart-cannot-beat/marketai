@@ -1773,6 +1773,45 @@ class TestIsolatedOutputRecovery(WorkerTestBase):
             ).all()
         self.assertEqual(reviews, [])
 
+    async def test_adoption_through_the_route_publishes_in_the_api_transaction(self) -> None:
+        """The route publishes the child AssetVersion in the API's own
+        transaction, which on PostgreSQL runs as the API role (#46). Served
+        over HTTP so the suite's grant guard checks those writes as the API
+        role (#59); the evidence itself is asserted by the test above."""
+        built = await self._isolated_attempt(
+            "iso_adopt_route01", external_qc_steps=("ocr_check",)
+        )
+        self._run_deterministic_qc(
+            built["batch_id"], built["item_id"], built["attempt_id"]
+        )
+        self._authorize(built)
+        with tenant_session(CTX) as s:
+            worker.handle_ocr_check(
+                s, CTX, batch_id=built["batch_id"], item_id=built["item_id"],
+                attempt_id=built["attempt_id"],
+            )
+
+        app.dependency_overrides[request_tenant_context] = lambda: CTX
+        try:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                response = client.post(
+                    f"/api/v1/localization/batches/{built['batch_id']}"
+                    f"/items/{built['item_id']}/attempts/{built['attempt_id']}/adopt",
+                    headers={"Idempotency-Key": "ik-iso-adopt-route01"},
+                )
+        finally:
+            app.dependency_overrides.pop(request_tenant_context, None)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertFalse(body["replayed"])
+        self.assertEqual(self._item(built["item_id"]).state, "succeeded")
+        with tenant_session(CTX) as s:
+            child = s.get(AssetVersionRecord, body["asset_version_id"])
+            self.assertIsNotNone(child)
+            self.assertEqual(child.origin_kind, "localized")
+            self.assertEqual(child.parent_version_id, built["asset_version_id"])
+
     async def test_recovers_a_cancelled_item_from_refusal_to_published(self) -> None:
         """The whole recovery path on the state it actually happens in.
 

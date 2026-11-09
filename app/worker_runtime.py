@@ -41,6 +41,7 @@ from .launch.saga import (
 from .adapters.persistence.database import SessionLocal, assert_runtime_role, tenant_session
 from .platform.blob_store_factory import build_blob_store
 from .platform.blob_store import BlobRef, BlobStoreError
+from .platform.runtime_role import WORKER_ROLE, runs_as
 from .platform.operations import (
     TERMINAL_STATES,
     OperationRecord,
@@ -236,6 +237,7 @@ class WorkerRuntime:
         )
         await asyncio.sleep(delay)
 
+    @runs_as(WORKER_ROLE)
     async def run_once(self, *, job_types=None, exclude_types=()) -> bool:
         if job_types is None and self._onboarding_http_client is not None:
             from .generation.onboarding_dispatcher import (
@@ -353,6 +355,7 @@ class WorkerRuntime:
         await self._generate_asset(job)
         return True
 
+    @runs_as(WORKER_ROLE)
     async def _localization_job(self, job: jobs.ClaimedJob) -> None:
         """Own the queue lifecycle around one Localization domain handler.
 
@@ -403,6 +406,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _dispatch_localization_job(self, job: jobs.ClaimedJob) -> None:
         from .localization import worker as localization_worker
 
@@ -572,6 +576,7 @@ class WorkerRuntime:
             )
         return attempt_id
 
+    @runs_as(WORKER_ROLE)
     async def _verify_upload_intent(self, job: jobs.ClaimedJob) -> None:
         """Job handler for spec §7.8's Worker verification sequence.
 
@@ -675,6 +680,7 @@ class WorkerRuntime:
             retryable=True,
         )
 
+    @runs_as(WORKER_ROLE)
     async def _cleanup_staging_upload(self, job: jobs.ClaimedJob) -> None:
         """Delete a terminal UploadIntent's staging object idempotently.
 
@@ -749,6 +755,7 @@ class WorkerRuntime:
             return
         jobs.succeed(job.context, job.id, self.owner)
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_resolution(self, job: jobs.ClaimedJob) -> None:
         from .marketing.recovery import execute_resolution, fail_resolution
         jobs.mark_running(job.context, job.id, self.owner)
@@ -768,6 +775,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_ai_qc(self, job: jobs.ClaimedJob) -> None:
         from .marketing.ai_qc_worker import execute_ai_qc
         jobs.mark_running(job.context, job.id, self.owner)
@@ -785,6 +793,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_image_edit(self, job: jobs.ClaimedJob) -> None:
         from .marketing.image_editing import execute_edit, fail_edit
         from .marketing.service import MarketingError
@@ -806,6 +815,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_export(self, job: jobs.ClaimedJob) -> None:
         from .marketing.handoff_worker import execute_export
         jobs.mark_running(job.context, job.id, self.owner)
@@ -823,6 +833,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_plan(self, job: jobs.ClaimedJob) -> None:
         from .marketing.planner import execute_planning
 
@@ -841,6 +852,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _generation_run_item(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for Generation Worker handler.
 
@@ -1003,6 +1015,7 @@ class WorkerRuntime:
                 "could not project the handler fault onto RunItem %s", run_item_id
             )
 
+    @runs_as(WORKER_ROLE)
     async def _generation_qc_asset_version(self, job: jobs.ClaimedJob) -> None:
         """Quality-check the exact generated AssetVersion/RunItem (Issue #169).
 
@@ -1173,6 +1186,7 @@ class WorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _generation_export_package(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for Issue #49 Task 9's export Worker handler.
 
@@ -1225,6 +1239,7 @@ class WorkerRuntime:
             retryable=False,
         )
 
+    @runs_as(WORKER_ROLE)
     def _library_connection_check(self, job: jobs.ClaimedJob) -> None:
         """Run the local DataSource check (#383, ``app.library.connection_checks``).
 
@@ -1289,6 +1304,7 @@ class WorkerRuntime:
             return
         jobs.succeed(job.context, job.id, self.owner)
 
+    @runs_as(WORKER_ROLE)
     async def _library_manual_fact_import(self, job: jobs.ClaimedJob) -> None:
         """Import a finalized upload into a new Manual Fact Set draft (#397).
 
@@ -1433,6 +1449,7 @@ class WorkerRuntime:
             code=code, detail=f"Operation 已是 {state}", retryable=False,
         )
 
+    @runs_as(WORKER_ROLE)
     async def _library_reference_gate(self, job: jobs.ClaimedJob) -> None:
         """Run reference upload gate checks on a quarantined object.
 
@@ -1543,6 +1560,7 @@ class WorkerRuntime:
             self._intake_fetcher = fetcher
         return fetcher
 
+    @runs_as(WORKER_ROLE)
     async def _products_intake(self, job: jobs.ClaimedJob) -> None:
         """Fence for the product-intake Job: fetch -> extract -> images.
 
@@ -1607,6 +1625,7 @@ class WorkerRuntime:
                 code=outcome.code or "product_intake_failed", detail=outcome.detail, retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _external_creative(self, job: jobs.ClaimedJob) -> None:
         """Fence for the external-creative Job (Issue #168): gate -> asset -> tag.
 
@@ -1669,6 +1688,7 @@ class WorkerRuntime:
                 code=outcome.code or "external_creative_failed", detail=outcome.detail, retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _test_plan_draft(self, job: jobs.ClaimedJob) -> None:
         """Fence for the test-plan drafting Job (Issues #163, #164).
 
@@ -1722,6 +1742,7 @@ class WorkerRuntime:
                 detail=outcome.detail, retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _scale_evaluate(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_evaluate`` job (spec §3.8, Issue #25
         Task 14). This shared Worker's ``run_scale_evaluation`` call is a pure
@@ -1771,6 +1792,7 @@ class WorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _scale_export(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_export`` job (#55).
 
@@ -1824,6 +1846,7 @@ class WorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _meta_schedule_tick(self, job: jobs.ClaimedJob) -> None:
         schedule_id = str(job.payload.get("schedule_id") or "")
         if not schedule_id:
@@ -1850,6 +1873,7 @@ class WorkerRuntime:
                 retryable=True,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _launch_canary(self, job: jobs.ClaimedJob) -> None:
         operation_id = str(job.payload.get("operation_id") or "")
         if not operation_id:
@@ -1888,6 +1912,7 @@ class WorkerRuntime:
             raise ValueError("missing or invalid meta_mode")
         return replace(job.context, meta_mode=mode)
 
+    @runs_as(WORKER_ROLE)
     def _launch_provisioning(self, job: jobs.ClaimedJob) -> None:
         operation_id = str(job.payload.get("operation_id") or "")
         provisioning_id = str(job.payload.get("provisioning_id") or "")
@@ -1995,6 +2020,7 @@ class WorkerRuntime:
                 code="launch_provisioning_failed", detail=detail, retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _launch_recovery(self, job: jobs.ClaimedJob) -> None:
         reconciliation_id = str(job.payload.get("reconciliation_id") or "")
         if not reconciliation_id:
@@ -2022,6 +2048,7 @@ class WorkerRuntime:
                 code="launch_recovery_failed", detail=str(exc), retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _meta_read_ingestion(self, job: jobs.ClaimedJob) -> None:
         ingestion_id = str(job.payload.get("ingestion_id") or "")
         if not ingestion_id:
@@ -2077,6 +2104,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _generate_asset(self, job: jobs.ClaimedJob) -> None:
         # ---- dispatch fence ----
         # Jobs with execution_contract_version >= 1 go through the

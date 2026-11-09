@@ -96,6 +96,7 @@ from app.scale.models import (
     ScaleTestPlanDraftRecord,
 )
 from app.scale.types import AdviceType, DataQualityState, EvidenceMaturity
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 _SYSTEM_EXECUTOR = "system:scale_advice_lifecycle"
 _RESOLVE_AFTER_ELIGIBLE_MISSES = 2
@@ -286,6 +287,7 @@ def _load_active_threads(
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def process_advice_candidates(
     session: Session,
     context: TenantContext,
@@ -966,6 +968,7 @@ def create_snooze(
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def expire_advice_thread(
     session: Session,
     context: TenantContext,

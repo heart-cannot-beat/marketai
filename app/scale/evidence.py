@@ -129,6 +129,7 @@ from app.scale.types import (
     ScaleHealth,
     WindowRole,
 )
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 # v2 (Issue #57): window days before the Episode's `started_local_day` are
 # sealed as `before_episode` instead of a blocking `daily_slot_missing`.
@@ -384,6 +385,7 @@ def _contract_set_hash(contracts: tuple[MetricContractRef, ...]) -> str:
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     """Seal or reuse the exact snapshot selected by the durable run.
 

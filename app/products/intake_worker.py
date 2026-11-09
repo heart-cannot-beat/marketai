@@ -48,6 +48,7 @@ from app.providers.llm_chat import LlmChatClient, LlmChatError, LlmChatRequest, 
 from . import intake_extraction as extraction
 from .intake_fetch import MAX_IMAGES, FetchRefused, SafeFetcher, sniff_image
 from .intake_html import ImageCandidateRef, page_digest_text, parse_product_page
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 #: Images that go through the reference gate (and can be bound on confirm).
 MAX_GATED_IMAGES = 8
@@ -194,6 +195,7 @@ def _step_payload(previous: dict, started: datetime, started_mono: float, **fiel
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 async def run_product_intake(
     ctx: TenantContext,
     *,
@@ -239,6 +241,7 @@ async def run_product_intake(
     return IntakeOutcome("ready")
 
 
+@runs_as(WORKER_ROLE)
 def mark_intake_failed(ctx: TenantContext, intake_id: str, *, code: str, detail: str) -> None:
     """Record an unexpected handler fault on the intake (best effort)."""
     try:

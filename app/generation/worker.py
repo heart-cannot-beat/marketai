@@ -61,6 +61,7 @@ from app.generation.thumbnails import CommittedThumbnail, apply_thumbnail
 from app.platform.jobs import enqueue_in_session
 from app.platform.blob_store import BlobStore, CommittedBlobRef, GeneratedArtifactSpec
 from app.platform.tenancy import TenantContext
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 if TYPE_CHECKING:
     from app.generation.controlled_adapter import GenerationRequest
@@ -85,6 +86,7 @@ class StaleRunItemRevisionError(RuntimeError):
     """Raised when a CAS UPDATE on a RunItem (or its GenerationRun) affects no row."""
 
 
+@runs_as(WORKER_ROLE)
 def handle_run_item(
     session: Session,
     ctx: TenantContext,
@@ -538,6 +540,7 @@ def _transition_item(
 _HANDLER_FAULT_STATES = ("pending", "queued", "running")
 
 
+@runs_as(WORKER_ROLE)
 def fail_run_item_after_handler_fault(
     session: Session,
     ctx: TenantContext,
@@ -821,6 +824,7 @@ def _get_or_create_reservation_id(
 # ---------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 async def handle_run_item_coordinated(
     coordinator: ExternalCallCoordinator,
     ctx: TenantContext,

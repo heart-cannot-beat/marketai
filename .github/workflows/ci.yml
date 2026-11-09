@@ -335,6 +335,17 @@ jobs:
             fi
           done
 
+      # SQLite has no roles: the grant guard in the SQLite suite (#59) checks
+      # every API and Worker write against the matrix that
+      # tests/support/grant_matrix.py evaluates from the role file. This
+      # proves the evaluation equals the ACLs a release leaves. It runs before
+      # any step that downgrades and upgrades a migration, whose own GRANTs
+      # are not the role file's.
+      - name: The grant guard's matrix is the one a release leaves
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_grant_matrix_pg -v
+
       - name: Row Level Security holds for every runtime role
         env:
           DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain

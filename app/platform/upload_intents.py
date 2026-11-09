@@ -47,6 +47,7 @@ from .blob_store import (
 from .purpose_policies import PURPOSE_POLICIES
 from .tenancy import TenantContext, current_context
 from .workspace_admission import WorkspaceAdmissionReader, WorkspaceNotFoundError
+from .runtime_role import WORKER_ROLE, runs_as
 
 __all__ = [
     "UploadIntentRecord",
@@ -440,6 +441,7 @@ class VerificationOutcome:
     detail: str = ""
 
 
+@runs_as(WORKER_ROLE)
 async def verify_upload_intent(
     context: TenantContext,
     intent_id: str,

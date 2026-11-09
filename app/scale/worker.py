@@ -40,6 +40,7 @@ import uuid
 
 from app.adapters.persistence.database import SessionLocal, assert_runtime_role, tenant_session
 from app.platform import jobs
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 from app.platform.tenancy import TenantContext
 from app.scale.advice import AdviceLifecycleError, expire_advice_thread
 from app.scale.exports import ExportError, export_job_context, run_scale_export
@@ -68,6 +69,7 @@ class ScaleWorkerRuntime:
             if not handled:
                 await asyncio.sleep(_JOB_POLL_SECONDS)
 
+    @runs_as(WORKER_ROLE)
     def run_once(self) -> bool:
         job = jobs.claim_next(self.owner)
         if job is None:
@@ -91,6 +93,7 @@ class ScaleWorkerRuntime:
         )
         return True
 
+    @runs_as(WORKER_ROLE)
     def _scale_evaluate(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_evaluate`` job (spec §3.8).
 
@@ -134,6 +137,7 @@ class ScaleWorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _scale_advice_expire(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_advice_expire`` deadline job (spec §3.5)."""
         thread_id = str(job.payload.get("thread_id") or "")
@@ -171,6 +175,7 @@ class ScaleWorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _scale_export(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_export`` job (Issue #87 Task 5).
 
