@@ -143,6 +143,20 @@ def _transitions(operation_id: str) -> list[tuple[str | None, str]]:
     return [(frm, to) for frm, to, _ in _events(operation_id)]
 
 
+def _operation_usage(operation_id: str) -> list[tuple[str, str]]:
+    """The Operation's Usage rows (#8 S2): ``(metric_key, execution_mode)``."""
+    from app.entitlements.usage_models import UsageEventRecord
+
+    with platform_session() as session:
+        return sorted(
+            (row.metric_key, row.execution_mode)
+            for row in session.scalars(select(UsageEventRecord).where(
+                UsageEventRecord.source_resource_type == "operation",
+                UsageEventRecord.source_resource_id == operation_id,
+            ))
+        )
+
+
 def _reconciled_audits(operation_id: str) -> list[dict]:
     with platform_session() as session:
         return [
@@ -168,6 +182,8 @@ class LegacyFoldCases:
     #: The resource as the command left it, and as the fold must leave it.
     RESOURCE_BEFORE: object = None
     RESOURCE_AFTER: object = None
+    #: The Usage bucket the settled Operation is counted in (#8 S2).
+    USAGE_MODE = "not_applicable"
 
     def workspace_id(self) -> str:
         raise NotImplementedError
@@ -225,6 +241,10 @@ class LegacyFoldCases:
         self.assertEqual(_events(self.operation_id), settled)
         self.assertEqual(sum(1 for _, to, _ in settled if to == "failed"), 1)
         self.assertEqual(len(_reconciled_audits(self.operation_id)), 1)
+        # Usage (#8 S2): the fold settles through transition_operation, which
+        # counts the Operation once however often the fold runs.
+        self.assertEqual(_operation_usage(self.operation_id),
+                         [("operations", self.USAGE_MODE), ("processing_seconds", self.USAGE_MODE)])
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +297,7 @@ class TestReferenceGateFold(crash.ReferenceGateFixture, LegacyFoldCases):
 class TestExportPackageFold(crash.ExportPackageFixture, LegacyFoldCases):
     RESOURCE_BEFORE = ("pending", None)
     RESOURCE_AFTER = ("failed", EPOCH_STALE)
+    USAGE_MODE = "mock"  # the Mock-mode resource this command acted on
 
     def resource(self):
         import json
@@ -510,6 +531,7 @@ class TestLaunchProvisioningFold(LaunchFixture, LegacyFoldCases):
             [(None, "queued"), ("queued", "running"), ("running", "uncertain")],
         )
         self.assertEqual(self.resource(), "provisioning", "the saga's evidence is not rewritten")
+        self.assertEqual(_operation_usage(self.operation_id), [], "uncertain is not terminal: not counted yet")
 
 
 class TestLaunchRecoveryFold(LaunchFixture, LegacyFoldCases):
@@ -574,6 +596,7 @@ class MarketingFold(LegacyFoldCases):
 class TestPlanningCallFold(planning_tests.MarketingPlanningFixtures, MarketingFold):
     RESOURCE_BEFORE = ("queued", None, None)
     RESOURCE_AFTER = ("failed", EPOCH_STALE, None)
+    USAGE_MODE = "mock"  # the Mock-mode resource this command acted on
 
     def seed(self, byok: bool = False) -> None:
         if byok:
@@ -608,6 +631,9 @@ class TestPlanningCallFold(planning_tests.MarketingPlanningFixtures, MarketingFo
         self.change_epoch_and_dispatch()
         self.fold()
         self.assertEqual(self.resource(), ("failed", EPOCH_STALE, "released"))
+        # Usage (#8 S2): the reservation records BYOK, so the Operation is real use.
+        self.assertEqual(_operation_usage(self.operation_id),
+                         [("operations", "byok"), ("processing_seconds", "byok")])
         # ``advance`` refuses while the latest call is queued/running/uncertain.
         again = self.plan_call(self.read(self.project))
         self.assertTrue(again["id"])
@@ -627,6 +653,7 @@ class TestPlanningCallFold(planning_tests.MarketingPlanningFixtures, MarketingFo
             [(None, "queued"), ("queued", "running"), ("running", "uncertain")],
         )
         self.assertEqual(self.resource()[:2], ("uncertain", "planner_outcome_unknown"))
+        self.assertEqual(_operation_usage(self.operation_id), [], "uncertain is not terminal: not counted yet")
 
 
 class TestResolveCallFold(planning_tests.MarketingPlanningFixtures, MarketingFold):
@@ -662,6 +689,7 @@ class TestResolveCallFold(planning_tests.MarketingPlanningFixtures, MarketingFol
 class TestAIQCCallFold(ai_qc_tests.MarketingAIQCFixtures, MarketingFold):
     RESOURCE_BEFORE = ("queued", None)
     RESOURCE_AFTER = ("failed", EPOCH_STALE)
+    USAGE_MODE = "mock"  # the Mock-mode resource this command acted on
 
     def seed(self) -> None:
         _, row = self.setup_round()
@@ -685,6 +713,7 @@ class TestAIQCCallFold(ai_qc_tests.MarketingAIQCFixtures, MarketingFold):
 class TestImageEditFold(workflow_tests.MarketingWorkflowFixtures, MarketingFold):
     RESOURCE_BEFORE = ("queued", None)
     RESOURCE_AFTER = ("failed", EPOCH_STALE)
+    USAGE_MODE = "mock"  # the Mock-mode resource this command acted on
 
     def seed(self) -> None:
         project = self.confirmed()
@@ -710,6 +739,7 @@ class TestImageEditFold(workflow_tests.MarketingWorkflowFixtures, MarketingFold)
 class TestHandoffFold(workflow_tests.MarketingWorkflowFixtures, MarketingFold):
     RESOURCE_BEFORE = ("queued", None)
     RESOURCE_AFTER = ("failed", EPOCH_STALE)
+    USAGE_MODE = "mock"  # the Mock-mode resource this command acted on
 
     def seed(self) -> None:
         _, self.row = self.queued_handoff()
@@ -827,6 +857,17 @@ class TestGenerationRunFold(LibraryFixtures, LegacyFoldCases):
         self.assertEqual(_events(self.operation_id), settled)
         self.assertEqual(sum(1 for _, to, _ in settled if to == "failed"), 1)
         self.assertEqual(_reconciled_audits(self.operation_id), audits)
+        # Usage (#8 S2): the Mock Run's Operation is counted once, in the Mock
+        # bucket, and each item the fold failed is one failed generation.
+        self.assertEqual(_operation_usage(self.operation_id),
+                         [("operations", "mock"), ("processing_seconds", "mock")])
+        with tenant_session(self.ctx) as session:
+            from app.entitlements.usage_models import UsageEventRecord
+            failed = session.scalars(select(UsageEventRecord.execution_mode).where(
+                UsageEventRecord.workspace_id == self.ctx.workspace_id,
+                UsageEventRecord.metric_key == "generation_items_failed",
+            )).all()
+        self.assertEqual(failed, ["mock"] * len(self.item_jobs))
 
 
 # ---------------------------------------------------------------------------

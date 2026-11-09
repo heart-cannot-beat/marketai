@@ -23,8 +23,16 @@ the statement (``tests/test_usage_pg.py`` proves both points as that role):
 * The outcome is read from ``rowcount`` (kept with ``preserve_rowcount``),
   never ``RETURNING``, which would need SELECT too.
 
-``record_provider_call`` is the one writer in this slice: it counts a
-provider call once the settlement that knows the call happened commits.
+Writers, each called in the transaction of the fact it records:
+
+* ``record_provider_call`` (slice S1) counts a provider call once the
+  settlement that knows the call happened commits.
+* ``record_asset_version_generated`` and ``record_generation_item_failed``
+  (slice S2) count a generated AssetVersion where Generation creates it, and
+  a Generation RunItem that failed without one where it is marked failed.
+* ``app.entitlements.operation_usage.record_operation_settled`` (slice S2)
+  counts an Operation and its processing seconds when
+  ``transition_operation`` moves it to a terminal state.
 
 ``UsageQuery.summarize`` folds one metric over a time window into the four
 execution-mode buckets. Mock is reported in its own bucket and never enters
@@ -50,6 +58,7 @@ from app.entitlements.usage_models import UsageEventRecord
 from app.platform.tenancy import TenantContext, is_postgres
 
 if TYPE_CHECKING:
+    from app.adapters.persistence.models import AssetVersionRecord
     from app.entitlements.cost_models import ProviderCallAttemptRecord
 
 logger = logging.getLogger(__name__)
@@ -85,9 +94,57 @@ PROVIDER_CALLS = UsageMetric(
     aggregation="sum",
 )
 
+#: One AssetVersion that Generation produced (``origin_kind="generation"``),
+#: in the transaction that creates it. A RunItem that reuses an existing
+#: version produced nothing new and is not counted.
+ASSET_VERSIONS_GENERATED = UsageMetric(
+    key="asset_versions_generated",
+    measurement_kind="delta",
+    direction="increase",
+    unit="asset_version",
+    aggregation="sum",
+)
+
+#: One Generation RunItem that was marked ``failed`` without an AssetVersion,
+#: in the transaction that marks it. A failed automatic quality check is a
+#: quality outcome of a version that *was* produced, and is not counted.
+GENERATION_ITEMS_FAILED = UsageMetric(
+    key="generation_items_failed",
+    measurement_kind="delta",
+    direction="increase",
+    unit="run_item",
+    aggregation="sum",
+)
+
+#: One Operation that reached a terminal state. Its execution-mode bucket
+#: tells Mock Operations apart; they never enter ``total``.
+OPERATIONS = UsageMetric(
+    key="operations",
+    measurement_kind="delta",
+    direction="increase",
+    unit="operation",
+    aggregation="sum",
+)
+
+#: Seconds from an Operation's creation to its terminal state (spec §3.11).
+PROCESSING_SECONDS = UsageMetric(
+    key="processing_seconds",
+    measurement_kind="delta",
+    direction="increase",
+    unit="second",
+    aggregation="sum",
+)
+
 #: Every metric Usage records. A metric that is not here cannot be written.
 METRICS: Mapping[str, UsageMetric] = MappingProxyType({
-    metric.key: metric for metric in (PROVIDER_CALLS,)
+    metric.key: metric
+    for metric in (
+        PROVIDER_CALLS,
+        ASSET_VERSIONS_GENERATED,
+        GENERATION_ITEMS_FAILED,
+        OPERATIONS,
+        PROCESSING_SECONDS,
+    )
 })
 
 #: The execution-mode buckets of a usage event (spec §2.12).
@@ -111,8 +168,11 @@ _ATTEMPT_MODES: Mapping[str, str] = MappingProxyType({
     "controlled_mock": "mock",
 })
 
-#: ``source_resource_type`` of a provider-call fact.
+#: ``source_resource_type`` of each kind of fact.
 PROVIDER_CALL_ATTEMPT = "provider_call_attempt"
+ASSET_VERSION = "asset_version"
+RUN_ITEM = "run_item"
+OPERATION = "operation"
 
 _SEMANTIC_KEY_HASH = re.compile(r"[0-9a-f]{64}")
 
@@ -304,6 +364,76 @@ def record_provider_call(
         source_resource_id=attempt.id,
     )
     return UsageRecorder().record_many(session, ctx, [fact])
+
+
+def record_asset_version_generated(
+    session: Session,
+    ctx: TenantContext,
+    version: AssetVersionRecord,
+) -> UsageWriteResult:
+    """Count one ``asset_versions_generated`` for a version Generation just created.
+
+    Call it in the transaction that inserts the version, after the flush
+    that gave it its ``created_at``. The key is the version id: a version is
+    created once, so nothing can count it twice.
+    """
+    if version.workspace_id != ctx.workspace_id:
+        raise UsageFactError(
+            "usage_workspace_mismatch",
+            "the AssetVersion belongs to another Workspace than the context",
+        )
+    if version.origin_kind != "generation" or not version.execution_mode:
+        raise UsageFactError(
+            "usage_source_invalid",
+            "only an AssetVersion produced by Generation, with its execution mode, is counted",
+        )
+    fact = UsageFact(
+        metric_key=ASSET_VERSIONS_GENERATED.key,
+        quantity=Decimal("1"),
+        unit=ASSET_VERSIONS_GENERATED.unit,
+        execution_mode=usage_execution_mode(version.execution_mode),
+        semantic_key_hash=usage_semantic_key(ASSET_VERSIONS_GENERATED.key, ASSET_VERSION, version.id),
+        occurred_at=as_utc(version.created_at),
+        source_resource_type=ASSET_VERSION,
+        source_resource_id=version.id,
+    )
+    return UsageRecorder().record_many(session, ctx, [fact])
+
+
+def record_generation_item_failed(
+    session: Session,
+    ctx: TenantContext,
+    *,
+    run_item_id: str,
+    revision: int,
+    execution_mode: str,
+    occurred_at: datetime,
+) -> UsageWriteResult:
+    """Count one ``generation_items_failed`` for a RunItem just marked ``failed``.
+
+    ``revision`` is the RunItem revision the failure wrote. A RunItem can be
+    retried after it failed and fail again; each failure is its own fact,
+    and the revision tells them apart. Writing the same failure again (the
+    same RunItem and revision) counts nothing new.
+    """
+    fact = UsageFact(
+        metric_key=GENERATION_ITEMS_FAILED.key,
+        quantity=Decimal("1"),
+        unit=GENERATION_ITEMS_FAILED.unit,
+        execution_mode=usage_execution_mode(execution_mode),
+        semantic_key_hash=usage_semantic_key(
+            GENERATION_ITEMS_FAILED.key, RUN_ITEM, run_item_id, f"revision:{revision}",
+        ),
+        occurred_at=occurred_at,
+        source_resource_type=RUN_ITEM,
+        source_resource_id=run_item_id,
+    )
+    return UsageRecorder().record_many(session, ctx, [fact])
+
+
+def as_utc(moment: datetime) -> datetime:
+    """``moment`` with a timezone. SQLite hands back naive UTC timestamps."""
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=timezone.utc)
 
 
 # ---------------------------------------------------------------------------

@@ -36,6 +36,7 @@ from app.platform.operations import (
     validate_transition,
 )
 from app.platform.tenancy import TenantContext, apply_to_session
+from tests.support.usage_tables import operation_usage_tables
 
 
 class TestOperationStateMachine(unittest.TestCase):
@@ -173,6 +174,8 @@ class OperationPersistenceTestCase(unittest.TestCase):
                 WorkspaceRecord.__table__,
                 OperationRecord.__table__,
                 OperationStateEvent.__table__,
+                # A terminal transition records the Operation's Usage (#8 S2).
+                *operation_usage_tables(),
             ],
         )
         # The migration's append-only guard is DB-level SQL, not covered by

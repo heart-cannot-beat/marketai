@@ -332,6 +332,65 @@ class TestGenerationSelection(LibraryFixtures):
         self._run(item_id, job_id, adapter, times=2)
         self.assertEqual(self._provider_calls(item_id), ["mock"])
 
+    # -- Usage AssetVersions and failed items (#8 S2) -------------------------
+
+    def _usage(self, metric, source_id=None):
+        from app.entitlements.usage_models import UsageEventRecord
+        with tenant_session(self.context) as session:
+            query = select(UsageEventRecord).where(UsageEventRecord.workspace_id == self.context.workspace_id,
+                                                   UsageEventRecord.metric_key == metric)
+            if source_id is not None:
+                query = query.where(UsageEventRecord.source_resource_id == source_id)
+            return [(row.source_resource_id, row.execution_mode) for row in session.scalars(query)]
+
+    def _version_of(self, item_id):
+        with tenant_session(self.context) as session:
+            return session.scalar(select(AssetVersionRecord.id).where(
+                AssetVersionRecord.workspace_id == self.context.workspace_id,
+                AssetVersionRecord.producing_run_item_id == item_id))
+
+    def test_usage_counts_a_paid_image_as_one_generated_asset_version(self):
+        self.paid_setup()
+        item_id, job_id = self._paid_item()
+        adapter = AsyncMock()
+        adapter.execute.return_value = ProviderCallResult(png_bytes(), "request-1", False)
+        self._run(item_id, job_id, adapter, times=2)
+        self.assertEqual(self._usage("asset_versions_generated"), [(self._version_of(item_id), "byok")])
+        self.assertEqual(self._usage("generation_items_failed"), [])
+
+    def test_usage_counts_a_controlled_mock_image_in_the_mock_bucket_of_asset_versions(self):
+        draft = self.draft()
+        item_id, job_id = self.items(self.submit(draft, self.preview(draft)).json()["generation_run_id"])[0]
+        adapter = AsyncMock()
+        adapter.execute.return_value = ProviderCallResult(png_bytes(), "mock-request", False)
+        self._run(item_id, job_id, adapter)
+        self.assertEqual(self._usage("asset_versions_generated"), [(self._version_of(item_id), "mock")])
+
+    def test_usage_counts_a_refused_or_unprepared_paid_image_as_one_failed_item(self):
+        from app.generation.paid_execution import record_execution_failure
+        self.paid_setup(limit="50")
+        refused_id, refused_job = self._paid_item()
+        adapter = AsyncMock()
+        adapter.execute.side_effect = ProviderDispatchError("not_dispatched", "refused")
+        self._run(refused_id, refused_job, adapter, times=2)
+        unprepared_id, unprepared_job = self._paid_item()
+        for _ in range(2):
+            record_execution_failure(self.context.for_system_execution(), unprepared_job, unprepared_id)
+        self.assertEqual(sorted(self._usage("generation_items_failed")),
+                         sorted([(refused_id, "byok"), (unprepared_id, "byok")]))
+        self.assertEqual(self._usage("asset_versions_generated"), [])
+
+    def test_usage_counts_no_failure_while_a_paid_image_is_uncertain(self):
+        self.paid_setup()
+        item_id, job_id = self._paid_item()
+        adapter = AsyncMock()
+        adapter.execute.side_effect = ProviderDispatchError("may_have_dispatched", "lost")
+        self._run(item_id, job_id, adapter)
+        with tenant_session(self.context) as session:
+            self.assertEqual(session.get(RunItemRecord, item_id).state, "uncertain")
+        self.assertEqual(self._usage("generation_items_failed"), [])
+        self.assertEqual(self._usage("asset_versions_generated"), [])
+
     def test_real_wire_status_controls_ledger_and_resume_never_replays(self):
         """HTTP commands + real provider adapters; only vendor transport replaced."""
         import httpx
