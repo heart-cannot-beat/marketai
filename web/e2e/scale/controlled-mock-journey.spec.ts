@@ -15,6 +15,7 @@ import {
   inspectAdviceThreads,
   inspectZeroMetaWrites,
   computeCommandIdentityHash,
+  deriveBffIdempotencyKey,
   restartScaleApiServer,
   restartScaleWorker,
   installNetworkSpy,
@@ -735,7 +736,26 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
   test('18: hostile actions fail closed without mutating the original Workspace', async ({
     page,
     browser,
+    baseURL,
   }) => {
+    // The direct writes below go through the BFF like the page's own: it
+    // refuses a write without the page's Origin and CSRF token (403), and
+    // derives the Idempotency-Key from `X-Intent-Id` (step 07). Each hostile
+    // write therefore reaches the API, which is what must refuse it.
+    const csrfToken = (
+      await readJson<{ token: string }>(await page.request.get('/api/csrf'))
+    ).token;
+    const writeHeaders = (intentId: string) => ({
+      Origin: new URL(baseURL!).origin,
+      'X-CSRF-Token': csrfToken,
+      'X-Intent-Id': intentId,
+    });
+    const original = inspectEnrollment(
+      seed.workspaceId,
+      'controlled_mock',
+      enrollmentId
+    );
+
     // Cross-Workspace: a foreign session must never see this Enrollment.
     const foreignContext = await createAuthenticatedContext(browser);
     try {
@@ -755,27 +775,71 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     );
     expect([403, 404]).toContain(crossMode.status());
 
-    // Stale revision: activating/pausing with a long-expired revision must
-    // 409, not silently apply.
-    const staleActivate = await page.request.put(
+    // Stale revision: pausing with a long-expired, well-formed revision must
+    // 409, not silently apply. (400 or 428 would mean the If-Match never
+    // reached the API.)
+    const stalePause = await page.request.put(
       `${scaleBff('controlled_mock')}/enrollments/${enrollmentId}/pause`,
-      { headers: { 'If-Match': '"0"' }, data: { reason: 'e2e-hostile' } }
-    );
-    expect([400, 409, 428]).toContain(staleActivate.status());
-
-    // Duplicate binding: re-creating a Candidate for the same
-    // (decision, delivery_target) pair after it already has a live
-    // Enrollment must fail closed, not silently mint a second one.
-    const duplicateCandidate = await page.request.post(
-      `${scaleBff('controlled_mock')}/enrollment-candidates`,
       {
-        data: {
-          winner_decision_id: seed.decisionId,
-          delivery_target_id: seed.deliveryTargetId,
+        headers: {
+          ...writeHeaders(`e2e-hostile-pause-${seed.tag}`),
+          'If-Match': '"0"',
         },
+        data: { reason: 'e2e-hostile' },
       }
     );
-    expect(duplicateCandidate.status()).not.toBe(201);
+    expect(stalePause.status()).toBe(409);
+    expect((await stalePause.json()).code).toBe('revision_conflict');
+
+    // Duplicate binding: a second Enrollment on the binding this journey's
+    // Enrollment holds must never become active. A new Candidate and Draft
+    // for the same (decision, delivery_target) pair are allowed -- the
+    // Candidate list is advisory and a Candidate only proves lineage. The
+    // binding is reserved at activation (one ad belongs to at most one
+    // active or paused Enrollment), so activation is what must refuse.
+    const duplicateCandidate = await readJson<{ id: string }>(
+      await page.request.post(
+        `${scaleBff('controlled_mock')}/enrollment-candidates`,
+        {
+          headers: writeHeaders(`e2e-hostile-candidate-${seed.tag}`),
+          data: {
+            winner_decision_id: seed.decisionId,
+            delivery_target_id: seed.deliveryTargetId,
+          },
+        }
+      )
+    );
+    const duplicate = await readJson<{ id: string; revision: number }>(
+      await page.request.post(`${scaleBff('controlled_mock')}/enrollments`, {
+        headers: writeHeaders(`e2e-hostile-draft-${seed.tag}`),
+        data: { enrollment_candidate_id: duplicateCandidate.id },
+      })
+    );
+    const duplicatePreview = await readJson<{ id: string }>(
+      await page.request.post(
+        `${scaleBff('controlled_mock')}/enrollments/${duplicate.id}/activation-previews`,
+        {
+          headers: writeHeaders(`e2e-hostile-preview-${seed.tag}`),
+          data: { expected_revision: duplicate.revision },
+        }
+      )
+    );
+    const duplicateActivate = await page.request.put(
+      `${scaleBff('controlled_mock')}/enrollments/${duplicate.id}/activate`,
+      {
+        headers: {
+          ...writeHeaders(`e2e-hostile-activate-${seed.tag}`),
+          'If-Match': `"${duplicate.revision}"`,
+        },
+        data: { activation_preview_id: duplicatePreview.id },
+      }
+    );
+    expect(duplicateActivate.status()).toBe(409);
+    expect((await duplicateActivate.json()).code).toBe('duplicate_binding');
+    expect(
+      inspectEnrollment(seed.workspaceId, 'controlled_mock', duplicate.id)
+        .lifecycle
+    ).toBe('draft');
 
     // Reused idempotency key, different payload: the target-preview key
     // from step 7 replayed with a different target_cpa must conflict,
@@ -786,7 +850,7 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     const conflicting = await page.request.post(
       `${scaleBff('controlled_mock')}/target-publication-previews`,
       {
-        headers: { 'Idempotency-Key': idemKey },
+        headers: writeHeaders(idemKey),
         data: {
           product_version_id: seed.productVersionId,
           offer_version_id: seed.offerVersionId,
@@ -796,21 +860,29 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
         },
       }
     );
-    expect([409, 422]).toContain(conflicting.status());
+    expect(conflicting.status()).toBe(409);
+    expect((await conflicting.json()).code).toBe('idempotency_conflict');
 
-    // Command-outcome recovery: the identity hash from that same
-    // idempotency key still recovers the *original* recorded outcome.
+    // Command-outcome recovery: the identity hash from that same intent
+    // still recovers the *original* recorded outcome. The command's dedup
+    // key is the Idempotency-Key the BFF derived from the intent.
+    const dedupKey = deriveBffIdempotencyKey(
+      'create_scale_target_publication_preview',
+      idemKey
+    );
     const identity = computeCommandIdentityHash(
       'create_target_publication_preview',
-      idemKey
+      dedupKey
     );
     const recovered = await page.request.get(
       `${scaleBff('controlled_mock')}/command-outcomes/${identity}`
     );
-    if (recovered.ok()) {
-      const body = await readJson<{ dedup_key: string }>(recovered);
-      expect(body.dedup_key).toBe(idemKey);
-    }
+    const outcome = await readJson<{
+      command_type: string;
+      dedup_key: string;
+    }>(recovered);
+    expect(outcome.command_type).toBe('create_target_publication_preview');
+    expect(outcome.dedup_key).toBe(dedupKey);
 
     // Nothing above mutated the original Workspace's Enrollment state.
     const finalState = inspectEnrollment(
@@ -819,6 +891,8 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
       enrollmentId
     );
     expect(finalState.found).toBe(true);
+    expect(finalState.lifecycle).toBe(original.lifecycle);
+    expect(finalState.revision).toBe(original.revision);
 
     // Zero Meta writes across the entire journey (spec §4.5's closing
     // sentence): browser spy, server-side call-intent audit, and write

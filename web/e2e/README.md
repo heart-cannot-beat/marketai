@@ -95,21 +95,12 @@ runners pin `--project=chromium --workers=1`.
 The Localization suite stops and restarts the stack's Worker. The Scale suite
 restarts the API and the Worker and drains Jobs with a one-shot Worker; its
 seed needs the Worker running, because it waits for the Worker to finish the
-Localization batch its fixture confirms. The Experiments suite's Launch
-recovery stops, starts and restarts the Worker and restarts the API; the
-Member scenario uses `e2e/.auth/member.json`. It takes about six and a half
-minutes, five of them in Scenario 5c, which waits out the Worker's default
-300-second Job lease.
-
-### Known failures (2026-11-07, #19)
-
-On a local Compose stack each suite finishes in about a minute. These fail
-for reasons outside the suites' copy and seeds:
-
-- Scale, controlled-mock journey step 18 (#72): its hostile requests call the
-  BFF without the page's Origin, CSRF token and `X-Intent-Id`, so the first
-  one (the stale activation) is refused with 403 before it reaches the API
-  instead of the 400, 409 or 428 the step expects.
+Localization batch its fixture confirms. On a local Compose stack the
+Localization and Scale suites each finish in about a minute. The Experiments
+suite's Launch recovery stops, starts and restarts the Worker and restarts the
+API; the Member scenario uses `e2e/.auth/member.json`. It takes about six and
+a half minutes, five of them in Scenario 5c, which waits out the Worker's
+default 300-second Job lease.
 
 ## Manual workflow
 

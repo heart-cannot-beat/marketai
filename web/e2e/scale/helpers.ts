@@ -343,6 +343,22 @@ export function computeCommandIdentityHash(
     .digest('hex');
 }
 
+/** Mirror of the BFF's `deriveIdempotencyKey`
+ * (`lib/domain-client/request-pipeline.ts`): the BFF drops a client
+ * `Idempotency-Key` and sends FastAPI `SHA-256(operationId:intentId)` from
+ * the `X-Intent-Id` header instead. That derived key is the command's
+ * `dedup_key`, so a test recovering an outcome through the BFF hashes it,
+ * not the raw intent id, with `computeCommandIdentityHash`. */
+export function deriveBffIdempotencyKey(
+  operationId: string,
+  intentId: string
+): string {
+  return crypto
+    .createHash('sha256')
+    .update(`${operationId}:${intentId}`)
+    .digest('hex');
+}
+
 // ---------------------------------------------------------------------------
 // Worker / compose control
 // ---------------------------------------------------------------------------
