@@ -530,6 +530,7 @@
     "group_members": "A reference group needs at least one member.",
     "mapping_data_source": "Choose the data source version; there is no default data source.",
     "mapping_execution_mode": "Set the execution mode.",
+    "mapping_execution_mode_mismatch": "The execution mode must match the referenced data source version. Mock and real cannot be mixed.",
     "mapping_external_id": "Enter the external object ID. It is never taken from a title or the first variant.",
     "mapping_external_kind": "The external object kind must be product, variant, price_list or shipping_rule.",
     "mapping_external_object": "Name the external object this mapping points to.",

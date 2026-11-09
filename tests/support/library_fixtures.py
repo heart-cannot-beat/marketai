@@ -465,8 +465,8 @@ class LibraryFixtures(unittest.TestCase):
         offer_entry, offer_version = self._publish(
             owner, ENTRY_OFFER, "Alpha 单品", self._offer_content(product_version["id"])
         )
-        # market_source_mapping publish is blocked (data_source_version_unavailable)
-        # until #20 lands; create as entry + draft only.
+        # The mapping stays a draft: its data_source_version_id is opaque, so publish
+        # would refuse it with dependency_not_found (#61). Create entry + draft only.
         mapping_content = {
             "offer_version_id": offer_version["id"],
             "data_source_version_id": "dsv_opaque_shop_1",
@@ -478,7 +478,7 @@ class LibraryFixtures(unittest.TestCase):
             ctx, entry_type=ENTRY_MARKET_MAPPING, display_name="Alpha US 映射", content=mapping_content,
         )
         mapping_entry = mapping_entry_result["id"]
-        mapping_version = None  # cannot publish until #20
+        mapping_version = None  # draft only, see above
         person_entry, person_version = self._publish(
             ctx, ENTRY_PERSON, "Nova", self._person_content(ref_version["id"])
         )

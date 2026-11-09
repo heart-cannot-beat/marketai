@@ -682,7 +682,8 @@ def _validate_offer(content: dict, findings: list[Finding]) -> None:
 def _validate_market_mapping(content: dict, findings: list[Finding]) -> None:
     if not _is_str(content.get("offer_version_id")):
         findings.append(Finding("mapping_offer", "MarketSourceMappingVersion 必须引用一个 OfferVersion", "offer_version_id"))
-    # DataSourceVersion 归 #20 所有；这里只强制显式、非空的不透明 ID。
+    # 形状校验只要求显式、非空的 ID。它是否指向本 Workspace 的 DataSourceVersion
+    # 由发布时的依赖解析判断（#61），模式是否一致见 mapping_data_source_findings。
     if not _is_str(content.get("data_source_version_id")):
         findings.append(
             Finding("mapping_data_source", "必须显式声明 data_source_version_id，不存在隐式默认数据源", "data_source_version_id")
@@ -705,6 +706,32 @@ def _validate_market_mapping(content: dict, findings: list[Finding]) -> None:
         findings.append(Finding("mapping_market", "market 必须是 2 位 ISO 国家代码", "market"))
     if content.get("execution_mode") not in EXECUTION_MODES:
         findings.append(Finding("mapping_execution_mode", "必须显式声明 execution_mode", "execution_mode"))
+
+
+def mapping_data_source_findings(content: dict, data_source_content: Any) -> list[Finding]:
+    """A mapping's execution mode against the DataSourceVersion it names (#61).
+
+    The data source decides the mode (contract §1.9 / §18): a real mapping
+    cannot name a Mock data source version, nor a mock mapping a real one.
+    The service calls this once ``data_source_version_id`` has resolved to a
+    DataSource version of the same Workspace. A missing or unknown mapping
+    mode is already ``mapping_execution_mode``, so it adds nothing here.
+    """
+    mode = content.get("execution_mode") if isinstance(content, dict) else None
+    if mode not in EXECUTION_MODES:
+        return []
+    source = data_source_content if isinstance(data_source_content, dict) else {}
+    source_mode = source.get("execution_mode")
+    if mode == source_mode:
+        return []
+    return [
+        Finding(
+            "mapping_execution_mode_mismatch",
+            f"execution_mode {mode!r} 与所引用 DataSourceVersion 的 {source_mode!r} 不一致；"
+            "执行模式由数据源决定，Mock 与真实不能混用",
+            "execution_mode",
+        )
+    ]
 
 
 def _validate_person(content: dict, findings: list[Finding], *, today: date | None = None) -> None:
@@ -1273,6 +1300,7 @@ REL_PRODUCT_SELECTION_RULE = "product_selection_rule"
 REL_MUST_MATCH_EVIDENCE = "must_match_evidence"
 REL_OFFER_PRODUCT = "offer_product"
 REL_MAPPING_OFFER = "mapping_offer"
+REL_MAPPING_DATA_SOURCE = "mapping_data_source"
 REL_PERSON_REFERENCE = "person_reference"
 REL_GROUP_MEMBER = "group_member"
 REL_RULE_GROUP = "rule_group"
@@ -1321,6 +1349,9 @@ def extract_dependencies(entry_type: str, content: dict) -> list[DependencyEdge]
         add(content.get("product_version_id"), REL_OFFER_PRODUCT, "product_version_id")
     elif entry_type == ENTRY_MARKET_MAPPING:
         add(content.get("offer_version_id"), REL_MAPPING_OFFER, "offer_version_id")
+        # A version ID, not an entry ID: the mapping pins one DataSourceVersion,
+        # so withdrawing that version lists the mapping (#61).
+        add(content.get("data_source_version_id"), REL_MAPPING_DATA_SOURCE, "data_source_version_id")
     elif entry_type == ENTRY_PERSON:
         for index, item in enumerate(items(content.get("reference_bindings"))):
             if isinstance(item, dict):
@@ -1374,6 +1405,7 @@ RELATION_TARGET_TYPES = {
     REL_MUST_MATCH_EVIDENCE: ENTRY_REFERENCE_ASSET,
     REL_OFFER_PRODUCT: ENTRY_PRODUCT,
     REL_MAPPING_OFFER: ENTRY_OFFER,
+    REL_MAPPING_DATA_SOURCE: ENTRY_DATA_SOURCE,
     REL_PERSON_REFERENCE: ENTRY_REFERENCE_ASSET,
     REL_GROUP_MEMBER: ENTRY_REFERENCE_ASSET,
     REL_RULE_GROUP: ENTRY_REFERENCE_GROUP,

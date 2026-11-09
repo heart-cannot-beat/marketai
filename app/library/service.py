@@ -63,6 +63,7 @@ from .contracts import (
     ELIGIBILITY_WARNING,
     ENTRY_DATA_SOURCE,
     ENTRY_DIMENSION_SCHEMA,
+    ENTRY_MARKET_MAPPING,
     ENTRY_PERSON,
     ENTRY_PRODUCT,
     ENTRY_REFERENCE_ASSET,
@@ -71,6 +72,7 @@ from .contracts import (
     LIFECYCLE_ACTIVE,
     LIFECYCLE_ARCHIVED,
     REL_FACT_SET_DATA_SOURCE,
+    REL_MAPPING_DATA_SOURCE,
     REL_SCHEMA_PRODUCT,
     REL_TRUTH_POLICY_DATA_SOURCE,
     RELATION_TARGET_TYPES,
@@ -85,6 +87,7 @@ from .contracts import (
     diff_content,
     extract_dependencies,
     extract_reference_bindings,
+    mapping_data_source_findings,
     validate_content,
 )
 
@@ -1046,6 +1049,12 @@ def _build_report(
         _validate_reference_object(session, context, content, report.findings)
     elif entry.entry_type == ENTRY_DIMENSION_SCHEMA:
         _validate_schema_product_immutable(session, context, entry, content, report.findings)
+    elif entry.entry_type == ENTRY_MARKET_MAPPING:
+        # Only a reference that resolved to a usable DataSource version of
+        # this Workspace is compared; anything else is already blocking (#61).
+        for edge, target in resolved:
+            if edge.relation == REL_MAPPING_DATA_SOURCE:
+                report.findings.extend(mapping_data_source_findings(content, target.content_json))
     return report, resolved
 
 

@@ -53,6 +53,7 @@ from app.library.contracts import (  # noqa: E402
     DRAFT_VALIDATION_FAILED,
     ELIGIBILITY_BLOCKED,
     ELIGIBILITY_ELIGIBLE,
+    ENTRY_DATA_SOURCE,
     ENTRY_MARKET_MAPPING,
     ENTRY_OFFER,
     ENTRY_PERSON,
@@ -103,7 +104,8 @@ class LibraryCoreTests(LibraryFixtures):
             "rule": ENTRY_SELECTION_RULE,
             "product": ENTRY_PRODUCT,
             "offer": ENTRY_OFFER,
-            # mapping is tested separately: publish blocked by data_source_version_unavailable (see test_market_source_mapping_publish_blocked)
+            # the stack's mapping stays a draft (its data source ID is opaque); mapping
+            # publish is covered by test_market_source_mapping_roundtrip and test_library_market_mapping.py
             "person": ENTRY_PERSON,
         }
         for key, entry_type in expected_types.items():
@@ -774,7 +776,7 @@ class LibraryCoreTests(LibraryFixtures):
         _rule_entry, rule_version = stack["rule"]
         product_entry, product_version = stack["product"]
         _offer_entry, offer_version = stack["offer"]
-        # mapping_version is None (publish blocked by data_source_version_unavailable)
+        # mapping_version is None: the stack's mapping stays a draft
         _person_entry, person_version = stack["person"]
 
         # 反向闭包：ref ← group ← {rule, product}；rule ← product；product ← offer；ref ← person。
@@ -1210,9 +1212,14 @@ class LibraryTenantAndMountGuardTests(LibraryFixtures):
         _offer_entry, offer_version = self._publish(
             ctx, ENTRY_OFFER, "Offer Test", self._offer_content(product_version["id"]),
         )
+        # The mapping must name a published DataSource version of this
+        # Workspace whose mode matches its own (#61).
+        _source_entry, source_version = self._publish(
+            ctx, ENTRY_DATA_SOURCE, "Mock source", {"adapter_kind": "mock", "execution_mode": "mock"},
+        )
         mapping_content = {
             "offer_version_id": offer_version["id"],
-            "data_source_version_id": "dsv_opaque_shop_1",
+            "data_source_version_id": source_version["id"],
             "external_object": {"kind": "variant", "id": "gid://shopify/ProductVariant/42"},
             "market": "US",
             "execution_mode": "mock",
@@ -1225,7 +1232,7 @@ class LibraryTenantAndMountGuardTests(LibraryFixtures):
         self.assertTrue(report["ok"], report)
         version = service.publish(ctx, entry["id"], revision)
         self.assertEqual(version["state"], "effective")
-        self.assertEqual(version["content"]["data_source_version_id"], "dsv_opaque_shop_1")
+        self.assertEqual(version["content"]["data_source_version_id"], source_version["id"])
         self.assertEqual(version["content"]["market"], "US")
 
     def test_market_source_mapping_rejects_missing_fields(self) -> None:
