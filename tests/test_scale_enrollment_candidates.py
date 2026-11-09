@@ -23,7 +23,6 @@ brief sketch's placeholder ``winner_not_confirmed``.
 """
 from __future__ import annotations
 
-import itertools
 import os
 import tempfile
 import unittest
@@ -106,6 +105,7 @@ from app.scale.delivery_targets import DeliveryTargetRequest, create_delivery_ta
 from app.scale.enrollment import CandidateFingerprintDriftError, create_draft_enrollment
 from app.scale.enrollment_lineage import DeliveryTargetNotFoundError
 from tests.experiment_governance_fixtures import govern_asset_versions, govern_product_offer_versions
+from tests.support.market_codes import next_market_code as _next_market
 
 CTX = TenantContext(
     workspace_id="ws_secand",
@@ -131,14 +131,6 @@ PRICE_REGISTRY = {
     "mock-edit": {"mock-edit-1": Decimal("0.05")},
     "mock-translate": {"mock-translate-1": Decimal("0.02")},
 }
-
-_MARKET_COUNTER = itertools.count(0)
-
-
-def _next_market() -> str:
-    n = next(_MARKET_COUNTER)
-    return chr(ord("A") + n // 26) + chr(ord("A") + n % 26)
-
 
 # ---------------------------------------------------------------------------
 # Light Winner chain (mirrors tests/test_winner_eligibility.py's identical

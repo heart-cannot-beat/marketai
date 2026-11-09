@@ -17,10 +17,11 @@ import pytest
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="marketai-pytest-"))
 atexit.register(shutil.rmtree, TEST_ROOT, ignore_errors=True)
+SHARED_DATABASE_URL = f"sqlite:///{TEST_ROOT / 'marketai.db'}"
 
 os.environ["MARKETAI_TEST_ROOT"] = str(TEST_ROOT)
 os.environ["MARKETAI_DATA_DIR"] = str(TEST_ROOT / "data")
-os.environ["MARKETAI_DATABASE_URL"] = f"sqlite:///{TEST_ROOT / 'marketai.db'}"
+os.environ["MARKETAI_DATABASE_URL"] = SHARED_DATABASE_URL
 os.environ["MARKETAI_WORKSPACE_ID"] = "ws_test"
 os.environ["MAX_COST_PER_RUN"] = "5"
 os.environ["MAX_COST_PER_DAY"] = "20"
@@ -45,6 +46,30 @@ def _start_each_file_with_no_claimable_leftover_jobs():
 
     quarantine_open_jobs()
     yield
+
+
+_running = {"item": None}
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    """Remember the running test, its setUpClass and fixtures included, so the
+    market-code guard can name it."""
+    _running["item"] = item
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _market_codes_never_collide_in_the_shared_database():
+    """``market_policies.market_id`` is unique, and which files share this
+    process's database changes from CI run to run. Every two-letter code must
+    come from ``tests.support.market_codes``, and no code may be written
+    twice; breaking either fails with an AssertionError that names the rule,
+    not an occasional IntegrityError (#81)."""
+    from tests.support.market_codes import guard_shared_database
+
+    remove = guard_shared_database(SHARED_DATABASE_URL, lambda: _running["item"])
+    yield
+    remove()
 
 
 def pytest_collection_modifyitems(config, items):

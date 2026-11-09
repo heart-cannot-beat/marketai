@@ -16,7 +16,6 @@ convention, this one genuinely lives in ``tests/support/`` (alongside
 """
 from __future__ import annotations
 
-import itertools
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -84,6 +83,7 @@ from app.meta.sync_pipeline import create_sync_run
 from app.platform.tenancy import TenantContext
 from app.scale.delivery_targets import DeliveryTargetRequest, create_delivery_target
 from tests.experiment_governance_fixtures import govern_asset_versions, govern_product_offer_versions
+from tests.support.market_codes import next_market_code as _next_market
 
 PRICE_REGISTRY = {
     "mock-vision": {"mock-vision-1": Decimal("0.01")},
@@ -93,12 +93,6 @@ PRICE_REGISTRY = {
 
 OBSERVED_AT = datetime(2026, 9, 1, tzinfo=timezone.utc)
 FAR_FUTURE = OBSERVED_AT + timedelta(days=365)
-_MARKET_COUNTER = itertools.count(500)
-
-
-def _next_market() -> str:
-    n = next(_MARKET_COUNTER)
-    return chr(ord("A") + n // 26) + chr(ord("A") + n % 26)
 
 
 def ensure_governance_prereqs(ctx: TenantContext, product_id: str) -> None:
