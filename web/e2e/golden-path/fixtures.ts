@@ -181,6 +181,8 @@ export interface WorkspaceProvisionResult {
 export async function provisionWorkspace(options: {
   suffix: string;
   mfaEncryptionKey: Buffer;
+  /** First-Owner invitation address; defaults to a new user per suffix. */
+  ownerEmail?: string;
 }): Promise<{
   result: WorkspaceProvisionResult;
   prisma: any;
@@ -210,7 +212,8 @@ export async function provisionWorkspace(options: {
 
   const { suffix } = options;
   const workspaceSlug = `e2e-golden-path-${suffix}`;
-  const ownerEmail = `e2e-gp-owner-${suffix}@example.test`;
+  const ownerEmail =
+    options.ownerEmail ?? `e2e-gp-owner-${suffix}@example.test`;
   const ownerPassword = 'correct horse battery staple';
   const ownerMfaSecret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 

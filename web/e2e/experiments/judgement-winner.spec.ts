@@ -57,10 +57,8 @@ interface JudgeResult {
  * (steps 12-16) -- this file covers only the inconclusive branch that
  * Scenario 1 never reaches (it seeds decisive metrics on purpose).
  *
- * This test cannot run without a live Postgres/API/Worker stack. It is
- * written to be structurally correct and type-safe against the real OpenAPI
- * contract (`lib/domain-client/generated/domain-v1.d.ts`) and the real
- * component/service source, not to be executed in this sandbox.
+ * This test needs a live Postgres/API/Worker stack; run it with
+ * `npm run test:e2e:experiments` (`e2e/README.md`).
  */
 
 /** Mirrors `toDraftContext` in `ExperimentsWorkspace.tsx` and satisfies

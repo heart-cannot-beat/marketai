@@ -52,11 +52,9 @@ type AssetVersionDetail = components['schemas']['AssetVersionDetail'];
  * intercepts `/api/domain/**` or manufactures duplicate-group/freeze/launch
  * state in browser memory.
  *
- * These tests cannot run without a live Postgres/API/Worker stack (see
- * `seed_prerequisites.py`'s required environment). They are written to be
- * structurally correct and type-safe against the real OpenAPI contract
- * (`lib/domain-client/generated/domain-v1.d.ts`) and the real component
- * source, not to be executed in this sandbox.
+ * These tests need a live Postgres/API/Worker stack (see
+ * `seed_prerequisites.py`'s required environment); run them with
+ * `npm run test:e2e:experiments` (`e2e/README.md`).
  */
 
 const LAUNCH_BFF = `/api/domain/v1/w/${WORKSPACE_SLUG}/launch`;

@@ -59,8 +59,9 @@ export default defineConfig({
       dependencies: ['setup'],
     },
     {
-      // A fresh Workspace with an MFA Owner and a Member for the
-      // Localization and Scale runners (e2e/support/identities.setup.ts).
+      // Fresh Workspaces with an MFA Owner and a Member for the
+      // Localization, Scale and Experiments runners
+      // (e2e/support/identities.setup.ts).
       name: 'identities',
       testMatch: /support\/identities\.setup\.ts/,
       retries: 0,
