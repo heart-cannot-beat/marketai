@@ -25,12 +25,25 @@ Here, as the roles that run in production:
   ``"0"``; a request with no verified identity gets 401;
 * the API role without a tenant context sees no row.
 
+Slice S2 adds AssetVersion and Operation facts, written as the role that
+runs the domain change:
+
+* ``transition_operation`` into a terminal state counts ``operations`` and
+  ``processing_seconds`` as the API and as the Worker. Reading the
+  Operation's execution mode reads every ``MODE_EVIDENCE`` table, so this
+  also proves both roles may SELECT each of them under RLS; settling again
+  is refused, recording again is a duplicate;
+* ``asset_versions_generated`` and ``generation_items_failed`` are written
+  as both roles, and a repeat is a duplicate;
+* one Workspace's Operations never show in another's ``/usage``.
+
 Then the privilege matrix of ``usage_events`` (the API reads and appends, the
 Worker only appends, Readonly only reads, nobody updates or deletes) and the
 migration's upgrade, downgrade and upgrade again.
 
-Every Workspace a test opens, and its usage rows, are removed afterwards by
-the owner with the append-only trigger disabled for that one transaction.
+Every Workspace a test opens, its usage rows and its Operations, are removed
+afterwards by the owner with the append-only triggers disabled for that one
+transaction.
 
 Run with ``DOMAIN_OWNER_DATABASE_URL``, ``DOMAIN_API_DATABASE_URL``,
 ``DOMAIN_WORKER_DATABASE_URL``, ``MARKETAI_DATABASE_URL`` (the owner) and
@@ -59,11 +72,26 @@ from sqlalchemy.orm import sessionmaker
 from app import config
 from app.adapters.persistence.database import platform_session, tenant_session
 from app.adapters.persistence.models import WorkspaceRecord
-from app.entitlements.usage import UsageFact, UsageRecorder, record_provider_call, usage_semantic_key
+from app.entitlements.operation_usage import record_operation_settled
+from app.entitlements.usage import (
+    UsageFact,
+    UsageRecorder,
+    record_asset_version_generated,
+    record_generation_item_failed,
+    record_provider_call,
+    usage_semantic_key,
+)
 from app.entitlements.usage_models import UsageEventRecord
 from app.library.contracts import ROLE_MEMBER, ROLE_OWNER
 from app.main import app
 from app.platform.http_identity import request_tenant_context
+from app.platform.operations import (
+    InvalidOperationTransitionError,
+    OperationRecord,
+    OperationState,
+    create_operation,
+    transition_operation,
+)
 from app.platform.tenancy import TenantContext
 
 URLS = [os.getenv(key) for key in ("DOMAIN_OWNER_DATABASE_URL", "DOMAIN_API_DATABASE_URL", "DOMAIN_WORKER_DATABASE_URL")]
@@ -114,8 +142,16 @@ class UsagePostgresTests(unittest.TestCase):
             return
         with self.owner.begin() as connection:
             connection.execute(text("ALTER TABLE usage_events DISABLE TRIGGER trg_usage_events_immutable"))
+            connection.execute(text(
+                "ALTER TABLE operation_state_events DISABLE TRIGGER operation_state_events_reject_mutation"))
             connection.execute(text("DELETE FROM usage_events WHERE workspace_id = ANY(:ids)"),
                                {"ids": self.workspaces})
+            connection.execute(text("DELETE FROM operation_state_events WHERE workspace_id = ANY(:ids)"),
+                               {"ids": self.workspaces})
+            connection.execute(text("DELETE FROM operation_records WHERE workspace_id = ANY(:ids)"),
+                               {"ids": self.workspaces})
+            connection.execute(text(
+                "ALTER TABLE operation_state_events ENABLE TRIGGER operation_state_events_reject_mutation"))
             connection.execute(text("ALTER TABLE usage_events ENABLE TRIGGER trg_usage_events_immutable"))
             connection.execute(text("DELETE FROM workspaces WHERE id = ANY(:ids)"), {"ids": self.workspaces})
 
@@ -285,6 +321,90 @@ class UsagePostgresTests(unittest.TestCase):
         app.dependency_overrides.pop(request_tenant_context, None)  # no verified identity at all
         with self._as(API), patch.object(config, "LOCAL_IDENTITY_ENABLED", False):
             self.assertEqual(self.client.get("/api/v1/usage").status_code, 401)
+
+    # -- Slice S2: Operations and AssetVersions ------------------------------
+
+    def _operation(self, ctx: TenantContext) -> str:
+        """Commands are admitted by the API: the Worker cannot INSERT operation_records."""
+        with self._as(API), tenant_session(ctx) as session:
+            return create_operation(session, command_type="usage.pg_test", context=ctx).id
+
+    def _move(self, index: int, ctx: TenantContext, operation_id: str, state: OperationState) -> None:
+        with self._as(index), tenant_session(ctx) as session:
+            transition_operation(session, operation_id, state, reason="pg test", actor=ROLE_NAMES[index])
+
+    def _metrics(self, ctx: TenantContext, source_id: str) -> list[tuple]:
+        with self._as(API), tenant_session(ctx) as session:
+            return sorted((r.metric_key, r.execution_mode, r.unit) for r in session.query(UsageEventRecord)
+                          .filter(UsageEventRecord.source_resource_id == source_id))
+
+    def test_settling_an_operation_counts_it_as_the_worker_and_the_api(self):
+        ctx = self._workspace("ws_usage_pg_op", ROLE_OWNER, "owner_o")
+        for index, name in ROLE_NAMES.items():
+            with self.subTest(role=name):
+                operation_id = self._operation(ctx)
+                self._move(index, ctx, operation_id, OperationState.RUNNING)
+                self.assertEqual(self._metrics(ctx, operation_id), [], "running is not terminal")
+                self._move(index, ctx, operation_id, OperationState.SUCCEEDED)
+                self.assertEqual(self._metrics(ctx, operation_id), [
+                    ("operations", "not_applicable", "operation"),
+                    ("processing_seconds", "not_applicable", "second"),
+                ])
+                with self.assertRaises(InvalidOperationTransitionError):
+                    self._move(index, ctx, operation_id, OperationState.FAILED)
+                with self._as(index), tenant_session(ctx) as session:
+                    operation = session.get(OperationRecord, operation_id)
+                    again = record_operation_settled(session, ctx, operation,
+                                                     settled_at=datetime.now(timezone.utc))
+                self.assertEqual((again.written, again.duplicates), (0, 2))
+                self.assertEqual(len(self._metrics(ctx, operation_id)), 2)
+
+    def test_an_uncertain_operation_is_counted_once_when_the_worker_settles_it(self):
+        ctx = self._workspace("ws_usage_pg_unc", ROLE_OWNER, "owner_u")
+        operation_id = self._operation(ctx)
+        for state in (OperationState.RUNNING, OperationState.UNCERTAIN):
+            self._move(WORKER, ctx, operation_id, state)
+        self.assertEqual(self._metrics(ctx, operation_id), [])
+        self._move(WORKER, ctx, operation_id, OperationState.FAILED)
+        self.assertEqual([metric for metric, *_ in self._metrics(ctx, operation_id)],
+                         ["operations", "processing_seconds"])
+
+    def test_asset_version_facts_are_written_as_the_worker_and_the_api(self):
+        ctx = self._workspace("ws_usage_pg_av", ROLE_OWNER, "owner_v")
+        for index, name in ROLE_NAMES.items():
+            with self.subTest(role=name):
+                version = SimpleNamespace(id=f"av_{name}_{uuid.uuid4().hex[:8]}", workspace_id=ctx.workspace_id,
+                                          origin_kind="generation", execution_mode="byok",
+                                          created_at=datetime.now(timezone.utc))
+                item_id = f"ri_{name}_{uuid.uuid4().hex[:8]}"
+                with self._as(index), tenant_session(ctx) as session:
+                    self.assertEqual(record_asset_version_generated(session, ctx, version).written, 1)
+                    self.assertEqual(record_asset_version_generated(session, ctx, version).duplicates, 1)
+                    for _ in range(2):
+                        failed = record_generation_item_failed(
+                            session, ctx, run_item_id=item_id, revision=3, execution_mode="controlled_mock",
+                            occurred_at=datetime.now(timezone.utc))
+                    self.assertEqual((failed.written, failed.duplicates), (0, 1))
+                self.assertEqual(self._metrics(ctx, version.id), [("asset_versions_generated", "byok", "asset_version")])
+                self.assertEqual(self._metrics(ctx, item_id), [("generation_items_failed", "mock", "run_item")])
+
+    def test_one_workspace_s_operations_stay_out_of_another_s_usage(self):
+        alpha = self._workspace("ws_usage_pg_op_a", ROLE_MEMBER, "member_a")
+        beta = self._workspace("ws_usage_pg_op_b", ROLE_MEMBER, "member_b")
+        operation_id = self._operation(alpha)
+        for state in (OperationState.RUNNING, OperationState.CANCELLED):
+            self._move(WORKER, alpha, operation_id, state)
+        for metric in ("operations", "processing_seconds"):
+            with self.subTest(metric=metric):
+                mine = self._usage(alpha, {"metric_key": metric})
+                theirs = self._usage(beta, {"metric_key": metric})
+                self.assertEqual(Decimal(mine["by_execution_mode"]["not_applicable"]) > 0, True)
+                self.assertEqual(Decimal(mine["total"]), Decimal(mine["by_execution_mode"]["not_applicable"]))
+                self.assertEqual((theirs["workspace_id"], Decimal(theirs["total"])), (beta.workspace_id, Decimal("0")))
+                self.assertEqual({Decimal(v) for v in theirs["by_execution_mode"].values()}, {Decimal("0")})
+        with self._as(API), tenant_session(beta) as session:  # nor through the table itself
+            self.assertEqual(session.query(UsageEventRecord).filter(
+                UsageEventRecord.source_resource_id == operation_id).count(), 0)
 
     def test_the_privilege_matrix_of_usage_events_holds(self):
         with self.owner.connect() as connection:

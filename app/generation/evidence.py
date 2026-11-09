@@ -21,7 +21,8 @@ Three responsibilities (matching spec section 2D exactly):
   later rollback is harmless.
 * ``persist_result`` -- in the complete transaction, create the
   ``AssetRecord`` + ``AssetVersionRecord`` (thumbnail columns included when
-  one was committed) + binding, transition the RunItem to ``qc_pending``,
+  one was committed) + binding, count the version in Usage
+  (``asset_versions_generated``), transition the RunItem to ``qc_pending``,
   enqueue the QC job, and sync the GenerationRun projection.
 
 Issue #98 Task 1; the blob-committing path arrived with BYOK dispatch, the
@@ -46,6 +47,7 @@ from app.adapters.persistence.models import (
     utcnow,
 )
 from app.entitlements.cost_models import ProviderCallAttemptRecord
+from app.entitlements.usage import record_asset_version_generated
 from app.generation.controlled_adapter import GenerationOutput
 from app.generation.models import (
     GenerationRecipeSnapshotRecord,
@@ -282,6 +284,7 @@ class GenerationEvidenceRecorder:
         apply_thumbnail(version, self._thumbnail)
         session.add(version)
         session.flush()
+        record_asset_version_generated(session, ctx, version)
 
         # -- Binding -------------------------------------------------------
         session.add(

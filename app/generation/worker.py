@@ -42,7 +42,11 @@ from app.adapters.persistence.models import (
     utcnow,
 )
 from app.entitlements.cost_models import ProviderCallAttemptRecord, SpendReservationRecord
-from app.entitlements.usage import record_provider_call
+from app.entitlements.usage import (
+    record_asset_version_generated,
+    record_generation_item_failed,
+    record_provider_call,
+)
 from app.generation.execution_policy import StepAdmission, StepRejection, admit_external_step
 from app.generation.models import (
     GenerationRecipeSnapshotRecord,
@@ -458,6 +462,7 @@ def _persist_output(
     apply_thumbnail(version, committed_thumbnail)
     session.add(version)
     session.flush()
+    record_asset_version_generated(session, ctx, version)
     return asset, version
 
 
@@ -480,6 +485,16 @@ def _transition_item(
     error_summary: str | None = None,
     same_snapshot_resumable: bool | None = None,
 ) -> RunItemRecord:
+    """CAS one RunItem state change; a change into ``failed`` is also counted.
+
+    Marking an item ``failed`` here means Generation produced no
+    AssetVersion for it, so the same transaction records one
+    ``generation_items_failed`` (Issue #8), keyed by the item and the
+    revision this change writes. A failed automatic quality check is
+    written by ``app.generation.qc`` through its own CAS and is not counted:
+    that item did produce its version.
+    """
+    previous_state = item.state
     values: dict = {"state": state, "revision": item.revision + 1, "updated_at": utcnow()}
     if error_summary is not None:
         values["error_summary"] = error_summary
@@ -508,6 +523,15 @@ def _transition_item(
         )
     session.flush()
     session.refresh(item)
+    if state == "failed" and previous_state != "failed":
+        record_generation_item_failed(
+            session,
+            ctx,
+            run_item_id=item.id,
+            revision=values["revision"],
+            execution_mode=item.execution_mode,
+            occurred_at=values["updated_at"],
+        )
     return item
 
 

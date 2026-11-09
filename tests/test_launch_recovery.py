@@ -53,6 +53,7 @@ from app.meta.models import (
     ScenarioVersionRecord,
 )
 from app.platform.tenancy import TenantContext
+from tests.support.usage_tables import operation_usage_tables
 
 
 def _sqlite_url(path: Path) -> str:
@@ -88,6 +89,8 @@ def db_session():
             LaunchSagaStepAttemptRecord.__table__,
             LaunchParityCheckRecord.__table__,
             LaunchReconciliationRecord.__table__,
+            # A terminal Operation records its Usage (#8 S2).
+            *operation_usage_tables(),
         ],
     )
     session = Session(bind=engine)

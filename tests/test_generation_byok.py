@@ -684,6 +684,66 @@ class ByokRunChainTests(LibraryFixtures):
             self.assertEqual([a.dispatch_state for a in attempts], ["failed", "succeeded"])
             self.assertEqual([r.state for r in self._reservations(s, item_id)], ["released", "settled"])
 
+    def _usage(self, s, metric: str) -> list[tuple[str, str]]:
+        from app.entitlements.usage_models import UsageEventRecord
+
+        return sorted((row.source_resource_id, row.execution_mode) for row in s.execute(
+            select(UsageEventRecord).where(
+                UsageEventRecord.workspace_id == self.ctx.workspace_id,
+                UsageEventRecord.metric_key == metric,
+            )).scalars())
+
+    def test_usage_counts_a_refusal_as_a_failed_item_and_the_retried_image_as_a_version(self):
+        """#8 S2: the refusal fails the item (``_project_failure``); the retry's
+        image is created in the coordinator's completion transaction
+        (``GenerationEvidenceRecorder.persist_result``)."""
+        from app.generation.recovery_preview import create_recovery_preview
+        from app.generation.run_commands import retry_failed_items
+
+        self._bind_openai_key()
+        with tenant_session(self.ctx) as s:
+            run_id, submit_operation_id = self._submit(s, variants=1)
+            item_id = self._items(s, run_id)[0].id
+        self._dispatch(
+            _ScriptedAdapter(ProviderDispatchError("not_dispatched", "nope", error_code="openai_400")),
+            item_id,
+        )
+        with tenant_session(self.ctx) as s:
+            self.assertEqual(self._usage(s, "generation_items_failed"), [(item_id, "byok")])
+            # The Run failed, which settles its submit Operation: counted once, as BYOK.
+            self.assertEqual(self._usage(s, "operations"), [(submit_operation_id, "byok")])
+            run = s.get(GenerationRunRecord, run_id)
+            preview = create_recovery_preview(
+                s, self.ctx, run_id,
+                command="retry_failed_items", selection_kind="all_eligible_failed", selection_item_ids=[],
+                expected_run_revision=run.revision, idempotency_key=new_id("ik"),
+            )
+            run = s.get(GenerationRunRecord, run_id)
+            retry_failed_items(
+                s, self.ctx, run_id=run_id, expected_revision=run.revision,
+                preview_id=preview["id"], preview_hash=preview["preview_hash"],
+                idempotency_key=new_id("ik"),
+            )
+
+        self.assertTrue(self._dispatch(_ScriptedAdapter(PNG), item_id).success)
+        self._dispatch(_ScriptedAdapter(PNG), item_id)  # redelivered: the item is past dispatch
+        with tenant_session(self.ctx) as s:
+            version_id = s.execute(select(AssetVersionRecord.id).where(
+                AssetVersionRecord.producing_run_item_id == item_id)).scalar_one()
+            self.assertEqual(self._usage(s, "asset_versions_generated"), [(version_id, "byok")])
+            self.assertEqual(self._usage(s, "generation_items_failed"), [(item_id, "byok")])
+
+    def test_usage_counts_nothing_for_an_item_left_uncertain(self):
+        self._bind_openai_key()
+        with tenant_session(self.ctx) as s:
+            run_id, _ = self._submit(s, variants=1)
+            item_id = self._items(s, run_id)[0].id
+        self._dispatch(_ScriptedAdapter(ProviderDispatchError(
+            "uncertain", "OpenAI request timed out", error_code="provider_timeout")), item_id)
+        with tenant_session(self.ctx) as s:
+            for metric in ("generation_items_failed", "asset_versions_generated", "operations"):
+                self.assertEqual(self._usage(s, metric), [], metric)
+
     def test_the_prompt_carries_the_product_and_the_dimension_fragments(self):
         from app.generation.prompting import compose_item_prompt
 
