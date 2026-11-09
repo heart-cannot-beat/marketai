@@ -179,3 +179,59 @@ test.each([
     );
   }
 );
+
+/**
+ * A new Episode younger than the 14-day window (#57): the evaluator returns
+ * `warming` and withholds health with `episode_window_incomplete`; the
+ * sentence says how many complete days are in.
+ */
+test.each([
+  [
+    'en',
+    en,
+    'Warming',
+    'Health not classified yet: the Episode has data for 5 of the 14 complete days the 7-day comparison needs. Health and advice start once all 14 are in.',
+    'Not computed: the Episode is younger than the 14-day window',
+  ],
+  [
+    'zh-CN',
+    zhCN,
+    '预热中',
+    '暂未判定健康状态：这个观察段已有 5 个完整日的数据，7 天对比需要 14 个。满 14 个完整日后才开始判定健康状态和给出建议。',
+    '未计算：观察段还不满 14 天窗口',
+  ],
+])(
+  'words a warming Episode and its day count in %s',
+  (locale, bundle, maturity, healthReason, signalReason) => {
+    mockUseScaleEnrollmentEvidence.mockReturnValue({
+      data: {
+        ...evidence,
+        maturity: 'warming',
+        health_reason: 'episode_window_incomplete',
+        complete_local_days_in_episode: 5,
+        active_delivery_days_in_episode: 5,
+        signals: [
+          signal(
+            'ctr_decline',
+            'unavailable',
+            'episode_window_incomplete',
+            null
+          ),
+        ],
+      },
+      problem: undefined,
+      isLoading: false,
+      isStale: false,
+      refresh: jest.fn(),
+    });
+    renderIn(locale, bundle);
+
+    expect(screen.getByText(maturity)).toBeInTheDocument();
+    expect(screen.getByText(healthReason)).toBeInTheDocument();
+    const cells = within(
+      screen.getByText('ctr_decline').closest('tr')!
+    ).getAllByRole('cell');
+    expect(cells.at(-1)).toHaveTextContent(signalReason);
+    expect(document.body.textContent).not.toMatch(/episode_window_incomplete/);
+  }
+);

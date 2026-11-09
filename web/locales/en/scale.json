@@ -251,14 +251,16 @@
       "conflicting_signals": "Health not classified: CTR declined while CPA or ROAS clearly improved.",
       "partial_adverse_signals": "Health not classified: some signals are adverse, but they match no health pattern.",
       "signal_unavailable": "Health not classified: a required signal could not be computed.",
-      "quality_blocked": "Health not classified: data quality is blocked."
+      "quality_blocked": "Health not classified: data quality is blocked.",
+      "episode_window_incomplete": "Health not classified yet: the Episode has data for {{days}} of the 14 complete days the 7-day comparison needs. Health and advice start once all 14 are in."
     },
     "signal-reason": {
       "frequency_unavailable": "No frequency data",
       "unavailable_baseline": "No usable baseline",
       "explained_by_pause": "Explained by a delivery pause; not counted as a hit",
       "bootstrap_unavailable": "Too few valid samples for an interval",
-      "data_quality_blocked": "Not computed: data quality is blocked"
+      "data_quality_blocked": "Not computed: data quality is blocked",
+      "episode_window_incomplete": "Not computed: the Episode is younger than the 14-day window"
     },
     "streak-counters": "Streak counters",
     "unknown-signal": "Unknown signal"
