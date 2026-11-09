@@ -17,6 +17,10 @@ export interface ImpactAffectedSummary {
   display_name: string;
   entry_type: string;
   effect: string;
+  /** The dependent version's number, when the projection names one. */
+  version_no?: number | null;
+  /** Withdraw only: the command newly blocks this dependent (`will_block`). */
+  will_block?: boolean;
 }
 
 export interface ImpactProjection {
@@ -28,6 +32,11 @@ export interface ImpactProjection {
   contentHash: string | null;
   expiry: number;
   affectedSummaries: ImpactAffectedSummary[];
+  /**
+   * Withdraw only: the version is the entry's effective one, so the entry has
+   * none afterwards (`will_clear_current_version`).
+   */
+  clearsCurrentVersion?: boolean;
   /** Validation findings that stop the command; worded by `FindingText`. */
   blocking: LibraryFinding[];
   /**
@@ -218,8 +227,14 @@ function toImpactProjection(
           dependent.will_block === true
             ? 'blocked'
             : stringValue(dependent.eligibility, 'affected'),
+        version_no:
+          typeof dependent.version_no === 'number'
+            ? dependent.version_no
+            : null,
+        will_block: dependent.will_block === true,
       };
     }),
+    clearsCurrentVersion: projection.will_clear_current_version === true,
     blocking: blocking.map(toLibraryFinding),
     warnings: warnings.map(toLibraryFinding),
   };

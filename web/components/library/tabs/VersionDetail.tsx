@@ -1,12 +1,33 @@
+import { useState } from 'react';
 import { useTranslation } from 'next-i18next';
 import type { ResolvedVersion } from '@/hooks/library/useResolvedLibraryVersion';
+import { VersionActions, type VersionAction } from '../commands/VersionActions';
+import { WithdrawDialog } from '../commands/WithdrawDialog';
+import { ForkDialog } from '../commands/ForkDialog';
+import { CloneProductDialog } from '../commands/CloneProductDialog';
 
 interface VersionDetailProps {
   version: ResolvedVersion;
+  /** The entry's name, the default for a fork's or a clone's name. */
+  entryDisplayName: string;
+  /** Opens the entry a Fork or Clone Product created, on its Draft. */
+  onEntryCreated: (entryId: string) => void;
 }
 
-export function VersionDetail({ version }: VersionDetailProps) {
+const ELIGIBILITY_BADGES: Record<string, string> = {
+  eligible: 'badge-success',
+  warning: 'badge-warning',
+  blocked: 'badge-error',
+};
+
+export function VersionDetail({
+  version,
+  entryDisplayName,
+  onEntryCreated,
+}: VersionDetailProps) {
   const { t } = useTranslation('library');
+  const [dialog, setDialog] = useState<VersionAction | null>(null);
+  const close = () => setDialog(null);
 
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
@@ -20,11 +41,20 @@ export function VersionDetail({ version }: VersionDetailProps) {
           {t(`status.${version.state}`, { defaultValue: version.state })}
         </span>
         <span
-          className={`badge badge-sm ${version.eligibility === 'eligible' ? 'badge-success' : 'badge-warning'}`}
+          className={`badge badge-sm ${ELIGIBILITY_BADGES[version.eligibility] ?? 'badge-ghost'}`}
         >
-          {version.eligibility}
+          {t(`eligibility.${version.eligibility}`, {
+            defaultValue: t('eligibility-default'),
+          })}
         </span>
       </div>
+
+      <VersionActions
+        allowedActions={version.allowed_actions ?? []}
+        onWithdraw={() => setDialog('withdraw')}
+        onFork={() => setDialog('fork')}
+        onCloneProduct={() => setDialog('clone_product')}
+      />
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         {version.content_hash && (
@@ -68,6 +98,39 @@ export function VersionDetail({ version }: VersionDetailProps) {
           </>
         )}
       </dl>
+
+      {dialog === 'withdraw' && (
+        <WithdrawDialog
+          versionId={version.id}
+          open
+          onClose={close}
+          onWithdrawn={close}
+        />
+      )}
+      {dialog === 'fork' && (
+        <ForkDialog
+          versionId={version.id}
+          sourceDisplayName={entryDisplayName}
+          open
+          onClose={close}
+          onForked={(entryId) => {
+            close();
+            onEntryCreated(entryId);
+          }}
+        />
+      )}
+      {dialog === 'clone_product' && (
+        <CloneProductDialog
+          versionId={version.id}
+          sourceDisplayName={entryDisplayName}
+          open
+          onClose={close}
+          onCloned={(productId) => {
+            close();
+            onEntryCreated(productId);
+          }}
+        />
+      )}
     </div>
   );
 }

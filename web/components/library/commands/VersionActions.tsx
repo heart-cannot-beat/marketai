@@ -1,75 +1,58 @@
 import { useTranslation } from 'next-i18next';
-import { deniedReason, type AllowedAction } from './EntryActions';
+import type { VersionActionEligibility } from '@/hooks/library/useResolvedLibraryVersion';
+import { ActionToolbar, type ToolbarButton } from './EntryActions';
+
+/**
+ * The actions `_version_allowed_actions` in `app/library/v1_router.py` lists
+ * for a published version, in toolbar order. Whether each is allowed, and
+ * why not, comes only from the server.
+ */
+export const VERSION_ACTIONS = ['withdraw', 'fork', 'clone_product'] as const;
+
+export type VersionAction = (typeof VERSION_ACTIONS)[number];
 
 interface VersionActionsProps {
-  versionId: string;
-  allowedActions: AllowedAction[];
+  allowedActions: VersionActionEligibility[];
   onWithdraw: () => void;
   onFork: () => void;
-  onClone: () => void;
-  onDownload: () => void;
+  onCloneProduct: () => void;
 }
-
-const VERSION_COMMANDS = [
-  'withdraw',
-  'fork',
-  'clone',
-  'create_reference_download',
-] as const;
 
 export function VersionActions({
   allowedActions,
   onWithdraw,
   onFork,
-  onClone,
-  onDownload,
+  onCloneProduct,
 }: VersionActionsProps) {
   const { t } = useTranslation('library');
 
-  const handlers: Record<string, () => void> = {
+  const handlers: Record<VersionAction, () => void> = {
     withdraw: onWithdraw,
     fork: onFork,
-    clone: onClone,
-    create_reference_download: onDownload,
+    clone_product: onCloneProduct,
   };
 
-  const actionMap = new Map(allowedActions.map((a) => [a.command, a]));
-  const visible = VERSION_COMMANDS.filter((cmd) => actionMap.has(cmd));
+  const actionMap = new Map(allowedActions.map((a) => [a.action, a]));
+  const buttons: ToolbarButton[] = VERSION_ACTIONS.flatMap((action) => {
+    const eligibility = actionMap.get(action);
+    if (!eligibility) return [];
+    return [
+      {
+        command: action,
+        label: t(`commands.${action}`),
+        action: {
+          allowed: eligibility.allowed,
+          reason_code: eligibility.reason_code ?? null,
+        },
+        onClick: handlers[action],
+        variant: action === 'withdraw' ? 'warning' : 'default',
+      },
+    ];
+  });
 
-  if (visible.length === 0) return null;
+  if (buttons.length === 0) return null;
 
   return (
-    <div
-      className="flex flex-wrap items-center gap-2"
-      role="toolbar"
-      aria-label={t('commands.version-actions')}
-    >
-      {visible.map((cmd) => {
-        const action = actionMap.get(cmd)!;
-        const denied = !action.allowed;
-
-        return (
-          <button
-            key={cmd}
-            type="button"
-            className={`btn btn-sm btn-outline ${denied ? 'btn-disabled opacity-60' : ''} ${
-              cmd === 'withdraw' ? 'btn-warning' : ''
-            }`}
-            aria-disabled={denied || undefined}
-            title={denied ? deniedReason(t, action.reason_code) : undefined}
-            onClick={(e) => {
-              if (denied) {
-                e.preventDefault();
-                return;
-              }
-              handlers[cmd]();
-            }}
-            data-command={cmd}
-          >
-            {t(`commands.${cmd}`)}
-          </button>
-        );
-      })}
-    </div>
+    <ActionToolbar label={t('commands.version-actions')} buttons={buttons} />
   );
 }

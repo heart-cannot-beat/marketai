@@ -8,7 +8,9 @@ type OperationId = string;
 const RESOURCE_OPERATIONS: Record<LibraryResource, readonly OperationId[]> = {
   entry: ['get_library_entry'],
   entryList: ['list_library_entries'],
-  versions: ['list_library_entry_versions'],
+  // The list and each version read: a command that changes a version's state
+  // (Withdraw, a Publish that supersedes) changes both.
+  versions: ['list_library_entry_versions', 'get_library_version'],
   events: ['list_library_entry_events'],
   impact: [
     'get_library_entry_publish_impact',

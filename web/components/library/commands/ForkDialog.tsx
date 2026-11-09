@@ -37,10 +37,12 @@ export function ForkDialog({
       }
     }
     if (open) {
-      setDisplayName(`${sourceDisplayName} (fork)`);
+      setDisplayName(
+        t('commands.fork-default-name', { name: sourceDisplayName })
+      );
       nameInputRef.current?.focus();
     }
-  }, [open, sourceDisplayName]);
+  }, [open, sourceDisplayName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 

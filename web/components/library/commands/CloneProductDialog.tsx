@@ -12,13 +12,18 @@ interface CloneProductDialogProps {
   onCloned: (productId: string) => void;
 }
 
-type CloneInclusion = 'offers' | 'references' | 'dimension_schemas';
+/**
+ * The fields a Clone Product may carry only when asked
+ * (`CLONE_PRODUCT_OPTIONAL_KEYS` in `app/library/contracts.py`), sent as
+ * `include_optional`. Offers, prices, market mappings and landing pages are
+ * never copied (`CLONE_PRODUCT_NEVER_COPIED`), so there is no option for them.
+ */
+export const CLONE_OPTIONAL_FIELDS = [
+  'brand_sku',
+  'prompt_policy_version_id',
+] as const;
 
-const INCLUSION_OPTIONS: CloneInclusion[] = [
-  'offers',
-  'references',
-  'dimension_schemas',
-];
+type CloneOptionalField = (typeof CLONE_OPTIONAL_FIELDS)[number];
 
 export function CloneProductDialog({
   versionId,
@@ -31,7 +36,8 @@ export function CloneProductDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [displayName, setDisplayName] = useState('');
-  const [inclusions, setInclusions] = useState<Set<CloneInclusion>>(new Set());
+  const [optional, setOptional] = useState<Set<CloneOptionalField>>(new Set());
+  // The command record the server keeps is `clone` (`service.clone_product`).
   const cloneCmd = useLibraryCommand('clone');
   const { invalidate } = useLibraryCache();
 
@@ -46,20 +52,22 @@ export function CloneProductDialog({
       }
     }
     if (open) {
-      setDisplayName(`${sourceDisplayName} (copy)`);
+      setDisplayName(
+        t('commands.clone-default-name', { name: sourceDisplayName })
+      );
       nameInputRef.current?.focus();
     }
-  }, [open, sourceDisplayName]);
+  }, [open, sourceDisplayName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
-  const toggleInclusion = (item: CloneInclusion) => {
-    setInclusions((prev) => {
+  const toggle = (field: CloneOptionalField) => {
+    setOptional((prev) => {
       const next = new Set(prev);
-      if (next.has(item)) {
-        next.delete(item);
+      if (next.has(field)) {
+        next.delete(field);
       } else {
-        next.add(item);
+        next.add(field);
       }
       return next;
     });
@@ -72,7 +80,9 @@ export function CloneProductDialog({
       version_id: versionId,
       body: {
         display_name: displayName.trim(),
-        inclusions: Array.from(inclusions),
+        include_optional: CLONE_OPTIONAL_FIELDS.filter((field) =>
+          optional.has(field)
+        ),
       },
     });
 
@@ -87,7 +97,7 @@ export function CloneProductDialog({
 
   const handleClose = () => {
     setDisplayName('');
-    setInclusions(new Set());
+    setOptional(new Set());
     cloneCmd.reset();
     onClose();
   };
@@ -110,6 +120,9 @@ export function CloneProductDialog({
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
           {t('commands.clone-description', { name: sourceDisplayName })}
         </p>
+        <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">
+          {t('commands.clone-never-copied')}
+        </p>
 
         <label className="form-control mt-4 w-full">
           <div className="label">
@@ -130,22 +143,22 @@ export function CloneProductDialog({
 
         <fieldset className="mt-4">
           <legend className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {t('commands.clone-inclusions')}
+            {t('commands.clone-optional')}
           </legend>
           <div className="mt-2 space-y-2">
-            {INCLUSION_OPTIONS.map((item) => (
+            {CLONE_OPTIONAL_FIELDS.map((field) => (
               <label
-                key={item}
+                key={field}
                 className="flex items-center gap-2 cursor-pointer"
               >
                 <input
                   type="checkbox"
                   className="checkbox checkbox-sm"
-                  checked={inclusions.has(item)}
-                  onChange={() => toggleInclusion(item)}
+                  checked={optional.has(field)}
+                  onChange={() => toggle(field)}
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {t(`commands.clone-include-${item}`)}
+                  {t(`commands.clone-optional-field.${field}`)}
                 </span>
               </label>
             ))}

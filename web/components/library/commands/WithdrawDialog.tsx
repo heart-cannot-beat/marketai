@@ -2,7 +2,10 @@ import { useTranslation } from 'next-i18next';
 import { useEffect, useRef, useState } from 'react';
 import { useLibraryCommand } from '@/hooks/library/useLibraryCommand';
 import { useLibraryCache } from '@/hooks/library/useLibraryCache';
-import { useLibraryCommandImpact } from '@/hooks/library/useLibraryCommandImpact';
+import {
+  useLibraryCommandImpact,
+  type ImpactProjection,
+} from '@/hooks/library/useLibraryCommandImpact';
 import { errorMessage } from '@/lib/i18n/domain-errors';
 import { FindingText } from '@/components/library/FindingText';
 
@@ -132,6 +135,8 @@ export function WithdrawDialog({
             </div>
           )}
 
+          {impactHook.impact && <WithdrawImpact impact={impactHook.impact} />}
+
           {impactHook.impact && impactHook.impact.blocking.length > 0 && (
             <div
               className="mt-3 rounded border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20"
@@ -197,5 +202,60 @@ export function WithdrawDialog({
         </form>
       </dialog>
     </>
+  );
+}
+
+/**
+ * What withdrawing this version does (`preview_withdraw_impact`): whether the
+ * entry loses its effective version, and which published versions depend on
+ * it and are newly blocked from new use (contract §14).
+ */
+function WithdrawImpact({ impact }: { impact: ImpactProjection }) {
+  const { t } = useTranslation('library');
+  const dependents = impact.affectedSummaries;
+  const newlyBlocked = dependents.filter((d) => d.will_block).length;
+
+  return (
+    <section
+      className="mt-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+      aria-labelledby="withdraw-impact-title"
+      data-testid="withdraw-impact"
+    >
+      <h4 id="withdraw-impact-title" className="font-medium">
+        {t('commands.withdraw-impact-title')}
+      </h4>
+      {impact.clearsCurrentVersion && (
+        <p className="mt-1">{t('commands.withdraw-clears-current')}</p>
+      )}
+      {dependents.length === 0 ? (
+        <p className="mt-1">{t('commands.withdraw-no-dependents')}</p>
+      ) : (
+        <>
+          <p className="mt-1">
+            {t('commands.withdraw-dependents', {
+              count: dependents.length,
+              blocked: newlyBlocked,
+            })}
+          </p>
+          <ul className="mt-1 list-disc pl-4">
+            {dependents.map((dependent) => (
+              <li key={dependent.id}>
+                {t(
+                  dependent.will_block
+                    ? 'commands.withdraw-dependent-blocks'
+                    : 'commands.withdraw-dependent-blocked',
+                  {
+                    type: t(`entry-type.${dependent.entry_type}`, {
+                      defaultValue: t('commands.withdraw-dependent-other'),
+                    }),
+                    no: String(dependent.version_no ?? ''),
+                  }
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }

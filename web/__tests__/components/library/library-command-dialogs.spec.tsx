@@ -559,7 +559,7 @@ describe('ForkDialog', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('defaults display name to source (fork)', () => {
+  it('defaults display name to the worded fork name', () => {
     render(
       createElement(ForkDialog, {
         versionId: 'v1',
@@ -573,7 +573,7 @@ describe('ForkDialog', () => {
     const input = screen.getByRole('textbox', {
       hidden: true,
     }) as HTMLInputElement;
-    expect(input.value).toBe('Widget (fork)');
+    expect(input.value).toBe('library:commands.fork-default-name');
   });
 
   it('fork button disabled when name empty', () => {
@@ -610,7 +610,7 @@ describe('CloneProductDialog', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('defaults display name to source (copy)', () => {
+  it('defaults display name to the worded copy name', () => {
     render(
       createElement(CloneProductDialog, {
         versionId: 'v1',
@@ -624,10 +624,10 @@ describe('CloneProductDialog', () => {
     const input = screen.getByRole('textbox', {
       hidden: true,
     }) as HTMLInputElement;
-    expect(input.value).toBe('Widget (copy)');
+    expect(input.value).toBe('library:commands.clone-default-name');
   });
 
-  it('shows inclusion checkboxes', () => {
+  it('offers only the optional fields the server copies on request', () => {
     render(
       createElement(CloneProductDialog, {
         versionId: 'v1',
@@ -639,16 +639,51 @@ describe('CloneProductDialog', () => {
     );
 
     const checkboxes = screen.getAllByRole('checkbox', { hidden: true });
-    expect(checkboxes).toHaveLength(3);
+    expect(checkboxes).toHaveLength(2);
     expect(
-      screen.getByText('library:commands.clone-include-offers')
+      screen.getByText('library:commands.clone-optional-field.brand_sku')
     ).toBeInTheDocument();
     expect(
-      screen.getByText('library:commands.clone-include-references')
+      screen.getByText(
+        'library:commands.clone-optional-field.prompt_policy_version_id'
+      )
     ).toBeInTheDocument();
     expect(
-      screen.getByText('library:commands.clone-include-dimension_schemas')
+      screen.getByText('library:commands.clone-never-copied')
     ).toBeInTheDocument();
+  });
+
+  it('sends the chosen fields as include_optional and opens the new product', async () => {
+    const onCloned = jest.fn();
+    render(
+      createElement(CloneProductDialog, {
+        versionId: 'v1',
+        sourceDisplayName: 'Widget',
+        open: true,
+        onClose: jest.fn(),
+        onCloned,
+      })
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { hidden: true }), {
+      target: { value: 'Acme Charge 65W copy' },
+    });
+    fireEvent.click(
+      screen.getByText(
+        'library:commands.clone-optional-field.prompt_policy_version_id'
+      )
+    );
+    fireEvent.click(screen.getByText('library:commands.confirm-clone'));
+    await waitFor(() => expect(mockRun).toHaveBeenCalledTimes(1));
+
+    expect(mockRun.mock.calls[0][0]).toEqual({
+      version_id: 'v1',
+      body: {
+        display_name: 'Acme Charge 65W copy',
+        include_optional: ['prompt_policy_version_id'],
+      },
+    });
+    await waitFor(() => expect(onCloned).toHaveBeenCalledWith('new-1'));
   });
 });
 

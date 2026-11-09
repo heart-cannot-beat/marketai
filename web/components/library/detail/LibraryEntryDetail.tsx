@@ -23,7 +23,7 @@ import { LibraryEntryCommands } from '../commands/LibraryEntryCommands';
 
 interface LibraryEntryDetailProps {
   route: LibraryRouteState;
-  onEntryChange?: (entryId: string) => void;
+  onEntryChange?: (entryId: string, tab?: LibraryTab) => void;
   onTabChange: (tab: LibraryTab | null) => void;
   onVersionChange: (versionId: string | null) => void;
   onDismissResource: () => void;
@@ -154,11 +154,13 @@ export function LibraryEntryDetail({
           tab={activeTab}
           entryId={entry.id}
           entryType={entry.entry_type as LibraryEntryType}
+          entryDisplayName={entry.display_name}
           currentVersionId={entry.current_version_id ?? null}
           draft={entry.draft ?? null}
           versionId={route.version}
           onGoToDraft={() => onTabChange('draft')}
           onSelectVersion={onVersionChange}
+          onEntryCreated={(createdId) => onEntryChange?.(createdId, 'draft')}
         />
       </LibraryTabs>
 
@@ -178,22 +180,26 @@ interface ActiveTabContentProps {
   tab: LibraryTab;
   entryId: string;
   entryType: LibraryEntryType;
+  entryDisplayName: string;
   currentVersionId: string | null;
   draft: EntryDetailData['draft'];
   versionId: string | null;
   onGoToDraft: () => void;
   onSelectVersion: (versionId: string | null) => void;
+  onEntryCreated: (entryId: string) => void;
 }
 
 function ActiveTabContent({
   tab,
   entryId,
   entryType,
+  entryDisplayName,
   currentVersionId,
   draft,
   versionId,
   onGoToDraft,
   onSelectVersion,
+  onEntryCreated,
 }: ActiveTabContentProps) {
   const { t } = useTranslation('library');
 
@@ -218,8 +224,10 @@ function ActiveTabContent({
       return (
         <VersionsTab
           entryId={entryId}
+          entryDisplayName={entryDisplayName}
           selectedVersionId={versionId}
           onSelectVersion={onSelectVersion}
+          onEntryCreated={onEntryCreated}
         />
       );
     case 'events':
