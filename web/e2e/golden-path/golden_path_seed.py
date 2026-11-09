@@ -324,10 +324,8 @@ def _seed_localization_infrastructure(env: dict[str, str], args: argparse.Namesp
     from tests.support.scale_candidate_fixtures import (
         _make_market_policy_version as _reusable_market_policy_version,
     )
-    from tests.test_localization_batch import (
-        _make_market_policy_version,
-        _make_version,
-    )
+    from tests.support.truth_sources import publish_truth_sources
+    from tests.test_localization_batch import _make_market_policy_version
 
     ctx = _tenant_context(env)
     workspace_id = ctx.workspace_id
@@ -374,34 +372,23 @@ def _seed_localization_infrastructure(env: dict[str, str], args: argparse.Namesp
             "isWinnerMarket": True,
         })
 
-    # Same versions as the Localization E2E seed (web/e2e/localization/
-    # seed_prerequisites.py). The Localization truth engine reads
-    # rules[].source_priority as adapter kinds ("mock"), while Library
-    # publish validation resolves each entry as a DataSource version id and
-    # rejects "mock" as dependency_not_found -- so a policy published through
-    # the Library service could never drive Localization.
+    # Same configuration as the Localization E2E seed (web/e2e/localization/
+    # seed_prerequisites.py), published through the Creative Library: the
+    # policy lists the Mock DataSource by entry id (#70), and preparation
+    # derives the source from it.
+    truth_sources = publish_truth_sources(
+        ctx, tag,
+        data_source_content={
+            "adapter_kind": "mock",
+            "execution_mode": "mock",
+            "config": {
+                "mock_scenario": "standard_9_market",
+                "mock_scenarios_by_country": {m["country"]: m["mockScenario"] for m in markets},
+            },
+        },
+        fact_rules={"price": "block", "availability": "block", "discount": "skip"},
+    )
     with tenant_session(ctx) as session:
-        truth_policy_id = _make_version(
-            session, workspace_id, "truth_resolution_policy", tag,
-            content={
-                "rules": [
-                    {"fact_type": "price", "source_priority": ["mock"], "on_failure": "block", "max_staleness_seconds": 86400},
-                    {"fact_type": "availability", "source_priority": ["mock"], "on_failure": "block", "max_staleness_seconds": 86400},
-                    {"fact_type": "discount", "source_priority": ["mock"], "on_failure": "skip", "max_staleness_seconds": 86400},
-                ],
-            },
-        )
-        data_source_id = _make_version(
-            session, workspace_id, "data_source", tag,
-            content={
-                "adapter_kind": "mock",
-                "execution_mode": "mock",
-                "config": {
-                    "mock_scenario": "standard_9_market",
-                    "mock_scenarios_by_country": {m["country"]: m["mockScenario"] for m in markets},
-                },
-            },
-        )
         inventory = create_inventory_from_analysis(
             session, ctx,
             asset_version_id=asset_version_id,
@@ -430,8 +417,8 @@ def _seed_localization_infrastructure(env: dict[str, str], args: argparse.Namesp
 
     return {
         "markets": markets,
-        "truthPolicyVersionId": truth_policy_id,
-        "dataSourceVersionId": data_source_id,
+        "truthPolicyVersionId": truth_sources.policy_version_id,
+        "dataSourceVersionId": truth_sources.data_source_version_id,
         "inventoryId": inventory.id,
     }
 

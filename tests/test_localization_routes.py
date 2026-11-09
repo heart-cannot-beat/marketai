@@ -22,6 +22,7 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from tests.support.library_fixtures import LibraryFixtures
+from tests.support.truth_sources import publish_truth_sources
 from tests.test_localization_batch import (
     _build_confirmed_winner,
     _ensure_workspace,
@@ -149,35 +150,20 @@ class TestLocalizationRoutes(LibraryFixtures):
 
     def _start_preparation_body(self, draft: dict, recipe_hash: str) -> dict:
         now = datetime.now(timezone.utc)
+        # The policy lists the DataSource by entry id (#70); both go through
+        # Library publish. The request names only the policy and fact set.
+        sources = publish_truth_sources(
+            self.ctx,
+            draft["batch_id"],
+            data_source_content={"adapter_kind": "manual", "execution_mode": "real"},
+            fact_rules={"price": "skip", "availability": "skip"},
+            max_staleness_seconds=86400 * 30,
+        )
         with tenant_session(self.ctx) as s:
             country = s.get(
                 MarketPolicyVersionRecord,
                 draft["market_policy_version_id"],
             ).country
-            policy_version_id = _make_version(
-                s,
-                self.ctx.workspace_id,
-                "truth_resolution_policy",
-                draft["batch_id"],
-                content={
-                    "rules": [
-                        {
-                            "fact_type": fact_type,
-                            "source_priority": ["manual"],
-                            "on_failure": "skip",
-                            "max_staleness_seconds": 86400 * 30,
-                        }
-                        for fact_type in ("price", "availability")
-                    ]
-                },
-            )
-            data_source_version_id = _make_version(
-                s,
-                self.ctx.workspace_id,
-                "data_source",
-                draft["batch_id"],
-                content={"adapter_kind": "manual", "execution_mode": "real"},
-            )
             manual_fact_set_version_id = _make_version(
                 s,
                 self.ctx.workspace_id,
@@ -206,8 +192,7 @@ class TestLocalizationRoutes(LibraryFixtures):
                 },
             )
         return {
-            "truth_resolution_policy_version_id": policy_version_id,
-            "data_source_version_ids": [data_source_version_id],
+            "truth_resolution_policy_version_id": sources.policy_version_id,
             "manual_fact_set_version_id": manual_fact_set_version_id,
             "analysis_recipe_hash": recipe_hash,
             "analysis_provider": "mock-vision",
@@ -395,6 +380,29 @@ class TestLocalizationRoutes(LibraryFixtures):
         self.assertTrue(
             any(
                 error["field"].endswith("truth_command")
+                for error in response.json()["field_errors"]
+            )
+        )
+
+    def test_start_preparation_rejects_caller_supplied_data_sources(self):
+        # #70: the DataSources come from the policy's source_priority; the
+        # request no longer carries data_source_version_ids at all.
+        draft = self._create_draft_via_http("sp-sources")
+        recipe_hash = self._analysis_recipe_hash("sp-sources")
+        self._seed_analysis(draft["winner"], recipe_hash, "sp-sources")
+        body = self._start_preparation_body(draft, recipe_hash)
+        body["data_source_version_ids"] = ["lv_caller_choice"]
+
+        response = self.client.post(
+            f"/api/localization/batches/{draft['batch_id']}/start-preparation",
+            json=body,
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["code"], "validation_error")
+        self.assertTrue(
+            any(
+                error["field"].endswith("data_source_version_ids")
                 for error in response.json()["field_errors"]
             )
         )

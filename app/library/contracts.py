@@ -1169,6 +1169,8 @@ def _validate_truth_resolution_policy(content: dict, findings: list[Finding]) ->
                                     f"重复 fact_type: {ft}", rpath))
         else:
             seen_types.add(str(ft))
+        # source_priority 按顺序列出数据源条目 id（#70）。发布时每项解析到该数据源的
+        # 当前版本（service._validate_dependencies），Truth 解析时读当前 effective 版本。
         sources = rule.get("source_priority")
         if not isinstance(sources, list) or not sources:
             findings.append(Finding("trp_source_priority_empty",
@@ -1176,6 +1178,15 @@ def _validate_truth_resolution_policy(content: dict, findings: list[Finding]) ->
         elif len(sources) != len(set(sources)):
             findings.append(Finding("trp_source_priority_dups",
                                     "source_priority 不能有重复", f"{rpath}.source_priority"))
+        if isinstance(sources, list):
+            for j, source in enumerate(sources):
+                # 旧写法：适配器类型不是数据源，给专门的发现码而不是 dependency_not_found。
+                if isinstance(source, str) and source.strip() in ADAPTER_KINDS:
+                    findings.append(Finding(
+                        "trp_source_priority_adapter_kind",
+                        f"source_priority 要写数据源条目 id，不是适配器类型: {source.strip()}",
+                        f"{rpath}.source_priority[{j}]",
+                    ))
         staleness = rule.get("max_staleness_seconds")
         if not isinstance(staleness, (int, float)) or isinstance(staleness, bool) or staleness < 0:
             findings.append(Finding("trp_staleness", "max_staleness_seconds 必须 >= 0",
@@ -1338,7 +1349,13 @@ def extract_dependencies(entry_type: str, content: dict) -> list[DependencyEdge]
         for i, rule in enumerate(items(content.get("rules"))):
             if not isinstance(rule, dict):
                 continue
+            # Each item names a data source entry (#70); the service resolves
+            # it to that entry's current version, so the stored edge stays
+            # version-to-version. An adapter kind is not a reference at all:
+            # content validation reports it as trp_source_priority_adapter_kind.
             for j, ds_id in enumerate(items(rule.get("source_priority"))):
+                if _is_str(ds_id) and str(ds_id).strip() in ADAPTER_KINDS:
+                    continue
                 add(ds_id, REL_TRUTH_POLICY_DATA_SOURCE, f"rules[{i}].source_priority[{j}]")
     elif entry_type == ENTRY_BRAND_LOCALIZATION_POLICY:
         # Dispatched explicitly (#24). Current content shape (claim_switches,

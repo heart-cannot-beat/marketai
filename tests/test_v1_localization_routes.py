@@ -24,6 +24,7 @@ from app.main import app
 from app.platform.http_identity import request_tenant_context
 from app.localization.claims import create_inventory_from_analysis
 from tests.support.library_fixtures import LibraryFixtures
+from tests.support.truth_sources import publish_truth_sources
 from tests.test_localization_batch import (
     _build_confirmed_winner,
     _make_market_policy_version,
@@ -832,46 +833,30 @@ def test_unavailable_pair_projects_skipped_reason_and_no_job_through_v1():
         winner = harness._winner(tag)
         recipe_hash = harness._analysis_recipe_hash(tag)
         harness._seed_analysis(winner, recipe_hash, tag)
+        # The policy lists the Mock DataSource by entry id (#70); both pass
+        # Library publish.
+        truth_policy_id = publish_truth_sources(
+            harness.ctx,
+            tag,
+            data_source_content={
+                "adapter_kind": "mock",
+                "execution_mode": "mock",
+                "config": {
+                    "mock_scenario": "standard_9_market",
+                    "mock_scenarios_by_country": {
+                        "GB": "standard_9_market",
+                        "AU": "unavailable",
+                    },
+                },
+            },
+            fact_rules={"price": "block", "availability": "block"},
+        ).policy_version_id
         with tenant_session(harness.ctx) as session:
             ready_market = f"GB{next(_MARKETS):06d}"[:10]
             unavailable_market = f"AU{next(_MARKETS):06d}"[:10]
             ready_policy = _make_market_policy_version(session, ready_market)
             unavailable_policy = _make_market_policy_version(
                 session, unavailable_market
-            )
-            truth_policy_id = _make_version(
-                session,
-                harness.ctx.workspace_id,
-                "truth_resolution_policy",
-                tag,
-                content={
-                    "rules": [
-                        {
-                            "fact_type": fact_type,
-                            "source_priority": ["mock"],
-                            "on_failure": "block",
-                            "max_staleness_seconds": 86400,
-                        }
-                        for fact_type in ("price", "availability")
-                    ]
-                },
-            )
-            data_source_id = _make_version(
-                session,
-                harness.ctx.workspace_id,
-                "data_source",
-                tag,
-                content={
-                    "adapter_kind": "mock",
-                    "execution_mode": "mock",
-                    "config": {
-                        "mock_scenario": "standard_9_market",
-                        "mock_scenarios_by_country": {
-                            "GB": "standard_9_market",
-                            "AU": "unavailable",
-                        },
-                    },
-                },
             )
             market_targets = [
                 {
@@ -911,7 +896,6 @@ def test_unavailable_pair_projects_skipped_reason_and_no_job_through_v1():
             f"/api/v1/localization/batches/{batch_id}/start-preparation",
             json={
                 "truth_resolution_policy_version_id": truth_policy_id,
-                "data_source_version_ids": [data_source_id],
                 "analysis_recipe_hash": recipe_hash,
                 "analysis_provider": "mock-vision",
                 "analysis_model": "mock-vision-1",

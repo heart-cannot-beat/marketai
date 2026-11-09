@@ -329,19 +329,30 @@ class TestTruthResolutionPolicyValidation(unittest.TestCase):
 
     def test_duplicate_fact_type_blocking(self):
         rules = [
-            {"fact_type": "price", "source_priority": ["ds1"],
+            {"fact_type": "price", "source_priority": ["lib_ds_001"],
              "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "block"},
-            {"fact_type": "price", "source_priority": ["ds2"],
+            {"fact_type": "price", "source_priority": ["lib_ds_002"],
              "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "block"},
         ]
         report = validate_content(ENTRY_TRUTH_RESOLUTION_POLICY, self._policy_content(rules=rules))
         self.assertFalse(report.ok)
 
     def test_price_cannot_degrade(self):
-        rules = [{"fact_type": "price", "source_priority": ["ds1"],
+        rules = [{"fact_type": "price", "source_priority": ["lib_ds_001"],
                   "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "degrade"}]
         report = validate_content(ENTRY_TRUTH_RESOLUTION_POLICY, self._policy_content(rules=rules))
         self.assertFalse(report.ok)
+
+    def test_source_priority_lists_data_source_entries_not_adapter_kinds(self):
+        # #70: the legacy adapter-kind form gets its own finding, not a
+        # generic dependency_not_found from the publish lookup.
+        rules = [{"fact_type": "price", "source_priority": ["lib_ds_001", "mock"],
+                  "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "block"}]
+        report = validate_content(ENTRY_TRUTH_RESOLUTION_POLICY, self._policy_content(rules=rules))
+        self.assertEqual(
+            [(f.code, f.path) for f in report.blocking],
+            [("trp_source_priority_adapter_kind", "rules[0].source_priority[1]")],
+        )
 
 
 class TestDependencyExtraction(unittest.TestCase):
@@ -374,9 +385,24 @@ class TestDependencyExtraction(unittest.TestCase):
             ],
         }
         edges = extract_dependencies(ENTRY_TRUTH_RESOLUTION_POLICY, content)
-        relations = {e.relation for e in edges}
-        self.assertIn("truth_policy_data_source", relations)
-        self.assertEqual(len([e for e in edges if e.relation == "truth_policy_data_source"]), 2)
+        self.assertEqual(
+            [(e.to_version_id, e.relation, e.path) for e in edges],
+            [
+                ("lib_ds_001", "truth_policy_data_source", "rules[0].source_priority[0]"),
+                ("lib_ds_002", "truth_policy_data_source", "rules[0].source_priority[1]"),
+            ],
+        )
+
+    def test_truth_resolution_policy_adapter_kinds_are_not_dependencies(self):
+        content = {
+            "rules": [
+                {"fact_type": "price", "source_priority": ["manual", "lib_ds_001"],
+                 "allow_fallback": False, "max_staleness_seconds": 0, "on_failure": "block"},
+            ],
+        }
+        edges = extract_dependencies(ENTRY_TRUTH_RESOLUTION_POLICY, content)
+        self.assertEqual([(e.to_version_id, e.path) for e in edges],
+                         [("lib_ds_001", "rules[0].source_priority[1]")])
 
     def test_prompt_policy_dependencies(self):
         content = {

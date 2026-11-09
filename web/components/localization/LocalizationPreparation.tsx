@@ -62,12 +62,7 @@ export function LocalizationPreparation({
     () => workspace.truth_resolution_policies ?? [],
     [workspace.truth_resolution_policies]
   );
-  const dataSources = useMemo(
-    () => workspace.data_sources ?? [],
-    [workspace.data_sources]
-  );
   const [policyVersionId, setPolicyVersionId] = useState('');
-  const [dataSourceVersionId, setDataSourceVersionId] = useState('');
   const [selectedPair, setSelectedPair] = useState('');
   const [claimActions, setClaimActions] = useState<Record<string, ClaimAction>>(
     {}
@@ -75,9 +70,7 @@ export function LocalizationPreparation({
 
   useEffect(() => {
     if (!policyVersionId && policies[0]) setPolicyVersionId(policies[0].id);
-    if (!dataSourceVersionId && dataSources[0])
-      setDataSourceVersionId(dataSources[0].id);
-  }, [dataSourceVersionId, dataSources, policies, policyVersionId]);
+  }, [policies, policyVersionId]);
 
   const inventories = batch.inventories ?? [];
   const analysisValidationFindings = Array.isArray(
@@ -129,9 +122,7 @@ export function LocalizationPreparation({
       typeof market.currency === 'string' &&
       market.currency.length > 0
   );
-  const configurationReady = Boolean(
-    policyVersionId && dataSourceVersionId && targetContextsReady
-  );
+  const configurationReady = Boolean(policyVersionId && targetContextsReady);
 
   async function startPreparation() {
     if (!configurationReady) return;
@@ -140,7 +131,6 @@ export function LocalizationPreparation({
       actionInstanceId: newActionId(),
       body: {
         truth_resolution_policy_version_id: policyVersionId,
-        data_source_version_ids: [dataSourceVersionId],
         analysis_recipe_hash: ANALYSIS_RECIPE_HASH,
         analysis_provider: 'controlled-mock-vision',
         analysis_model: 'localization-analysis-v1',
@@ -241,24 +231,9 @@ export function LocalizationPreparation({
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="form-control">
-              <span className="label-text mb-1 text-xs">
-                {t('preparation.data-source-version')}
+              <span className="label-text-alt mt-1 text-xs opacity-70">
+                {t('preparation.sources-from-policy')}
               </span>
-              <select
-                className="select select-bordered select-sm"
-                aria-label={t('preparation.data-source-version')}
-                value={dataSourceVersionId}
-                onChange={(event) => setDataSourceVersionId(event.target.value)}
-              >
-                <option value="">{t('preparation.select-version')}</option>
-                {dataSources.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.display_name} · {source.id}
-                  </option>
-                ))}
-              </select>
             </label>
           </div>
           <button

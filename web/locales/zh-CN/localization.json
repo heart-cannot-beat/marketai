@@ -311,7 +311,7 @@
     "not-ready": "请先发布符合条件的真值解析策略和数据源，并确保每个目标都明确了语言区域、国家和币种，再解析这个批次。",
     "policy-version": "真值策略版本",
     "select-version": "选择一个已发布的版本",
-    "data-source-version": "事实数据源版本",
+    "sources-from-policy": "事实数据源由策略的来源优先级决定，每个数据源都读取它当前已发布的版本。",
     "start": "解析真值并分析来源",
     "unavailable": "不可用：{{reason}}",
     "server-policy": "服务端策略",

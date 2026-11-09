@@ -10376,7 +10376,6 @@ export interface components {
     };
     StartPreparationInput: {
       truth_resolution_policy_version_id: string;
-      data_source_version_ids: string[];
       manual_fact_set_version_id?: string | null;
       analysis_recipe_hash: string;
       analysis_provider: string;

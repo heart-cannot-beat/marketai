@@ -659,6 +659,7 @@
     "trp_price_no_degrade": "price 类型的规则失败时不能使用 degrade。",
     "trp_rule_shape": "每条规则都必须是对象。",
     "trp_rules_required": "至少需要一条规则。",
+    "trp_source_priority_adapter_kind": "来源优先级要列出数据源条目，不能写 manual、mock 这类适配器类型。",
     "trp_source_priority_dups": "来源优先级里有重复的来源。",
     "trp_source_priority_empty": "来源优先级至少要列出一个来源。",
     "trp_staleness": "最长过期时间必须不小于 0 秒。",

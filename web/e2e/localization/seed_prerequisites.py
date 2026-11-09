@@ -339,10 +339,10 @@ def main(argv: list[str] | None = None) -> None:
     from app.adapters.persistence.models import WorkspaceRecord
     from app.localization.claims import create_inventory_from_analysis
     from app.platform.tenancy import TenantContext
+    from tests.support.truth_sources import publish_truth_sources
     from tests.test_localization_batch import (
         _build_confirmed_winner,
         _make_market_policy_version,
-        _make_version,
         _seed_review,
     )
 
@@ -436,51 +436,24 @@ def main(argv: list[str] | None = None) -> None:
                     "failsLockedCopyQc": fails_locked_copy_qc,
                 }
             )
-        truth_policy_id = _make_version(
-            session,
-            workspace_id,
-            "truth_resolution_policy",
-            tag,
-            content={
-                "rules": [
-                    {
-                        "fact_type": "price",
-                        "source_priority": ["mock"],
-                        "on_failure": "block",
-                        "max_staleness_seconds": 86400,
-                    },
-                    {
-                        "fact_type": "availability",
-                        "source_priority": ["mock"],
-                        "on_failure": "block",
-                        "max_staleness_seconds": 86400,
-                    },
-                    {
-                        "fact_type": "discount",
-                        "source_priority": ["mock"],
-                        "on_failure": "skip",
-                        "max_staleness_seconds": 86400,
-                    },
-                ]
-            },
-        )
-        data_source_id = _make_version(
-            session,
-            workspace_id,
-            "data_source",
-            tag,
-            content={
-                "adapter_kind": "mock",
-                "execution_mode": "mock",
-                "config": {
-                    "mock_scenario": "standard_9_market",
-                    "mock_scenarios_by_country": {
-                        market["country"]: market["mockScenario"]
-                        for market in markets
-                    },
+    # The policy lists the Mock DataSource by entry id (#70); both pass Library
+    # publish, and start-preparation derives the source from the policy.
+    truth_sources = publish_truth_sources(
+        ctx,
+        tag,
+        data_source_content={
+            "adapter_kind": "mock",
+            "execution_mode": "mock",
+            "config": {
+                "mock_scenario": "standard_9_market",
+                "mock_scenarios_by_country": {
+                    market["country"]: market["mockScenario"] for market in markets
                 },
             },
-        )
+        },
+        fact_rules={"price": "block", "availability": "block", "discount": "skip"},
+    )
+    with tenant_session(ctx) as session:
         inventory = create_inventory_from_analysis(
             session,
             ctx,
@@ -516,8 +489,8 @@ def main(argv: list[str] | None = None) -> None:
             "market": markets[0]["market"],
             "marketPolicyVersionId": markets[0]["marketPolicyVersionId"],
             "markets": markets,
-            "truthPolicyVersionId": truth_policy_id,
-            "dataSourceVersionId": data_source_id,
+            "truthPolicyVersionId": truth_sources.policy_version_id,
+            "dataSourceVersionId": truth_sources.data_source_version_id,
         }
 
     json.dump(result, sys.stdout, sort_keys=True)

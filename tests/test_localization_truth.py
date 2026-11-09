@@ -99,6 +99,41 @@ def _make_version(
     return version_id
 
 
+def _make_data_source(session: Session, workspace_id: str, content: dict) -> tuple[str, str]:
+    """A DataSource entry with one effective version: ``(entry_id, version_id)``.
+
+    A policy's ``source_priority`` lists the entry id (#70); Truth reads the
+    entry's current effective version.
+    """
+    version_id = _make_version(session, workspace_id, "data_source", content=content)
+    return session.get(LibraryVersionRecord, version_id).entry_id, version_id
+
+
+def _publish_next_version(session: Session, entry_id: str, content: dict) -> str:
+    """Supersede the entry's effective version with a new one, as Library publish does."""
+    current = (
+        session.query(LibraryVersionRecord).filter_by(entry_id=entry_id, state="effective").one()
+    )
+    current.state = "superseded"
+    session.flush()
+    version_id = new_id("lv")
+    session.add(
+        LibraryVersionRecord(
+            id=version_id,
+            workspace_id=current.workspace_id,
+            entry_id=entry_id,
+            entry_type=current.entry_type,
+            version_no=current.version_no + 1,
+            content_json=content,
+            content_hash=f"hash-{version_id}",
+            published_by="tester",
+        )
+    )
+    session.get(LibraryEntryRecord, entry_id).current_version_id = version_id
+    session.flush()
+    return version_id
+
+
 class _TruthTestCase(unittest.TestCase):
     """Shared fixture: one Workspace, the nine-market platform catalog, and
     effective Product/Offer/TruthResolutionPolicy/DataSource versions."""
@@ -416,35 +451,19 @@ def _manual_fact_set_content(*country_prices: tuple[str, str, str]) -> dict:
 
 
 class TestPrepareTruthResolutionCommand(_TruthTestCase):
-    """Exercises the policy-driven factory: adapter selection from
-    `TruthResolutionPolicyVersion.rules[].source_priority`, the Manual and
-    Controlled Mock adapters built from real `DataSourceVersion`/
+    """Exercises the policy-driven factory: `TruthResolutionPolicyVersion.
+    rules[].source_priority` lists DataSource entry ids (#70), each read at its
+    current effective version, whose `adapter_kind` selects the adapter; the
+    Manual and Controlled Mock adapters built from real `DataSourceVersion`/
     `ManualFactSetVersion` content_json shapes (per
     `app/library/contracts.py`), and the `adapter_not_enabled` path for an
     unregistered adapter_kind (e.g. "shopify")."""
 
     def test_controlled_mock_can_project_distinct_country_readiness(self):
-        policy_version_id = _make_version(
+        data_source_entry_id, _version_id = _make_data_source(
             self.session,
             WS_ID,
-            "truth_resolution_policy",
-            content={
-                "rules": [
-                    {
-                        "fact_type": fact_type,
-                        "source_priority": ["mock"],
-                        "max_staleness_seconds": 86400,
-                        "on_failure": "skip" if fact_type == "discount" else "block",
-                    }
-                    for fact_type in ("price", "availability", "discount")
-                ]
-            },
-        )
-        data_source_version_id = _make_version(
-            self.session,
-            WS_ID,
-            "data_source",
-            content=_data_source_content(
+            _data_source_content(
                 "mock",
                 execution_mode="mock",
                 config={
@@ -457,6 +476,22 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
                 },
             ),
         )
+        policy_version_id = _make_version(
+            self.session,
+            WS_ID,
+            "truth_resolution_policy",
+            content={
+                "rules": [
+                    {
+                        "fact_type": fact_type,
+                        "source_priority": [data_source_entry_id],
+                        "max_staleness_seconds": 86400,
+                        "on_failure": "skip" if fact_type == "discount" else "block",
+                    }
+                    for fact_type in ("price", "availability", "discount")
+                ]
+            },
+        )
         market_versions = [
             self._market_policy(market)[1]
             for market in ("en-GB", "en-CA", "en-AU")
@@ -468,7 +503,6 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
             product_version_id=self.product_version_id,
             offer_version_id=self.offer_version_id,
             truth_resolution_policy_version_id=policy_version_id,
-            data_source_version_ids=(data_source_version_id,),
             markets=tuple(
                 MarketResolutionInput(market_policy_version_id=version.id)
                 for version in market_versions
@@ -489,11 +523,14 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
         )
 
     def test_manual_adapter_selected_from_policy_and_mapping_dependency_recorded(self):
-        policy_version_id = _make_version(
-            self.session, WS_ID, "truth_resolution_policy", content=_policy_content(("manual",))
+        data_source_entry_id, data_source_version_id = _make_data_source(
+            self.session, WS_ID, _data_source_content("manual")
         )
-        data_source_version_id = _make_version(
-            self.session, WS_ID, "data_source", content=_data_source_content("manual")
+        policy_version_id = _make_version(
+            self.session,
+            WS_ID,
+            "truth_resolution_policy",
+            content=_policy_content((data_source_entry_id,)),
         )
         _, market_policy_version = self._market_policy("en-GB")
         manual_fact_set_version_id = _make_version(
@@ -519,7 +556,6 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
             product_version_id=self.product_version_id,
             offer_version_id=self.offer_version_id,
             truth_resolution_policy_version_id=policy_version_id,
-            data_source_version_ids=(data_source_version_id,),
             markets=(
                 MarketResolutionInput(
                     market_policy_version_id=market_policy_version.id,
@@ -553,14 +589,18 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
             .one()
         )
         self.assertEqual(attempt.adapter_kind, "manual")
+        self.assertEqual(attempt.data_source_version_id, data_source_version_id)
         self.assertEqual(attempt.market_source_mapping_version_id, market_source_mapping_version_id)
 
     def test_unregistered_adapter_produces_adapter_not_enabled(self):
-        policy_version_id = _make_version(
-            self.session, WS_ID, "truth_resolution_policy", content=_policy_content(("shopify",))
+        data_source_entry_id, _version_id = _make_data_source(
+            self.session, WS_ID, _data_source_content("shopify")
         )
-        data_source_version_id = _make_version(
-            self.session, WS_ID, "data_source", content=_data_source_content("shopify")
+        policy_version_id = _make_version(
+            self.session,
+            WS_ID,
+            "truth_resolution_policy",
+            content=_policy_content((data_source_entry_id,)),
         )
         _, market_policy_version = self._market_policy("en-GB")
 
@@ -570,7 +610,6 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
             product_version_id=self.product_version_id,
             offer_version_id=self.offer_version_id,
             truth_resolution_policy_version_id=policy_version_id,
-            data_source_version_ids=(data_source_version_id,),
             markets=(MarketResolutionInput(market_policy_version_id=market_policy_version.id),),
         )
 
@@ -598,6 +637,10 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
         self.assertEqual(skipped_attempt.skip_code, "on_failure_skip")
 
     def test_divergent_source_priority_across_rules_is_rejected(self):
+        manual_entry_id, _ = _make_data_source(self.session, WS_ID, _data_source_content("manual"))
+        mock_entry_id, _ = _make_data_source(
+            self.session, WS_ID, _data_source_content("mock", execution_mode="mock")
+        )
         policy_version_id = _make_version(
             self.session,
             WS_ID,
@@ -606,35 +649,145 @@ class TestPrepareTruthResolutionCommand(_TruthTestCase):
                 "rules": [
                     {
                         "fact_type": "price",
-                        "source_priority": ["manual"],
+                        "source_priority": [manual_entry_id],
                         "max_staleness_seconds": 86400,
                         "on_failure": "skip",
                     },
                     {
                         "fact_type": "discount",
-                        "source_priority": ["mock", "manual"],
+                        "source_priority": [mock_entry_id, manual_entry_id],
                         "max_staleness_seconds": 86400,
                         "on_failure": "skip",
                     },
                 ]
             },
         )
-        data_source_version_id = _make_version(
-            self.session, WS_ID, "data_source", content=_data_source_content("manual")
-        )
-        _, market_policy_version = self._market_policy("en-GB")
 
-        with self.assertRaises(TruthResolutionError):
-            prepare_truth_resolution_command(
-                self.session,
-                self.ctx,
-                product_version_id=self.product_version_id,
-                offer_version_id=self.offer_version_id,
-                truth_resolution_policy_version_id=policy_version_id,
-                data_source_version_ids=(data_source_version_id,),
-                markets=(MarketResolutionInput(market_policy_version_id=market_policy_version.id),),
-                manual_fact_set_version_id="lv_unused",
-            )
+        with self.assertRaisesRegex(TruthResolutionError, "disagree on source_priority"):
+            self._prepare(policy_version_id, manual_fact_set_version_id="lv_unused")
+
+    # -- #70: source_priority lists DataSource entry ids ---------------------
+
+    def _prepare(self, policy_version_id: str, **kwargs) -> TruthResolutionCommand:
+        _, market_policy_version = self._market_policy("en-GB")
+        return prepare_truth_resolution_command(
+            self.session,
+            self.ctx,
+            product_version_id=self.product_version_id,
+            offer_version_id=self.offer_version_id,
+            truth_resolution_policy_version_id=policy_version_id,
+            markets=(MarketResolutionInput(market_policy_version_id=market_policy_version.id),),
+            **kwargs,
+        )
+
+    def _policy(self, *source_priority: str) -> str:
+        return _make_version(
+            self.session, WS_ID, "truth_resolution_policy", content=_policy_content(source_priority)
+        )
+
+    def _mock_source(self, scenario: str = "standard_9_market") -> tuple[str, str]:
+        return _make_data_source(
+            self.session,
+            WS_ID,
+            _data_source_content("mock", execution_mode="mock", config={"mock_scenario": scenario}),
+        )
+
+    def test_each_entry_resolves_to_its_current_effective_version(self):
+        entry_id, first_version_id = self._mock_source("standard_9_market")
+        policy_version_id = self._policy(entry_id)
+        self.assertEqual(
+            self._prepare(policy_version_id).markets[0].sources[0].data_source_version_id,
+            first_version_id,
+        )
+
+        second_version_id = _publish_next_version(
+            self.session,
+            entry_id,
+            _data_source_content(
+                "mock", execution_mode="mock", config={"mock_scenario": "complete_with_discount"}
+            ),
+        )
+
+        step = self._prepare(policy_version_id).markets[0].sources[0]
+        self.assertEqual(step.data_source_version_id, second_version_id)
+        self.assertEqual(step.mock_scenario, "complete_with_discount")
+
+    def test_two_sources_of_one_adapter_kind_keep_the_policy_order(self):
+        # Adapter kinds could not order two sources of the same kind (#70).
+        first_entry, first_version = self._mock_source("complete_with_discount")
+        second_entry, second_version = self._mock_source("standard_9_market")
+
+        command = self._prepare(self._policy(second_entry, first_entry))
+
+        self.assertEqual(
+            [step.data_source_version_id for step in command.markets[0].sources],
+            [second_version, first_version],
+        )
+
+    def test_a_legacy_data_source_version_id_maps_back_to_its_entry(self):
+        # Before #70 only a DataSourceVersion id could publish; such a
+        # policy keeps resolving, against the entry's current version.
+        entry_id, first_version_id = self._mock_source()
+        policy_version_id = self._policy(first_version_id)
+        second_version_id = _publish_next_version(
+            self.session, entry_id, _data_source_content("mock", execution_mode="mock")
+        )
+
+        step = self._prepare(policy_version_id).markets[0].sources[0]
+        self.assertEqual(step.data_source_version_id, second_version_id)
+
+    def test_entry_id_and_its_legacy_version_id_are_one_source(self):
+        entry_id, version_id = self._mock_source()
+        with self.assertRaisesRegex(TruthResolutionError, "more than once"):
+            self._prepare(self._policy(entry_id, version_id))
+
+    def test_an_adapter_kind_is_not_a_source(self):
+        self._mock_source()
+        with self.assertRaisesRegex(TruthResolutionError, "lists adapter_kind 'mock'"):
+            self._prepare(self._policy("mock"))
+
+    def test_another_workspaces_data_source_is_rejected(self):
+        self.session.add(
+            WorkspaceRecord(id="ws_truth_other", name="Other", lifecycle="active", budget_currency="USD")
+        )
+        self.session.flush()
+        foreign_entry_id, foreign_version_id = _make_data_source(
+            self.session, "ws_truth_other", _data_source_content("mock", execution_mode="mock")
+        )
+        for reference in (foreign_entry_id, foreign_version_id):
+            with self.subTest(reference=reference):
+                with self.assertRaisesRegex(TruthResolutionError, "not a DataSource in this Workspace"):
+                    self._prepare(self._policy(reference))
+
+    def test_an_entry_of_another_type_is_rejected(self):
+        offer_entry_id = self.session.get(LibraryVersionRecord, self.offer_version_id).entry_id
+        with self.assertRaisesRegex(TruthResolutionError, "not a DataSource"):
+            self._prepare(self._policy(offer_entry_id))
+
+    def test_a_withdrawn_data_source_is_rejected(self):
+        entry_id, version_id = self._mock_source()
+        policy_version_id = self._policy(entry_id)
+        self.session.get(LibraryVersionRecord, version_id).state = "withdrawn"
+        self.session.get(LibraryEntryRecord, entry_id).current_version_id = None
+        self.session.flush()
+
+        with self.assertRaisesRegex(TruthResolutionError, "has no effective version"):
+            self._prepare(policy_version_id)
+
+    def test_an_archived_data_source_is_rejected(self):
+        entry_id, _version_id = self._mock_source()
+        policy_version_id = self._policy(entry_id)
+        self.session.get(LibraryEntryRecord, entry_id).lifecycle = "archived"
+        self.session.flush()
+
+        with self.assertRaisesRegex(TruthResolutionError, "is archived"):
+            self._prepare(policy_version_id)
+
+    def test_two_manual_sources_are_rejected(self):
+        first, _ = _make_data_source(self.session, WS_ID, _data_source_content("manual"))
+        second, _ = _make_data_source(self.session, WS_ID, _data_source_content("manual"))
+        with self.assertRaisesRegex(TruthResolutionError, "more than one 'manual' DataSource"):
+            self._prepare(self._policy(first, second), manual_fact_set_version_id="lv_unused")
 
 
 def _truth_rule_v1_readiness(accepted, remaining, *_):
@@ -810,6 +963,14 @@ class TestTruthRuleVersion(_TruthTestCase):
     under `truth-rule-v1` keeps its readiness (#401)."""
 
     def _blocked_discount_command(self) -> TruthResolutionCommand:
+        data_source_entry_id, _version_id = _make_data_source(
+            self.session,
+            WS_ID,
+            # `standard_9_market` has price and availability but no discount.
+            _data_source_content(
+                "mock", execution_mode="mock", config={"mock_scenario": "standard_9_market"}
+            ),
+        )
         policy_version_id = _make_version(
             self.session,
             WS_ID,
@@ -818,22 +979,13 @@ class TestTruthRuleVersion(_TruthTestCase):
                 "rules": [
                     {
                         "fact_type": fact_type,
-                        "source_priority": ["mock"],
+                        "source_priority": [data_source_entry_id],
                         "max_staleness_seconds": 86400,
                         "on_failure": "block",
                     }
                     for fact_type in ("price", "availability", "discount")
                 ]
             },
-        )
-        data_source_version_id = _make_version(
-            self.session,
-            WS_ID,
-            "data_source",
-            # `standard_9_market` has price and availability but no discount.
-            content=_data_source_content(
-                "mock", execution_mode="mock", config={"mock_scenario": "standard_9_market"}
-            ),
         )
         _, market_policy_version = self._market_policy("en-GB")
         return prepare_truth_resolution_command(
@@ -842,7 +994,6 @@ class TestTruthRuleVersion(_TruthTestCase):
             product_version_id=self.product_version_id,
             offer_version_id=self.offer_version_id,
             truth_resolution_policy_version_id=policy_version_id,
-            data_source_version_ids=(data_source_version_id,),
             markets=(MarketResolutionInput(market_policy_version_id=market_policy_version.id),),
         )
 
