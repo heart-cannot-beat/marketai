@@ -116,6 +116,11 @@ NON_TERMINAL_STATES = frozenset(
 #: so :func:`aggregate_operation_from_jobs` records that dispatch as an
 #: explicit ``admitted -> running`` event first rather than inventing a
 #: history in which work completed without starting.
+#:
+#: ``queued`` is the unpriced entry state and reaches ``failed`` directly for
+#: the same reason ``admitted`` does: a legacy command whose Job the
+#: dispatcher rejected under a since-revoked authorization epoch failed
+#: without anything having run (#22, ``app.legacy_operations``).
 VALID_TRANSITIONS: dict[OperationState, set[OperationState]] = {
     OperationState.ADMITTED: {
         OperationState.RUNNING,
@@ -123,7 +128,11 @@ VALID_TRANSITIONS: dict[OperationState, set[OperationState]] = {
         OperationState.FAILED,
         OperationState.UNCERTAIN,
     },
-    OperationState.QUEUED: {OperationState.RUNNING, OperationState.CANCELLED},
+    OperationState.QUEUED: {
+        OperationState.RUNNING,
+        OperationState.CANCELLED,
+        OperationState.FAILED,
+    },
     OperationState.RUNNING: {
         OperationState.SUCCEEDED,
         OperationState.FAILED,

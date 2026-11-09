@@ -122,8 +122,9 @@ class LibraryMigrationDowngradeTests(unittest.TestCase):
         # zz6f7a8b9c0d (soft-removable experiment entries, Issue #284) and
         # zz7a8b9c0d1e (the API reads usage events, Issue #347) and
         # zz8b9c0d1e2f (stored spend guardrail previews, Issue #386) and
-        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46).
-        self.assertEqual(revision, "zz9c0d1e2f3a")
+        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46) and
+        # zza0d1e2f3a4 (Worker-only Operation reconciliation candidates, Issue #22).
+        self.assertEqual(revision, "zza0d1e2f3a4")
         self.assertEqual(event_type, "library.withdrawal.affects_market_asset_binding")
 
 
@@ -211,8 +212,9 @@ class LibraryTemplatesDatasourcesMigrationTests(unittest.TestCase):
         # zz6f7a8b9c0d (soft-removable experiment entries, Issue #284) and
         # zz7a8b9c0d1e (the API reads usage events, Issue #347) and
         # zz8b9c0d1e2f (stored spend guardrail previews, Issue #386) and
-        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46).
-        self.assertEqual(revision, "zz9c0d1e2f3a")
+        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46) and
+        # zza0d1e2f3a4 (Worker-only Operation reconciliation candidates, Issue #22).
+        self.assertEqual(revision, "zza0d1e2f3a4")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as connection:

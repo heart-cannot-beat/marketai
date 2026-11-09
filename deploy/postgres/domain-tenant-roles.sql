@@ -831,6 +831,17 @@ BEGIN
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_claim_next_onboarding_fact(text, integer) TO marketai_domain_worker';
   END IF;
 
+  -- Tenant-neutral reconciliation candidates (ids only); every fold that
+  -- follows runs in a signed TenantContext under RLS (#22).
+  IF to_regprocedure('public.marketai_legacy_operation_candidates_v1(text[],integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_legacy_operation_candidates_v1(text[], integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_legacy_operation_candidates_v1(text[], integer) TO marketai_domain_worker';
+  END IF;
+  IF to_regprocedure('public.marketai_admitted_operation_candidates_v1(integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_admitted_operation_candidates_v1(integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_admitted_operation_candidates_v1(integer) TO marketai_domain_worker';
+  END IF;
+
   -- ---- projection_writer: mutable projection tables ----
   FOREACH relation_name IN ARRAY ARRAY[
     'experiment_eligibility_projections',

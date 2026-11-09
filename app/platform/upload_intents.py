@@ -564,6 +564,17 @@ async def verify_upload_intent(
     return VerificationOutcome(kind="finalized", committed=committed)
 
 
+def reject_before_verification(session: Session, intent_id: str, rejection_code: str) -> None:
+    """Reject an intent whose verification Job never ran (#22).
+
+    The same terminal write step 2 makes for a stale authorization epoch,
+    for the reconciler that settles a verification the dispatcher refused.
+    """
+    if rejection_code not in REJECTION_CODES:
+        raise ValueError(f"unknown upload rejection code {rejection_code!r}")
+    _reject_without_lease(session, intent_id, rejection_code)
+
+
 def _reject_without_lease(session: Session, intent_id: str, rejection_code: str) -> None:
     """Terminal marking for step 1's admission check, which runs before the
     CAS lease (step 5) is ever acquired -- so there is no ``lease_id`` to
