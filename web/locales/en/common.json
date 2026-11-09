@@ -1994,6 +1994,8 @@
   "error-manifest_blocked": "The data needed for this evaluation is incomplete.",
   "error-manifest_not_found": "The data for this evaluation is missing.",
   "error-manual_fact_import_failed": "The fact import did not finish.",
+  "error-manual_fact_expired": "Every manual fact of this kind for this market has expired. Import current facts.",
+  "error-manual_fact_not_yet_valid": "No manual fact of this kind is valid yet for this market.",
   "error-manual_fact_set_expired": "The manual fact set has expired. Import current facts.",
   "error-market_scope_mismatch": "The offer is not available in this market.",
   "error-marketing_ai_qc_failed": "The AI check did not finish. Check its status; paid calls are not repeated automatically.",

@@ -1114,11 +1114,16 @@ def _fact_date(value: str) -> datetime | None:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
-def _validate_fact_window(fact: dict, fpath: str, findings: list[Finding]) -> None:
+def _validate_fact_window(fact: dict, fpath: str, findings: list[Finding], *, now: datetime) -> None:
     """Both ends of a fact's validity are ISO dates and it starts before it ends (#23).
 
     Truth serves a fact while ``valid_from <= now < valid_to``, so an end on
     or before the start is a fact that is never valid.
+
+    Truth judges each row on its own (#60): a row that has already ended is
+    left out at resolution while the other rows stay usable, so publishing
+    it is allowed and only warned about. A row that starts later gives
+    nothing; it is a scheduled fact.
     """
     starts = ends = None
     if not _is_str(fact.get("valid_from")):
@@ -1133,9 +1138,17 @@ def _validate_fact_window(fact: dict, fpath: str, findings: list[Finding]) -> No
                                 "valid_to 必须是 ISO 日期或时间，例如 2026-01-31", f"{fpath}.valid_to"))
     if starts is not None and ends is not None and starts >= ends:
         findings.append(Finding("fact_valid_range", "valid_to 必须晚于 valid_from", f"{fpath}.valid_to"))
+    elif starts is not None and ends is not None and ends <= now:
+        findings.append(Finding(
+            "fact_expired",
+            f"这条事实已于 {fact['valid_to']} 失效：解析真值时会跳过它，其他行照常使用",
+            f"{fpath}.valid_to",
+            severity=SEVERITY_WARNING,
+        ))
 
 
 def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
+    now = datetime.now(timezone.utc)
     if not _is_str(content.get("data_source_entry_id")):
         findings.append(Finding("fact_set_ds_required",
                                 "必须显式声明 data_source_entry_id", "data_source_entry_id"))
@@ -1164,7 +1177,7 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
         cc = fact.get("country_code")
         if not isinstance(cc, str) or len(cc) != 2 or cc != cc.upper():
             findings.append(Finding("fact_country_code", "country_code 必须是大写 2 位 ISO", f"{fpath}.country_code"))
-        _validate_fact_window(fact, fpath, findings)
+        _validate_fact_window(fact, fpath, findings, now=now)
         if not _is_str(fact.get("evidence_source")):
             findings.append(Finding("fact_evidence_source_required",
                                     "必须声明证据来源 evidence_source", f"{fpath}.evidence_source"))

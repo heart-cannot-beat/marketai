@@ -53,7 +53,8 @@ def _valid_fact(fact_id="f1", fact_type="price", country="US"):
         "fact_type": fact_type,
         "country_code": country,
         "valid_from": "2026-01-01",
-        "valid_to": "2026-12-31",
+        # Far ahead: a row that already ended is a publish warning (#60).
+        "valid_to": "2099-12-31",
         "amount": "9.99",
         "currency": "USD",
         "evidence_source": "Acme Charge price list",

@@ -1994,6 +1994,8 @@
   "error-manifest_blocked": "评估所需的数据不完整。",
   "error-manifest_not_found": "缺少评估所需的数据。",
   "error-manual_fact_import_failed": "事实导入没有完成。",
+  "error-manual_fact_expired": "这个市场的这类手填事实都已过期，请导入最新事实。",
+  "error-manual_fact_not_yet_valid": "这个市场的这类手填事实还没有生效。",
   "error-manual_fact_set_expired": "手填事实集已过期，请导入最新事实。",
   "error-market_scope_mismatch": "这个优惠不适用于该市场。",
   "error-marketing_ai_qc_failed": "AI 检查没有完成，请查看检查状态；不会自动重复付费调用。",

@@ -69,6 +69,7 @@ from .fact_sources import (
     FactSourceAdapter,
     FactSourceFailure,
     FactSourceResult,
+    ManualFactRow,
     ManualFactSet,
     ManualFactSourceAdapter,
     MarketContext,
@@ -277,6 +278,21 @@ def _requested_context(
     }
 
 
+def _with_source_rows(
+    requested_context: Mapping[str, object], source_rows: tuple[Mapping[str, object], ...]
+) -> Mapping[str, object]:
+    """An attempt's context plus, for a manual source, every row it judged (#60).
+
+    `manual_fact_rows` lists each row of the attempt's fact type for the
+    market (`fact_id`, `row`, `valid_from`, `valid_to`, `status`, `used`), so
+    the package keeps each row's validity as resolution saw it. Packages
+    resolved before #60 have no such key and are never rewritten.
+    """
+    if not source_rows:
+        return requested_context
+    return {**requested_context, "manual_fact_rows": [dict(row) for row in source_rows]}
+
+
 def _canonical_json(payload: object) -> str:
     def _default(obj):
         if isinstance(obj, Decimal):
@@ -434,7 +450,7 @@ def _resolve_market(
                     adapter_kind=step.adapter_kind,
                     adapter_version=step.adapter_version,
                     manual_fact_set_version_id=step.manual_fact_set_version_id,
-                    requested_context=raw_fact.requested_context,
+                    requested_context=_with_source_rows(raw_fact.requested_context, raw_fact.source_rows),
                     mock_scenario=raw_fact.mock_scenario,
                     mock_version=raw_fact.mock_version,
                     outcome="accepted",
@@ -487,7 +503,9 @@ def _resolve_market(
                     adapter_kind=step.adapter_kind,
                     adapter_version=step.adapter_version,
                     manual_fact_set_version_id=step.manual_fact_set_version_id,
-                    requested_context=_requested_context(command, market_cmd, step),
+                    requested_context=_with_source_rows(
+                        _requested_context(command, market_cmd, step), failure.source_rows
+                    ),
                     mock_scenario=step.mock_scenario,
                     mock_version=step.mock_version,
                     outcome="failed",
@@ -1130,28 +1148,39 @@ def _policy_data_source(
 def _manual_fact_set_for_market(
     manual_fact_set_version_id: str, content: dict, country_code: str
 ) -> ManualFactSet:
-    facts_by_type: dict[str, dict] = {}
-    windows: list[tuple[datetime, datetime]] = []
-    for raw in content.get("facts", []) or []:
+    """Every row of the fact set for one market, each with its own window (#60).
+
+    Validity is judged row by row when the adapter resolves (contract §7.3,
+    §7.4): a row out of force is left out on its own, and a fact type left
+    with no row in force follows its rule's `on_failure`. Before #60 the
+    intersection of every row's window was the window of the whole set, so one
+    expired row made every fact of the market `manual_fact_set_expired`.
+    """
+    rows: list[ManualFactRow] = []
+    for index, raw in enumerate(content.get("facts", []) or []):
         if not isinstance(raw, dict) or raw.get("country_code") != country_code:
             continue
         fact_type = raw.get("fact_type")
         if not isinstance(fact_type, str) or not fact_type:
             continue
-        facts_by_type[fact_type] = raw
-        windows.append((_parse_content_date(raw["valid_from"]), _parse_content_date(raw["valid_to"])))
+        fact_id = raw.get("fact_id")
+        rows.append(
+            ManualFactRow(
+                index=index,
+                fact_id=fact_id if isinstance(fact_id, str) else None,
+                fact_type=fact_type,
+                valid_from=_parse_content_date(raw.get("valid_from")),
+                valid_to=_parse_content_date(raw.get("valid_to")),
+                raw=raw,
+            )
+        )
 
-    if not facts_by_type:
+    if not rows:
         raise TruthResolutionError(
             f"ManualFactSet {manual_fact_set_version_id!r} has no facts for country {country_code!r}"
         )
 
-    return ManualFactSet(
-        version_id=manual_fact_set_version_id,
-        facts=facts_by_type,
-        valid_from=max(window[0] for window in windows),
-        valid_to=min(window[1] for window in windows),
-    )
+    return ManualFactSet(version_id=manual_fact_set_version_id, rows=tuple(rows))
 
 
 def _build_source_step(

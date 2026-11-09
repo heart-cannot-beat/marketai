@@ -512,6 +512,7 @@
     "fact_days_range": "The maximum delivery days cannot be less than the minimum.",
     "fact_duplicate_id": "Another fact already uses this fact ID.",
     "fact_evidence_source_required": "Say where this fact comes from (evidence_source), such as the price list or contract it was taken from.",
+    "fact_expired": "This fact has already expired. Localization skips it and keeps using the other facts.",
     "fact_id_required": "Each fact needs a stable fact ID.",
     "fact_set_ds_required": "Choose the data source these facts come from.",
     "fact_set_empty": "Add at least one fact.",
