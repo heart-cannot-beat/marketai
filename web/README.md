@@ -5,7 +5,7 @@ membership, invitations and account administration. It is a **hardened,
 curated fork** of the [BoxyHQ SaaS Starter Kit](https://github.com/boxyhq/saas-starter-kit)
 pinned in [`UPSTREAM.json`](UPSTREAM.json).
 
-- Customer walkthrough (34 steps, 72 step-by-step screenshots): [HTML 图文教程](../docs/tutorials/marketai-tutorial.html)
+- Customer walkthrough (54 steps, 68 step-by-step screenshots): [HTML 图文教程](../docs/tutorials/marketai-tutorial.html)
   ([download/open instructions](../docs/tutorials/README.md), [text reference](../docs/user-guide.md))
 - Project overview and current validation scope: [MarketAI README](../README.md)
 - Documentation index: [docs/README.md](../docs/README.md)
