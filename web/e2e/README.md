@@ -112,10 +112,6 @@ for reasons outside the suites' copy and seeds:
   `daily_slot_missing` and its maturity is `insufficient`. (The golden path
   advances 14 days before it asserts maturity.) The journey is serial, so
   steps 07–18 do not run after it.
-- Scale, controlled-mock journey step 18 (#72): its hostile requests call the
-  BFF without the page's Origin, CSRF token and `X-Intent-Id`, so the first
-  one (the stale activation) is refused with 403 before it reaches the API
-  instead of the 400, 409 or 428 the step expects.
 
 ## Manual workflow
 
