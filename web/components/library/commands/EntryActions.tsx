@@ -25,117 +25,66 @@ export function deniedReason(t: TFunction, code: string | null): string {
     : fallback;
 }
 
-interface EntryActionsProps {
-  entryId: string;
-  entryType: LibraryEntryType;
-  lifecycle: string;
-  allowedActions: AllowedAction[];
-  onPublish: () => void;
-  onArchive: () => void;
-  onFork: () => void;
-  onClone: () => void;
-  onApplyTemplate: () => void;
-  onCreateEntry: () => void;
-  onBindReference: () => void;
+/** The server's verdict on one toolbar button. */
+export interface ToolbarEligibility {
+  allowed: boolean;
+  reason_code: string | null;
 }
 
-const ENTRY_COMMANDS: LibraryCommandKind[] = [
-  'publish',
-  'archive',
-  'fork',
-  'clone',
-  'apply_template',
-  'bind_reference',
-];
+export interface ToolbarButton {
+  /** The server's action code, kept on the button as `data-command`. */
+  command: string;
+  label: string;
+  action: ToolbarEligibility;
+  onClick: () => void;
+  variant: 'primary' | 'warning' | 'default';
+}
 
-export function EntryActions({
-  allowedActions,
-  onPublish,
-  onArchive,
-  onFork,
-  onClone,
-  onApplyTemplate,
-  onCreateEntry,
-  onBindReference,
-}: EntryActionsProps) {
+interface ActionToolbarProps {
+  label: string;
+  buttons: ToolbarButton[];
+}
+
+/**
+ * A Library toolbar: one button per action the server listed, and under it
+ * the server's reasons, one line per `reason_code` naming the buttons it
+ * holds back, so touch and keyboard users see them too.
+ */
+export function ActionToolbar({ label, buttons }: ActionToolbarProps) {
   const { t } = useTranslation('library');
   const reasonId = useId();
 
-  const handlers: Record<string, () => void> = {
-    publish: onPublish,
-    archive: onArchive,
-    fork: onFork,
-    clone: onClone,
-    apply_template: onApplyTemplate,
-    bind_reference: onBindReference,
-  };
-
-  const actionMap = new Map(allowedActions.map((a) => [a.command, a]));
-
-  const visibleActions = ENTRY_COMMANDS.filter((cmd) => actionMap.has(cmd));
-
-  if (visibleActions.length === 0 && !actionMap.has('create_entry')) {
-    return null;
-  }
-
-  const label = (cmd: LibraryCommandKind) =>
-    cmd === 'create_entry' ? t('commands.create-entry') : t(`commands.${cmd}`);
-
-  // The server's reasons under the toolbar, one line per `reason_code` naming
-  // the buttons it holds back, so touch and keyboard users see them too.
   const reasons = new Map<string, string[]>();
-  for (const cmd of [
-    ...(actionMap.has('create_entry') ? (['create_entry'] as const) : []),
-    ...visibleActions,
-  ]) {
-    const action = actionMap.get(cmd)!;
-    if (action.allowed) continue;
-    const code = action.reason_code ?? '';
-    reasons.set(code, [...(reasons.get(code) ?? []), label(cmd)]);
+  for (const button of buttons) {
+    if (button.action.allowed) continue;
+    const code = button.action.reason_code ?? '';
+    reasons.set(code, [...(reasons.get(code) ?? []), button.label]);
   }
   const reasonCodes = Array.from(reasons.keys());
   const lineId = (code: string) => `${reasonId}-${reasonCodes.indexOf(code)}`;
-  const describedBy = (action: AllowedAction) =>
-    action.allowed ? undefined : lineId(action.reason_code ?? '');
 
   return (
     <div className="space-y-1">
       <div
         className="flex flex-wrap items-center gap-2"
         role="toolbar"
-        aria-label={t('commands.entry-actions')}
+        aria-label={label}
       >
-        {actionMap.has('create_entry') && (
+        {buttons.map((button) => (
           <ActionButton
-            command="create_entry"
-            action={actionMap.get('create_entry')!}
-            label={label('create_entry')}
-            onClick={onCreateEntry}
-            variant="primary"
-            describedBy={describedBy(actionMap.get('create_entry')!)}
+            key={button.command}
+            command={button.command}
+            action={button.action}
+            label={button.label}
+            onClick={button.onClick}
+            variant={button.variant}
+            describedBy={
+              button.action.allowed
+                ? undefined
+                : lineId(button.action.reason_code ?? '')
+            }
           />
-        )}
-        {visibleActions.map((cmd) => {
-          const action = actionMap.get(cmd)!;
-          const handler = handlers[cmd];
-          return (
-            <ActionButton
-              key={cmd}
-              command={cmd}
-              action={action}
-              label={label(cmd)}
-              onClick={handler}
-              variant={
-                cmd === 'publish'
-                  ? 'primary'
-                  : cmd === 'archive'
-                    ? 'warning'
-                    : 'default'
-              }
-              describedBy={describedBy(action)}
-            />
-          );
-        })}
+        ))}
       </div>
       {reasons.size > 0 && (
         <ul className="space-y-0.5 text-xs text-gray-500 dark:text-gray-400">
@@ -153,9 +102,85 @@ export function EntryActions({
   );
 }
 
+interface EntryActionsProps {
+  entryId: string;
+  entryType: LibraryEntryType;
+  lifecycle: string;
+  allowedActions: AllowedAction[];
+  onPublish: () => void;
+  onArchive: () => void;
+  onCreateEntry: () => void;
+  onBindReference: () => void;
+}
+
+/**
+ * The entry-level commands `_entry_allowed_actions` can list. Fork and Clone
+ * Product act on a published version and live on the version toolbar
+ * (`VersionActions`).
+ */
+export const ENTRY_COMMANDS: LibraryCommandKind[] = [
+  'publish',
+  'archive',
+  'bind_reference',
+];
+
+export function EntryActions({
+  allowedActions,
+  onPublish,
+  onArchive,
+  onCreateEntry,
+  onBindReference,
+}: EntryActionsProps) {
+  const { t } = useTranslation('library');
+
+  const handlers: Record<string, () => void> = {
+    publish: onPublish,
+    archive: onArchive,
+    bind_reference: onBindReference,
+  };
+
+  const actionMap = new Map(allowedActions.map((a) => [a.command, a]));
+
+  const visibleActions = ENTRY_COMMANDS.filter((cmd) => actionMap.has(cmd));
+
+  if (visibleActions.length === 0 && !actionMap.has('create_entry')) {
+    return null;
+  }
+
+  const buttons: ToolbarButton[] = [
+    ...(actionMap.has('create_entry')
+      ? [
+          {
+            command: 'create_entry',
+            label: t('commands.create-entry'),
+            action: actionMap.get('create_entry')!,
+            onClick: onCreateEntry,
+            variant: 'primary' as const,
+          },
+        ]
+      : []),
+    ...visibleActions.map((cmd) => ({
+      command: cmd,
+      label: t(`commands.${cmd}`),
+      action: actionMap.get(cmd)!,
+      onClick: handlers[cmd],
+      variant:
+        cmd === 'publish'
+          ? ('primary' as const)
+          : cmd === 'archive'
+            ? ('warning' as const)
+            : ('default' as const),
+    })),
+  ];
+
+  return (
+    <ActionToolbar label={t('commands.entry-actions')} buttons={buttons} />
+  );
+}
+
 interface ActionButtonProps {
   command: string;
-  action: AllowedAction;
+  action: ToolbarEligibility;
   label: string;
   onClick: () => void;
   variant: 'primary' | 'warning' | 'default';

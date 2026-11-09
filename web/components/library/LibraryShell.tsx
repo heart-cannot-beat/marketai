@@ -52,7 +52,7 @@ export function LibraryShell() {
         >
           <LibraryEntryDetail
             route={state}
-            onEntryChange={(id) => setEntry(id)}
+            onEntryChange={(id, tab) => setEntry(id, tab)}
             onTabChange={setTab}
             onVersionChange={setVersion}
             onDismissResource={() => setResource(null, null)}

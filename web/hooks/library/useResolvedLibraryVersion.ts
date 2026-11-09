@@ -2,6 +2,18 @@ import { useMemo } from 'react';
 import { useDomainQuery } from '@/hooks/domain/useDomainQuery';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
 
+/**
+ * One of a version's `allowed_actions`, as `compute_actions` in
+ * `app/platform/action_eligibility.py` builds it: `requirements` only when
+ * the command needs something first (`impact_confirmation` for Withdraw).
+ */
+export interface VersionActionEligibility {
+  action: string;
+  allowed: boolean;
+  reason_code: string | null;
+  requirements?: string[];
+}
+
 export interface ResolvedVersion {
   id: string;
   entry_id: string;
@@ -19,11 +31,7 @@ export interface ResolvedVersion {
   published_by?: string | null;
   published_at?: string | null;
   withdraw_reason?: string | null;
-  allowed_actions?: Array<{
-    action: string;
-    eligible: boolean;
-    reason_code?: string;
-  }>;
+  allowed_actions?: VersionActionEligibility[];
 }
 
 export interface UseResolvedLibraryVersionResult {

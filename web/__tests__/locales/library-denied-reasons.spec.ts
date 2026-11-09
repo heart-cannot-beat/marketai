@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { ENTRY_COMMANDS } from '@/components/library/commands/EntryActions';
+import { VERSION_ACTIONS } from '@/components/library/commands/VersionActions';
 import { CJK, readNamespace } from './locale-files';
 
 /**
@@ -170,6 +172,29 @@ describe.each(['en', 'zh-CN'])('%s', (locale) => {
   });
 });
 
+test('the version toolbar renders exactly the actions the server lists (#25)', () => {
+  expect([...VERSION_ACTIONS].sort()).toEqual(
+    [...eligibility[1].actions].sort()
+  );
+});
+
+test('the entry toolbar renders only actions the server lists for an entry', () => {
+  expect(
+    ENTRY_COMMANDS.filter((cmd) => !eligibility[0].actions.includes(cmd))
+  ).toEqual([]);
+});
+
+describe.each(['en', 'zh-CN'])('%s toolbar labels', (locale) => {
+  const keys = readNamespace(locale, 'library');
+
+  it('names every toolbar action', () => {
+    const missing = [...ENTRY_COMMANDS, ...VERSION_ACTIONS].filter(
+      (action) => !keys.has(`commands.${action}`)
+    );
+    expect(missing).toEqual([]);
+  });
+});
+
 test('both Library action toolbars word reasons through deniedReason', () => {
   const read = (file: string) =>
     fs.readFileSync(
@@ -182,19 +207,16 @@ test('both Library action toolbars word reasons through deniedReason', () => {
   expect(entryActions.match(/\bt\(`commands\.denied\.[^`]*`/g)).toEqual([
     `t(\`${PREFIX}\${code}\``,
   ]);
-  const versionActions = read('VersionActions.tsx');
-  expect(versionActions).toContain('import { deniedReason');
-  expect(versionActions).not.toContain('commands.denied.');
+  // The shared toolbar words each refused button and each reason line.
+  expect(entryActions).toContain('deniedReason(t, action.reason_code)');
+  expect(entryActions).toContain('reason: deniedReason(t, code || null)');
+  expect(entryActions).not.toContain('defaultValue: action.reason_code');
+  // Both toolbars render through it, and neither reads a reason on its own.
   for (const [file, source] of [
     ['EntryActions.tsx', entryActions],
-    ['VersionActions.tsx', versionActions],
+    ['VersionActions.tsx', read('VersionActions.tsx')],
   ]) {
-    expect([
-      file,
-      source.includes('deniedReason(t, action.reason_code)'),
-    ]).toEqual([file, true]);
-    expect([file, source.includes('defaultValue: action.reason_code')]).toEqual(
-      [file, false]
-    );
+    expect([file, source.includes('<ActionToolbar')]).toEqual([file, true]);
   }
+  expect(read('VersionActions.tsx')).not.toContain('commands.denied');
 });

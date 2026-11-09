@@ -39,14 +39,12 @@ import {
   type AllowedAction,
 } from '@/components/library/commands/EntryActions';
 import { VersionActions } from '@/components/library/commands/VersionActions';
+import versions from '../../fixtures/library-versions.json';
 
 function makeEntryHandlers() {
   return {
     onPublish: jest.fn(),
     onArchive: jest.fn(),
-    onFork: jest.fn(),
-    onClone: jest.fn(),
-    onApplyTemplate: jest.fn(),
     onCreateEntry: jest.fn(),
     onBindReference: jest.fn(),
   };
@@ -56,8 +54,7 @@ function makeVersionHandlers() {
   return {
     onWithdraw: jest.fn(),
     onFork: jest.fn(),
-    onClone: jest.fn(),
-    onDownload: jest.fn(),
+    onCloneProduct: jest.fn(),
   };
 }
 
@@ -67,7 +64,7 @@ describe('EntryActions', () => {
     const allowedActions: AllowedAction[] = [
       { command: 'publish', allowed: true, reason_code: null },
       { command: 'archive', allowed: true, reason_code: null },
-      { command: 'fork', allowed: true, reason_code: null },
+      { command: 'bind_reference', allowed: true, reason_code: null },
     ];
 
     render(
@@ -88,14 +85,16 @@ describe('EntryActions', () => {
 
     expect(screen.getByText('library:commands.publish')).toBeInTheDocument();
     expect(screen.getByText('library:commands.archive')).toBeInTheDocument();
-    expect(screen.getByText('library:commands.fork')).toBeInTheDocument();
+    expect(
+      screen.getByText('library:commands.bind_reference')
+    ).toBeInTheDocument();
   });
 
   it('calls handler on allowed action click', () => {
     const handlers = makeEntryHandlers();
     const allowedActions: AllowedAction[] = [
       { command: 'publish', allowed: true, reason_code: null },
-      { command: 'clone', allowed: true, reason_code: null },
+      { command: 'bind_reference', allowed: true, reason_code: null },
     ];
 
     render(
@@ -111,8 +110,8 @@ describe('EntryActions', () => {
     fireEvent.click(screen.getByText('library:commands.publish'));
     expect(handlers.onPublish).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText('library:commands.clone'));
-    expect(handlers.onClone).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('library:commands.bind_reference'));
+    expect(handlers.onBindReference).toHaveBeenCalledTimes(1);
   });
 
   it('suppresses click on denied action', () => {
@@ -234,10 +233,13 @@ describe('EntryActions', () => {
     ).toBeInTheDocument();
   });
 
-  it('does not render buttons for unknown commands', () => {
+  it('does not render version or unknown commands', () => {
     const handlers = makeEntryHandlers();
     const allowedActions: AllowedAction[] = [
-      { command: 'withdraw' as any, allowed: true, reason_code: null },
+      { command: 'withdraw', allowed: true, reason_code: null },
+      { command: 'fork', allowed: true, reason_code: null },
+      { command: 'clone', allowed: true, reason_code: null },
+      { command: 'apply_template', allowed: true, reason_code: null },
     ];
 
     const { container } = render(
@@ -255,22 +257,11 @@ describe('EntryActions', () => {
 });
 
 describe('VersionActions', () => {
-  it('renders toolbar with allowed buttons', () => {
+  it('renders the server actions of an Owner on an effective product', () => {
     const handlers = makeVersionHandlers();
-    const allowedActions: AllowedAction[] = [
-      { command: 'withdraw', allowed: true, reason_code: null },
-      { command: 'fork', allowed: true, reason_code: null },
-      {
-        command: 'create_reference_download',
-        allowed: true,
-        reason_code: null,
-      },
-    ];
-
     render(
       createElement(VersionActions, {
-        versionId: 'v1',
-        allowedActions,
+        allowedActions: versions.owner_effective_product.allowed_actions,
         ...handlers,
       })
     );
@@ -280,50 +271,27 @@ describe('VersionActions', () => {
       'aria-label',
       'library:commands.version-actions'
     );
-
-    expect(screen.getByText('library:commands.withdraw')).toBeInTheDocument();
-    expect(screen.getByText('library:commands.fork')).toBeInTheDocument();
+    // Toolbar order, not the server's alphabetical order.
     expect(
-      screen.getByText('library:commands.create_reference_download')
-    ).toBeInTheDocument();
-  });
-
-  it('calls handler on allowed action click', () => {
-    const handlers = makeVersionHandlers();
-    const allowedActions: AllowedAction[] = [
-      { command: 'withdraw', allowed: true, reason_code: null },
-      { command: 'clone', allowed: true, reason_code: null },
-    ];
-
-    render(
-      createElement(VersionActions, {
-        versionId: 'v1',
-        allowedActions,
-        ...handlers,
-      })
-    );
+      Array.from(toolbar.querySelectorAll('button'), (b) =>
+        b.getAttribute('data-command')
+      )
+    ).toEqual(['withdraw', 'fork', 'clone_product']);
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
 
     fireEvent.click(screen.getByText('library:commands.withdraw'));
+    fireEvent.click(screen.getByText('library:commands.fork'));
+    fireEvent.click(screen.getByText('library:commands.clone_product'));
     expect(handlers.onWithdraw).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByText('library:commands.clone'));
-    expect(handlers.onClone).toHaveBeenCalledTimes(1);
+    expect(handlers.onFork).toHaveBeenCalledTimes(1);
+    expect(handlers.onCloneProduct).toHaveBeenCalledTimes(1);
   });
 
-  it('suppresses click on denied action', () => {
+  it('holds back Withdraw for a Member with its reason', () => {
     const handlers = makeVersionHandlers();
-    const allowedActions: AllowedAction[] = [
-      {
-        command: 'withdraw',
-        allowed: false,
-        reason_code: 'invalid_state',
-      },
-    ];
-
     render(
       createElement(VersionActions, {
-        versionId: 'v1',
-        allowedActions,
+        allowedActions: versions.member_effective_product.allowed_actions,
         ...handlers,
       })
     );
@@ -331,18 +299,41 @@ describe('VersionActions', () => {
     const btn = screen.getByText('library:commands.withdraw');
     fireEvent.click(btn);
     expect(handlers.onWithdraw).not.toHaveBeenCalled();
+    expect(btn).not.toBeDisabled();
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAttribute(
       'title',
-      'library:commands.denied.invalid_state'
+      'library:commands.denied.owner_required'
     );
+    expect(btn).toHaveAccessibleDescription('library:commands.denied-line');
+
+    fireEvent.click(screen.getByText('library:commands.fork'));
+    expect(handlers.onFork).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores actions the version toolbar does not know', () => {
+    const handlers = makeVersionHandlers();
+    const { container } = render(
+      createElement(VersionActions, {
+        allowedActions: [
+          {
+            action: 'create_reference_download',
+            allowed: true,
+            reason_code: null,
+          },
+          { action: 'clone', allowed: true, reason_code: null },
+        ],
+        ...handlers,
+      })
+    );
+
+    expect(container.innerHTML).toBe('');
   });
 
   it('returns null when no visible actions', () => {
     const handlers = makeVersionHandlers();
     const { container } = render(
       createElement(VersionActions, {
-        versionId: 'v1',
         allowedActions: [],
         ...handlers,
       })

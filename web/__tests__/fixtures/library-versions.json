@@ -1,0 +1,300 @@
+{
+  "owner_effective_product": {
+    "id": "libver_01",
+    "entry_id": "lib_01",
+    "entry_type": "product",
+    "version_no": 1,
+    "state": "effective",
+    "eligibility": "eligible",
+    "content_schema_version": 1,
+    "lifecycle_revision": 1,
+    "content": {
+      "name": "Acme Charge 65W",
+      "description": "65W GaN charger",
+      "audience": "Commuters",
+      "selling_points": ["Compact", "Three ports"],
+      "brand_constraints": "Keep the logo whole",
+      "must_match": [
+        {
+          "id": "mm_logo",
+          "type": "logo",
+          "description": "Front logo stays readable",
+          "severity": "blocking",
+          "viewpoints": ["front"],
+          "qc_method": "human_review",
+          "evidence_reference_version_ids": ["libver_02"],
+          "confirmed": true
+        }
+      ],
+      "reference_bindings": [
+        {
+          "reference_version_id": "libver_02",
+          "purpose": "hero",
+          "viewpoint": "front",
+          "priority": 0,
+          "note": "Hero",
+          "conditions": {}
+        }
+      ],
+      "reference_group_version_ids": ["libver_03"]
+    },
+    "content_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "origin_command": "create",
+    "source_version_id": null,
+    "base_version_id": null,
+    "published_by": "member_a",
+    "published_at": "2026-11-08T00:00:00+00:00",
+    "withdraw_reason": "",
+    "allowed_actions": [
+      {
+        "action": "clone_product",
+        "allowed": true,
+        "reason_code": null
+      },
+      {
+        "action": "fork",
+        "allowed": true,
+        "reason_code": null
+      },
+      {
+        "action": "withdraw",
+        "allowed": true,
+        "reason_code": null,
+        "requirements": ["impact_confirmation"]
+      }
+    ]
+  },
+  "member_effective_product": {
+    "id": "libver_01",
+    "entry_id": "lib_01",
+    "entry_type": "product",
+    "version_no": 1,
+    "state": "effective",
+    "eligibility": "eligible",
+    "content_schema_version": 1,
+    "lifecycle_revision": 1,
+    "content": {
+      "name": "Acme Charge 65W",
+      "description": "65W GaN charger",
+      "audience": "Commuters",
+      "selling_points": ["Compact", "Three ports"],
+      "brand_constraints": "Keep the logo whole",
+      "must_match": [
+        {
+          "id": "mm_logo",
+          "type": "logo",
+          "description": "Front logo stays readable",
+          "severity": "blocking",
+          "viewpoints": ["front"],
+          "qc_method": "human_review",
+          "evidence_reference_version_ids": ["libver_02"],
+          "confirmed": true
+        }
+      ],
+      "reference_bindings": [
+        {
+          "reference_version_id": "libver_02",
+          "purpose": "hero",
+          "viewpoint": "front",
+          "priority": 0,
+          "note": "Hero",
+          "conditions": {}
+        }
+      ],
+      "reference_group_version_ids": ["libver_03"]
+    },
+    "content_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "origin_command": "create",
+    "source_version_id": null,
+    "base_version_id": null,
+    "published_by": "member_a",
+    "published_at": "2026-11-08T00:00:00+00:00",
+    "withdraw_reason": "",
+    "allowed_actions": [
+      {
+        "action": "clone_product",
+        "allowed": true,
+        "reason_code": null
+      },
+      {
+        "action": "fork",
+        "allowed": true,
+        "reason_code": null
+      },
+      {
+        "action": "withdraw",
+        "allowed": false,
+        "reason_code": "owner_required",
+        "requirements": ["impact_confirmation"]
+      }
+    ]
+  },
+  "member_effective_person": {
+    "id": "libver_04",
+    "entry_id": "lib_02",
+    "entry_type": "person",
+    "version_no": 1,
+    "state": "effective",
+    "eligibility": "eligible",
+    "content_schema_version": 1,
+    "lifecycle_revision": 1,
+    "content": {
+      "name": "Nova",
+      "person_type": "fictional",
+      "age_expression": "25-30",
+      "wardrobe": "Business casual",
+      "temperament": "Calm",
+      "prompt_fragments": ["calm person in business casual"],
+      "rights": {
+        "state": "granted",
+        "scope": "Fictional character",
+        "regions": ["US"],
+        "channels": ["meta"]
+      },
+      "reference_bindings": [
+        {
+          "reference_version_id": "libver_02",
+          "purpose": "face",
+          "viewpoint": "front",
+          "priority": 0
+        }
+      ]
+    },
+    "content_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "origin_command": "create",
+    "source_version_id": null,
+    "base_version_id": null,
+    "published_by": "member_a",
+    "published_at": "2026-11-08T00:00:00+00:00",
+    "withdraw_reason": "",
+    "allowed_actions": [
+      {
+        "action": "clone_product",
+        "allowed": false,
+        "reason_code": "entry_type_mismatch"
+      },
+      {
+        "action": "fork",
+        "allowed": true,
+        "reason_code": null
+      },
+      {
+        "action": "withdraw",
+        "allowed": false,
+        "reason_code": "owner_required",
+        "requirements": ["impact_confirmation"]
+      }
+    ]
+  },
+  "owner_withdraw_impact": {
+    "impact_id": "impact_01",
+    "impact_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "command_kind": "withdraw",
+    "target_entry_id": "lib_01",
+    "target_version_id": "libver_01",
+    "target_revision": 1,
+    "content_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "expires_at": "2026-11-08T00:00:00+00:00",
+    "projection": {
+      "command_kind": "withdraw",
+      "target_entry_id": "lib_01",
+      "target_version_id": "libver_01",
+      "entry_type": "product",
+      "display_name": "Acme Charge 65W",
+      "version_no": 1,
+      "version_state": "effective",
+      "lifecycle_revision": 1,
+      "is_current_effective": true,
+      "will_clear_current_version": true,
+      "dependents": [
+        {
+          "version_id": "libver_05",
+          "entry_id": "lib_03",
+          "entry_type": "offer",
+          "version_no": 1,
+          "state": "effective",
+          "eligibility": "eligible",
+          "will_block": true
+        }
+      ],
+      "dependent_count": 1,
+      "newly_blocked_count": 1
+    }
+  },
+  "owner_withdrawn_product": {
+    "id": "libver_01",
+    "entry_id": "lib_01",
+    "entry_type": "product",
+    "version_no": 1,
+    "state": "withdrawn",
+    "eligibility": "blocked",
+    "content_schema_version": 1,
+    "lifecycle_revision": 2,
+    "content": {
+      "name": "Acme Charge 65W",
+      "description": "65W GaN charger",
+      "audience": "Commuters",
+      "selling_points": ["Compact", "Three ports"],
+      "brand_constraints": "Keep the logo whole",
+      "must_match": [
+        {
+          "id": "mm_logo",
+          "type": "logo",
+          "description": "Front logo stays readable",
+          "severity": "blocking",
+          "viewpoints": ["front"],
+          "qc_method": "human_review",
+          "evidence_reference_version_ids": ["libver_02"],
+          "confirmed": true
+        }
+      ],
+      "reference_bindings": [
+        {
+          "reference_version_id": "libver_02",
+          "purpose": "hero",
+          "viewpoint": "front",
+          "priority": 0,
+          "note": "Hero",
+          "conditions": {}
+        }
+      ],
+      "reference_group_version_ids": ["libver_03"]
+    },
+    "content_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "origin_command": "create",
+    "source_version_id": null,
+    "base_version_id": null,
+    "published_by": "member_a",
+    "published_at": "2026-11-08T00:00:00+00:00",
+    "withdraw_reason": "Recalled for legal review",
+    "allowed_actions": [
+      {
+        "action": "clone_product",
+        "allowed": false,
+        "reason_code": "invalid_state"
+      },
+      {
+        "action": "fork",
+        "allowed": false,
+        "reason_code": "invalid_state"
+      },
+      {
+        "action": "withdraw",
+        "allowed": false,
+        "reason_code": "invalid_state",
+        "requirements": ["impact_confirmation"]
+      }
+    ]
+  },
+  "other_workspace_not_found": {
+    "type": "urn:marketai:error:library-not-found",
+    "title": "library_not_found",
+    "status": 404,
+    "detail": "创意库版本不存在",
+    "instance": "/library/versions/{version_id}",
+    "code": "library_not_found",
+    "trace_id": "req_01",
+    "retryable": false,
+    "field_errors": []
+  }
+}

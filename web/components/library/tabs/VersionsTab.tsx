@@ -6,14 +6,19 @@ import { VersionDetail } from './VersionDetail';
 
 interface VersionsTabProps {
   entryId: string;
+  entryDisplayName: string;
   selectedVersionId: string | null;
   onSelectVersion: (versionId: string | null) => void;
+  /** Opens the entry a Fork or Clone Product created, on its Draft. */
+  onEntryCreated: (entryId: string) => void;
 }
 
 export function VersionsTab({
   entryId,
+  entryDisplayName,
   selectedVersionId,
   onSelectVersion,
+  onEntryCreated,
 }: VersionsTabProps) {
   const { t } = useTranslation('library');
   const {
@@ -28,8 +33,10 @@ export function VersionsTab({
 
   const {
     version: resolvedVersion,
+    problem: versionProblem,
     isLoading: isLoadingVersion,
     mismatch,
+    refresh: refreshVersion,
   } = useResolvedLibraryVersion(selectedVersionId, entryId);
 
   if (isLoading) {
@@ -59,7 +66,11 @@ export function VersionsTab({
   return (
     <div className="space-y-4">
       {selectedVersionId && resolvedVersion && !mismatch && (
-        <VersionDetail version={resolvedVersion} />
+        <VersionDetail
+          version={resolvedVersion}
+          entryDisplayName={entryDisplayName}
+          onEntryCreated={onEntryCreated}
+        />
       )}
       {selectedVersionId && isLoadingVersion && (
         <div className="py-4 text-center" aria-busy="true">
@@ -68,6 +79,31 @@ export function VersionsTab({
           </p>
         </div>
       )}
+      {selectedVersionId &&
+        versionProblem &&
+        !resolvedVersion &&
+        !isLoadingVersion && (
+          <div className="py-4 text-center" role="alert">
+            {versionProblem.status === 404 ? (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {t('tabs.versions.not-found')}
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {t('problem.description')}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void refreshVersion()}
+                  className="btn btn-sm btn-outline mt-2"
+                >
+                  {t('problem.retry')}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       {selectedVersionId && mismatch && (
         <div className="py-4 text-center" role="alert">
           <p className="text-sm text-red-600 dark:text-red-400">

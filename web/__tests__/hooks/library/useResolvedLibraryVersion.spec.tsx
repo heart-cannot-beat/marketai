@@ -37,7 +37,12 @@ jest.mock('@/components/workspace/WorkspaceProvider', () => ({
   }),
 }));
 
-import { useResolvedLibraryVersion } from '@/hooks/library/useResolvedLibraryVersion';
+import {
+  useResolvedLibraryVersion,
+  type ResolvedVersion,
+  type VersionActionEligibility,
+} from '@/hooks/library/useResolvedLibraryVersion';
+import fixtures from '../../fixtures/library-versions.json';
 
 describe('useResolvedLibraryVersion', () => {
   beforeEach(() => {
@@ -79,6 +84,47 @@ describe('useResolvedLibraryVersion', () => {
     expect(result.current.version).toBeDefined();
     expect(result.current.version?.id).toBe('v-1');
     expect(result.current.mismatch).toBe(false);
+  });
+
+  it('types the version the server really sends (#25)', () => {
+    // `fixtures/library-versions.json` is FastAPI's own answer
+    // (tests/test_library_version_web_fixtures.py); it must type-check as a
+    // ResolvedVersion, so a drift in either shape fails `check-types`.
+    const owner: ResolvedVersion = fixtures.owner_effective_product;
+    const member: ResolvedVersion = fixtures.member_effective_product;
+    mockQueryResult.data = member;
+    const { result } = renderHook(() =>
+      useResolvedLibraryVersion(member.id, member.entry_id)
+    );
+
+    const actions = result.current.version?.allowed_actions ?? [];
+    expect(actions.map((a) => a.action)).toEqual([
+      'clone_product',
+      'fork',
+      'withdraw',
+    ]);
+    const withdraw = actions.find(
+      (a) => a.action === 'withdraw'
+    ) as VersionActionEligibility;
+    expect(withdraw).toEqual({
+      action: 'withdraw',
+      allowed: false,
+      reason_code: 'owner_required',
+      requirements: ['impact_confirmation'],
+    });
+    // Every action carries exactly the server's keys.
+    for (const action of [
+      ...(owner.allowed_actions ?? []),
+      ...actions,
+    ] as VersionActionEligibility[]) {
+      expect(
+        Object.keys(action).filter(
+          (key) =>
+            !['action', 'allowed', 'reason_code', 'requirements'].includes(key)
+        )
+      ).toEqual([]);
+      expect(typeof action.allowed).toBe('boolean');
+    }
   });
 
   it('detects mismatch when entry_id differs', () => {

@@ -98,9 +98,6 @@ export function LibraryEntryCommands({
         allowedActions={actions}
         onPublish={() => setDialog('publish')}
         onArchive={() => setDialog('archive')}
-        onFork={() => undefined}
-        onClone={() => undefined}
-        onApplyTemplate={() => undefined}
         onCreateEntry={() => undefined}
         onBindReference={() => setDialog('bind_reference')}
       />
