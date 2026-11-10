@@ -30,6 +30,10 @@ taken now is due tomorrow, so every claim runs on the real clock.
 
 The fixture is seeded as the schema owner (BYPASSRLS). Its rows stay,
 because the Scale evidence tables refuse DELETE; every Workspace id is new.
+Its Jobs do not stay: a Job not yet due would stay queued and count in the
+cluster-wide queue depth that later CI steps read from
+``marketai_health_stats_v1``, so after each test the owner deletes every
+Job of the Workspaces that test seeded.
 
 Run with ``DOMAIN_OWNER_DATABASE_URL``, ``DOMAIN_WORKER_DATABASE_URL``,
 ``MARKETAI_DATABASE_URL`` (the owner) and ``MARKETAI_TENANT_CONTEXT_SECRET``
@@ -43,7 +47,7 @@ import uuid
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from sqlalchemy import create_engine, func, select, text, update
+from sqlalchemy import create_engine, delete, func, select, text, update
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.scale.service as service_module
@@ -86,11 +90,21 @@ class AdviceExpiryAsADelayedJobPostgresTests(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.runtime = WorkerRuntime(owner=f"ci-only-advice-delay-{uuid.uuid4().hex[:8]}")
+        self._workspace_ids: list[str] = []
+        self.addCleanup(self._delete_jobs)  # runs before the engines are disposed
 
     # -- the fixture, as the owner -------------------------------------------
 
+    def _delete_jobs(self) -> None:
+        """Delete every Job of the Workspaces this test seeded, whatever its state."""
+        if not self._workspace_ids:
+            return
+        with Session(self.owner) as session, session.begin():
+            session.execute(delete(JobRecord).where(JobRecord.workspace_id.in_(self._workspace_ids)))
+
     def _seed(self, prefix: str, *, freshness_reference_at: datetime = FRESHNESS_REFERENCE_AT) -> SeededRun:
         workspace_id = f"{prefix}_{uuid.uuid4().hex[:10]}"
+        self._workspace_ids.append(workspace_id)
         with Session(self.owner) as session, session.begin():
             session.add(WorkspaceRecord(id=workspace_id, name=workspace_id))  # the control plane opens it
             session.flush()
