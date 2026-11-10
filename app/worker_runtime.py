@@ -156,6 +156,9 @@ class WorkerRuntime:
             and config.DOMAIN_TO_CONTROL_PLANE_SYNC_TOKEN
             else None
         )
+        # Monotonic time of the next Meta observation dispatch (#107); None
+        # means the first main-lane tick dispatches.
+        self._next_observation_dispatch_at: float | None = None
 
     def _begin_drain(self) -> None:
         if self.stopping:
@@ -250,6 +253,10 @@ class WorkerRuntime:
                 self._onboarding_http_client,
             ):
                 return True
+        if job_types is None:
+            # Busy or idle: a queue that never drains must not starve the
+            # schedules (#101 Q4).
+            await self._dispatch_observation_ticks_if_due()
         job = await asyncio.to_thread(jobs.claim_next, self.owner,
             **({'job_types': job_types, 'exclude_types': exclude_types} if job_types is not None or exclude_types else {}))
         if job is None:
@@ -280,6 +287,12 @@ class WorkerRuntime:
             return True
         if job.type == "meta_schedule_tick":
             self._meta_schedule_tick(job)
+            return True
+        if job.type == "meta_observation_tick":
+            self._meta_observation_tick(job)
+            return True
+        if job.type == "meta_observation_sync":
+            self._meta_observation_sync(job)
             return True
         if job.type == "verify_upload_intent":
             await self._verify_upload_intent(job)
@@ -1940,6 +1953,117 @@ class WorkerRuntime:
                 code="meta_schedule_failed",
                 detail=str(exc),
                 retryable=True,
+            )
+
+    async def _dispatch_observation_ticks_if_due(self) -> None:
+        """Turn due Meta observation schedules into tick Jobs, at most once a
+        minute per process (#107). A failure is reported and retried on the
+        next interval; it never stops this lane from claiming Jobs."""
+        from .meta import observation_sync
+
+        now = time.monotonic()
+        if self._next_observation_dispatch_at is not None and now < self._next_observation_dispatch_at:
+            return
+        # Set before awaiting: the other main-lane tasks of this process see
+        # it and skip, so one process dispatches once per interval.
+        self._next_observation_dispatch_at = now + observation_sync.DISPATCH_INTERVAL_SECONDS
+        try:
+            await asyncio.to_thread(observation_sync.dispatch_due_observation_ticks)
+        except Exception as exc:  # noqa: BLE001 -- the next interval retries
+            from .platform.ops_alerts import AlertCategory, Severity, emit
+
+            emit(
+                Severity.WARNING,
+                AlertCategory.WORKER_LIFECYCLE,
+                "Meta observation dispatch failed; retrying next interval",
+                details={"owner": self.owner, "error": type(exc).__name__},
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _meta_observation_tick(self, job: jobs.ClaimedJob) -> None:
+        """One due firing of a connection's observation schedules (#107).
+
+        The Meta mode comes from the payload: the claimed context names
+        none, and RLS shows Meta rows only to a context that does. The
+        schedules are re-checked under their row lock, so a replayed tick
+        changes nothing.
+        """
+        from .meta.observation_sync import (
+            ObservationSyncError,
+            observation_job_context,
+            parse_fire_at,
+            run_observation_tick,
+        )
+
+        try:
+            context = observation_job_context(job.context, job.payload)
+            connection_id = str(job.payload.get("connection_id") or "")
+            if not connection_id:
+                raise ObservationSyncError("missing_input", "缺少 connection_id")
+            fire_at = parse_fire_at(str(job.payload.get("fire_at") or ""))
+        except (ObservationSyncError, ValueError) as exc:
+            jobs.fail(job.context, job.id, self.owner, code="missing_input", detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            with tenant_session(context) as session:
+                run_observation_tick(session, context, connection_id=connection_id, fire_at=fire_at)
+            jobs.succeed(job.context, job.id, self.owner)
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="meta_observation_tick_failed", detail=str(exc), retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _meta_observation_sync(self, job: jobs.ClaimedJob) -> None:
+        """Run one connection's sync runs for one target day to a terminal
+        state (#107). Reads go through the sandbox adapter, resolved per
+        transaction and never held by this runtime (ADR 0017). Runs resume
+        from their last committed page; on the Job's last attempt the runs
+        that still fail are marked ``failed``."""
+        from datetime import date
+
+        from .meta.observation_sync import (
+            ObservationBatchFailed,
+            ObservationLeaseLost,
+            ObservationSyncError,
+            observation_job_context,
+            run_observation_sync,
+        )
+
+        try:
+            context = observation_job_context(job.context, job.payload)
+            connection_id = str(job.payload.get("connection_id") or "")
+            if not connection_id:
+                raise ObservationSyncError("missing_input", "缺少 connection_id")
+            target_date = date.fromisoformat(str(job.payload.get("target_date") or ""))
+            run_generation = int(job.payload.get("run_generation") or 1)
+        except (ObservationSyncError, ValueError, TypeError) as exc:
+            jobs.fail(job.context, job.id, self.owner, code="missing_input", detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_observation_sync(
+                context,
+                connection_id=connection_id,
+                target_date=target_date,
+                run_generation=run_generation,
+                final_attempt=job.attempt >= job.max_attempts,
+                heartbeat=lambda: jobs.heartbeat(job.context, job.id, self.owner),
+            )
+            jobs.succeed(job.context, job.id, self.owner)
+        except ObservationLeaseLost:
+            return  # the Job is no longer ours to settle
+        except ObservationBatchFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="meta_observation_sync_failed", detail=str(exc), retryable=not exc.final,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="meta_observation_sync_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
             )
 
     @runs_as(WORKER_ROLE)

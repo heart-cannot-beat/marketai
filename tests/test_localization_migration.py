@@ -111,8 +111,9 @@ class TestLocalizationMigration(unittest.TestCase):
             # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46) and
             # zza0d1e2f3a4 (Worker-only Operation reconciliation candidates, Issue #22) and
             # zzb1e2f3a4b5 (the Worker rolls Scale Episodes over, Issue #92) and
-            # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94).
-            self.assertIn("zzc2f3a4b5c6", revisions)
+            # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
+            # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107).
+            self.assertIn("zze4f5a6b7c8", revisions)
 
     def test_downgrade_and_upgrade(self):
         up = self._alembic("upgrade", "head")

@@ -139,8 +139,9 @@ class Gate0MigrationTests(unittest.TestCase):
         # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46) and
         # zza0d1e2f3a4 (Worker-only Operation reconciliation candidates, Issue #22) and
         # zzb1e2f3a4b5 (the Worker rolls Scale Episodes over, Issue #92) and
-        # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94).
-        self.assertEqual(revision, "zzc2f3a4b5c6")
+        # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
+        # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107).
+        self.assertEqual(revision, "zze4f5a6b7c8")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as conn:

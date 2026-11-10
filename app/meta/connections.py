@@ -434,10 +434,12 @@ def retire_connection(
     ``LaunchProvisioningRecord`` rows reference the connection.
 
     ``active -> retiring`` when non-terminal provisionings exist: active
-    bindings are marked ``supersession_required`` and active sync
-    schedules are paused (not deleted). A background reconciler -- outside
-    this service's scope -- transitions ``retiring -> retired`` once every
-    provisioning reaches a terminal state.
+    bindings are marked ``supersession_required``. A background reconciler
+    -- outside this service's scope -- transitions ``retiring -> retired``
+    once every provisioning reaches a terminal state.
+
+    Either way the connection's active sync schedules are paused (not
+    deleted, spec §8.7), so the scheduler stops reading from it (#107).
     """
     connection = _get_connection(session, context=context, connection_id=connection_id)
     _require_owner(context)
@@ -473,20 +475,20 @@ def retire_connection(
             )
             .values(state="supersession_required")
         )
-        session.execute(
-            update(MetaObservationSyncScheduleRecord)
-            .where(
-                MetaObservationSyncScheduleRecord.workspace_id == context.workspace_id,
-                MetaObservationSyncScheduleRecord.meta_mode == context.meta_mode,
-                MetaObservationSyncScheduleRecord.meta_connection_id == connection_id,
-                MetaObservationSyncScheduleRecord.state == "active",
-            )
-            .values(state="paused")
-        )
     else:
         connection.state = "retired"
         connection.retired_at = utcnow()
 
+    session.execute(
+        update(MetaObservationSyncScheduleRecord)
+        .where(
+            MetaObservationSyncScheduleRecord.workspace_id == context.workspace_id,
+            MetaObservationSyncScheduleRecord.meta_mode == context.meta_mode,
+            MetaObservationSyncScheduleRecord.meta_connection_id == connection_id,
+            MetaObservationSyncScheduleRecord.state == "active",
+        )
+        .values(state="paused")
+    )
     connection.updated_at = utcnow()
     session.flush()
     return connection
