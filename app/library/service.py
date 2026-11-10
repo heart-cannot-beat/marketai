@@ -62,7 +62,6 @@ from .contracts import (
     ELIGIBILITY_BLOCKED,
     ELIGIBILITY_ELIGIBLE,
     ELIGIBILITY_WARNING,
-    ENTRY_DATA_SOURCE,
     ENTRY_DIMENSION_SCHEMA,
     ENTRY_MANUAL_FACT_SET,
     ENTRY_MARKET_MAPPING,
@@ -77,6 +76,7 @@ from .contracts import (
     REL_FACT_SET_DATA_SOURCE,
     REL_FACT_SET_OFFER,
     REL_MAPPING_DATA_SOURCE,
+    REL_POLICY_TEMPLATE,
     REL_SCHEMA_PRODUCT,
     REL_TRUTH_POLICY_DATA_SOURCE,
     RELATION_TARGET_TYPES,
@@ -882,11 +882,11 @@ def _validate_dependencies(
                     )
                     continue
                 edge = DependencyEdge(source_entry.current_version_id, edge.relation, edge.path)
-        elif edge.relation == REL_TRUTH_POLICY_DATA_SOURCE:
-            source_edge = _truth_policy_source_edge(session, context, edge, findings)
-            if source_edge is None:
+        elif edge.relation in _ENTRY_REFERENCE_NOUNS:
+            entry_edge = _entry_reference_edge(session, context, edge, findings)
+            if entry_edge is None:
                 continue
-            edge = source_edge
+            edge = entry_edge
         elif edge.relation == REL_FACT_SET_OFFER:
             reference = edge.to_version_id
             if reference not in offer_targets:
@@ -946,63 +946,77 @@ def _validate_dependencies(
     return resolved
 
 
-def _truth_policy_source_edge(
+# Relations whose item names the target entry and, in the form publish took
+# before the entry form existed, may still hold one of its version IDs:
+# TruthResolutionPolicy ``rules[].source_priority`` (#70) and
+# WorkspacePromptPolicy ``allowed_template_entry_ids`` (#100). The value is
+# the noun the findings name the target by.
+_ENTRY_REFERENCE_NOUNS = {
+    REL_TRUTH_POLICY_DATA_SOURCE: "数据源",
+    REL_POLICY_TEMPLATE: "模板",
+}
+
+
+def _entry_reference_edge(
     session,
     context: TenantContext,
     edge: DependencyEdge,
     findings: list[Finding],
 ) -> DependencyEdge | None:
-    """One TruthResolutionPolicy ``rules[].source_priority`` item (#70).
+    """One item of an ``_ENTRY_REFERENCE_NOUNS`` relation.
 
-    The item names a data source entry and resolves to that entry's current
-    version, like ``product_entry_id`` above, so the stored edge stays
-    version-to-version. Impact previews read the edge by entry (#88):
-    withdrawing the data source's current effective version lists the policy
-    whichever version its edge names. A data
-    source version ID -- the only form publish accepted before #70 -- maps
-    back to its entry and resolves the same way, which is also what Truth
-    resolution reads (``truth._policy_data_source``).
+    The item names an entry of the relation's target type and resolves to
+    that entry's current version, like ``product_entry_id`` above, so the
+    stored edge stays version-to-version. Impact previews read the edge by
+    entry (#88): withdrawing the target's current effective version lists the
+    dependent whichever version its edge names. A version ID of the target
+    maps back to its entry and resolves the same way: for a data source the
+    only form publish accepted before #70, which is also what Truth resolution
+    reads (``truth._policy_data_source``); for a template the form a draft
+    may hold if it was written to get past the failure fixed in #100.
     The common checks below (withdrawn, archived, blocked) then run on the
     resolved version. ``None`` means a blocking finding was recorded.
     """
     reference = edge.to_version_id
-    source_entry = session.get(LibraryEntryRecord, reference)
-    if source_entry is None or source_entry.workspace_id != context.workspace_id:
-        source_entry = None
+    noun = _ENTRY_REFERENCE_NOUNS[edge.relation]
+    target_type = RELATION_TARGET_TYPES[edge.relation]
+    target_entry = session.get(LibraryEntryRecord, reference)
+    if target_entry is None or target_entry.workspace_id != context.workspace_id:
+        target_entry = None
         legacy_version = session.get(LibraryVersionRecord, reference)
         if legacy_version is not None and legacy_version.workspace_id == context.workspace_id:
-            source_entry = session.get(LibraryEntryRecord, legacy_version.entry_id)
-    if source_entry is None or source_entry.workspace_id != context.workspace_id:
-        findings.append(Finding("dependency_not_found", f"引用的数据源不存在: {reference}", edge.path))
+            target_entry = session.get(LibraryEntryRecord, legacy_version.entry_id)
+    if target_entry is None or target_entry.workspace_id != context.workspace_id:
+        findings.append(Finding("dependency_not_found", f"引用的{noun}不存在: {reference}", edge.path))
         return None
-    if source_entry.entry_type != ENTRY_DATA_SOURCE:
+    if target_entry.entry_type != target_type:
         findings.append(
             Finding(
                 "dependency_type_mismatch",
-                f"{edge.relation} 需要 {ENTRY_DATA_SOURCE} 条目，实际为 {source_entry.entry_type}",
+                f"{edge.relation} 需要 {target_type} 条目，实际为 {target_entry.entry_type}",
                 edge.path,
             )
         )
         return None
-    if not source_entry.current_version_id:
+    if not target_entry.current_version_id:
         # No current version: never published, or its current version was
         # withdrawn (withdraw clears current_version_id).
         latest = session.scalars(
             select(LibraryVersionRecord)
-            .where(LibraryVersionRecord.entry_id == source_entry.id)
+            .where(LibraryVersionRecord.entry_id == target_entry.id)
             .order_by(LibraryVersionRecord.version_no.desc())
             .limit(1)
         ).first()
         if latest is not None and latest.state == VERSION_WITHDRAWN:
             findings.append(
-                Finding("dependency_withdrawn", f"引用的数据源当前版本已被 Withdraw: {latest.id}", edge.path)
+                Finding("dependency_withdrawn", f"引用的{noun}当前版本已被 Withdraw: {latest.id}", edge.path)
             )
         else:
             findings.append(
-                Finding("dependency_not_found", f"引用的数据源尚无已发布版本: {reference}", edge.path)
+                Finding("dependency_not_found", f"引用的{noun}尚无已发布版本: {reference}", edge.path)
             )
         return None
-    return DependencyEdge(source_entry.current_version_id, edge.relation, edge.path)
+    return DependencyEdge(target_entry.current_version_id, edge.relation, edge.path)
 
 
 def _fact_set_offer_target(session, context: TenantContext, reference: str) -> str | Finding:

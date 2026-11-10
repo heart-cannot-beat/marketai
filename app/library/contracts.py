@@ -1434,6 +1434,8 @@ def extract_dependencies(entry_type: str, content: dict) -> list[DependencyEdge]
         )
         add(content.get("product_entry_id"), REL_SCHEMA_PRODUCT, "product_entry_id")
     elif entry_type == ENTRY_PROMPT_POLICY:
+        # Each item names a DimensionTemplate entry (#100); the service
+        # resolves it to the entry's current version, as for source_priority.
         for index, template_id in enumerate(items(content.get("allowed_template_entry_ids"))):
             add(template_id, REL_POLICY_TEMPLATE, f"allowed_template_entry_ids[{index}]")
     elif entry_type == ENTRY_MANUAL_FACT_SET:
@@ -1497,6 +1499,7 @@ ENTRY_RESOLVED_RELATIONS = frozenset({
     REL_FACT_SET_DATA_SOURCE,  # ManualFactSet.data_source_entry_id (#64)
     REL_FACT_SET_OFFER,  # ManualFactSet facts[].offer_entry_id (#54)
     REL_TRUTH_POLICY_DATA_SOURCE,  # TruthResolutionPolicy rules[].source_priority (#70)
+    REL_POLICY_TEMPLATE,  # WorkspacePromptPolicy allowed_template_entry_ids (#100)
 })
 
 
