@@ -860,6 +860,19 @@ BEGIN
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_credential_version_workspace_v1(text) TO marketai_domain_api';
   END IF;
 
+  -- Platform Meta connection reads (zzd3a4b5c6d7, #102). The operator's
+  -- cross-Workspace list and by-id lookups learn only where a connection
+  -- lives (id, Workspace, Meta mode, current epoch and platform flag), then
+  -- read the connection and its binding in a signed TenantContext under RLS.
+  IF to_regprocedure('public.marketai_meta_connection_ids_v1(text,integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_meta_connection_ids_v1(text, integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_meta_connection_ids_v1(text, integer) TO marketai_domain_api';
+  END IF;
+  IF to_regprocedure('public.marketai_meta_connection_workspace_v1(text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_meta_connection_workspace_v1(text) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_meta_connection_workspace_v1(text) TO marketai_domain_api';
+  END IF;
+
   -- ---- projection_writer: mutable projection tables ----
   FOREACH relation_name IN ARRAY ARRAY[
     'experiment_eligibility_projections',
