@@ -26,14 +26,12 @@ this deliberately rather than by surprise):
   separate cross-cutting change, not one of this task's six required
   functions, and not in its required test list. ``ScaleAdviceNotification
   DecisionRecord`` is left for that later integration.
-* **Freshness-deadline job scheduling is deferred to Task 14** (Worker
-  dispatch), mirroring Task 12's own precedent of leaving job-queue
-  wiring to the Worker task. ``expire_advice_thread`` is the complete,
-  directly callable, lock-recheck handler; nothing here enqueues a
-  ``scale_advice_expire`` job (doing so would also require binding this
-  module's plain ``Session`` fixtures to ``app.platform.jobs``'s
-  ``current_context`` session-scope helper, a pattern the existing Task
-  11/12 Scale test suites deliberately do not use).
+* **When to schedule the freshness-deadline job is #101's.**
+  ``expire_advice_thread`` is the complete, directly callable,
+  lock-recheck handler; ``enqueue_advice_expiry`` enqueues its
+  ``scale_advice_expire`` Job with the thread's Meta mode in the payload
+  (#97), and ``advice_expire_job_context`` reads it back for the Worker.
+  Nothing in this module calls the enqueue yet.
 * **Episode-close supersession is applied lazily, at recurrence.** The
   ``ScaleAdviceThreadEventRecord`` CHECK constraint
   (``ck_sate_superseded_shape``) requires a non-null ``successor_thread_id``
@@ -67,17 +65,19 @@ this deliberately rather than by surprise):
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
-from typing import Sequence
+from typing import Any, Sequence
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.adapters.persistence.models import LibraryVersionRecord, new_id, utcnow
+from app.adapters.persistence.models import JobRecord, LibraryVersionRecord, new_id, utcnow
 from app.generation.draft import create_draft
-from app.platform.tenancy import TenantContext, commit_and_rebind
+from app.platform.jobs import enqueue_in_session
+from app.platform.tenancy import VALID_META_MODES, TenantContext, commit_and_rebind, tenant_scope
 from app.scale._canonical import canonical_encode, canonical_hash
 from app.scale._contracts import AdviceCandidate
 from app.scale.models import (
@@ -986,6 +986,40 @@ def expire_advice_thread(
     if thread.lifecycle != "active":
         return False
 
+    current_time = _ensure_utc(now) or utcnow()
+    if current_time < _freshness_deadline(session, context, meta_mode, thread):
+        # Newer evidence already moved the deadline; nothing to do.
+        return False
+
+    thread.lifecycle = "expired"
+    thread.lifecycle_reason = "freshness_deadline_exceeded"
+    thread.revision += 1
+    thread.updated_at = current_time
+    session.add(ScaleAdviceThreadEventRecord(
+        id=new_id("sate"),
+        workspace_id=context.workspace_id,
+        meta_mode=meta_mode,
+        episode_id=thread.episode_id,
+        thread_id=thread.id,
+        occurrence_id=None,
+        event_type="expired",
+        previous_lifecycle="active",
+        current_lifecycle="expired",
+        successor_thread_id=None,
+        reason="freshness_deadline_exceeded",
+        deduplication_key=f"expired:{thread.id}",
+        executor_id=executor_id,
+    ))
+    commit_and_rebind(session)
+    return True
+
+
+def _freshness_deadline(
+    session: Session, context: TenantContext, meta_mode: str, thread: ScaleAdviceThreadRecord,
+) -> datetime:
+    """When the thread's latest eligible evidence passes its frozen freshness
+    deadline (spec §3.5): the freshest evaluated live run of its Episode, or
+    else its latest occurrence, plus the Policy's maximum lag."""
     latest_occurrence = session.get(ScaleAdviceOccurrenceRecord, thread.latest_occurrence_id)
     if latest_occurrence is None:
         raise AdviceLifecycleError("occurrence_not_found", thread.latest_occurrence_id)
@@ -1014,30 +1048,55 @@ def expire_advice_thread(
         freshest_run.freshness_reference_at if freshest_run is not None
         else latest_occurrence.occurred_at
     )
-    current_time = _ensure_utc(now) or utcnow()
-    deadline = reference_at + timedelta(hours=policy.freshness_floor_maximum_lag_hours)
-    if current_time < deadline:
-        # Newer evidence already moved the deadline; nothing to do.
-        return False
+    return reference_at + timedelta(hours=policy.freshness_floor_maximum_lag_hours)
 
-    thread.lifecycle = "expired"
-    thread.lifecycle_reason = "freshness_deadline_exceeded"
-    thread.revision += 1
-    thread.updated_at = current_time
-    session.add(ScaleAdviceThreadEventRecord(
-        id=new_id("sate"),
-        workspace_id=context.workspace_id,
-        meta_mode=meta_mode,
-        episode_id=thread.episode_id,
-        thread_id=thread.id,
-        occurrence_id=None,
-        event_type="expired",
-        previous_lifecycle="active",
-        current_lifecycle="expired",
-        successor_thread_id=None,
-        reason="freshness_deadline_exceeded",
-        deduplication_key=f"expired:{thread.id}",
-        executor_id=executor_id,
-    ))
-    commit_and_rebind(session)
-    return True
+
+def enqueue_advice_expiry(
+    session: Session, context: TenantContext, thread_id: str,
+) -> JobRecord | None:
+    """Enqueue the ``scale_advice_expire`` deadline Job for an active thread
+    (spec §3.5), keyed by thread and freshness deadline, or return the Job
+    that key already names. A thread that is no longer active has no
+    deadline: nothing is enqueued.
+
+    The queue has no delayed start, so a Job is claimed as soon as it is
+    enqueued; one enqueued before its deadline rechecks, finds the deadline
+    ahead and changes nothing. When to call this is #101's scheduling. The
+    payload carries the thread's Meta mode (#97): the Worker's claimed
+    context names none, and the thread is visible under RLS only to a
+    context that does.
+    """
+    meta_mode = _require_meta_mode(context)
+    thread = session.execute(
+        select(ScaleAdviceThreadRecord).filter_by(
+            workspace_id=context.workspace_id, meta_mode=meta_mode, id=thread_id,
+        )
+    ).scalar_one_or_none()
+    if thread is None:
+        raise AdviceLifecycleError("thread_not_found", thread_id)
+    if thread.lifecycle != "active":
+        return None
+    deadline = _freshness_deadline(session, context, meta_mode, thread)
+    with tenant_scope(session, context):
+        return enqueue_in_session(
+            session,
+            context=context,
+            job_type="scale_advice_expire",
+            payload={"thread_id": thread.id, "meta_mode": meta_mode},
+            idempotency_key=f"scale-advice-expire:{thread.id}:{deadline.isoformat()}",
+            resource_type="scale_advice_thread",
+            resource_id=thread.id,
+        )
+
+
+def advice_expire_job_context(context: TenantContext, payload: Mapping[str, Any]) -> TenantContext:
+    """The TenantContext a ``scale_advice_expire`` Job runs under (#97).
+
+    The claimed context names no Meta mode; the payload does. A payload
+    without a valid mode is refused as ``missing_input`` before the Job
+    runs, instead of failing inside the handler as ``meta_mode_required``.
+    """
+    meta_mode = str(payload.get("meta_mode") or "")
+    if meta_mode not in VALID_META_MODES:
+        raise AdviceLifecycleError("missing_input", "缺少或无效的 meta_mode")
+    return replace(context, meta_mode=meta_mode)

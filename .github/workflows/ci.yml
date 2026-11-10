@@ -549,6 +549,20 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_scale_episode_rollover_pg -v
 
+      # Scale Jobs on the deployed Worker (#96, #97): a queued scale_evaluate
+      # is claimed and runs Phase A, B and C to evaluated as the Worker role,
+      # each phase's transaction bound to the Workspace and the Meta mode the
+      # payload names; a queued scale_advice_expire expires its thread. A Job
+      # without a mode fails as missing_input, another Workspace or mode
+      # changes nothing, and a run stranded in snapshot_sealed by an unbound
+      # phase commit completes when run again.
+      - name: Scale evaluation and Advice expiry Jobs run under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_evaluate_worker_pg -v
+
       # Localization isolated-output adoption (#46): the API publishes the
       # child AssetVersion, publication, lineage and binding in its own
       # transaction, under RLS; while QC is incomplete it answers 422

@@ -149,6 +149,9 @@ class TestRegistryCoversEveryJobType(unittest.TestCase):
 
         enqueued = _literal_enqueued_types()
         self.assertIn("scale_export", enqueued, "the source scan found the Scale export enqueue")
+        # #97: the evaluation and Advice-expiry enqueues, which the deployed
+        # Worker did not forward (``scale_advice_expire``) before.
+        self.assertLessEqual({"scale_evaluate", "scale_advice_expire"}, enqueued)
         self.assertEqual(sorted(enqueued - _dispatched_types(WorkerRuntime)), [])
 
 

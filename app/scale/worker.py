@@ -46,9 +46,9 @@ from app.adapters.persistence.database import SessionLocal, assert_runtime_role,
 from app.platform import jobs
 from app.platform.runtime_role import WORKER_ROLE, runs_as
 from app.platform.tenancy import TenantContext
-from app.scale.advice import AdviceLifecycleError, expire_advice_thread
+from app.scale.advice import AdviceLifecycleError, advice_expire_job_context, expire_advice_thread
 from app.scale.exports import ExportError, export_job_context, run_scale_export
-from app.scale.service import ScaleOrchestrationError, run_scale_evaluation
+from app.scale.service import ScaleOrchestrationError, evaluation_job_context, run_scale_evaluation
 
 _JOB_POLL_SECONDS = float(os.getenv("JOB_POLL_SECONDS", "0.5"))
 
@@ -104,23 +104,30 @@ class ScaleWorkerRuntime:
         ``run_scale_evaluation`` owns its own Phase A/B/C transaction
         boundaries internally; this method only owns the Job lifecycle
         around it, mirroring ``WorkerRuntime._generation_run_item``'s
-        division of responsibility for its own domain call.
+        division of responsibility for its own domain call. The run's Meta
+        mode comes from the payload (``evaluation_job_context``, #97): the
+        claimed context names none, and RLS shows Scale rows only to a
+        context that does.
         """
         evaluation_run_id = str(job.payload.get("evaluation_run_id") or "")
-        if not evaluation_run_id:
+        try:
+            if not evaluation_run_id:
+                raise ScaleOrchestrationError("missing_input", "缺少 evaluation_run_id")
+            context = evaluation_job_context(job.context, job.payload)
+        except ScaleOrchestrationError as exc:
             jobs.fail(
                 job.context,
                 job.id,
                 self.owner,
-                code="missing_input",
-                detail="缺少 evaluation_run_id",
+                code=exc.code,
+                detail=str(exc),
                 retryable=False,
             )
             return
         jobs.mark_running(job.context, job.id, self.owner)
         try:
-            with tenant_session(job.context) as session:
-                run_scale_evaluation(session, job.context, evaluation_run_id)
+            with tenant_session(context) as session:
+                run_scale_evaluation(session, context, evaluation_run_id)
             jobs.succeed(job.context, job.id, self.owner)
         except ScaleOrchestrationError as exc:
             jobs.fail(
@@ -143,29 +150,37 @@ class ScaleWorkerRuntime:
 
     @runs_as(WORKER_ROLE)
     def _scale_advice_expire(self, job: jobs.ClaimedJob) -> None:
-        """Dispatch fence for the ``scale_advice_expire`` deadline job (spec §3.5)."""
+        """Dispatch fence for the ``scale_advice_expire`` deadline job (spec §3.5).
+
+        The thread's Meta mode comes from the payload
+        (``advice_expire_job_context``, #97), as ``_scale_evaluate``'s does.
+        """
         thread_id = str(job.payload.get("thread_id") or "")
-        if not thread_id:
+        try:
+            if not thread_id:
+                raise AdviceLifecycleError("missing_input", "缺少 thread_id")
+            context = advice_expire_job_context(job.context, job.payload)
+        except AdviceLifecycleError as exc:
             jobs.fail(
                 job.context,
                 job.id,
                 self.owner,
-                code="missing_input",
-                detail="缺少 thread_id",
+                code=exc.code,
+                detail=str(exc),
                 retryable=False,
             )
             return
         jobs.mark_running(job.context, job.id, self.owner)
         try:
-            with tenant_session(job.context) as session:
-                expire_advice_thread(session, job.context, thread_id)
+            with tenant_session(context) as session:
+                expire_advice_thread(session, context, thread_id)
             jobs.succeed(job.context, job.id, self.owner)
         except AdviceLifecycleError as exc:
             jobs.fail(
                 job.context,
                 job.id,
                 self.owner,
-                code="scale_advice_expire_failed",
+                code=exc.code,
                 detail=str(exc),
                 retryable=False,
             )
