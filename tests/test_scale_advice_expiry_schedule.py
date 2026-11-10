@@ -21,36 +21,56 @@ long due, one taken now is due tomorrow. So every claim below runs on the
 real clock, as it does on PostgreSQL (``tests/test_scale_advice_expiry_pg.py``
 runs the same paths as the real Worker role).
 
-A change of the Workspace's authorization epoch rejects a delayed Job at the
-next claim, due or not, and the thread stays active. That is recorded here as
-the current behavior: the fallback scan in the source-collection Job (#109)
-is what will expire such a thread.
+Two things can still leave a thread active past its deadline: a change of
+the Workspace's authorization epoch rejects its delayed Job at the next
+claim, due or not; and a Job the claim found due may run while the Worker's
+clock is still short of the deadline, and change nothing. The daily
+source-collection Job (#109) is the fallback: after its Episode loop it
+expires every active thread past its deadline on the connection
+(``expire_overdue_connection_advice``). Here it runs as the deployed Worker
+runs it, a ``scale_collect_sources`` Job claimed under the current epoch.
 """
 from __future__ import annotations
 
 import asyncio
 import inspect
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from sqlalchemy import func, select, update
 
+import app.scale.advice as advice_module
 import app.scale.service as service_module
 from app.adapters.persistence.database import platform_session, tenant_session
 from app.adapters.persistence.models import AuditEventRecord, JobRecord, WorkspaceRecord, utcnow
 from app.platform import jobs
-from app.scale.advice import AdviceLifecycleError, enqueue_advice_expiry, enqueue_episode_advice_expiries
-from app.scale.models import ScaleAdviceThreadEventRecord, ScaleAdviceThreadRecord, ScaleEvaluationRunRecord
+from app.scale.advice import (
+    AdviceLifecycleError,
+    enqueue_advice_expiry,
+    enqueue_episode_advice_expiries,
+    expire_overdue_connection_advice,
+)
+from app.scale.collector import enqueue_source_collection
+from app.scale.models import (
+    ScaleAdviceThreadEventRecord,
+    ScaleAdviceThreadRecord,
+    ScaleEnrollmentRecord,
+    ScaleEvaluationRunRecord,
+)
 from app.scale.service import enqueue_scale_evaluation
 from app.worker_runtime import WorkerRuntime
 from tests.support.library_fixtures import LibraryFixtures
 from tests.support.queue_hygiene import cancel_workspace_jobs, quarantine_foreign_jobs
 from tests.support.scale_evaluation import (
+    AS_OF,
+    CONNECTION_ID,
     FRESHNESS_LAG,
     FRESHNESS_REFERENCE_AT,
     MODE,
     SeededRun,
+    seed_active_thread,
     seed_evaluable_run,
     seed_later_run,
     worker_context,
@@ -60,6 +80,8 @@ from tests.support.scale_evaluation import (
 DUE_DEADLINE = FRESHNESS_REFERENCE_AT + FRESHNESS_LAG
 EXPIRE = ("scale_advice_expire",)
 EVALUATE = ("scale_evaluate",)
+SWEEP_EXECUTOR = "system:scale_advice_fallback_sweep"
+JOB_EXECUTOR = "system:scale_advice_lifecycle"
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -249,6 +271,34 @@ class PhaseCSchedulesAdviceExpiry(DelayedJobTestBase):
                 ScaleAdviceThreadEventRecord.thread_id == thread_id,
                 ScaleAdviceThreadEventRecord.event_type == "expired")).all()
 
+    @staticmethod
+    def _expired_by(thread_id: str) -> list[tuple[str, str]]:
+        """The thread's ``expired`` events: their reason and executor."""
+        with platform_session() as session:
+            return [(row.reason, row.executor_id) for row in session.scalars(
+                select(ScaleAdviceThreadEventRecord).where(
+                    ScaleAdviceThreadEventRecord.thread_id == thread_id,
+                    ScaleAdviceThreadEventRecord.event_type == "expired"))]
+
+    @staticmethod
+    def _current_context(workspace_id: str, meta_mode: str = MODE):
+        """A Job's context under the Workspace's current authorization epoch."""
+        with platform_session() as session:
+            epoch = session.get(WorkspaceRecord, workspace_id).authorization_epoch
+        return replace(worker_context(workspace_id, meta_mode), authorization_epoch=epoch)
+
+    def _collect(self, seeded: SeededRun, target_date=AS_OF) -> str:
+        """The connection's ``scale_collect_sources`` Job for ``target_date``,
+        enqueued under the current epoch and claimed and run by the deployed
+        Worker loop."""
+        context = self._current_context(seeded.workspace_id)
+        with tenant_session(context) as session:
+            job_id = enqueue_source_collection(
+                session, context, connection_id=CONNECTION_ID, target_date=target_date).id
+        self.assertTrue(self._run_one(seeded.workspace_id), "the collection Job is claimed")
+        self.assertNotIn(self._job(job_id).state, ("queued", "leased", "running"))
+        return job_id
+
     def _assert_scheduled(self, thread_id: str, deadline: datetime) -> JobRecord:
         [job] = [job for job in self._expiry_jobs(thread_id) if _aware(job.next_attempt_at) == deadline]
         self.assertEqual((job.state, job.attempt), ("queued", 0))
@@ -343,20 +393,129 @@ class PhaseCSchedulesAdviceExpiry(DelayedJobTestBase):
             run = session.get(ScaleEvaluationRunRecord, seeded.run_id)
             self.assertIsNone(run.outcome_kind)
 
-    def test_a_stale_authorization_epoch_rejects_the_delayed_job_and_the_thread_stays_active(self):
-        seeded = self._seed(freshness_reference_at=utcnow())
+    def test_a_stale_authorization_epoch_rejects_the_delayed_job_and_the_collection_sweep_expires_the_thread(self):
+        seeded = self._seed()
         self._evaluate(seeded)
         thread_id = self._thread_id(seeded)
         [job] = self._expiry_jobs(thread_id)
         self._bump_epoch(seeded.workspace_id)
 
-        self.assertFalse(self._run_one(seeded.workspace_id))
+        self.assertFalse(self._run_one(seeded.workspace_id), "due, but rejected at the claim")
 
         self.assertEqual((self._job(job.id).state, self._job(job.id).error_code),
                          ("failed", "authorization_epoch_stale"))
-        # Current behavior: nothing else expires this thread until the
-        # collection Job's fallback scan (#109) exists.
         self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "active")])
+
+        self._collect(seeded)
+
+        self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "expired")])
+        self.assertEqual(self._expired_by(thread_id), [("freshness_deadline_exceeded", SWEEP_EXECUTOR)])
+
+    def test_a_job_run_on_a_lagging_worker_clock_changes_nothing_and_the_collection_sweep_expires_the_thread(self):
+        seeded = self._seed()
+        self._evaluate(seeded)
+        thread_id = self._thread_id(seeded)
+        [job] = self._expiry_jobs(thread_id)
+
+        # The claim finds the Job due; the handler's clock is a minute short.
+        with mock.patch.object(advice_module, "utcnow", return_value=DUE_DEADLINE - timedelta(minutes=1)):
+            self.assertTrue(self._run_one(seeded.workspace_id))
+
+        self.assertEqual(self._job(job.id).state, "succeeded")
+        self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "active")])
+
+        self._collect(seeded)
+
+        self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "expired")])
+        self.assertEqual(self._expired_by(thread_id), [("freshness_deadline_exceeded", SWEEP_EXECUTOR)])
+
+    def test_the_sweep_leaves_a_thread_whose_deadline_is_ahead(self):
+        seeded = self._seed(freshness_reference_at=utcnow())
+        self._evaluate(seeded)
+        thread_id = self._thread_id(seeded)
+        [job] = self._expiry_jobs(thread_id)
+
+        self._collect(seeded)
+
+        self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "active")])
+        self.assertEqual(self._expired_by(thread_id), [])
+        self.assertEqual(self._job(job.id).state, "queued", "its own Job still waits for the deadline")
+
+    def test_the_sweep_runs_when_every_enrollment_on_the_connection_is_paused(self):
+        seeded = self._seed()
+        self._evaluate(seeded)
+        thread_id = self._thread_id(seeded)
+        self._bump_epoch(seeded.workspace_id)
+        self.assertFalse(self._run_one(seeded.workspace_id))
+        with tenant_session(self._current_context(seeded.workspace_id)) as session:
+            session.get(ScaleEnrollmentRecord, seeded.enrollment_id).lifecycle = "paused"
+
+        self.assertEqual(self._job(self._collect(seeded)).state, "succeeded", "nothing to collect")
+
+        self.assertEqual(self._expired_by(thread_id), [("freshness_deadline_exceeded", SWEEP_EXECUTOR)])
+
+    def test_a_thread_the_delayed_job_expired_is_left_to_it(self):
+        seeded = self._seed()
+        self._evaluate(seeded)
+        thread_id = self._thread_id(seeded)
+        self.assertTrue(self._run_one(seeded.workspace_id))
+
+        self._collect(seeded)
+        self._collect(seeded, AS_OF + timedelta(days=1))
+
+        self.assertEqual(self._expired_by(thread_id), [("freshness_deadline_exceeded", JOB_EXECUTOR)])
+
+    def test_the_sweep_expires_only_the_overdue_threads_of_its_connection_workspace_and_mode(self):
+        seeded = self._seed()
+        self._evaluate(seeded)
+        thread_id = self._thread_id(seeded)
+        other = self._seed()
+        for workspace_id, mode, connection_id in (
+            (seeded.workspace_id, MODE, "mcon_ci_only_other"),
+            (seeded.workspace_id, "customer_sandbox", CONNECTION_ID),
+            (other.workspace_id, MODE, CONNECTION_ID),
+        ):
+            with self.subTest(workspace=workspace_id, mode=mode, connection=connection_id):
+                swept = expire_overdue_connection_advice(self._current_context(workspace_id, mode), connection_id)
+                self.assertEqual((swept.expired, dict(swept.failed)), ((), {}))
+        self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "active")])
+
+        context = self._current_context(seeded.workspace_id)
+        self.assertEqual(expire_overdue_connection_advice(context, CONNECTION_ID).expired, (thread_id,))
+        self.assertEqual(expire_overdue_connection_advice(context, CONNECTION_ID).expired, (), "once")
+        self.assertEqual(self._expired_by(thread_id), [("freshness_deadline_exceeded", SWEEP_EXECUTOR)])
+
+    def test_a_thread_the_sweep_cannot_check_is_audited_and_the_others_still_expire(self):
+        seeded = self._seed()
+        self._evaluate(seeded)
+        context = worker_context(seeded.workspace_id)
+        with platform_session() as session:
+            evaluation_id = session.get(ScaleEvaluationRunRecord, seeded.run_id).evaluation_id
+        with tenant_session(context) as session:
+            seed_active_thread(session, context, seeded, evaluation_id)
+        with platform_session() as session:
+            broken, healthy = session.scalars(select(ScaleAdviceThreadRecord.id).where(
+                ScaleAdviceThreadRecord.episode_id == seeded.episode_id).order_by(ScaleAdviceThreadRecord.id)).all()
+        cancel_workspace_jobs(seeded.workspace_id)  # the Phase C thread's Job is gone, as if rejected
+        real_expire = advice_module.expire_advice_thread
+
+        def expire_or_fail(session, context, thread_id, **kwargs):
+            if thread_id == broken:
+                raise AdviceLifecycleError("occurrence_not_found", "ci-only")
+            return real_expire(session, context, thread_id, **kwargs)
+
+        with mock.patch.object(advice_module, "expire_advice_thread", expire_or_fail):
+            job_id = self._collect(seeded)
+
+        self.assertEqual(self._job(job_id).state, "succeeded", "the sweep never fails the collection")
+        self.assertEqual(self._expired_by(broken), [])
+        self.assertEqual(self._expired_by(healthy), [("freshness_deadline_exceeded", SWEEP_EXECUTOR)])
+        with platform_session() as session:
+            [event] = session.scalars(select(AuditEventRecord).where(
+                AuditEventRecord.event_type == "scale.advice_sweep.thread_failed",
+                AuditEventRecord.resource_id == broken)).all()
+        self.assertEqual(event.details_json["meta_connection_id"], CONNECTION_ID)
+        self.assertIn("occurrence_not_found", event.details_json["error"])
 
     def test_another_workspace_or_mode_schedules_nothing_for_the_episode(self):
         seeded = self._seed()

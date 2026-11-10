@@ -142,8 +142,9 @@ class Gate0MigrationTests(unittest.TestCase):
         # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
         # zzd3a4b5c6d7 (platform Meta connection reads across Workspaces, #102) and
         # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107) and
-        # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109).
-        self.assertEqual(revision, "zzf5a6b7c8d9")
+        # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109) and
+        # zzf6b7c8d9e0 (observation ticks keyed by authorization epoch, #119).
+        self.assertEqual(revision, "zzf6b7c8d9e0")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as conn:

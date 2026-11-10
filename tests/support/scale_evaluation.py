@@ -51,6 +51,8 @@ from tests.test_scale_evidence import (
 )
 
 MODE = "internal_validation"
+#: The connection of the seeded Enrollment and Episode (``tests.test_scale_evidence``).
+CONNECTION_ID = "mcon_1"
 AS_OF = date(2026, 9, 5)
 #: The run's freshness reference. The Policy's 24-hour freshness lag put its
 #: Advice deadline at 2026-09-07 04:00 UTC, long past.

@@ -23,10 +23,13 @@ taken now is due tomorrow, so every claim runs on the real clock.
 * a crash after scheduling and before Phase C's commit leaves neither the
   thread nor its Job;
 * a change of the Workspace's authorization epoch rejects the delayed Job at
-  the next claim, and the thread stays active: recorded as the current
-  behavior, the collection Job's fallback scan (#109) is what will expire it;
+  the next claim; the connection's next ``scale_collect_sources`` Job,
+  claimed under the new epoch, sweeps the thread past its deadline and
+  expires it. So does it when the Job ran while the Worker's clock was
+  still short of the deadline;
 * another Workspace or Meta mode neither schedules for the Episode nor sees
-  its Job.
+  its Job, and a sweep of another connection, Workspace or mode leaves the
+  thread alone.
 
 The fixture is seeded as the schema owner (BYPASSRLS). Its rows stay,
 because the Scale evidence tables refuse DELETE; every Workspace id is new.
@@ -44,21 +47,31 @@ from __future__ import annotations
 import os
 import unittest
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from sqlalchemy import create_engine, delete, func, select, text, update
 from sqlalchemy.orm import Session, sessionmaker
 
+import app.scale.advice as advice_module
 import app.scale.service as service_module
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import AuditEventRecord, JobRecord, WorkspaceRecord, utcnow
 from app.platform import jobs
-from app.scale.advice import AdviceLifecycleError, enqueue_advice_expiry, enqueue_episode_advice_expiries
+from app.scale.advice import (
+    AdviceLifecycleError,
+    enqueue_advice_expiry,
+    enqueue_episode_advice_expiries,
+    expire_overdue_connection_advice,
+)
+from app.scale.collector import enqueue_source_collection
 from app.scale.models import ScaleAdviceThreadEventRecord, ScaleAdviceThreadRecord, ScaleEvaluationRunRecord
 from app.scale.service import enqueue_scale_evaluation
 from app.worker_runtime import WorkerRuntime
 from tests.support.scale_evaluation import (
+    AS_OF,
+    CONNECTION_ID,
     FRESHNESS_LAG,
     FRESHNESS_REFERENCE_AT,
     MODE,
@@ -69,9 +82,11 @@ from tests.support.scale_evaluation import (
 )
 
 URLS = [os.getenv(key) for key in ("DOMAIN_OWNER_DATABASE_URL", "DOMAIN_WORKER_DATABASE_URL")]
-SCALE_JOB_TYPES = ("scale_evaluate", "scale_advice_expire")
+SCALE_JOB_TYPES = ("scale_evaluate", "scale_advice_expire", "scale_collect_sources")
 EXPIRE = ("scale_advice_expire",)
 EVALUATE = ("scale_evaluate",)
+COLLECT = ("scale_collect_sources",)
+SWEEP_EXECUTOR = "system:scale_advice_fallback_sweep"
 #: The deadline of a thread on a run seeded with the default reference: due.
 DUE_DEADLINE = FRESHNESS_REFERENCE_AT + FRESHNESS_LAG
 
@@ -138,7 +153,25 @@ class AdviceExpiryAsADelayedJobPostgresTests(unittest.TestCase):
 
     def _handle(self, claimed: jobs.ClaimedJob) -> None:
         {"scale_evaluate": self.runtime._scale_evaluate,
-         "scale_advice_expire": self.runtime._scale_advice_expire}[claimed.type](claimed)
+         "scale_advice_expire": self.runtime._scale_advice_expire,
+         "scale_collect_sources": self.runtime._scale_collect_sources}[claimed.type](claimed)
+
+    def _current_context(self, workspace_id: str, meta_mode: str = MODE):
+        """A Job's context under the Workspace's current authorization epoch."""
+        with Session(self.owner) as session:
+            epoch = session.get(WorkspaceRecord, workspace_id).authorization_epoch
+        return replace(worker_context(workspace_id, meta_mode), authorization_epoch=epoch)
+
+    def _collect(self, seeded: SeededRun) -> None:
+        """The connection's daily ``scale_collect_sources`` Job, enqueued under
+        the current epoch, claimed and handled as the Worker."""
+        context = self._current_context(seeded.workspace_id)
+        with tenant_session(context) as session:
+            job_id = enqueue_source_collection(session, context, connection_id=CONNECTION_ID, target_date=AS_OF).id
+        claimed = self._claim(seeded.workspace_id, COLLECT)
+        self.assertEqual(claimed.id, job_id)
+        self._handle(claimed)
+        self.assertEqual(self._job(job_id), ("succeeded", ""))
 
     def _enqueue_evaluation(self, seeded: SeededRun, run_id: str | None = None) -> str:
         context = worker_context(seeded.workspace_id)
@@ -198,6 +231,14 @@ class AdviceExpiryAsADelayedJobPostgresTests(unittest.TestCase):
             return session.scalars(select(ScaleAdviceThreadEventRecord.reason).where(
                 ScaleAdviceThreadEventRecord.thread_id == thread_id,
                 ScaleAdviceThreadEventRecord.event_type == "expired")).all()
+
+    def _expired_by(self, thread_id: str) -> list[tuple[str, str]]:
+        """The thread's ``expired`` events: their reason and executor."""
+        with Session(self.owner) as session:
+            return [(row.reason, row.executor_id) for row in session.scalars(
+                select(ScaleAdviceThreadEventRecord).where(
+                    ScaleAdviceThreadEventRecord.thread_id == thread_id,
+                    ScaleAdviceThreadEventRecord.event_type == "expired"))]
 
     def _scheduled(self, thread_id: str, deadline: datetime) -> tuple:
         """The one queued Job at ``deadline``: due then, under the thread-and-deadline key."""
@@ -311,20 +352,65 @@ class AdviceExpiryAsADelayedJobPostgresTests(unittest.TestCase):
                 JobRecord.workspace_id == seeded.workspace_id, JobRecord.type == "scale_advice_expire")), 0)
             self.assertIsNone(session.get(ScaleEvaluationRunRecord, seeded.run_id).outcome_kind)
 
-    def test_a_stale_authorization_epoch_rejects_the_delayed_job_and_the_thread_stays_active(self):
-        seeded = self._seed("ws_advice_epoch_pg", freshness_reference_at=utcnow())
+    def test_a_stale_authorization_epoch_rejects_the_delayed_job_and_the_collection_sweep_expires_the_thread(self):
+        seeded = self._seed("ws_advice_epoch_pg")
         self._evaluate(seeded)
         thread_id = self._thread_id(seeded)
         [(job_id, *_)] = self._expiry_jobs(thread_id)
         self._bump_epoch(seeded.workspace_id)
 
-        self.assertIsNone(self._claim(seeded.workspace_id, EXPIRE))
+        self.assertIsNone(self._claim(seeded.workspace_id, EXPIRE), "due, but rejected at the claim")
 
         self.assertEqual(self._job(job_id), ("failed", "authorization_epoch_stale"))
         self.assertEqual(self._attempts(job_id), (0, 0))
-        # Current behavior: nothing else expires this thread until the
-        # collection Job's fallback scan (#109) exists.
         self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "active")])
+
+        self._collect(seeded)
+
+        self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "expired")])
+        self.assertEqual(self._expired_by(thread_id), [("freshness_deadline_exceeded", SWEEP_EXECUTOR)])
+
+    def test_a_job_run_on_a_lagging_worker_clock_changes_nothing_and_the_collection_sweep_expires_the_thread(self):
+        seeded = self._seed("ws_advice_clock_pg")
+        self._evaluate(seeded)
+        thread_id = self._thread_id(seeded)
+        [(job_id, *_)] = self._expiry_jobs(thread_id)
+
+        claimed = self._claim(seeded.workspace_id, EXPIRE)
+        self.assertEqual(claimed.id, job_id, "due on the database clock")
+        with patch.object(advice_module, "utcnow", return_value=DUE_DEADLINE - timedelta(minutes=1)):
+            self._handle(claimed)  # the Worker's clock is a minute short
+
+        self.assertEqual(self._job(job_id), ("succeeded", ""))
+        self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "active")])
+
+        self._collect(seeded)
+
+        self.assertEqual(self._expired_by(thread_id), [("freshness_deadline_exceeded", SWEEP_EXECUTOR)])
+
+    def test_the_sweep_expires_only_the_overdue_threads_of_its_connection_workspace_and_mode(self):
+        ahead = self._seed("ws_advice_sweep_ahead_pg", freshness_reference_at=utcnow())
+        self._evaluate(ahead)
+        seeded = self._seed("ws_advice_sweep_pg")
+        self._evaluate(seeded)
+        thread_id = self._thread_id(seeded)
+        other = self._seed("ws_advice_sweep_other_pg")
+        for workspace_id, mode, connection_id in (
+            (seeded.workspace_id, MODE, "mcon_ci_only_other"),
+            (seeded.workspace_id, "customer_sandbox", CONNECTION_ID),
+            (other.workspace_id, MODE, CONNECTION_ID),
+            (ahead.workspace_id, MODE, CONNECTION_ID),
+        ):
+            with self.subTest(workspace=workspace_id, mode=mode, connection=connection_id):
+                swept = expire_overdue_connection_advice(self._current_context(workspace_id, mode), connection_id)
+                self.assertEqual((swept.expired, dict(swept.failed)), ((), {}))
+        self.assertEqual(self._threads(seeded), [("investigate_delivery_anomaly", "active")])
+        self.assertEqual(self._threads(ahead), [("investigate_delivery_anomaly", "active")])
+
+        context = self._current_context(seeded.workspace_id)
+        self.assertEqual(expire_overdue_connection_advice(context, CONNECTION_ID).expired, (thread_id,))
+        self.assertEqual(expire_overdue_connection_advice(context, CONNECTION_ID).expired, (), "once")
+        self.assertEqual(self._expired_by(thread_id), [("freshness_deadline_exceeded", SWEEP_EXECUTOR)])
 
     def test_another_workspace_or_mode_neither_schedules_for_the_episode_nor_sees_its_job(self):
         seeded = self._seed("ws_advice_owner_pg")

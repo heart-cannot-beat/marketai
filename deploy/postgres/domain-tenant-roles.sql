@@ -848,9 +848,10 @@ BEGIN
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_admitted_operation_candidates_v1(integer) TO marketai_domain_worker';
   END IF;
 
-  -- Meta observation dispatch (zze4f5a6b7c8, #107): due schedules become
-  -- meta_observation_tick Jobs and their job.enqueued audit events, nothing
-  -- else; the tick then runs in a signed TenantContext under RLS.
+  -- Meta observation dispatch (zze4f5a6b7c8, #107; ticks keyed by authorization
+  -- epoch since zzf6b7c8d9e0, #119): due schedules become meta_observation_tick
+  -- Jobs and their job.enqueued audit events, nothing else; the tick then runs
+  -- in a signed TenantContext under RLS. Same signature, so the same grant.
   IF to_regprocedure('public.marketai_dispatch_meta_observation_ticks_v1(integer)') IS NOT NULL THEN
     EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_dispatch_meta_observation_ticks_v1(integer) FROM PUBLIC';
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_dispatch_meta_observation_ticks_v1(integer) TO marketai_domain_worker';

@@ -66,8 +66,8 @@ enqueues ``scale_evaluate`` in the same transaction
 (:func:`app.scale.live_trigger.trigger_live_evaluation`, #110): the
 manifest, the run and the Job commit together, and a replayed collection,
 which finds the manifest by its key, triggers nothing again. The fallback
-Advice-expiry sweep of #111 hooks into :func:`run_source_collection` after
-the Episode loop.
+Advice-expiry sweep of #111 runs in :func:`run_source_collection` after the
+Episode loop, in its own transaction.
 
 ADR 0017: this module reads Meta rows and parses stored pages; it imports
 neither ``app.meta.credential_resolution`` nor ``app.adapters.meta``.
@@ -127,6 +127,7 @@ from app.platform.jobs import enqueue_in_session
 from app.platform.runtime_role import WORKER_ROLE, runs_as
 from app.platform.tenancy import VALID_META_MODES, TenantContext
 from app.scale._canonical import canonical_hash
+from app.scale.advice import expire_overdue_connection_advice
 from app.scale.live_trigger import trigger_live_evaluation
 from app.scale.models import (
     ScaleBreakdownSourceRecord,
@@ -459,6 +460,7 @@ def run_source_collection(
     # Episode loop and in its own tenant transaction, so it also runs for a
     # batch that failed (it still enqueues this Job) and for a connection
     # whose Enrollments are all paused (the Job is enqueued for them too).
+    expire_overdue_connection_advice(context, connection_id)
     if failures:
         raise SourceCollectionFailed(failures)
     return CollectionResult(manifests=tuple(manifests), skipped=tuple(skipped))
