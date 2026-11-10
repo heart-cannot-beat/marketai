@@ -124,6 +124,8 @@ __all__ = [
     "close_enrollment",
     "handle_upstream_withdrawal",
     "apply_no_delivery_episode_closure",
+    "UNVERIFIED_SYNC_PREFIX",
+    "is_unverified_baseline",
 ]
 
 
@@ -440,6 +442,17 @@ def _build_episode_and_delivery_source(
 #: has no genuine source for (see ``_build_episode_from_evidence``'s
 #: docstring). Never a value a browser could plausibly have supplied.
 _UNVERIFIED = "unverified"
+#: The ``sync_run_id`` prefix of a baseline synthesized at activation or
+#: resume. No observation sync run id has it.
+UNVERIFIED_SYNC_PREFIX = "unverified_sync:"
+
+
+def is_unverified_baseline(source: ScaleDeliveryConfigSourceRecord) -> bool:
+    """Whether ``source`` is a baseline :func:`_build_episode_from_evidence`
+    synthesized, with no configuration Meta returned behind it. The first
+    complete source manifest of its Episode adopts the real configuration in
+    its place (``app.scale.live_trigger``, #110)."""
+    return str(source.sync_run_id or "").startswith(UNVERIFIED_SYNC_PREFIX)
 
 
 def _resolve_metric_semantic_contract_set_id(
@@ -598,7 +611,7 @@ def _build_episode_from_evidence(
         evidence_hash=evidence_hash,
         comparability_hash=comparability_hash,
         raw_response_hash=raw_response_hash,
-        sync_run_id=f"unverified_sync:{evidence.id}",
+        sync_run_id=f"{UNVERIFIED_SYNC_PREFIX}{evidence.id}",
         occurrence_id=f"unverified_occurrence:{evidence.id}",
         call_intent_id=f"unverified_call_intent:{evidence.id}",
         observed_at=observed_at,

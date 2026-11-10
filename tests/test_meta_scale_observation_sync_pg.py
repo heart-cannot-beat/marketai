@@ -75,6 +75,7 @@ from tests.support.meta_observation import AD_ACCOUNT, seed_sandbox_ads, worker_
 from tests.support.scale_contract_set import (
     create_connection_through_api,
     delivery_target_request,
+    sandbox_ad_hierarchy,
     seed_target_references,
 )
 
@@ -181,14 +182,17 @@ class ScaleObservationPostgresTests(unittest.TestCase):
         self.current = owner
         with self._as(API):
             connection_id = create_connection_through_api(self, self.client, SANDBOX)["id"]
+        with self._as(WORKER):  # a sandbox Launch's ads
+            ad_ids = seed_sandbox_ads(worker_context(owner.workspace_id, SANDBOX), connection_id, 3)
         with Session(self.owner) as session, session.begin():  # #63 makes these in the product
             references = seed_target_references(session, owner.workspace_id, "pg")
             scenario_id = session.scalar(select(ScenarioVersionRecord.id).where(
                 ScenarioVersionRecord.meta_connection_id == connection_id))
+            hierarchy = sandbox_ad_hierarchy(session, workspace_id=owner.workspace_id, meta_mode=SANDBOX,
+                                             connection_id=connection_id, ad_id=ad_ids[0], as_of=utcnow().date())
         context = replace(owner, meta_mode=SANDBOX)
         request = delivery_target_request(connection_id=connection_id, scenario_version_id=scenario_id,
-                                          meta_mode=SANDBOX, ad_remote_id="ad_fake_acme_charge_pg",
-                                          references=references)
+                                          meta_mode=SANDBOX, hierarchy=hierarchy, references=references)
         with self._as(API), tenant_session(context) as session:
             target, contract_set = create_delivery_target_with_contract_set(session, context, request)
             target_id, target_generation = target.id, target.contract_generation_id
@@ -208,8 +212,6 @@ class ScaleObservationPostgresTests(unittest.TestCase):
                          {("active", DEFAULT_SYNC_CRON, schedules[0].next_fire_at)})
         self.assertEqual(len(schedules), 3)
 
-        with self._as(WORKER):  # a sandbox Launch's ads
-            ad_ids = seed_sandbox_ads(worker_context(owner.workspace_id, SANDBOX), connection_id, 3)
         self.assertEqual(len(ad_ids), 3)
         fire_at = self._make_due(owner.workspace_id)
         target_date = observation_target_date(fire_at, "UTC")

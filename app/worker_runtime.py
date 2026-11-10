@@ -1777,8 +1777,11 @@ class WorkerRuntime:
         The run's Meta mode comes from the payload (``evaluation_job_context``,
         #97): the claimed context names none, and RLS shows Scale rows only to
         a context that does. A payload without one fails as ``missing_input``.
+        A run whose Episode the previous run still holds is deferred, not
+        failed: the Job retries it (``ScaleEvaluationDeferred``, #110).
         """
         from app.scale.service import (
+            ScaleEvaluationDeferred,
             ScaleOrchestrationError,
             evaluation_job_context,
             run_scale_evaluation,
@@ -1804,6 +1807,18 @@ class WorkerRuntime:
             with tenant_session(context) as session:
                 run_scale_evaluation(session, context, evaluation_run_id)
             jobs.succeed(job.context, job.id, self.owner)
+        except ScaleEvaluationDeferred as exc:
+            # Another run holds the Episode (#110): the run is untouched and
+            # waits for it, it is not failed.
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code=exc.code,
+                detail=str(exc),
+                retryable=True,
+                retry_after_seconds=exc.retry_after_seconds,
+            )
         except ScaleOrchestrationError as exc:
             jobs.fail(
                 job.context,

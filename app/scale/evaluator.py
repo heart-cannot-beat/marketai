@@ -796,6 +796,11 @@ def _bootstrap_economic_signal(
                 return None
             b_spend = sum((d.spend for d in baseline_sample), Decimal(0))
             c_spend = sum((d.spend for d in current_sample), Decimal(0))
+            if b_spend <= 0:
+                # A draw whose baseline days carry purchases but no spend has
+                # a zero baseline CPA: unavailable, as the point estimate's
+                # zero baseline is above (spec §2.4, #110).
+                return None
             return ((c_spend / c_purchases) / (b_spend / b_purchases)) - 1
         b_spend = sum((d.spend for d in baseline_sample), Decimal(0))
         c_spend = sum((d.spend for d in current_sample), Decimal(0))
@@ -803,6 +808,11 @@ def _bootstrap_economic_signal(
             return None
         b_pv = sum((d.purchase_value for d in baseline_sample), Decimal(0))
         c_pv = sum((d.purchase_value for d in current_sample), Decimal(0))
+        if b_pv <= 0:
+            # A draw of only the baseline days without purchase value has a
+            # zero baseline ROAS: unavailable, not a division by zero (spec
+            # §2.4, #110). Before, one such draw failed the whole evaluation.
+            return None
         return 1 - ((c_pv / c_spend) / (b_pv / b_spend))
 
     policy = snapshot.policy

@@ -56,7 +56,12 @@ from app.scale.collector import (
     run_source_collection,
 )
 from app.scale.exports import ExportError, export_job_context, run_scale_export
-from app.scale.service import ScaleOrchestrationError, evaluation_job_context, run_scale_evaluation
+from app.scale.service import (
+    ScaleEvaluationDeferred,
+    ScaleOrchestrationError,
+    evaluation_job_context,
+    run_scale_evaluation,
+)
 
 _JOB_POLL_SECONDS = float(os.getenv("JOB_POLL_SECONDS", "0.5"))
 
@@ -140,6 +145,18 @@ class ScaleWorkerRuntime:
             with tenant_session(context) as session:
                 run_scale_evaluation(session, context, evaluation_run_id)
             jobs.succeed(job.context, job.id, self.owner)
+        except ScaleEvaluationDeferred as exc:
+            # Another run holds the Episode (#110): the run is untouched and
+            # waits for it, it is not failed.
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code=exc.code,
+                detail=str(exc),
+                retryable=True,
+                retry_after_seconds=exc.retry_after_seconds,
+            )
         except ScaleOrchestrationError as exc:
             jobs.fail(
                 job.context,

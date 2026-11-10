@@ -477,6 +477,24 @@ def _make_evidence_observation_context(ctx: TenantContext, session, tag: str) ->
     }
 
 
+def seed_landing_page_version(session, ctx: TenantContext, chain: dict, tag: str) -> None:
+    """The Landing Page version the Winner's experiment names, which a
+    matching DeliveryTarget refers to (#63 makes it in the product)."""
+    landing_entry_id = new_id("le")
+    session.add(LibraryEntryRecord(
+        id=landing_entry_id, workspace_id=ctx.workspace_id,
+        entry_type="landing_page", display_name=f"landing-{tag}",
+    ))
+    session.flush()
+    session.add(LibraryVersionRecord(
+        id=chain["landing_page_evidence_hash"], workspace_id=ctx.workspace_id,
+        entry_id=landing_entry_id, entry_type="landing_page",
+        version_no=1, content_json={}, content_hash="d" * 64,
+        published_by="test-fixture",
+    ))
+    session.flush()
+
+
 def _make_matching_delivery_target(ctx: TenantContext, chain: dict, tag: str, meta_mode: str) -> str:
     is_curated = meta_mode in ("customer_sandbox", "controlled_mock")
     with tenant_session(ctx) as s:
@@ -485,20 +503,7 @@ def _make_matching_delivery_target(ctx: TenantContext, chain: dict, tag: str, me
             if is_curated
             else _make_evidence_observation_context(ctx, s, tag)
         )
-
-        landing_entry_id = new_id("le")
-        s.add(LibraryEntryRecord(
-            id=landing_entry_id, workspace_id=ctx.workspace_id,
-            entry_type="landing_page", display_name=f"landing-{tag}",
-        ))
-        s.flush()
-        s.add(LibraryVersionRecord(
-            id=chain["landing_page_evidence_hash"], workspace_id=ctx.workspace_id,
-            entry_id=landing_entry_id, entry_type="landing_page",
-            version_no=1, content_json={}, content_hash="d" * 64,
-            published_by="test-fixture",
-        ))
-        s.flush()
+        seed_landing_page_version(s, ctx, chain, tag)
 
     request = DeliveryTargetRequest(
         meta_connection_id=upstream["meta_connection_id"],
@@ -558,6 +563,26 @@ def build_ready_winner_and_target(
     Returns a dict with (at least) ``decision_id`` and
     ``delivery_target_id`` -- the exact pair
     ``app.scale.candidates.create_enrollment_candidate`` needs.
+    """
+    chain = build_ready_winner(ctx, product_id, tag, admission=admission)
+    chain["delivery_target_id"] = _make_matching_delivery_target(ctx, chain, tag, target_meta_mode)
+    return chain
+
+
+def build_ready_winner(
+    ctx: TenantContext,
+    product_id: str,
+    tag: str,
+    *,
+    admission: PaidOperationAdmission | None = None,
+) -> dict:
+    """:func:`build_ready_winner_and_target` without the DeliveryTarget, for a
+    caller that puts the target on a connection of its own (#110: the
+    sandbox connection the Scale contract set reads). ``chain`` names what
+    a matching target must carry: ``market``, ``asset_version_id``,
+    ``offer_version_id``, ``landing_page_evidence_hash`` (the Landing Page
+    version id, see :func:`seed_landing_page_version`) and
+    ``attribution_semantics_hash``.
     """
     admission = admission or PaidOperationAdmission(
         policy=EntitlementPolicy(),
@@ -666,7 +691,6 @@ def build_ready_winner_and_target(
         s.flush()
 
     chain["binding_id"] = binding_id
-    chain["delivery_target_id"] = _make_matching_delivery_target(ctx, chain, tag, target_meta_mode)
     return chain
 
 

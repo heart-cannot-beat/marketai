@@ -20,7 +20,11 @@ moves its readiness projection.
   runs of a batch Job rejected for a stale authorization epoch.
 
 ``tests/test_scale_source_collection_pg.py`` runs the main path under the
-real roles. Fictional brand only: Acme Charge.
+real roles. A complete manifest also requests a live evaluation when a
+Policy is eligible (#110, ``tests/test_scale_live_evaluation.py``); these
+tests cover the collection alone, so they run with no eligible Policy,
+whatever Policies other files left in the shared database. Fictional brand
+only: Acme Charge.
 """
 from __future__ import annotations
 
@@ -64,7 +68,7 @@ from app.meta.observation import ensure_observation_schedule, occurrence_id
 from app.platform.operations import OperationRecord
 from app.platform.runtime_role import API_ROLE, entered_as
 from app.platform.tenancy import TenantContext
-from app.scale import collector
+from app.scale import collector, live_trigger
 from app.scale.delivery_targets import ensure_metric_contract_set
 from app.scale.evaluator import _is_pause_explained
 from app.scale.evidence import assemble_snapshot, seal_snapshot
@@ -112,6 +116,9 @@ def _fire_at(day: date) -> datetime:
 
 
 class CollectionTestCase(unittest.TestCase):
+    #: Whether a complete manifest may request its live evaluation (#110).
+    LIVE_TRIGGER = False
+
     @classmethod
     def setUpClass(cls) -> None:
         db_file = engine.url.database
@@ -120,6 +127,10 @@ class CollectionTestCase(unittest.TestCase):
         command.upgrade(Config(str(ROOT / "alembic.ini")), "head")
 
     def setUp(self) -> None:
+        if not self.LIVE_TRIGGER:
+            patcher = mock.patch.object(live_trigger, "eligible_live_policy", return_value=None)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.workspace_id = self._provision("ws_scale_collect")
         self.owner = TenantContext(workspace_id=self.workspace_id, role="owner", initiator_id=OWNER_ID)
 

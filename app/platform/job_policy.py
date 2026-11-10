@@ -111,7 +111,9 @@ JOB_POLICIES: dict[str, JobPolicy] = {
     "marketing.resolve_call": _policy(_NONE_REQUEUE, "核对已有调用记录，不重发"),
     "marketing.export": _policy(_NONE_REQUEUE, "只写 BlobStore"),
     "scale_evaluate": _policy(
-        _NONE_REQUEUE, "Phase A/B/C 检查点可续跑（tests/test_scale_recovery.py）；调度未接（#101）"),
+        _NONE_REQUEUE,
+        "Phase A/B/C 检查点可续跑（tests/test_scale_recovery.py）；收集器写 complete manifest 时"
+        "同一事务建 run 并入队；Episode 被前一个 run 占着时可重试，不终结 run（#110）"),
     "scale_advice_expire": _policy(
         _NONE_REQUEUE, "在线程行锁下复查，非 active 即不写；Phase C 按截止时间延迟入队（#111）"),
     "scale_collect_sources": _policy(

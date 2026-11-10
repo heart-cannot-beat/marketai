@@ -43,9 +43,14 @@ Known Task-12 scoping decisions (the full generality is later tasks' job):
   step 10 schedules every active thread's delayed ``scale_advice_expire``
   Job (#111). Both land in Phase C's one transaction.
 * Deciding when to request and enqueue an evaluation (spec §3.8 trigger
-  sources) is #101's scheduling. ``request_scale_evaluation`` only
-  creates/reuses the durable run checkpoint; ``enqueue_scale_evaluation``
-  is the enqueue the scheduler calls.
+  sources) is ``app.scale.live_trigger`` (#110): the collector's complete
+  source manifest requests a ``live`` run and enqueues it in the same
+  transaction. ``request_scale_evaluation`` only creates/reuses the durable
+  run checkpoint; ``enqueue_scale_evaluation`` is the enqueue it calls.
+* A run whose Episode another unfinished run holds (two adjacent days'
+  runs overlapping) is not terminalized: Phase A raises
+  :class:`ScaleEvaluationDeferred` and the Job retries it once the holder
+  releases the phase (#110). The run stays ``requested``.
 * Forward-replay lineage reconciliation (spec §3.8 "Backfill lineage") is not
   implemented: a ``forward_replay`` run never wins the projection CAS here.
   The run/Evaluation records still carry every field a later task needs to
@@ -127,6 +132,9 @@ __all__ = [
     "ScaleEvaluationRequest",
     "ScaleRunOutcome",
     "ScaleOrchestrationError",
+    "ScaleEvaluationDeferred",
+    "EVALUATION_JOB_MAX_ATTEMPTS",
+    "PHASE_CONFLICT_RETRY_SECONDS",
     "enqueue_scale_evaluation",
     "evaluation_job_context",
     "request_scale_evaluation",
@@ -150,12 +158,34 @@ _RUN_STATE_BY_OUTCOME = {
 }
 
 
+#: How long a run waits before it tries an Episode another run holds again.
+PHASE_CONFLICT_RETRY_SECONDS = 60
+#: Attempts of a ``scale_evaluate`` Job. Only a deferral retries (every other
+#: failure is final), so this bounds how long a run waits for the run ahead
+#: of it: ten minutes covers a crashed holder's 300-second lease and rerun.
+EVALUATION_JOB_MAX_ATTEMPTS = 10
+
+
 class ScaleOrchestrationError(RuntimeError):
     """Deterministic, stably-coded rejection raised by this module."""
 
     def __init__(self, code: str, detail: str = ""):
         self.code = code
         super().__init__(f"{code}: {detail}" if detail else code)
+
+
+class ScaleEvaluationDeferred(ScaleOrchestrationError):
+    """The run cannot start yet; nothing was written (#110).
+
+    Raised when another unfinished run holds the Episode's phase -- the
+    previous day's run is still evaluating. The ``scale_evaluate`` Job
+    retries after ``retry_after_seconds`` instead of failing the run.
+    """
+
+    def __init__(self, code: str, detail: str = "", *,
+                 retry_after_seconds: float = PHASE_CONFLICT_RETRY_SECONDS):
+        super().__init__(code, detail)
+        self.retry_after_seconds = retry_after_seconds
 
 
 @dataclass(frozen=True)
@@ -349,16 +379,25 @@ def request_scale_evaluation(
     return run.id
 
 
+def evaluation_job_key(run_id: str, algorithm_version: str, redrive: int = 0) -> str:
+    """``scale-eval:{run_id}:{algorithm_version}``, and ``:redrive-{n}`` for
+    the n-th time a stuck run is enqueued again (#101 Q10)."""
+    key = f"scale-eval:{run_id}:{algorithm_version}"
+    return f"{key}:redrive-{redrive}" if redrive else key
+
+
 def enqueue_scale_evaluation(
-    session: Session, context: TenantContext, evaluation_run_id: str,
+    session: Session, context: TenantContext, evaluation_run_id: str, *, redrive: int = 0,
 ) -> JobRecord:
     """Enqueue the ``scale_evaluate`` Job for one durable run (spec §3.8),
     or return the Job its idempotency key already names.
 
-    The key is the spec's ``scale-eval:{run_id}:{algorithm_version}``. The
-    payload carries the run's Meta mode beside its id (#97): the Worker's
-    claimed context is frozen from the Job row, which records no mode, and
-    the run is visible under RLS only to a context that names it.
+    The key is the spec's ``scale-eval:{run_id}:{algorithm_version}``;
+    ``redrive`` names a later Job for a run whose Jobs all ended without
+    finishing it (:func:`evaluation_job_key`). The payload carries the run's
+    Meta mode beside its id (#97): the Worker's claimed context is frozen
+    from the Job row, which records no mode, and the run is visible under
+    RLS only to a context that names it.
     """
     meta_mode = _require_meta_mode(context)
     run = session.execute(
@@ -374,9 +413,10 @@ def enqueue_scale_evaluation(
             context=context,
             job_type="scale_evaluate",
             payload={"evaluation_run_id": run.id, "meta_mode": meta_mode},
-            idempotency_key=f"scale-eval:{run.id}:{run.algorithm_version}",
+            idempotency_key=evaluation_job_key(run.id, run.algorithm_version, redrive),
             resource_type="scale_evaluation_run",
             resource_id=run.id,
+            max_attempts=EVALUATION_JOB_MAX_ATTEMPTS,
         )
 
 
@@ -520,6 +560,15 @@ def _phase_a(
     try:
         snapshot_id = seal_snapshot(session, context, run.id)
     except SnapshotSealingError as exc:
+        if exc.code == "episode_phase_conflict":
+            # The previous run still holds the Episode (#110). Sealing
+            # refused before writing anything; release the locks and let the
+            # Job try again once that run's Phase C has released the phase.
+            # Read before the rollback: it expires every row, and on
+            # PostgreSQL a refresh outside the bound transaction sees none.
+            detail = f"run {episode.phase_run_id} holds Episode {episode.id}"
+            session.rollback()
+            raise ScaleEvaluationDeferred("episode_phase_conflict", detail) from exc
         if run.snapshot_id is None:
             # No snapshot exists (manifest blocked, or any other rejection
             # `seal_snapshot()` raises before inserting a snapshot row). The
@@ -546,11 +595,11 @@ def _phase_a(
                 episode_id=run.episode_id,
                 detail=exc.code,
             )
-        # The snapshot itself sealed (its content is committed, real, sealed
-        # evidence); only the Episode `phase_run_id` fencing step afterward
-        # failed because a different live run already owns it. Persist the
-        # pending `run.snapshot_id`/`run_state` sealing already assigned in
-        # memory, then terminalize -- the constraint is now satisfiable.
+        # A rejection after the snapshot sealed (its content is real, sealed
+        # evidence). `seal_snapshot` raises none today -- the phase fence
+        # moved ahead of sealing (#110) -- but a later one must still leave
+        # the run constraint-safe: persist the pending `run.snapshot_id`/
+        # `run_state` sealing already assigned in memory, then terminalize.
         session.flush()
         outcome = _terminalize(
             session, context, run, episode, kind=RunOutcomeKind.FAILED_INTEGRITY, detail=exc.code,
