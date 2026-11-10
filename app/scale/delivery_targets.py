@@ -17,20 +17,52 @@ hierarchy state for ``curated_scenario``, or evidence pages and
 one AssetVersion" creative-mapping validation -- is future population-path
 work, not this task's file list. :func:`create_delivery_target` is the
 narrow-waist boundary that work will call through.
+
+Metric contract set (#101 S2): :func:`ensure_metric_contract_set` builds,
+for the connection a DeliveryTarget lives on, every observation contract
+generation Scale's read policy requires -- daily, exact window and delivery
+configuration, no breakdown family in the first batch -- from the code
+contracts in :mod:`app.meta.scale_read_contracts`, and one
+``ScaleMetricSemanticContractSetRecord`` wrapping exactly those generations.
+It is idempotent: a second call returns the same generations and set. All
+generations of the connection share the account's time zone and the daily
+04:00 cron, so the connection's day is one batch. A ``customer_sandbox``
+connection's generations are scheduled as they are created.
+:func:`create_delivery_target_with_contract_set` is the population path that
+binds a new DeliveryTarget to that set's delivery-configuration generation,
+the one Enrollment activation resolves the set and the attestation from.
+The DeliveryTarget product entry is #63.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+import json
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from typing import Any, Mapping
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.adapters.persistence.models import new_id
-from app.platform.tenancy import TenantContext
+from app.meta.models import MetaConnectionRecord, ObservationContractGenerationRecord
+from app.meta.observation import ContractError, create_contract_generation, sandbox_account_for_connection
+from app.meta.scale_read_contracts import (
+    DELIVERY_CONFIGURATION,
+    SCALE_READ_POLICY,
+    AccountBinding,
+    contract_for,
+    generation_spec,
+)
+from app.platform.audit import append_event
+from app.platform.tenancy import TenantContext, is_postgres
 
 from .canonical_lineage import canonical_lineage_hash
-from .models import ScaleDeliveryTargetRecord
+from .models import (
+    ScaleDeliveryTargetRecord,
+    ScaleMetricSemanticContractSetMemberRecord,
+    ScaleMetricSemanticContractSetRecord,
+)
 
 __all__ = [
     "DeliveryTargetRequest",
@@ -40,6 +72,10 @@ __all__ = [
     "DeliveryTargetExpiredError",
     "create_delivery_target",
     "validate_delivery_target",
+    "MetricContractSet",
+    "MetricContractSetError",
+    "ensure_metric_contract_set",
+    "create_delivery_target_with_contract_set",
 ]
 
 # Schema version folded into target_fingerprint's canonical_lineage_hash
@@ -75,6 +111,10 @@ class DeliveryTargetError(RuntimeError):
     def __init__(self, code: str, detail: str = "") -> None:
         self.code = code
         super().__init__(f"{code}: {detail}" if detail else code)
+
+
+class MetricContractSetError(DeliveryTargetError):
+    """The connection's Scale metric contract set cannot be established."""
 
 
 class InvalidSourceProvenanceError(DeliveryTargetError):
@@ -289,3 +329,226 @@ def validate_delivery_target(
     if target.expires_at < datetime.now(timezone.utc):
         raise DeliveryTargetExpiredError(target_id)
     return target
+
+
+# ---------------------------------------------------------------------------
+# Metric contract set (#101 S2)
+# ---------------------------------------------------------------------------
+
+#: The generation fields a Scale read contract fixes (``generation_spec``).
+_GENERATION_FIELDS = (
+    "ad_account_id", "fields", "attribution_window", "breakdowns", "time_window", "delivery_config",
+    "local_timezone",
+)
+_CONTRACT_SET_DESCRIPTION = "Scale read contracts v1"
+
+
+@dataclass(frozen=True)
+class MetricContractSet:
+    """A connection's Scale metric contract set and the generations it wraps."""
+
+    contract_set_id: str
+    generation_ids: Mapping[str, str]
+    created: bool
+
+    @property
+    def delivery_configuration_generation_id(self) -> str:
+        return self.generation_ids[DELIVERY_CONFIGURATION]
+
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _advisory_lock_key(context: TenantContext, connection_id: str) -> int:
+    scope = f"{context.workspace_id}:{context.meta_mode}:{connection_id}:scale_metric_contract_set"
+    return int(hashlib.sha256(scope.encode("utf-8")).hexdigest(), 16) % (2**63 - 1)
+
+
+def _account_binding(
+    session: Session, context: TenantContext, connection: MetaConnectionRecord,
+    currency: str | None, timezone_name: str | None,
+) -> AccountBinding:
+    """The account the contracts are frozen to.
+
+    A sandbox connection defaults to the account its scenario simulates;
+    a real account's currency and time zone must be given.
+    """
+    if currency and timezone_name:
+        return AccountBinding(connection.ad_account_id, currency, timezone_name)
+    if context.meta_mode not in _CURATED_SCENARIO_MODES:
+        raise MetricContractSetError(
+            "scale_contract_account_required",
+            f"{context.meta_mode} contracts need the account's currency and time zone",
+        )
+    sandbox = sandbox_account_for_connection(
+        session, workspace_id=context.workspace_id, meta_mode=context.meta_mode, connection_id=connection.id,
+    )
+    return AccountBinding(connection.ad_account_id, currency or sandbox.currency,
+                          timezone_name or sandbox.timezone_name)
+
+
+def _required_generation(
+    session: Session, context: TenantContext, connection: MetaConnectionRecord,
+    contract_type: str, binding: AccountBinding,
+) -> ObservationContractGenerationRecord:
+    """The connection's active generation of ``contract_type``, created from
+    the code contract when there is none. An active generation of the type
+    that is anything else is a conflict, not something to replace silently:
+    evidence and Episodes may already reference it."""
+    spec = generation_spec(contract_for(contract_type), binding)
+    existing = session.scalar(
+        select(ObservationContractGenerationRecord).where(
+            ObservationContractGenerationRecord.workspace_id == context.workspace_id,
+            ObservationContractGenerationRecord.meta_mode == context.meta_mode,
+            ObservationContractGenerationRecord.meta_connection_id == connection.id,
+            ObservationContractGenerationRecord.contract_type == contract_type,
+            ObservationContractGenerationRecord.state == "active",
+        )
+    )
+    if existing is not None:
+        drifted = [field for field in _GENERATION_FIELDS
+                   if _canonical(getattr(existing, field)) != _canonical(spec[field])]
+        if drifted:
+            raise MetricContractSetError(
+                "scale_contract_generation_conflict",
+                f"active {contract_type} generation {existing.id} differs from the Scale read contract in {drifted}",
+            )
+        return existing
+    try:
+        return create_contract_generation(
+            session, workspace_id=context.workspace_id, meta_mode=context.meta_mode,
+            connection_id=connection.id, **spec,
+        )
+    except ContractError as exc:
+        raise MetricContractSetError(exc.code, str(exc)) from exc
+
+
+def ensure_metric_contract_set(
+    session: Session,
+    context: TenantContext,
+    *,
+    connection_id: str,
+    currency: str | None = None,
+    timezone_name: str | None = None,
+) -> MetricContractSet:
+    """Idempotently build the connection's Scale generations and contract set.
+
+    Runs in the caller's transaction. Only an Owner or the system may set up
+    contracts, on an active connection of the context's Workspace and mode.
+    On PostgreSQL a transaction-scoped advisory lock serializes concurrent
+    calls for one connection, so two callers cannot both create a set for
+    the same delivery-configuration generation (activation would find it
+    ambiguous). A set that already wraps the connection's
+    delivery-configuration generation with other members is drift that a
+    caller must resolve; it is never silently joined by a second set.
+    """
+    meta_mode = _require_meta_mode(context)
+    if context.role not in ("owner", "system"):
+        raise MetricContractSetError("forbidden", f"role {context.role!r} cannot set up Scale metric contracts")
+    connection = session.scalar(
+        select(MetaConnectionRecord).where(
+            MetaConnectionRecord.workspace_id == context.workspace_id,
+            MetaConnectionRecord.meta_mode == meta_mode,
+            MetaConnectionRecord.id == connection_id,
+        )
+    )
+    if connection is None or connection.state != "active":
+        raise MetricContractSetError("connection_not_found", connection_id)
+    if is_postgres(session):
+        session.execute(text("SELECT pg_advisory_xact_lock(:key)"),
+                        {"key": _advisory_lock_key(context, connection_id)})
+    binding = _account_binding(session, context, connection, currency, timezone_name)
+
+    generations = {
+        contract_type: _required_generation(session, context, connection, contract_type, binding)
+        for contract_type in SCALE_READ_POLICY.required_contract_types()
+    }
+    wanted = {kind: (row.id, row.contract_hash) for kind, row in generations.items()}
+    generation_ids = {kind: row.id for kind, row in generations.items()}
+
+    member = ScaleMetricSemanticContractSetMemberRecord
+    contract_set = ScaleMetricSemanticContractSetRecord
+    candidates = sorted(set(session.scalars(
+        select(member.contract_set_id)
+        .join(contract_set, contract_set.id == member.contract_set_id)
+        .where(
+            contract_set.workspace_id == context.workspace_id,
+            contract_set.meta_mode == meta_mode,
+            member.contract_type == DELIVERY_CONFIGURATION,
+            member.observation_contract_generation == generation_ids[DELIVERY_CONFIGURATION],
+        )
+    )))
+    for set_id in candidates:
+        members = {
+            row.contract_type: (row.observation_contract_generation, row.contract_hash)
+            for row in session.scalars(select(member).where(member.contract_set_id == set_id))
+        }
+        if members == wanted:
+            return MetricContractSet(set_id, generation_ids, created=False)
+    if candidates:
+        raise MetricContractSetError(
+            "scale_contract_set_drift",
+            f"contract set {candidates[0]} wraps generation {generation_ids[DELIVERY_CONFIGURATION]} "
+            "with other members",
+        )
+
+    record = contract_set(
+        id=new_id("smcs"),
+        workspace_id=context.workspace_id,
+        meta_mode=meta_mode,
+        description=f"{_CONTRACT_SET_DESCRIPTION} for connection {connection_id}",
+        created_by=(context.initiator_id or context.executor)[:100],
+    )
+    session.add(record)
+    session.flush()
+    for kind, (generation_id, contract_hash) in sorted(wanted.items()):
+        session.add(member(
+            id=new_id("smcm"),
+            contract_set_id=record.id,
+            contract_type=kind,
+            observation_contract_generation=generation_id,
+            contract_hash=contract_hash,
+        ))
+    session.flush()
+    append_event(
+        session,
+        event_type="scale.metric_contract_set.created",
+        resource_type="scale_metric_semantic_contract_set",
+        resource_id=record.id,
+        details={
+            "meta_connection_id": connection_id,
+            "members": {kind: generation_id for kind, (generation_id, _hash) in sorted(wanted.items())},
+            "account_currency": binding.currency,
+            "account_timezone": binding.timezone_name,
+        },
+    )
+    return MetricContractSet(record.id, generation_ids, created=True)
+
+
+def create_delivery_target_with_contract_set(
+    session: Session,
+    context: TenantContext,
+    request: DeliveryTargetRequest,
+    *,
+    currency: str | None = None,
+    timezone_name: str | None = None,
+) -> tuple[ScaleDeliveryTargetRecord, MetricContractSet]:
+    """Create a DeliveryTarget on its connection's Scale metric contract set.
+
+    Ensures the set first, then binds the target to the set's
+    delivery-configuration generation. ``request.contract_generation_id``
+    may be empty (filled in here) or must already name that generation.
+    """
+    contract_set = ensure_metric_contract_set(
+        session, context, connection_id=request.meta_connection_id,
+        currency=currency, timezone_name=timezone_name,
+    )
+    generation_id = contract_set.delivery_configuration_generation_id
+    if request.contract_generation_id not in ("", generation_id):
+        raise MetricContractSetError(
+            "scale_contract_generation_conflict",
+            f"target names generation {request.contract_generation_id}, the contract set {generation_id}",
+        )
+    target = create_delivery_target(session, context, replace(request, contract_generation_id=generation_id))
+    return target, contract_set
