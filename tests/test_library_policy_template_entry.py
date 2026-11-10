@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 # library_fixtures sets the test database env before any app.* import.
@@ -33,6 +34,8 @@ from app.library.contracts import (
     ENTRY_RESOLVED_RELATIONS,
     REL_POLICY_TEMPLATE,
 )
+from app.main import app
+from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
 
 TEMPLATE_CONTENT = {
@@ -284,3 +287,64 @@ class TestImpactPreviewReadsTheTemplateByEntry(PolicyTemplateFixtures):
 
         service.withdraw_version(self.owner, colors_v2, reason="Palette recalled")
         self.assertEqual(service.get_version(foreign, foreign_policy)["eligibility"], "eligible")
+
+
+class TestThroughTheApi(PolicyTemplateFixtures):
+    """The v1 routes run as the API role, so the grant guard (#59, #98) checks
+    every read the resolver adds: the entry, a legacy version and the latest
+    version of an entry whose current version was withdrawn."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.client = TestClient(app, raise_server_exceptions=False)
+        self.addCleanup(self.client.close)
+        self.addCleanup(app.dependency_overrides.pop, request_tenant_context, None)
+
+    def as_(self, ctx: TenantContext) -> TestClient:
+        app.dependency_overrides[request_tenant_context] = lambda: ctx
+        return self.client
+
+    def publish_over_http(self, ctx: TenantContext, key: str, *template_ids: str):
+        entry = service.create_entry(
+            ctx, entry_type=ENTRY_PROMPT_POLICY, display_name=f"Tone {key}", content=policy_content(*template_ids),
+        )
+        return self.as_(ctx).post(
+            f"/api/v1/library/entries/{entry['id']}/publish",
+            json={},
+            headers={"Idempotency-Key": key, "If-Match": str(entry["draft"]["revision"])},
+        )
+
+    @staticmethod
+    def findings(problem: dict) -> list[tuple[str, str]]:
+        return [(f["code"], f["path"]) for f in problem["report"]["blocking"]]
+
+    def test_an_owner_publishes_by_entry_and_by_version_id_and_previews_the_withdraw(self):
+        colors_entry, colors_v1 = self.publish_template(self.owner)
+        colors_v2 = self.republish_template(self.owner, colors_entry, "Crimson")
+
+        response = self.publish_over_http(self.owner, "ik-100-publish", colors_entry, colors_v1)
+
+        self.assertEqual(response.status_code, 201, response.text)
+        policy_v1 = response.json()["id"]
+        self.assertEqual(self.edges_from(self.owner, policy_v1), {(colors_v2, REL_POLICY_TEMPLATE, path(0))})
+
+        preview = self.as_(self.owner).post(f"/api/v1/library/versions/{colors_v2}/withdraw-impact")
+        self.assertEqual(preview.status_code, 201, preview.text)
+        self.assertEqual(self.listed(preview.json()), {policy_v1})
+
+    def test_a_withdrawn_or_foreign_template_answers_422_and_a_member_403(self):
+        recalled_entry, recalled_v1 = self.publish_template(self.owner, "Recalled colors")
+        service.withdraw_version(self.owner, recalled_v1, reason="Palette recalled")
+        foreign = self.owner_ctx(self.ctx(), actor="owner_b")
+        foreign_entry, _foreign_v1 = self.publish_template(foreign, "Brightvolt colors")
+
+        blocked = self.publish_over_http(self.owner, "ik-100-blocked", recalled_entry, foreign_entry)
+        self.assertEqual(blocked.status_code, 422, blocked.text)
+        self.assertEqual(self.findings(blocked.json()), [
+            ("dependency_withdrawn", path(0)), ("dependency_not_found", path(1)),
+        ])
+
+        colors_entry, _colors_v1 = self.publish_template(self.owner)
+        refused = self.publish_over_http(self.member, "ik-100-member", colors_entry)
+        self.assertEqual(refused.status_code, 403, refused.text)
+        self.assertEqual(refused.json()["code"], "library_forbidden")
