@@ -34,8 +34,11 @@ this deliberately rather than by surprise):
   ``advice_expire_job_context`` reads the mode back for the Worker.
   ``app.scale.service``'s Phase C calls ``enqueue_episode_advice_expiries``
   once its run is ``evaluated``, in the transaction that wrote the thread
-  changes. The fallback scan for Jobs a stale authorization epoch rejects
-  waits for the source-collection Job (#109).
+  changes. ``expire_overdue_connection_advice`` is the fallback, run by the
+  daily source-collection Job (#109) after its Episode loop: it expires an
+  active thread past its deadline whose Job a stale authorization epoch
+  rejected, or whose Job ran while the Worker's clock was behind the
+  database's.
 * **Episode-close supersession is applied lazily, at recurrence.** The
   ``ScaleAdviceThreadEventRecord`` CHECK constraint
   (``ck_sate_superseded_shape``) requires a non-null ``successor_thread_id``
@@ -74,12 +77,14 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Sequence
 
-from sqlalchemy import select, text
+from sqlalchemy import and_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import JobRecord, LibraryVersionRecord, new_id, utcnow
 from app.generation.draft import create_draft
+from app.platform.audit import append_event
 from app.platform.jobs import enqueue_in_session
 from app.platform.tenancy import VALID_META_MODES, TenantContext, commit_and_rebind, tenant_scope
 from app.scale._canonical import canonical_encode, canonical_hash
@@ -103,6 +108,7 @@ from app.scale.types import AdviceType, DataQualityState, EvidenceMaturity
 from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 _SYSTEM_EXECUTOR = "system:scale_advice_lifecycle"
+_FALLBACK_SWEEP_EXECUTOR = "system:scale_advice_fallback_sweep"
 _RESOLVE_AFTER_ELIGIBLE_MISSES = 2
 _SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
 _MISS_STREAK_PREFIX = "miss_streak="
@@ -1137,3 +1143,91 @@ def advice_expire_job_context(context: TenantContext, payload: Mapping[str, Any]
     if meta_mode not in VALID_META_MODES:
         raise AdviceLifecycleError("missing_input", "缺少或无效的 meta_mode")
     return replace(context, meta_mode=meta_mode)
+
+
+# ---------------------------------------------------------------------------
+# The fallback sweep -- #111, #101 design §5
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OverdueAdviceSweep:
+    """What one fallback sweep did: the threads it expired, in id order, and
+    the ones it could not check, by thread id."""
+
+    expired: tuple[str, ...]
+    failed: Mapping[str, str]
+
+
+@runs_as(WORKER_ROLE)
+def expire_overdue_connection_advice(
+    context: TenantContext, connection_id: str, *, now: datetime | None = None,
+) -> OverdueAdviceSweep:
+    """Expire every ``active`` thread past its deadline on one connection: the
+    fallback for a deadline Job that did not (#111; #101 design §5).
+
+    A ``scale_advice_expire`` Job waits until its deadline, a day or more,
+    and two things can leave its thread ``active`` past it:
+
+    * the Workspace's authorization epoch moves meanwhile, and the claim
+      rejects the Job as ``authorization_epoch_stale``, due or not;
+    * the claim compares the deadline with the database clock, while
+      :func:`expire_advice_thread` rechecks it with the Worker's: a Job
+      claimed while a lagging Worker clock is still short of the deadline
+      changes nothing, and its key is spent.
+
+    The source-collection Job (``app.scale.collector``) calls this after its
+    Episode loop. It runs daily for each connection with an ``active`` or
+    ``paused`` Enrollment, also when the batch failed, under the epoch its
+    claim checked. Every ``active`` thread of an Episode on the connection,
+    in this Workspace and Meta mode, goes through
+    :func:`expire_advice_thread`, which locks it, recomputes the deadline
+    and expires it only once the deadline has passed, so a thread whose
+    deadline is ahead, or that its Job already expired, is left as it is.
+
+    Each thread commits on its own. A thread that cannot be checked is
+    recorded as a ``scale.advice_sweep.thread_failed`` audit event and stays
+    for the next collection: the sweep never fails the collection. The
+    ``expired`` event names this sweep as its executor, so the thread's
+    history says which path expired it.
+    """
+    meta_mode = _require_meta_mode(context)
+    current_time = _ensure_utc(now) or utcnow()
+    with tenant_session(context) as session:
+        thread_ids = list(session.scalars(
+            select(ScaleAdviceThreadRecord.id)
+            .join(ScaleEpisodeRecord, and_(
+                ScaleEpisodeRecord.workspace_id == ScaleAdviceThreadRecord.workspace_id,
+                ScaleEpisodeRecord.meta_mode == ScaleAdviceThreadRecord.meta_mode,
+                ScaleEpisodeRecord.id == ScaleAdviceThreadRecord.episode_id,
+            ))
+            .where(
+                ScaleAdviceThreadRecord.workspace_id == context.workspace_id,
+                ScaleAdviceThreadRecord.meta_mode == meta_mode,
+                ScaleAdviceThreadRecord.lifecycle == "active",
+                ScaleEpisodeRecord.meta_connection_id == connection_id,
+            )
+            .order_by(ScaleAdviceThreadRecord.id)
+        ))
+    expired: list[str] = []
+    failed: dict[str, str] = {}
+    for thread_id in thread_ids:
+        try:
+            with tenant_session(context) as session:
+                if expire_advice_thread(
+                    session, context, thread_id, executor_id=_FALLBACK_SWEEP_EXECUTOR, now=current_time,
+                ):
+                    expired.append(thread_id)
+        except Exception as exc:  # noqa: BLE001 -- one thread must not stop the others or the collection
+            failed[thread_id] = f"{type(exc).__name__}: {exc}"[:500]
+    if failed:
+        with tenant_session(context) as session:
+            for thread_id, detail in failed.items():
+                append_event(
+                    session,
+                    event_type="scale.advice_sweep.thread_failed",
+                    resource_type="scale_advice_thread",
+                    resource_id=thread_id,
+                    details={"meta_connection_id": connection_id, "error": detail},
+                )
+    return OverdueAdviceSweep(expired=tuple(expired), failed=failed)
