@@ -5,21 +5,20 @@ Distinct from every other router in this codebase: these routes act
 Workspace derived from a verified delegated identity. They therefore do
 not depend on ``request_tenant_context`` (spec §3's BFF-derived,
 single-Workspace identity) -- they use their own
-:func:`request_platform_context` dependency, and reads that must span
-Workspaces use ``platform_session()`` (untenanted) rather than
-``tenant_session()`` (RLS-scoped to one Workspace), mirroring the existing
-cross-tenant callers ``app.platform.jobs`` and ``app.library.prompt_policy``.
+:func:`request_platform_context` dependency.
 
 On PostgreSQL ``marketai_domain_api`` is NOBYPASSRLS and the domain tables
-are FORCE RLS, so an untenanted session reads nothing. Bootstrap and
-credential revocation therefore learn what they need before a TenantContext
-exists through narrow ``SECURITY DEFINER`` functions -- the Workspace's
-epoch and platform flag (``marketai_workspace_admission``), the platform
-Workspace's creation (``marketai_create_platform_workspace_v1``) and a
-credential version's owning Workspace
-(``marketai_credential_version_workspace_v1``) -- and do everything else in
-a TenantContext signed for that Workspace's current epoch. SQLite has no RLS
-and reads and writes those rows directly.
+are FORCE RLS, so an untenanted ``platform_session()`` reads nothing. Every
+route therefore learns what it needs before a TenantContext exists through
+narrow ``SECURITY DEFINER`` functions -- the Workspace's epoch and platform
+flag (``marketai_workspace_admission``), the platform Workspace's creation
+(``marketai_create_platform_workspace_v1``), a credential version's owning
+Workspace (``marketai_credential_version_workspace_v1``), and where Meta
+connections live (``marketai_meta_connection_ids_v1`` across Workspaces,
+``marketai_meta_connection_workspace_v1`` by id; #102) -- and does everything
+else in a TenantContext signed for that Workspace's current epoch (and, for
+Meta rows, their Meta mode, which the Meta tables' policy binds). SQLite has
+no RLS and reads and writes those rows directly.
 
 Routes (per spec §8.2 platform allowlist / §8.7):
 
@@ -38,6 +37,9 @@ Routes (per spec §8.2 platform allowlist / §8.7):
 * ``GET /api/platform/v1/meta/connections`` / ``GET .../{id}`` -- the
   platform-wide read view across every Workspace, for operators diagnosing
   a specific tenant's connection without knowing its Workspace up front.
+  The list runs oldest first and holds at most ``limit`` connections (at
+  most :data:`CONNECTION_LIST_LIMIT`, the default); ``after=<last id>``
+  continues from the previous page, and a short page is the last one.
 * ``POST /api/platform/v1/meta/connections/{id}/reconcile`` -- re-derives
   and returns the connection's current projection (connection + active
   binding state). See the docstring on :func:`reconcile_connection` for
@@ -72,10 +74,11 @@ import hmac
 import logging
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import and_, or_, select, text
+from sqlalchemy.orm import Session, aliased
 
 from . import connections as connections_service
 from .models import MetaConnectionRecord, MetaDataSourceBindingRecord
@@ -324,6 +327,106 @@ def _credential_version_workspace(credential_version_id: str) -> str | None:
         )
 
 
+#: The most connections ``GET /meta/connections`` returns; on PostgreSQL
+#: ``marketai_meta_connection_ids_v1`` enforces the same cap.
+CONNECTION_LIST_LIMIT = 500
+
+
+@dataclass(frozen=True)
+class _ListedConnection:
+    """One connection in the platform-wide list: where it lives, not what it says."""
+
+    connection_id: str
+    workspace_id: str
+    meta_mode: str
+    workspace: _WorkspaceScope
+
+
+def _list_connection_ids(*, after: str | None, limit: int) -> list[_ListedConnection]:
+    """Connections across every Workspace, oldest first (``created_at``, then
+    ``id``), starting after connection ``after`` when given, at most ``limit``.
+
+    Each carries its Workspace, Meta mode and the Workspace's current epoch
+    and platform flag -- what signing a context to read it takes -- and none
+    of its content. On PostgreSQL that comes from
+    ``marketai_meta_connection_ids_v1`` (migration ``zzd3a4b5c6d7``); SQLite
+    reads the same columns directly.
+    """
+    with platform_session() as session:
+        if is_postgres(session):
+            rows = session.execute(
+                text(
+                    "SELECT workspace_id, meta_mode, authorization_epoch, "
+                    "is_platform_workspace, connection_id "
+                    "FROM public.marketai_meta_connection_ids_v1(:after, :limit)"
+                ),
+                {"after": after, "limit": limit},
+            ).all()
+        else:
+            query = (
+                select(
+                    MetaConnectionRecord.workspace_id,
+                    MetaConnectionRecord.meta_mode,
+                    WorkspaceRecord.authorization_epoch,
+                    WorkspaceRecord.is_platform_workspace,
+                    MetaConnectionRecord.id.label("connection_id"),
+                )
+                .join(WorkspaceRecord, WorkspaceRecord.id == MetaConnectionRecord.workspace_id)
+                .order_by(MetaConnectionRecord.created_at, MetaConnectionRecord.id)
+                .limit(limit)
+            )
+            if after is not None:
+                cursor = aliased(MetaConnectionRecord)
+                after_created_at = (
+                    select(cursor.created_at).where(cursor.id == after).scalar_subquery()
+                )
+                query = query.where(
+                    or_(
+                        MetaConnectionRecord.created_at > after_created_at,
+                        and_(
+                            MetaConnectionRecord.created_at == after_created_at,
+                            MetaConnectionRecord.id > after,
+                        ),
+                    )
+                )
+            rows = session.execute(query).all()
+    return [
+        _ListedConnection(
+            connection_id=row.connection_id,
+            workspace_id=row.workspace_id,
+            meta_mode=row.meta_mode,
+            workspace=_WorkspaceScope(int(row.authorization_epoch), bool(row.is_platform_workspace)),
+        )
+        for row in rows
+    ]
+
+
+def _connection_workspace(connection_id: str) -> tuple[str, str] | None:
+    """The Workspace and Meta mode of ``connection_id``, or ``None``.
+
+    On PostgreSQL ``meta_connection_records`` is FORCE RLS behind a context
+    bound to one Workspace and Meta mode, so both come from
+    ``marketai_meta_connection_workspace_v1``, which returns them and nothing
+    else. SQLite reads the two columns directly.
+    """
+    with platform_session() as session:
+        if is_postgres(session):
+            row = session.execute(
+                text(
+                    "SELECT workspace_id, meta_mode "
+                    "FROM public.marketai_meta_connection_workspace_v1(:connection_id)"
+                ),
+                {"connection_id": connection_id},
+            ).first()
+        else:
+            row = session.execute(
+                select(MetaConnectionRecord.workspace_id, MetaConnectionRecord.meta_mode).where(
+                    MetaConnectionRecord.id == connection_id
+                )
+            ).first()
+    return None if row is None else (row.workspace_id, row.meta_mode)
+
+
 def _platform_tenant_context(
     workspace_id: str,
     scope: _WorkspaceScope,
@@ -341,6 +444,33 @@ def _platform_tenant_context(
         meta_mode=meta_mode,
         is_platform_workspace=scope.is_platform_workspace,
     )
+
+
+def _connection_context(connection_id: str, platform: LegacyPlatformContext) -> TenantContext:
+    """A context signed to read ``connection_id``: its Workspace's current
+    epoch and the connection's Meta mode. 404 if there is no such connection."""
+    owner = _connection_workspace(connection_id)
+    scope = _workspace_scope(owner[0]) if owner is not None else None
+    if owner is None or scope is None:
+        raise HTTPException(404, "Meta connection not found")
+    workspace_id, meta_mode = owner
+    return _platform_tenant_context(workspace_id, scope, platform, meta_mode=meta_mode)
+
+
+def _scoped_connection(
+    session: Session, context: TenantContext, connection_id: str,
+) -> MetaConnectionRecord:
+    """``connection_id`` read in ``context``; 404 if RLS or a race hides it."""
+    row = session.scalar(
+        select(MetaConnectionRecord).where(
+            MetaConnectionRecord.id == connection_id,
+            MetaConnectionRecord.workspace_id == context.workspace_id,
+            MetaConnectionRecord.meta_mode == context.meta_mode,
+        )
+    )
+    if row is None:
+        raise HTTPException(404, "Meta connection not found")
+    return row
 
 
 def _connection_dict(row: MetaConnectionRecord) -> dict:
@@ -511,14 +641,58 @@ def bootstrap(
 
 @router.get("/meta/connections")
 def list_connections(
+    after: str | None = Query(
+        None, max_length=64,
+        description="Continue after this connection id: the last item of the previous page.",
+    ),
+    limit: int = Query(CONNECTION_LIST_LIMIT, ge=1, le=CONNECTION_LIST_LIMIT),
     _platform: LegacyPlatformContext = Depends(request_platform_context),
 ) -> dict:
-    with platform_session() as session:
-        rows = session.scalars(
-            select(MetaConnectionRecord).order_by(MetaConnectionRecord.created_at)
-        ).all()
-        items = [_connection_dict(row) for row in rows]
-    return {"items": items}
+    # Which connections exist and where is the only thing read untenanted;
+    # each Workspace's connections are then read in one TenantContext per
+    # Meta mode, signed for that Workspace's current epoch (#102).
+    if after is not None and _connection_workspace(after) is None:
+        raise HTTPException(
+            400,
+            {"code": "invalid_cursor", "message": f"unknown Meta connection {after!r} in 'after'"},
+        )
+    listed = _list_connection_ids(after=after, limit=limit)
+
+    groups: dict[tuple[str, str], list[_ListedConnection]] = {}
+    for entry in listed:
+        groups.setdefault((entry.workspace_id, entry.meta_mode), []).append(entry)
+
+    items_by_id: dict[str, dict] = {}
+    for (workspace_id, meta_mode), entries in groups.items():
+        context = _platform_tenant_context(
+            workspace_id, entries[0].workspace, _platform, meta_mode=meta_mode,
+        )
+        with tenant_session(context) as session:
+            rows = session.scalars(
+                select(MetaConnectionRecord).where(
+                    MetaConnectionRecord.workspace_id == workspace_id,
+                    MetaConnectionRecord.meta_mode == meta_mode,
+                    MetaConnectionRecord.id.in_([entry.connection_id for entry in entries]),
+                )
+            )
+            items_by_id.update((row.id, _connection_dict(row)) for row in rows)
+
+    unread = len(listed) - len(items_by_id)
+    if unread:
+        # Only a Workspace whose epoch moved between the two reads hides its
+        # rows from the context signed for the old one.
+        logger.warning(
+            "platform_meta_connection_list_unread: %d listed connections were not "
+            "readable in their Workspace's context",
+            unread,
+        )
+    return {
+        "items": [
+            items_by_id[entry.connection_id]
+            for entry in listed
+            if entry.connection_id in items_by_id
+        ]
+    }
 
 
 @router.get("/meta/connections/{connection_id}")
@@ -526,11 +700,9 @@ def get_connection(
     connection_id: str,
     _platform: LegacyPlatformContext = Depends(request_platform_context),
 ) -> dict:
-    with platform_session() as session:
-        row = session.get(MetaConnectionRecord, connection_id)
-        if row is None:
-            raise HTTPException(404, "Meta connection not found")
-        return _connection_dict(row)
+    context = _connection_context(connection_id, _platform)
+    with tenant_session(context) as session:
+        return _connection_dict(_scoped_connection(session, context, connection_id))
 
 
 @router.post("/meta/connections/{connection_id}/reconcile")
@@ -553,11 +725,13 @@ def reconcile_connection(
     operators have one command to re-fetch a connection's ground truth
     without hand-rolling two queries. See the Task 17 report's Concerns for
     what full cross-mode reconciliation would still need.
+
+    Both reads run in one TenantContext signed for the connection's Workspace
+    and Meta mode (#102), so the binding can only be that Workspace's.
     """
-    with platform_session() as session:
-        connection = session.get(MetaConnectionRecord, connection_id)
-        if connection is None:
-            raise HTTPException(404, "Meta connection not found")
+    context = _connection_context(connection_id, _platform)
+    with tenant_session(context) as session:
+        connection = _scoped_connection(session, context, connection_id)
         active_binding = session.scalar(
             select(MetaDataSourceBindingRecord).where(
                 MetaDataSourceBindingRecord.workspace_id == connection.workspace_id,

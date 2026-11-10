@@ -1,4 +1,4 @@
-"""The platform Meta API under the real API role on PostgreSQL (#91, #94).
+"""The platform Meta API under the real API role on PostgreSQL (#91, #94, #102).
 
 ``app.meta.platform_api`` starts without a TenantContext, and
 ``marketai_domain_api`` is NOBYPASSRLS with SELECT only on ``workspaces`` and
@@ -14,7 +14,11 @@ sessions bound to the API role:
   existing customer Workspace is never promoted;
 * credential revocation learns the owning Workspace from
   ``marketai_credential_version_workspace_v1`` and revokes under RLS (#94);
-* only the API may execute either function, and the API still cannot read
+* the connection list, a connection by id and its reconcile learn where a
+  connection lives from ``marketai_meta_connection_ids_v1`` and
+  ``marketai_meta_connection_workspace_v1`` and read it in a context signed
+  for its Workspace, Meta mode and current epoch (#102);
+* only the API may execute these functions, and the API still cannot read
   the ciphertext.
 
 Workspaces the control plane would project are seeded as the schema owner.
@@ -43,6 +47,7 @@ from app.adapters.persistence.models import AuditEventRecord, WorkspaceRecord
 from app.entitlements.credential_admin import CredentialAdmin
 from app.entitlements.credentials import CredentialVersionRecord
 from app.meta.models import MetaConnectionRecord, MetaDataSourceBindingRecord
+from app.meta.platform_api import CONNECTION_LIST_LIMIT, _binding_dict, _connection_dict
 from app.platform.tenancy import TenantContext
 
 URLS = [os.getenv(key) for key in (
@@ -51,6 +56,9 @@ URLS = [os.getenv(key) for key in (
 OPERATOR = "platform:pg-operator"
 CREATE = "marketai_create_platform_workspace_v1(text, text)"
 OWNER_OF = "marketai_credential_version_workspace_v1(text)"
+CONNECTION_IDS = "marketai_meta_connection_ids_v1(text, integer)"
+CONNECTION_OWNER = "marketai_meta_connection_workspace_v1(text)"
+CONNECTIONS = "/api/platform/v1/meta/connections"
 
 
 @unittest.skipUnless(
@@ -91,8 +99,9 @@ class PlatformMetaApiPostgresTests(unittest.TestCase):
                 authorization_epoch=epoch, is_platform_workspace=is_platform,
             ))
 
-    def _bootstrap(self, workspace_id: str, meta_mode: str = "internal_validation"):
-        body = {"workspace_id": workspace_id, "meta_mode": meta_mode, "ad_account_id": "act_acme_charge"}
+    def _bootstrap(self, workspace_id: str, meta_mode: str = "internal_validation",
+                   ad_account_id: str = "act_acme_charge"):
+        body = {"workspace_id": workspace_id, "meta_mode": meta_mode, "ad_account_id": ad_account_id}
         if meta_mode == "internal_validation":
             body |= {"access_token_material": "token-acme", "app_secret_material": "secret-acme"}
         return self.client.post("/api/platform/v1/meta/bootstrap", json=body)
@@ -114,6 +123,39 @@ class PlatformMetaApiPostgresTests(unittest.TestCase):
                     AuditEventRecord.resource_type == "workspace",
                 ))
             ]
+
+    def _bump_epoch(self, workspace_id: str) -> None:
+        """A membership or entitlement change after the connection was made."""
+        with Session(self.owner) as session, session.begin():
+            session.execute(text(
+                "UPDATE public.workspaces SET authorization_epoch = authorization_epoch + 1 WHERE id = :ws"
+            ), {"ws": workspace_id})
+
+    def _connections_in(self, *workspace_ids: str) -> list[dict]:
+        """These Workspaces' connections as the owner sees them, in list order."""
+        with Session(self.owner) as session:
+            return [_connection_dict(row) for row in session.scalars(
+                select(MetaConnectionRecord)
+                .where(MetaConnectionRecord.workspace_id.in_(workspace_ids))
+                .order_by(MetaConnectionRecord.created_at, MetaConnectionRecord.id)
+            )]
+
+    def _binding(self, binding_id: str) -> dict:
+        with Session(self.owner) as session:
+            return _binding_dict(session.get(MetaDataSourceBindingRecord, binding_id))
+
+    def _list_all(self) -> list[dict]:
+        """Every page of the list: the database is shared, so ours may not be first."""
+        items: list[dict] = []
+        params: dict = {}
+        while True:
+            resp = self.client.get(CONNECTIONS, params=params)
+            self.assertEqual(resp.status_code, 200, resp.text)
+            page = resp.json()["items"]
+            items.extend(page)
+            if len(page) < CONNECTION_LIST_LIMIT:
+                return items
+            params = {"after": page[-1]["id"]}
 
     def _credential(self, version_id: str) -> tuple[str, str, str | None]:
         with Session(self.owner) as session:
@@ -261,6 +303,169 @@ class PlatformMetaApiPostgresTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200, resp.text)
         self.assertEqual(self._credential(version_id), (workspace_id, "revoked", OPERATOR))
 
+    # -- connection reads (#102) ---------------------------------------------
+
+    def test_the_list_reads_connections_across_workspaces_as_the_api_role(self):
+        """Three connections in two Workspaces and three Meta modes, one
+        Workspace at a later epoch than when its connections were made."""
+        platform_ws = self._workspace_id("list_platform")
+        customer_ws = self._workspace_id("list_customer")
+        self._seed_workspace(customer_ws, epoch=3)
+        self.assertEqual(self._bootstrap(platform_ws).status_code, 201)
+        for meta_mode in ("customer_sandbox", "controlled_mock"):
+            self.assertEqual(self._bootstrap(customer_ws, meta_mode).status_code, 201)
+        self._bump_epoch(customer_ws)
+
+        expected = self._connections_in(platform_ws, customer_ws)
+        self.assertEqual(
+            [(row["workspace_id"], row["meta_mode"]) for row in expected],
+            [(platform_ws, "internal_validation"), (customer_ws, "customer_sandbox"),
+             (customer_ws, "controlled_mock")],
+        )
+        listed = [row for row in self._list_all() if row["workspace_id"] in (platform_ws, customer_ws)]
+        self.assertEqual(listed, expected)
+
+        # What the route read before #102: untenanted, the API sees none of them.
+        with self.api.connect() as connection:
+            self.assertEqual(connection.scalar(text(
+                "SELECT count(*) FROM public.meta_connection_records WHERE workspace_id IN (:a, :b)"
+            ), {"a": platform_ws, "b": customer_ws}), 0)
+
+    def test_the_list_pages_after_a_connection(self):
+        workspace_ids = [self._workspace_id(f"page{index}") for index in range(3)]
+        for workspace_id in workspace_ids:
+            self._seed_workspace(workspace_id, epoch=1)
+            self.assertEqual(self._bootstrap(workspace_id, "customer_sandbox").status_code, 201)
+        ours = self._connections_in(*workspace_ids)
+
+        first = self.client.get(CONNECTIONS, params={"after": ours[0]["id"], "limit": 1})
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(first.json()["items"], [ours[1]])
+        rest = self.client.get(CONNECTIONS, params={"after": ours[1]["id"], "limit": 2})
+        self.assertEqual(rest.json()["items"][0], ours[2])
+        last = self.client.get(CONNECTIONS, params={"after": ours[2]["id"]})
+        self.assertEqual(last.json()["items"], [], "the newest connection ends the list")
+
+        for limit in (0, CONNECTION_LIST_LIMIT + 1):
+            with self.subTest(limit=limit):
+                self.assertEqual(self.client.get(CONNECTIONS, params={"limit": limit}).status_code, 422)
+
+    def test_get_and_reconcile_find_a_connection_in_its_own_workspace(self):
+        platform_ws = self._workspace_id("get_platform")
+        customer_ws = self._workspace_id("get_customer")
+        self._seed_workspace(customer_ws, epoch=2)
+        created = {
+            platform_ws: self._bootstrap(platform_ws).json(),
+            customer_ws: self._bootstrap(customer_ws, "customer_sandbox").json(),
+        }
+        self._bump_epoch(customer_ws)
+
+        for workspace_id, made in created.items():
+            with self.subTest(workspace_id=workspace_id):
+                [expected] = self._connections_in(workspace_id)
+                got = self.client.get(f"{CONNECTIONS}/{made['connection_id']}")
+                self.assertEqual(got.status_code, 200, got.text)
+                self.assertEqual(got.json(), expected)
+
+                reconciled = self.client.post(f"{CONNECTIONS}/{made['connection_id']}/reconcile")
+                self.assertEqual(reconciled.status_code, 200, reconciled.text)
+                self.assertEqual(reconciled.json(), {
+                    "connection": expected, "active_binding": self._binding(made["binding_id"]),
+                })
+
+    def test_one_workspaces_binding_never_answers_for_anothers_connection(self):
+        """Two Workspaces, same Meta mode, same ad account: each connection is
+        listed and reconciled with its own Workspace's rows only."""
+        first_ws = self._workspace_id("mix_a")
+        second_ws = self._workspace_id("mix_b")
+        self._seed_workspace(first_ws, epoch=1)
+        self._seed_workspace(second_ws, epoch=7)
+        created = {
+            workspace_id: self._bootstrap(workspace_id, "customer_sandbox", "act_shared_account").json()
+            for workspace_id in (first_ws, second_ws)
+        }
+
+        listed = {row["id"]: row for row in self._list_all() if row["workspace_id"] in created}
+        for workspace_id, made in created.items():
+            with self.subTest(workspace_id=workspace_id):
+                [expected] = self._connections_in(workspace_id)
+                self.assertEqual(listed[made["connection_id"]], expected)
+
+                reconciled = self.client.post(f"{CONNECTIONS}/{made['connection_id']}/reconcile").json()
+                binding = reconciled["active_binding"]
+                self.assertEqual(
+                    (reconciled["connection"]["workspace_id"], binding["id"], binding["workspace_id"],
+                     binding["meta_connection_id"]),
+                    (workspace_id, made["binding_id"], workspace_id, made["connection_id"]),
+                )
+
+    def test_an_unknown_connection_is_a_404_and_an_unknown_cursor_a_400(self):
+        missing = f"{CONNECTIONS}/mcon_does_not_exist"
+        for resp in (self.client.get(missing), self.client.post(f"{missing}/reconcile")):
+            with self.subTest(path=resp.request.url.path):
+                self.assertEqual(resp.status_code, 404, resp.text)
+                self.assertEqual(resp.json()["detail"], "Meta connection not found")
+
+        resp = self.client.get(CONNECTIONS, params={"after": "mcon_does_not_exist"})
+        self.assertEqual(resp.status_code, 400, resp.text)
+        self.assertEqual(resp.json()["code"], "invalid_cursor")
+
+    def test_the_connection_functions_return_only_where_a_connection_lives(self):
+        workspace_id = self._workspace_id("where")
+        self._seed_workspace(workspace_id, epoch=6)
+        connection_id = self._bootstrap(workspace_id, "controlled_mock").json()["connection_id"]
+        with self.owner.connect() as connection:
+            before = connection.scalar(text(
+                "SELECT id FROM public.meta_connection_records "
+                " WHERE (created_at, id) < (SELECT created_at, id FROM public.meta_connection_records "
+                "                            WHERE id = :id) "
+                " ORDER BY created_at DESC, id DESC LIMIT 1"
+            ), {"id": connection_id})
+
+        with self.api.connect() as connection:
+            owner_of = text("SELECT * FROM public.marketai_meta_connection_workspace_v1(:id)")
+            row = connection.execute(owner_of, {"id": connection_id}).one()
+            self.assertEqual(row._asdict(), {"workspace_id": workspace_id, "meta_mode": "controlled_mock"})
+            self.assertIsNone(connection.execute(owner_of, {"id": "mcon_does_not_exist"}).first())
+
+            listed = text("SELECT * FROM public.marketai_meta_connection_ids_v1(:after, :limit)")
+            row = connection.execute(listed, {"after": before, "limit": 1}).one()
+            self.assertEqual(row._asdict(), {
+                "workspace_id": workspace_id, "meta_mode": "controlled_mock",
+                "authorization_epoch": 6, "is_platform_workspace": False,
+                "connection_id": connection_id,
+            })
+            for limit in (0, -1, None):
+                with self.subTest(limit=limit):
+                    self.assertEqual(connection.execute(listed, {"after": None, "limit": limit}).all(), [])
+            self.assertEqual(
+                connection.execute(listed, {"after": "mcon_does_not_exist", "limit": 5}).all(), [],
+            )
+
+    def test_the_list_function_returns_at_most_500_rows(self):
+        """Inside one owner transaction that is rolled back, so the shared
+        database keeps no extra connections."""
+        workspace_id = self._workspace_id("cap")
+        with self.owner.connect() as connection:
+            transaction = connection.begin()
+            try:
+                connection.execute(text(
+                    "INSERT INTO public.workspaces (id, name, default_currency, created_at, lifecycle, "
+                    "budget_currency) VALUES (:ws, :ws, 'USD', now(), 'active', 'USD')"
+                ), {"ws": workspace_id})
+                connection.execute(text(
+                    "INSERT INTO public.meta_connection_records "
+                    "(id, workspace_id, meta_mode, ad_account_id, state, created_at, updated_at, retired_at) "
+                    "SELECT :ws || '_' || n, :ws, 'customer_sandbox', 'act_acme_charge', 'retired', "
+                    "       now(), now(), now() FROM generate_series(1, 501) AS n"
+                ), {"ws": workspace_id})
+                self.assertEqual(connection.scalar(text(
+                    "SELECT count(*) FROM public.marketai_meta_connection_ids_v1(NULL, 100000)"
+                )), 500)
+            finally:
+                transaction.rollback()
+        self.assertIsNone(self._workspace(workspace_id))
+
     # -- the functions and the grants ---------------------------------------
 
     def test_the_owner_function_returns_only_the_workspace_id(self):
@@ -274,7 +479,14 @@ class PlatformMetaApiPostgresTests(unittest.TestCase):
     def test_only_the_api_may_execute_the_functions(self):
         """Each runs as the owner with an empty search_path, PUBLIC has no
         EXECUTE, and the Worker and Read-only roles are refused."""
-        expected = {CREATE: ("v", "boolean"), OWNER_OF: ("s", "text")}
+        expected = {
+            CREATE: ("v", "boolean"),
+            OWNER_OF: ("s", "text"),
+            CONNECTION_IDS: ("s", "TABLE(workspace_id character varying, meta_mode character varying, "
+                                  "authorization_epoch integer, is_platform_workspace boolean, "
+                                  "connection_id character varying)"),
+            CONNECTION_OWNER: ("s", "TABLE(workspace_id character varying, meta_mode character varying)"),
+        }
         with self.owner.connect() as connection:
             for signature, (volatility, result) in expected.items():
                 with self.subTest(signature=signature):
@@ -302,6 +514,8 @@ class PlatformMetaApiPostgresTests(unittest.TestCase):
         queries = (
             "SELECT public.marketai_create_platform_workspace_v1('ws_meta_platform_pg_refused', 'x')",
             "SELECT public.marketai_credential_version_workspace_v1('cv_any')",
+            "SELECT * FROM public.marketai_meta_connection_ids_v1(NULL, 10)",
+            "SELECT * FROM public.marketai_meta_connection_workspace_v1('mcon_any')",
         )
         for engine in engines:
             for query in queries:
