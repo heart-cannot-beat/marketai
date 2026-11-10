@@ -44,10 +44,11 @@ per Task 12):
   ``_POLICY_JSON_INT_FIELDS`` below (no earlier task defined this mapping);
   Target threshold overrides are not modeled on ``ScaleTargetVersionRecord``
   and are always frozen as ``None``;
-* ``DeliveryConfigSnapshot.status_history`` is always ``()`` and
-  ``diagnostic_state`` defaults to ``NONE_`` -- no earlier task added a
-  status-history or diagnostic-state column to
-  ``ScaleDeliveryConfigSourceRecord``;
+* up to snapshot schema v2, ``DeliveryConfigSnapshot.status_history`` is
+  always ``()`` and ``diagnostic_state`` is ``NONE_``: the source record had
+  no such columns. From v3 (#109) both come from the delivery-configuration
+  source record the collector writes (``app.scale.collector``); a v1/v2
+  snapshot still assembles under its own rule, so its hash stays valid;
 * `MetricContractRef.observation_contract_version_id` reuses
   ``ScaleMetricSemanticContractSetMemberRecord.observation_contract_generation``
   -- that record only retains the wrapped #23 physical contract generation
@@ -61,9 +62,10 @@ from __future__ import annotations
 
 import hmac
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -80,6 +82,7 @@ from app.scale._contracts import (
     DataQualityItem,
     DataQualityLocator,
     DeliveryConfigSnapshot,
+    DeliveryStatusEvent,
     ExactWindowMetrics,
     MetricContractRef,
     MetricWindow,
@@ -134,8 +137,15 @@ from app.platform.runtime_role import WORKER_ROLE, runs_as
 # v2 (Issue #57): window days before the Episode's `started_local_day` are
 # sealed as `before_episode` instead of a blocking `daily_slot_missing`.
 # Snapshots sealed as v1 keep v1 assembly rules (see `_before_episode_cutoff`).
-CANONICAL_SCHEMA_VERSION = "scale-snapshot-v2"
+# v3 (Issue #109): the delivery configuration carries the source record's
+# status history and delivery diagnostic; sealing records
+# `freshness_slo_exceeded` (blocking unless the Policy permits it as a
+# warning) when the run's freshness reference is more than the Policy's lag
+# past the manifest's last sync, and freezes each quality issue once. v1/v2
+# snapshots keep their rules (see `_has_delivery_history`).
+CANONICAL_SCHEMA_VERSION = "scale-snapshot-v3"
 _SNAPSHOT_SCHEMA_V1 = "scale-snapshot-v1"
+_SNAPSHOT_SCHEMA_V2 = "scale-snapshot-v2"
 SNAPSHOT_HASH_DOMAIN = "scale-evidence-snapshot-v1"
 CLAIM_HASH_DOMAIN = "scale-snapshot-claim-v1"
 CONTRACT_SET_HASH_DOMAIN = "scale-metric-contract-set-v1"
@@ -503,7 +513,9 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
         )
         quality_issues += iss
 
-        delivery_config, delivery_source = _build_delivery_config(session, item_by_key)
+        delivery_config, delivery_source = _build_delivery_config(
+            session, item_by_key, CANONICAL_SCHEMA_VERSION, episode.timezone_name,
+        )
         if delivery_source is None:
             raise SnapshotSealingError("delivery_config_missing")
 
@@ -514,6 +526,14 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
             select(ScaleSourceQualityIssueRecord).filter_by(manifest_id=manifest.id)
         ).scalars().all():
             quality_issues.append(_quality_item_from_source_issue(source_issue))
+
+        if _has_delivery_history(CANONICAL_SCHEMA_VERSION):
+            stale = _freshness_issue(freshness_reference_at, last_sync_at, policy)
+            if stale is not None:
+                quality_issues.append(stale)
+            # A manifest issue the sealed rules also derive (an unavailable
+            # exact window) is one issue, not two.
+            quality_issues = list({_quality_sort_key(item): item for item in quality_issues}.values())
 
         quality_issues = sorted(quality_issues, key=_quality_sort_key)
 
@@ -744,6 +764,101 @@ def _quality_sort_key(item: DataQualityItem):
     )
 
 
+def _has_delivery_history(schema_version: str) -> bool:
+    """Whether snapshots of this schema freeze the delivery status history,
+    the delivery diagnostic, and the seal-time freshness check (v3, #109).
+
+    Sealing and assembly both call this, so a v1/v2 snapshot reassembles
+    with the empty history and ``NONE_`` diagnostic it was hashed with,
+    whatever the source record holds today.
+    """
+    return schema_version not in (_SNAPSHOT_SCHEMA_V1, _SNAPSHOT_SCHEMA_V2)
+
+
+def _freshness_issue(
+    freshness_reference_at: datetime, last_sync_at: datetime, policy: ScalePolicyVersionRecord,
+) -> DataQualityItem | None:
+    """Contract §8: the latest successful sync is at most the Policy's lag
+    before the run's frozen freshness reference.
+
+    Beyond it the snapshot carries ``freshness_slo_exceeded``: blocking, as
+    §8 requires, unless the frozen Policy explicitly permits the code as a
+    warning (``quality_warning_permitted_codes``, "whether a warning permits
+    evaluation is the Policy's decision"). A live run's reference is its
+    manifest's ``terminal_at``, so this fires only for a later reevaluation
+    of older evidence.
+    """
+    lag = timedelta(hours=policy.freshness_floor_maximum_lag_hours)
+    if freshness_reference_at - last_sync_at <= lag:
+        return None
+    permitted = (policy.signal_thresholds or {}).get("quality_warning_permitted_codes", ())
+    impact = (
+        DataQualityImpact.WARNING
+        if DataQualityIssueCode.FRESHNESS_SLO_EXCEEDED.value in permitted
+        else DataQualityImpact.BLOCKING
+    )
+    return DataQualityItem(
+        code=DataQualityIssueCode.FRESHNESS_SLO_EXCEEDED,
+        impact=impact,
+        locator=DataQualityLocator(
+            contract_type=MetricContractType.DAILY,
+            window_role=None,
+            local_date=None,
+            breakdown_type=None,
+            segment_key=None,
+            source_evidence_hash="",
+        ),
+        details=(),
+    )
+
+
+def _status_event_at(local_day: date, timezone_name: str) -> datetime:
+    """The instant a day's configuration status stands for: local noon of
+    that day in the Episode's time zone. Kept in that zone so the
+    evaluator's ``observed_at.date()`` is the account-local day."""
+    return datetime.combine(local_day, time(12), tzinfo=ZoneInfo(timezone_name))
+
+
+def _delivery_config_snapshot(
+    row: ScaleDeliveryConfigSourceRecord, schema_version: str, timezone_name: str,
+) -> DeliveryConfigSnapshot:
+    if _has_delivery_history(schema_version):
+        status_history = tuple(
+            DeliveryStatusEvent(
+                observed_at=_status_event_at(date.fromisoformat(entry["local_day"]), timezone_name),
+                entity_level=str(entry["entity_level"]),
+                status=str(entry["status"]),
+            )
+            for entry in sorted(
+                row.status_history or [],
+                key=lambda entry: (entry["local_day"], entry["entity_level"], entry["status"]),
+            )
+        )
+        diagnostic_state = DeliveryDiagnosticState(row.diagnostic_state)
+        detail: list[CanonicalKeyValue] = []
+        if row.diagnostic_observed_at is not None:
+            detail.append(CanonicalKeyValue(
+                key="observed_at",
+                value=_ensure_utc(row.diagnostic_observed_at).astimezone(timezone.utc),
+            ))
+        if row.diagnostic_source_field:
+            detail.append(CanonicalKeyValue(key="source_field", value=row.diagnostic_source_field))
+        diagnostic_detail = tuple(detail)
+    else:
+        status_history, diagnostic_state, diagnostic_detail = (), DeliveryDiagnosticState.NONE_, ()
+    return DeliveryConfigSnapshot(
+        baseline_configuration_hash=row.comparability_hash,
+        current_configuration_hash=row.comparability_hash,
+        effective_campaign_status=row.campaign_status,
+        effective_ad_set_status=row.ad_set_status,
+        effective_ad_status=row.ad_status,
+        status_history=status_history,
+        attribution_setting=row.attribution_setting,
+        diagnostic_state=diagnostic_state,
+        diagnostic_detail=diagnostic_detail,
+    )
+
+
 def _before_episode_cutoff(schema_version: str, episode: ScaleEpisodeRecord) -> date | None:
     """The first local day that belongs to the Episode under the given
     snapshot schema, or ``None`` when that schema has no ``before_episode``
@@ -876,7 +991,10 @@ def _build_exact_window(
 
 
 def _build_delivery_config(
-    session: Session, item_by_key: dict[tuple, ScaleManifestItemRecord],
+    session: Session,
+    item_by_key: dict[tuple, ScaleManifestItemRecord],
+    schema_version: str,
+    timezone_name: str,
 ) -> tuple[DeliveryConfigSnapshot | None, ScaleDeliveryConfigSourceRecord | None]:
     item = item_by_key.get(
         (MetricContractType.DELIVERY_CONFIGURATION.value, None, None, None)
@@ -884,18 +1002,7 @@ def _build_delivery_config(
     if item is None or item.state != "fulfilled":
         return None, None
     row = session.get(ScaleDeliveryConfigSourceRecord, item.source_record_id)
-    snapshot = DeliveryConfigSnapshot(
-        baseline_configuration_hash=row.comparability_hash,
-        current_configuration_hash=row.comparability_hash,
-        effective_campaign_status=row.campaign_status,
-        effective_ad_set_status=row.ad_set_status,
-        effective_ad_status=row.ad_status,
-        status_history=(),
-        attribution_setting=row.attribution_setting,
-        diagnostic_state=DeliveryDiagnosticState.NONE_,
-        diagnostic_detail=(),
-    )
-    return snapshot, row
+    return _delivery_config_snapshot(row, schema_version, timezone_name), row
 
 
 def _build_breakdowns(
@@ -1299,7 +1406,9 @@ def assemble_snapshot(
         current_exact = _assemble_exact_window(session, link_by_key, WindowRole.CURRENT_7D)
         baseline_exact = _assemble_exact_window(session, link_by_key, WindowRole.BASELINE_7D)
         rolling_exact = _assemble_exact_window(session, link_by_key, WindowRole.ROLLING_14D)
-        delivery_config = _assemble_delivery_config(session, link_by_key)
+        delivery_config = _assemble_delivery_config(
+            session, link_by_key, snapshot_row.canonical_schema_version, snapshot_row.timezone_name,
+        )
     except SnapshotAssemblyError:
         raise
     except Exception as exc:  # defensive: any missing-child lookup failure
@@ -1466,7 +1575,10 @@ def _assemble_exact_window(
 
 
 def _assemble_delivery_config(
-    session: Session, link_by_key: dict[tuple, ScaleEvidenceSourceLinkRecord],
+    session: Session,
+    link_by_key: dict[tuple, ScaleEvidenceSourceLinkRecord],
+    schema_version: str,
+    timezone_name: str,
 ) -> DeliveryConfigSnapshot:
     link = link_by_key.get((MetricContractType.DELIVERY_CONFIGURATION.value, None, None, None))
     if link is None:
@@ -1474,17 +1586,7 @@ def _assemble_delivery_config(
     row = session.get(ScaleDeliveryConfigSourceRecord, link.source_record_id)
     if row is None:
         raise SnapshotAssemblyError("missing_child", "delivery_configuration")
-    return DeliveryConfigSnapshot(
-        baseline_configuration_hash=row.comparability_hash,
-        current_configuration_hash=row.comparability_hash,
-        effective_campaign_status=row.campaign_status,
-        effective_ad_set_status=row.ad_set_status,
-        effective_ad_status=row.ad_status,
-        status_history=(),
-        attribution_setting=row.attribution_setting,
-        diagnostic_state=DeliveryDiagnosticState.NONE_,
-        diagnostic_detail=(),
-    )
+    return _delivery_config_snapshot(row, schema_version, timezone_name)
 
 
 def _assemble_breakdowns(session: Session, snapshot_id: str) -> tuple[BreakdownSegment, ...]:

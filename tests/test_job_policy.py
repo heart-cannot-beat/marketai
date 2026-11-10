@@ -133,7 +133,9 @@ class TestRegistryCoversEveryJobType(unittest.TestCase):
         from app.scale.worker import ScaleWorkerRuntime
 
         dispatched = _dispatched_types(ScaleWorkerRuntime)
-        self.assertEqual(dispatched, {"scale_evaluate", "scale_advice_expire", "scale_export"})
+        self.assertEqual(
+            dispatched, {"scale_evaluate", "scale_advice_expire", "scale_collect_sources", "scale_export"},
+        )
         self.assertEqual(sorted(dispatched - set(JOB_POLICIES)), [])
 
     def test_every_literal_enqueue_point_names_a_registered_type(self):

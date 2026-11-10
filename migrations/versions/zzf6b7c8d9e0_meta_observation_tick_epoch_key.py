@@ -1,7 +1,7 @@
 """Key each observation tick by its authorization epoch too (#101 S1 follow-up).
 
 Revision ID: zzf6b7c8d9e0
-Revises: zze4f5a6b7c8
+Revises: zzf5a6b7c8d9
 
 ``marketai_dispatch_meta_observation_ticks_v1`` (zze4f5a6b7c8) inserts one
 ``meta_observation_tick`` Job per ``(connection, next_fire_at)``, keyed
@@ -41,7 +41,7 @@ from alembic import op
 
 
 revision = "zzf6b7c8d9e0"
-down_revision = "zze4f5a6b7c8"
+down_revision = "zzf5a6b7c8d9"
 branch_labels = None
 depends_on = None
 

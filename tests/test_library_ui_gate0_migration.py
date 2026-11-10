@@ -142,6 +142,7 @@ class Gate0MigrationTests(unittest.TestCase):
         # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
         # zzd3a4b5c6d7 (platform Meta connection reads across Workspaces, #102) and
         # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107) and
+        # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109) and
         # zzf6b7c8d9e0 (observation ticks keyed by authorization epoch, #101).
         self.assertEqual(revision, "zzf6b7c8d9e0")
 
