@@ -61,9 +61,13 @@ lookback whose configuration read succeeded -- and the delivery diagnostic
 Meta returned (``learning_stage_info``), both sealed into snapshot schema v3
 (``app.scale.evidence``).
 
-Out of scope here (S4, #110): building an evaluation run or enqueueing
-``scale_evaluate``. The fallback Advice-expiry sweep of #111 hooks into
-:func:`run_source_collection` after the Episode loop.
+A complete manifest also requests the Episode's ``live`` evaluation run and
+enqueues ``scale_evaluate`` in the same transaction
+(:func:`app.scale.live_trigger.trigger_live_evaluation`, #110): the
+manifest, the run and the Job commit together, and a replayed collection,
+which finds the manifest by its key, triggers nothing again. The fallback
+Advice-expiry sweep of #111 hooks into :func:`run_source_collection` after
+the Episode loop.
 
 ADR 0017: this module reads Meta rows and parses stored pages; it imports
 neither ``app.meta.credential_resolution`` nor ``app.adapters.meta``.
@@ -123,6 +127,7 @@ from app.platform.jobs import enqueue_in_session
 from app.platform.runtime_role import WORKER_ROLE, runs_as
 from app.platform.tenancy import VALID_META_MODES, TenantContext
 from app.scale._canonical import canonical_hash
+from app.scale.live_trigger import trigger_live_evaluation
 from app.scale.models import (
     ScaleBreakdownSourceRecord,
     ScaleDailyMetricSourceRecord,
@@ -237,6 +242,10 @@ class CollectedManifest:
     state: str
     source_revision: int
     replayed: bool
+    #: The live run a complete manifest requested, or why it requested none
+    #: (``app.scale.live_trigger``); both ``None`` on a replay.
+    evaluation_run_id: str | None = None
+    evaluation_skipped: str | None = None
 
 
 @dataclass(frozen=True)
@@ -506,19 +515,36 @@ def collect_episode_sources(
         return None
 
     assessment = _assess(session, context, episode, connection_id, target_date, run_generation, cache)
+    trigger = None
     try:
+        # One unit (#110): the manifest and, when it is complete, its live run
+        # and Job commit together or not at all.
         with session.begin_nested():
             manifest = _write(session, context, episode, assessment, target_date, key)
+            if manifest.state == "complete":
+                trigger = trigger_live_evaluation(
+                    session, context, enrollment=enrollment, episode=episode, manifest=manifest,
+                    triggering_sync_run_id=_last_run_id(assessment),
+                )
     except IntegrityError:
         # A concurrent collection of the same batch committed first.
         existing = _manifest_by_key(session, context, episode.id, key)
         if existing is None:
             raise
         return _collected(enrollment.id, existing, replayed=True)
-    return _collected(enrollment.id, manifest, replayed=False)
+    return _collected(enrollment.id, manifest, replayed=False,
+                      evaluation_run_id=trigger.run_id if trigger else None,
+                      evaluation_skipped=trigger.skipped if trigger else None)
 
 
-def _collected(enrollment_id: str, manifest: ScaleEvidenceSourceManifestRecord, *, replayed: bool) -> CollectedManifest:
+def _collected(
+    enrollment_id: str,
+    manifest: ScaleEvidenceSourceManifestRecord,
+    *,
+    replayed: bool,
+    evaluation_run_id: str | None = None,
+    evaluation_skipped: str | None = None,
+) -> CollectedManifest:
     return CollectedManifest(
         enrollment_id=enrollment_id,
         episode_id=manifest.episode_id,
@@ -526,7 +552,16 @@ def _collected(enrollment_id: str, manifest: ScaleEvidenceSourceManifestRecord, 
         state=manifest.state,
         source_revision=manifest.source_revision,
         replayed=replayed,
+        evaluation_run_id=evaluation_run_id,
+        evaluation_skipped=evaluation_skipped,
     )
+
+
+def _last_run_id(found: _Assessment) -> str | None:
+    """The sync run whose completion is the manifest's ``terminal_at``: the
+    run that triggered the evaluation (spec §3.8)."""
+    finished = [(run.completed_at, run.run_id) for run in found.runs if run.completed_at is not None]
+    return max(finished)[1] if finished else None
 
 
 def _manifest_by_key(

@@ -451,6 +451,25 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_scale_source_collection_pg -v
 
+      # #101's acceptance (#110, S4): a customer_sandbox Enrollment activated
+      # through the API (candidate, draft, preview, activate), then fourteen
+      # days with the slot set into the past and only the Worker running.
+      # Each day's complete manifest requests its live run and enqueues
+      # scale_evaluate in the same transaction; the API reads warming on days
+      # 1-13 and monitorable from day 14, with the Episode activation opened.
+      # Replaying the tick, batch, collection and evaluation Jobs adds
+      # nothing; a Worker killed after Phase C retries to the recorded
+      # outcome; a blocked day gets no run; overlapping days wait instead of
+      # failing; a paused Enrollment gets no manifest or run; Workspace B and
+      # the controlled_mock context read nothing.
+      - name: Live Scale evaluation runs end to end under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_live_evaluation_pg -v
+
       # SQLite cannot see a missing grant (#284): every competitor write
       # command runs here as the role that serves it in production.
       - name: Competitor API and Worker writes hold under the real roles

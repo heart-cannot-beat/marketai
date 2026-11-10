@@ -301,10 +301,11 @@ class TestConfigurationRolloverDuringEvaluation(OrchestrationTestBase):
     A genuinely *second live run* against the very same Episode cannot
     model this race: Phase A's own fencing (``seal_snapshot`` sets
     ``episode.phase_run_id`` to the sealing run's id and Phase C is the
-    only step that clears it) means a second run's own Phase A would
-    itself fail with ``failed_integrity`` while the first run still owns
-    the fence -- proving that specific double-dispatch race is already
-    closed by design, verified separately below. The *actual* rollover
+    only step that clears it) means a second run's own Phase A is
+    refused with ``episode_phase_conflict`` while the first run still owns
+    the fence -- deferred untouched, so its Job retries once the fence is
+    released (#110) -- proving that specific double-dispatch race is
+    already closed by design, verified separately below. The *actual* rollover
     race this class targets is a different actor entirely: a completed
     evaluation for a *later* day, dispatched and fully resolved (Phase
     A/B/C, releasing the fence) before this run's Phase B finishes,
@@ -336,18 +337,23 @@ class TestConfigurationRolloverDuringEvaluation(OrchestrationTestBase):
     def test_a_second_live_run_against_the_same_episode_is_fenced_not_raced(self):
         """Positive control for the docstring's claim: dispatching the
         second run for real, synchronously, while the first still holds
-        the Episode's ``phase_run_id`` fence, fails integrity rather than
-        silently interleaving -- exactly the corruption the fence exists
-        to prevent."""
+        the Episode's ``phase_run_id`` fence, is refused before it seals
+        anything rather than silently interleaving -- exactly the
+        corruption the fence exists to prevent. It is deferred, not failed
+        (#110): the run stays ``requested`` for its Job to retry."""
         first_outcome = service_module._phase_a(self.session, self.context, self.run.id)
         self.assertIsInstance(first_outcome, tuple)  # sealed, not yet terminal
 
-        second_outcome = service_module.run_scale_evaluation(self.session, self.context, self.rollover_run.id)
-        self.assertEqual(second_outcome.kind, RunOutcomeKind.FAILED_INTEGRITY)
+        with self.assertRaises(service_module.ScaleEvaluationDeferred) as deferred:
+            service_module.run_scale_evaluation(self.session, self.context, self.rollover_run.id)
+        self.assertEqual(deferred.exception.code, "episode_phase_conflict")
 
         self.session.refresh(self.rollover_run)
-        self.assertEqual(self.rollover_run.run_state, "failed_integrity")
-        self.assertIsNone(self.rollover_run.evaluation_id)
+        self.assertEqual((self.rollover_run.run_state, self.rollover_run.snapshot_id,
+                          self.rollover_run.outcome_kind, self.rollover_run.evaluation_id),
+                         ("requested", None, None, None))
+        self.session.refresh(self.episode)
+        self.assertEqual(self.episode.phase_run_id, self.run.id, "the first run still holds the fence")
 
     def test_concurrent_rollover_during_phase_b_is_detected_by_phase_c(self):
         original_evaluate = service_module.evaluate_scale

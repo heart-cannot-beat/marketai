@@ -321,6 +321,7 @@ field, keyed by severity and category:
 | `info` | `reconciliation` | Lease recovery or operation fold completed. |
 | `info` | `shutdown` | Worker drain started or completed. |
 | `info` | `retention` | Retention sweep deleted operational artifacts. |
+| `critical` | `scale_evaluation` | A Scale evaluation run holding its Episode stayed unfinished after two redrives; the Episode gets no new live run until it is resolved. |
 
 ## Recovery Signals
 
@@ -330,3 +331,4 @@ field, keyed by severity and category:
 | No heartbeat renewal | Worker process dead or frozen | Check Railway logs; the lease will expire and recovery will classify the job. |
 | `uncertain_state` alert | Paid call outcome unknown | Consult recovery matrix; do not auto-retry. |
 | Reconciliation alert with `uncertain > 0` | Lease-expired jobs could not be safely retried | Same as above. |
+| `scale_evaluation` alert | The run named in `details.evaluation_run_id` holds its Episode (`phase_run_id`) and every `scale_evaluate` Job for it, two redrives included, ended without finishing it | Read the failed Jobs' `error_detail` for the cause and fix it; then enqueue the run once more (`enqueue_scale_evaluation` with the next `redrive` number). The next collection then requests the Episode's live run again. |

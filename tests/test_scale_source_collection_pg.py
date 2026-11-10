@@ -61,7 +61,7 @@ from app.meta.observation import ensure_observation_schedule, observation_target
 from app.platform.http_identity import request_tenant_context
 from app.platform.operations import OperationRecord
 from app.platform.tenancy import TenantContext
-from app.scale import collector
+from app.scale import collector, live_trigger
 from app.scale.delivery_targets import ensure_metric_contract_set
 from app.scale.models import (
     ScaleDailyMetricSourceRecord,
@@ -107,6 +107,11 @@ class ScaleSourceCollectionPostgresTests(unittest.TestCase):
         self.addCleanup(self.client.close)
         self.workspaces: list[str] = []
         self.addCleanup(self._quiesce)
+        # Collection alone: a complete manifest requests no live evaluation
+        # without an eligible Policy (#110, tests/test_scale_live_evaluation_pg.py).
+        patcher = patch.object(live_trigger, "eligible_live_policy", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @contextmanager
     def _as(self, index: int):

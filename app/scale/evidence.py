@@ -401,7 +401,9 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     Scope for Task 10 (see module docstring): rejects a run whose frozen
     source manifest is not ``complete`` without mutating the run record
     (pitfall #2 -- the run's shape CHECK forbids a `blocked` run_state
-    without a `snapshot_id`; terminalizing the run is Task 12's job).
+    without a `snapshot_id`; terminalizing the run is Task 12's job). A run
+    whose Episode another unfinished run holds is refused the same way, as
+    ``episode_phase_conflict``, before anything is sealed (#110).
     """
     run = session.execute(
         _for_update(
@@ -443,6 +445,12 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     ).scalar_one_or_none()
     if episode is None:
         raise SnapshotSealingError("episode_not_found", run.episode_id)
+    if episode.phase_run_id is not None and episode.phase_run_id != run.id:
+        # Another run holds the Episode until its Phase C releases it (spec
+        # §3.4 step 8). Refused before anything is sealed (#110): a snapshot
+        # sealed now would freeze the predecessor that run is about to
+        # replace, and the caller retries this run once the phase is free.
+        raise SnapshotSealingError("episode_phase_conflict", episode.id)
 
     enrollment = session.execute(
         _for_update(
@@ -737,8 +745,7 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     run.run_state = "snapshot_sealed"
     run.updated_at = utcnow()
 
-    if episode.phase_run_id is not None and episode.phase_run_id != run.id:
-        raise SnapshotSealingError("episode_phase_conflict", episode.id)
+    # The Episode row is locked above, so the phase checked there is still free.
     episode.phase = "evaluating"
     episode.phase_run_id = run.id
     episode.revision += 1

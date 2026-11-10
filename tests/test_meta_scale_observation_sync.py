@@ -81,6 +81,7 @@ from tests.support.queue_hygiene import cancel_workspace_jobs, quarantine_foreig
 from tests.support.scale_contract_set import (
     create_connection_through_api,
     delivery_target_request,
+    sandbox_ad_hierarchy,
     seed_target_references,
 )
 
@@ -226,13 +227,15 @@ class ContractSetEstablishment(ScaleObservationTestCase):
     def test_a_delivery_target_binds_to_the_sets_configuration_generation(self):
         connection_id = self._connection()
         context = replace(self.owner, meta_mode=SANDBOX)
+        [ad_id] = seed_sandbox_ads(worker_context(self.workspace_id, SANDBOX), connection_id, 1)
         with platform_session() as session:
             references = seed_target_references(session, self.workspace_id, "dt")
             scenario_id = session.scalar(select(ScenarioVersionRecord.id).where(
                 ScenarioVersionRecord.meta_connection_id == connection_id))
+            hierarchy = sandbox_ad_hierarchy(session, workspace_id=self.workspace_id, meta_mode=SANDBOX,
+                                             connection_id=connection_id, ad_id=ad_id, as_of=utcnow().date())
         request = delivery_target_request(connection_id=connection_id, scenario_version_id=scenario_id,
-                                          meta_mode=SANDBOX, ad_remote_id="ad_fake_acme_charge_dt",
-                                          references=references)
+                                          meta_mode=SANDBOX, hierarchy=hierarchy, references=references)
         with entered_as(API_ROLE), tenant_session(context) as session:
             target, contract_set = create_delivery_target_with_contract_set(session, context, request)
             self.assertEqual(target.contract_generation_id, contract_set.delivery_configuration_generation_id)
