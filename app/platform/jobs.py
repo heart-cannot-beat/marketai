@@ -119,16 +119,32 @@ def enqueue_in_session(
     resource_id: str = "",
     safe_to_retry_after_crash: bool | None = None,
     max_attempts: int = 3,
+    not_before: datetime | None = None,
 ) -> JobRecord:
     """Persist one Job, or return the one ``idempotency_key`` already named.
 
     ``safe_to_retry_after_crash`` comes from ``app.platform.job_policy``:
     leave it ``None``, or pass the registered value. A type the registry
     does not list is refused before anything is written.
+
+    ``not_before`` delays the first claim (#111): it is written to
+    ``next_attempt_at``, which both claim paths already filter on in the
+    selecting query (``marketai_claim_next_job_v2`` on PostgreSQL,
+    :func:`claim_next` on SQLite). A Job that is not yet due is never
+    leased, so it neither holds up the Jobs queued after it nor makes a
+    Worker spin. It is not a lease or a deadline: a stale authorization
+    epoch still rejects the Job at the next claim, due or not. When the key
+    already names a Job, that Job is returned as it is.
     """
     safe_to_retry_after_crash = resolve_safe_to_retry_after_crash(
         job_type, safe_to_retry_after_crash
     )
+    if not_before is not None:
+        if not_before.tzinfo is None:
+            raise ValueError("not_before must be timezone-aware")
+        # SQLite stores the wall-clock value without its offset; UTC keeps
+        # it comparable with the claim's own UTC clock.
+        not_before = not_before.astimezone(timezone.utc)
     bound = current_context(session)
     if bound != context:
         raise ValueError("the job context must match the transaction's TenantContext")
@@ -158,22 +174,26 @@ def enqueue_in_session(
         state="queued",
         safe_to_retry_after_crash=safe_to_retry_after_crash,
         max_attempts=max_attempts,
+        next_attempt_at=not_before,
     )
     session.add(job)
     session.flush()
+    details: dict[str, Any] = {
+        "job_type": job_type,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "idempotency_key_sha256": hashlib.sha256(
+            idempotency_key.encode("utf-8")
+        ).hexdigest(),
+    }
+    if not_before is not None:
+        details["not_before"] = not_before.isoformat()
     append_event(
         session,
         event_type="job.enqueued",
         resource_type="job",
         resource_id=job.id,
-        details={
-            "job_type": job_type,
-            "resource_type": resource_type,
-            "resource_id": resource_id,
-            "idempotency_key_sha256": hashlib.sha256(
-                idempotency_key.encode("utf-8")
-            ).hexdigest(),
-        },
+        details=details,
     )
     return job
 
