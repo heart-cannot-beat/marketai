@@ -72,9 +72,9 @@ def _api_and_worker_writes_have_postgres_grants():
     """SQLite has no database roles, so a write the PostgreSQL API or Worker
     role may not make passes here and fails in production (#46). Every HTTP
     request runs as the API role and every Worker entry as the Worker role;
-    each INSERT, UPDATE and DELETE they send is checked against
-    deploy/postgres/domain-tenant-roles.sql, and a missing grant fails the
-    test that first made the write, at its teardown (#59).
+    each INSERT, UPDATE, DELETE, SELECT and row lock they send is checked
+    against deploy/postgres/domain-tenant-roles.sql, and a missing grant
+    fails the test that first sent it, at its teardown (#59).
     ``MARKETAI_GRANT_GUARD=off`` turns the check off;
     ``MARKETAI_GRANT_GUARD_REPORT=<path>`` writes what it saw as JSON."""
     from tests.support.grant_guard import guard_from_environment, mark_api_requests
@@ -97,8 +97,8 @@ def _api_and_worker_writes_have_postgres_grants():
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Fail the teardown of the test that first made a write PostgreSQL will
-    refuse, whatever the test itself did with the error."""
+    """Fail the teardown of the test that first sent a statement PostgreSQL
+    will refuse, whatever the test itself did with the error."""
     outcome = yield
     guard = _grant_guard["guard"]
     if guard is None or call.when != "teardown":

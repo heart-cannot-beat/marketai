@@ -249,13 +249,10 @@ class ReservationBook:
     def _lock_guardrail(
         self, session: Session, workspace_id: str,
     ) -> SpendGuardrailRecord:
-        dialect = session.get_bind().dialect.name
-        query = session.query(SpendGuardrailRecord).filter_by(
+        # SQLite leaves the lock out of the SQL; the guard (#59) still sees it.
+        guardrail = session.query(SpendGuardrailRecord).filter_by(
             workspace_id=workspace_id,
-        )
-        if dialect == "postgresql":
-            query = query.with_for_update()
-        guardrail = query.one()
+        ).with_for_update().one()
         return guardrail
 
     def _check_guardrails(

@@ -107,12 +107,11 @@ def _require_member(ctx: TenantContext) -> None:
 
 
 def lock_scan(session, ctx: TenantContext, scan_id: str) -> CompetitorScanRecord | None:
-    """The scan row, locked for this transaction (PostgreSQL; SQLite has one writer)."""
+    """The scan row, locked for this transaction (PostgreSQL; SQLite has one
+    writer, and SQLAlchemy leaves the lock out of its SQL)."""
     statement = select(CompetitorScanRecord).where(
         CompetitorScanRecord.workspace_id == ctx.workspace_id, CompetitorScanRecord.id == scan_id,
-    )
-    if session.get_bind().dialect.name == "postgresql":
-        statement = statement.with_for_update()
+    ).with_for_update()
     return session.scalars(statement).one_or_none()
 
 
@@ -1393,7 +1392,7 @@ def recluster_scan(ctx: TenantContext, scan_id: str, *, idempotency_key: str) ->
 def _product_for(session, ctx: TenantContext, product_id: str, *, lock: bool = False) -> ProductRecord:
     statement = select(ProductRecord).where(ProductRecord.workspace_id == ctx.workspace_id,
                                             ProductRecord.id == product_id)
-    if lock and session.get_bind().dialect.name == "postgresql":
+    if lock:
         statement = statement.with_for_update()
     product = session.scalars(statement).one_or_none()
     if product is None:
