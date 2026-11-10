@@ -7,9 +7,12 @@ ManualFactSet's ``data_source_entry_id`` (#64) and its rows'
 stored edge points at the version current at publish and is never rewritten,
 so after the target is republished a Withdraw preview of the *new* version
 used to list nothing. ``contracts.ENTRY_RESOLVED_RELATIONS`` registers these
-relations, and the shared reverse walk (``app.library.dependents``) counts an
-edge of one of them to any version of the entry. Every other relation still
-follows the exact version it pins.
+relations. When the shared reverse walk (``app.library.dependents``) reaches
+an entry's current effective version, an edge of one of them to any version
+of the entry counts, since every such dependent resolves to that version. A
+superseded version is matched by its exact edges only: withdrawing it changes
+nothing the entry resolves to. Every other relation follows the exact version
+it pins.
 
 DataSources, Offers, policies, fact sets and mappings publish through
 ``service.publish``. Only the registry probe inserts LibraryVersion rows
@@ -110,6 +113,21 @@ class EntryResolvedFixtures(LibraryFixtures):
             mapping_v1=mapping_v1,
         )
 
+    def publish_late_fact_set(self, owner: TenantContext, w: SimpleNamespace) -> str:
+        """A fact set naming the same DataSource and Offer entries, published now.
+
+        Its edges point at whatever those entries resolve to at this point.
+        """
+        _entry, version = self._publish_entry(owner, ENTRY_MANUAL_FACT_SET, "Acme Charge prices, later", {
+            "data_source_entry_id": w.source_entry,
+            "facts": [{
+                "fact_id": "price-us-later", "fact_type": "price", "amount": "18.99", "currency": "USD",
+                "country_code": "US", "valid_from": "2026-06-01", "valid_to": "2099-12-31",
+                "evidence_source": "Acme Charge price list 2026", "offer_entry_id": w.offer_entry,
+            }],
+        })
+        return version
+
     @staticmethod
     def _publish_entry(owner: TenantContext, entry_type: str, name: str, content: dict) -> tuple[str, str]:
         entry = service.create_entry(owner, entry_type=entry_type, display_name=name, content=content)
@@ -209,12 +227,50 @@ class TestARepublishedDataSource(EntryResolvedFixtures):
         self.assertEqual(preview["projection"]["newly_blocked_count"], 2)
         self.assertEqual(self.listed(service.impact_analysis(self.owner, source_v2)), {w.policy_v1, w.fact_set_v1})
 
-        # Withdrawing v1 still lists the mapping that pins it, and the
-        # entry-named dependents as before.
+        # v1 is superseded: its preview lists the dependents whose edges name
+        # it, the mapping that pins it and, as before #88, the entry-named
+        # dependents published while it was current.
         self.assertEqual(
             self.listed(self.withdraw_preview(self.owner, w.source_v1)),
             {w.policy_v1, w.fact_set_v1, w.mapping_v1},
         )
+
+    def test_withdrawing_the_superseded_version_follows_its_exact_edges_only(self):
+        w = self.world(self.owner)
+        source_v2 = republish_data_source(self.owner, w.source_entry, {**MANUAL_SOURCE, "config": {"note": "v2"}})
+        # Published after the republish, these name the entry and resolve to v2.
+        policy_v2 = _republish(self.owner, w.policy_entry, **truth_policy_content(
+            [w.source_entry], {"price": "block"}, max_staleness_seconds=3600,
+        ))
+        late_fact_set = self.publish_late_fact_set(self.owner, w)
+        self.assertEqual(self.edges_from(self.owner, policy_v2), {(source_v2, REL_TRUTH_POLICY_DATA_SOURCE)})
+        self.assertIn((source_v2, REL_FACT_SET_DATA_SOURCE), self.edges_from(self.owner, late_fact_set))
+
+        # The current version stands for the entry and reaches all of them.
+        self.assertEqual(
+            self.listed(self.withdraw_preview(self.owner, source_v2)),
+            {w.policy_v1, policy_v2, w.fact_set_v1, late_fact_set},
+        )
+
+        # Withdrawing v1 leaves the entry resolving to v2: only the edges that
+        # name v1 count, so the dependents published on v2 are not listed.
+        preview = self.withdraw_preview(self.owner, w.source_v1)
+        self.assertEqual(self.listed(preview), {w.policy_v1, w.fact_set_v1, w.mapping_v1})
+        self.assertEqual(preview["projection"]["dependent_count"], 3)
+        self.assertEqual(self.listed(service.impact_analysis(self.owner, w.source_v1)), self.listed(preview))
+
+        result = service.withdraw_version(
+            self.owner, w.source_v1, reason="Superseded price list recalled",
+            impact_id=preview["impact_id"], impact_hash=preview["impact_hash"],
+        )
+
+        self.assertEqual(self.listed(result), self.listed(preview))
+        self.assertEqual(self.eligibility(w.policy_v1), "blocked")
+        self.assertEqual(self.eligibility(w.fact_set_v1), "blocked")
+        self.assertEqual(self.eligibility(w.mapping_v1), "blocked")
+        self.assertEqual(self.eligibility(policy_v2), "eligible")
+        self.assertEqual(self.eligibility(late_fact_set), "eligible")
+        self.assertEqual(service.get_version(self.owner, source_v2)["state"], "effective")
 
     def test_the_withdraw_blocks_what_its_preview_listed(self):
         w = self.world(self.owner)
@@ -259,6 +315,28 @@ class TestARepublishedOffer(EntryResolvedFixtures):
             self.listed(self.withdraw_preview(self.owner, w.offer_v1)), {w.fact_set_v1, w.mapping_v1},
         )
 
+    def test_withdrawing_the_superseded_version_does_not_reach_fact_sets_published_on_the_new_one(self):
+        w = self.world(self.owner)
+        offer_v2 = republish_offer(self.owner, w.offer_entry, {
+            **service.get_version(self.owner, w.offer_v1)["content"],
+            "landing_page_url": "https://acme-charge.example/offers/acme-65w-v2",
+        })
+        late_fact_set = self.publish_late_fact_set(self.owner, w)
+        self.assertIn((offer_v2, REL_FACT_SET_OFFER), self.edges_from(self.owner, late_fact_set))
+
+        self.assertEqual(
+            self.listed(self.withdraw_preview(self.owner, offer_v2)), {w.fact_set_v1, late_fact_set},
+        )
+        preview = self.withdraw_preview(self.owner, w.offer_v1)
+        self.assertEqual(self.listed(preview), {w.fact_set_v1, w.mapping_v1})
+
+        service.withdraw_version(
+            self.owner, w.offer_v1, reason="Superseded landing page recalled",
+            impact_id=preview["impact_id"], impact_hash=preview["impact_hash"],
+        )
+        self.assertEqual(self.eligibility(w.fact_set_v1), "blocked")
+        self.assertEqual(self.eligibility(late_fact_set), "eligible")
+
 
 class TestPinnedRelationsFollowTheirVersion(EntryResolvedFixtures):
     def test_an_offer_pinned_to_the_old_product_version_is_not_listed_for_the_new_one(self):
@@ -287,6 +365,26 @@ class TestPinnedRelationsFollowTheirVersion(EntryResolvedFixtures):
             (w.source_v1, REL_FACT_SET_DATA_SOURCE), (w.offer_v1, REL_FACT_SET_OFFER),
         })
         self.assertEqual(self.listed(self.withdraw_preview(self.owner, product_v2)), {offer_v2, w.fact_set_v1})
+
+    def test_a_superseded_version_further_down_follows_its_exact_edges_only(self):
+        # Product v1 pins Offer v1, which is superseded once the Offer moves to
+        # Product v2. From Offer v1 the walk follows exact edges only: the fact
+        # set published on Offer v2 is not reached.
+        w = self.world(self.owner)
+        product_v2 = _republish(self.owner, w.product_entry, description="Compact 65W GaN charger, v2")
+        offer_v2 = republish_offer(self.owner, w.offer_entry, {
+            **service.get_version(self.owner, w.offer_v1)["content"], "product_version_id": product_v2,
+        })
+        late_fact_set = self.publish_late_fact_set(self.owner, w)
+        self.assertIn((offer_v2, REL_FACT_SET_OFFER), self.edges_from(self.owner, late_fact_set))
+
+        self.assertEqual(
+            self.listed(self.withdraw_preview(self.owner, w.product_v1)),
+            {w.offer_v1, w.mapping_v1, w.fact_set_v1},
+        )
+        self.assertEqual(
+            self.listed(self.withdraw_preview(self.owner, product_v2)), {offer_v2, w.fact_set_v1, late_fact_set},
+        )
 
 
 class TestWorkspaceAndRoleBoundaries(EntryResolvedFixtures):

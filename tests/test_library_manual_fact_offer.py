@@ -258,8 +258,8 @@ class TestOnlyRealDependencies(OfferFixtures):
 
         # Republishing Offer A supersedes A v1; the published fact set keeps
         # its frozen edge to A v1, and nothing about Offer B changes. The rows
-        # name Offer A's entry, so a withdraw preview of either A version
-        # lists the fact set (#88).
+        # name Offer A's entry and resolve to A v2, so a withdraw preview of
+        # A v2, the current version, lists the fact set too (#88).
         a_2 = republish_offer(self.ctx, offer_a, {
             **service.get_version(self.ctx, a_1)["content"],
             "landing_page_url": "https://acme-charge.example/offers/acme-65w-new",

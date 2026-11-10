@@ -957,7 +957,8 @@ def _truth_policy_source_edge(
     The item names a data source entry and resolves to that entry's current
     version, like ``product_entry_id`` above, so the stored edge stays
     version-to-version. Impact previews read the edge by entry (#88):
-    withdrawing any version of the data source lists the policy. A data
+    withdrawing the data source's current effective version lists the policy
+    whichever version its edge names. A data
     source version ID -- the only form publish accepted before #70 -- maps
     back to its entry and resolves the same way, which is also what Truth
     resolution reads (``truth._policy_data_source``).
@@ -1010,7 +1011,8 @@ def _fact_set_offer_target(session, context: TenantContext, reference: str) -> s
     A row names the Offer *entry*, the way a TruthResolutionPolicy names its
     data sources (#70): it resolves to the entry's current effective version,
     so the stored edge stays version-to-version. Impact previews read the edge
-    by entry (#88): withdrawing any version of the Offer lists the fact set.
+    by entry (#88): withdrawing the Offer's current effective version lists
+    the fact set whichever version its edge names.
     Republishing the Offer leaves the row valid: Truth matches rows by the
     entry of the batch's OfferVersion. The common checks (withdrawn, blocked,
     archived) then run on the resolved version.
@@ -1707,9 +1709,15 @@ def _effective_version(session, entry: LibraryEntryRecord) -> LibraryVersionReco
 
 
 def _impact_payload(
-    session, context: TenantContext, version: LibraryVersionRecord, *, reason: str = ""
+    session,
+    context: TenantContext,
+    version: LibraryVersionRecord,
+    *,
+    reason: str = "",
+    dependents: list[LibraryVersionRecord] | None = None,
 ) -> dict:
-    dependents = dependent_versions(session, context, {version.id})
+    if dependents is None:
+        dependents = dependent_versions(session, context, {version.id})
     payload = {
         "version_id": version.id,
         "entry_id": version.entry_id,
@@ -1792,6 +1800,10 @@ def withdraw_version(
                 code="library_version_not_withdrawable",
             )
 
+        # Walk before the state changes: an entry's current effective version
+        # also reaches the dependents that name its entry (#88), and that
+        # must match the preview the impact token was issued for.
+        impacted = dependent_versions(session, context, {version.id})
         previous_state = version.state
         now = utcnow()
         version.state = VERSION_WITHDRAWN
@@ -1816,7 +1828,6 @@ def withdraw_version(
             entry.current_version_id = None
             entry.updated_at = now
 
-        impacted = dependent_versions(session, context, {version.id})
         for dependent in impacted:
             if dependent.eligibility != ELIGIBILITY_BLOCKED:
                 dependent.eligibility = ELIGIBILITY_BLOCKED
@@ -1859,7 +1870,7 @@ def withdraw_version(
                     "affected_entities": [],
                 },
             )
-        result = _impact_payload(session, context, version, reason=clean_reason)
+        result = _impact_payload(session, context, version, reason=clean_reason, dependents=impacted)
         _audit(
             session,
             context,
