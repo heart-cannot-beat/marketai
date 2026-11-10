@@ -123,6 +123,7 @@ from app.platform.jobs import enqueue_in_session
 from app.platform.runtime_role import WORKER_ROLE, runs_as
 from app.platform.tenancy import VALID_META_MODES, TenantContext
 from app.scale._canonical import canonical_hash
+from app.scale.advice import expire_overdue_connection_advice
 from app.scale.models import (
     ScaleBreakdownSourceRecord,
     ScaleDailyMetricSourceRecord,
@@ -450,6 +451,7 @@ def run_source_collection(
     # Episode loop and in its own tenant transaction, so it also runs for a
     # batch that failed (it still enqueues this Job) and for a connection
     # whose Enrollments are all paused (the Job is enqueued for them too).
+    expire_overdue_connection_advice(context, connection_id)
     if failures:
         raise SourceCollectionFailed(failures)
     return CollectionResult(manifests=tuple(manifests), skipped=tuple(skipped))

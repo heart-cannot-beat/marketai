@@ -117,7 +117,8 @@ JOB_POLICIES: dict[str, JobPolicy] = {
     "scale_collect_sources": _policy(
         _NONE_REQUEUE,
         "只读已存的观察页，不调用适配器；每个 Episode 在行锁下单事务写 manifest，"
-        "按收集键找回已写的，重放不分配新 revision（#109）"),
+        "按收集键找回已写的，重放不分配新 revision（#109）；"
+        "之后兜底扫描该连接上过了截止时间的 active Advice thread，在线程行锁下复查，重放不重复过期（#111）"),
     # -- Paid, but the handler fences the call through its own durable record.
     "marketing.plan": _policy(_PAID_REQUEUE, "调用记录挡住重复付费"),
     "marketing.ai_qc": _policy(_PAID_REQUEUE, "调用记录挡住重复付费"),
