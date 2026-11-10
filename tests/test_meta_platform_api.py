@@ -37,12 +37,21 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 
+from sqlalchemy import select
+
 from app import config
-from app.adapters.persistence.database import engine, platform_session
-from app.adapters.persistence.models import WorkspaceRecord
+from app.adapters.persistence.database import engine, platform_session, tenant_session
+from app.adapters.persistence.models import AuditEventRecord, WorkspaceRecord
+from app.entitlements.credential_admin import CredentialAdmin
 from app.entitlements.credentials import CredentialVersionRecord
 from app.main import app
-from app.meta.platform_api import LegacyPlatformContext, request_platform_context
+from app.meta.platform_api import (
+    PLATFORM_EXECUTOR,
+    LegacyPlatformContext,
+    _get_protector,
+    request_platform_context,
+)
+from app.platform.tenancy import TenantContext
 
 
 def _migrate_to_head() -> None:
@@ -51,6 +60,30 @@ def _migrate_to_head() -> None:
         Path(db_file).parent.mkdir(parents=True, exist_ok=True)
     cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     command.upgrade(cfg, "head")
+
+
+def _provision_customer_workspace(workspace_id: str, *, authorization_epoch: int = 2) -> None:
+    """The control plane's projection, done directly: a customer Workspace
+    at a non-zero epoch, so a context signed for epoch 0 would be refused."""
+    with platform_session() as session:
+        session.add(
+            WorkspaceRecord(
+                id=workspace_id, name=workspace_id, authorization_epoch=authorization_epoch,
+            )
+        )
+
+
+def _workspace_audit(workspace_id: str) -> list[tuple[str, str, str | None, str]]:
+    with platform_session() as session:
+        return [
+            (row.event_type, row.executor, row.initiator_id, row.resource_id)
+            for row in session.scalars(
+                select(AuditEventRecord).where(
+                    AuditEventRecord.workspace_id == workspace_id,
+                    AuditEventRecord.resource_type == "workspace",
+                )
+            )
+        ]
 
 
 class PlatformApiTestCase(unittest.TestCase):
@@ -119,6 +152,13 @@ class BootstrapTests(PlatformApiTestCase):
             ws = session.get(WorkspaceRecord, self.workspace_id)
             self.assertIsNotNone(ws)
             self.assertTrue(ws.is_platform_workspace)
+        # ... with one audit event naming the operator (#91).
+        self.assertEqual(
+            _workspace_audit(self.workspace_id),
+            [("workspace.platform_created", PLATFORM_EXECUTOR, "platform:test-operator",
+              self.workspace_id)],
+        )
+        with platform_session() as session:
 
             cred = session.get(CredentialVersionRecord, data["access_token_version_id"])
             self.assertIsNotNone(cred)
@@ -129,6 +169,7 @@ class BootstrapTests(PlatformApiTestCase):
             self.assertNotEqual(cred.encrypted_secret, b"token_material_here")
 
     def test_bootstrap_sandbox_mode_requires_no_credentials(self):
+        _provision_customer_workspace(self.workspace_id)
         resp = self.client.post(
             "/api/platform/v1/meta/bootstrap",
             json={
@@ -146,6 +187,65 @@ class BootstrapTests(PlatformApiTestCase):
         with platform_session() as session:
             ws = session.get(WorkspaceRecord, self.workspace_id)
             self.assertFalse(ws.is_platform_workspace)
+
+    def test_bootstrap_refuses_a_customer_workspace_the_control_plane_has_not_projected(self):
+        """Only the control-plane projection creates customer Workspaces
+        (#91): bootstrap answers 409 and leaves no row behind."""
+        for meta_mode in ("customer_sandbox", "controlled_mock"):
+            with self.subTest(meta_mode=meta_mode):
+                workspace_id = f"{self.workspace_id}_{meta_mode}"
+                resp = self.client.post(
+                    "/api/platform/v1/meta/bootstrap",
+                    json={"workspace_id": workspace_id, "meta_mode": meta_mode,
+                          "ad_account_id": "act_sandbox"},
+                )
+                self.assertEqual(resp.status_code, 409, resp.text)
+                self.assertEqual(resp.json()["code"], "workspace_not_provisioned")
+                with platform_session() as session:
+                    self.assertIsNone(session.get(WorkspaceRecord, workspace_id))
+
+    def test_bootstrap_never_promotes_an_existing_customer_workspace(self):
+        _provision_customer_workspace(self.workspace_id)
+        resp = self.client.post(
+            "/api/platform/v1/meta/bootstrap",
+            json={
+                "workspace_id": self.workspace_id,
+                "meta_mode": "internal_validation",
+                "ad_account_id": "act_internal",
+                "access_token_material": "token_material_here",
+                "app_secret_material": "secret_material_here",
+            },
+        )
+        self.assertEqual(resp.status_code, 400, resp.text)
+        self.assertIn("platform workspace", resp.json()["detail"])
+        with platform_session() as session:
+            ws = session.get(WorkspaceRecord, self.workspace_id)
+            self.assertFalse(ws.is_platform_workspace)
+            self.assertEqual(ws.authorization_epoch, 2)
+            # The credentials made before the refusal rolled back with it.
+            self.assertEqual(
+                session.scalars(
+                    select(CredentialVersionRecord.id).where(
+                        CredentialVersionRecord.workspace_id == self.workspace_id
+                    )
+                ).all(),
+                [],
+            )
+        self.assertEqual(_workspace_audit(self.workspace_id), [])
+
+    def test_bootstrap_an_existing_platform_workspace_signs_for_its_epoch(self):
+        """An existing platform Workspace keeps its row, and the credentials
+        are validated in a context signed for its current epoch."""
+        with platform_session() as session:
+            session.add(WorkspaceRecord(
+                id=self.workspace_id, name=self.workspace_id, authorization_epoch=3,
+                is_platform_workspace=True,
+            ))
+        created = self._bootstrap()
+        self.assertIsNotNone(created["binding_id"])
+        with platform_session() as session:
+            self.assertEqual(session.get(WorkspaceRecord, self.workspace_id).authorization_epoch, 3)
+        self.assertEqual(_workspace_audit(self.workspace_id), [])
 
     def test_bootstrap_internal_validation_missing_material_rejected(self):
         resp = self.client.post(
@@ -254,6 +354,7 @@ class PlatformAuthGuardTests(unittest.TestCase):
 
     def test_correct_bearer_token_grants_access(self):
         config.PLATFORM_ADMIN_TOKEN = "s3cr3t-platform-token"
+        _provision_customer_workspace(self.workspace_id)
         resp = self.client.post(
             "/api/platform/v1/meta/bootstrap",
             json=self._bootstrap_body(),
@@ -342,6 +443,48 @@ class CredentialRevocationTests(PlatformApiTestCase):
             json={"reason": "n/a"},
         )
         self.assertEqual(resp.status_code, 404)
+
+    def test_revoke_a_rotated_version_leaves_its_replacement_active(self):
+        """The route names one version; a version that is no longer active
+        must not revoke whichever one replaced it."""
+        created = self._bootstrap()
+        old_version_id = created["access_token_version_id"]
+        context = TenantContext(
+            workspace_id=self.workspace_id, role="owner", initiator_id="platform:test-operator",
+            executor=PLATFORM_EXECUTOR, is_platform_workspace=True,
+        )
+        with tenant_session(context) as session:
+            new_version_id = CredentialAdmin(_get_protector()).rotate(
+                session, context, credential_key="meta_access_token",
+                new_plaintext=b"rotated_material",
+            ).credential_version_id
+
+        resp = self.client.post(
+            f"/api/platform/v1/credentials/{old_version_id}/revoke", json={"reason": "stale id"},
+        )
+        self.assertEqual(resp.status_code, 404, resp.text)
+        with platform_session() as session:
+            self.assertEqual(session.get(CredentialVersionRecord, new_version_id).state, "active")
+
+    def test_revoke_in_a_workspace_at_a_later_epoch(self):
+        _provision_customer_workspace(self.workspace_id, authorization_epoch=5)
+        context = TenantContext(
+            workspace_id=self.workspace_id, role="owner", initiator_id="owner_1",
+            authorization_epoch=5,
+        )
+        with tenant_session(context) as session:
+            version_id = CredentialAdmin(_get_protector()).create(
+                session, context, credential_key="openai_api_key", provider="openai",
+                plaintext=b"customer_material",
+            ).credential_version_id
+
+        resp = self.client.post(
+            f"/api/platform/v1/credentials/{version_id}/revoke", json={"reason": "leaked"},
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        with platform_session() as session:
+            version = session.get(CredentialVersionRecord, version_id)
+            self.assertEqual((version.state, version.revoked_by), ("revoked", "platform:test-operator"))
 
     def test_revoke_twice_second_call_not_found(self):
         created = self._bootstrap()

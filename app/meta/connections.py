@@ -135,12 +135,14 @@ def _get_connection(
 def _validate_credential_version(
     session: Session, *, workspace_id: str, credential_version_id: str, expected_key: str,
 ) -> None:
+    # Only the non-secret columns: the API role may not read the ciphertext
+    # (encrypted_secret, encrypted_data_key, nonce) on PostgreSQL (#94).
     cred = session.execute(
-        select(CredentialVersionRecord).where(
+        select(CredentialVersionRecord.credential_key, CredentialVersionRecord.state).where(
             CredentialVersionRecord.id == credential_version_id,
             CredentialVersionRecord.workspace_id == workspace_id,
         )
-    ).scalar_one_or_none()
+    ).first()
     if cred is None:
         raise ConnectionLifecycleError(
             f"credential version {credential_version_id!r} not found in workspace "

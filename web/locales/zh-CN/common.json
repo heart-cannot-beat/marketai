@@ -2363,6 +2363,7 @@
   "error-workspace_membership_required": "你不是这个工作区的成员。",
   "error-workspace_mismatch": "这个请求属于其他工作区。",
   "error-workspace_not_found": "这个工作区不存在。",
+  "error-workspace_not_provisioned": "这个工作区还没有创建。",
   "error-workspace_provisioning": "工作区仍在创建中，请稍后重试。",
   "error-workspace_suspended": "这个工作区已被暂停。",
   "error-wrong_advice_type": "这类建议不支持此操作。",
