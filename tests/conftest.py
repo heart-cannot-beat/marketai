@@ -53,6 +53,7 @@ def _start_each_file_with_no_claimable_leftover_jobs():
 
 _running = {"item": None}
 _grant_guard = {"guard": None}
+_observation_guard = {"guard": None}
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -95,26 +96,48 @@ def _api_and_worker_writes_have_postgres_grants():
         guard.write_report(f"{report}.{worker}" if worker else report)
 
 
+def _observation_schedule_guard():
+    """Every test's Worker dispatches due Meta observation schedules from any
+    Workspace on its first ``run_once``, after the test quarantined the queue,
+    so a schedule one test leaves active, due now or later, runs in another
+    test's Worker. No test leaves one today; checked after every test, this
+    fails the teardown of the first that does (#124)."""
+    if _observation_guard["guard"] is None:
+        from tests.support.queue_hygiene import ObservationScheduleGuard
+
+        _observation_guard["guard"] = ObservationScheduleGuard(SHARED_DATABASE_URL)
+    return _observation_guard["guard"]
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """Fail the teardown of the test that first sent a statement PostgreSQL
-    will refuse, whatever the test itself did with the error."""
+    will refuse, or that left a Meta observation schedule for a later test's
+    Worker, whatever the test itself did."""
     outcome = yield
+    if call.when != "teardown":
+        return
+    failures = []
     guard = _grant_guard["guard"]
-    if guard is None or call.when != "teardown":
-        return
-    violations = guard.unreported()
-    if not violations:
-        return
-    from tests.support.grant_guard import failure_message
+    violations = guard.unreported() if guard is not None else []
+    if violations:
+        from tests.support.grant_guard import failure_message
 
+        failures.append(("grant guard", failure_message(violations)))
+    left = _observation_schedule_guard().unreported()
+    if left:
+        from tests.support.queue_hygiene import observation_schedule_failure
+
+        failures.append(("observation schedule guard", observation_schedule_failure(left, item.nodeid)))
+    if not failures:
+        return
     report = outcome.get_result()
-    message = failure_message(violations)
-    if report.passed:
-        report.outcome = "failed"
-        report.longrepr = message
-    else:
-        report.sections.append(("grant guard", message))
+    for section, message in failures:
+        if report.passed:
+            report.outcome = "failed"
+            report.longrepr = message
+        else:
+            report.sections.append((section, message))
 
 
 def pytest_terminal_summary(terminalreporter):
