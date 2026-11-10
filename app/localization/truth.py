@@ -1089,7 +1089,7 @@ def _policy_data_source(
     way the entry's *current* effective version is read, so republishing the
     DataSource never strands a policy, and `truth_source_attempts` records
     the version actually used. Library publish resolves the same way
-    (`library.service._truth_policy_source_edge`).
+    (`library.service._entry_reference_edge`).
     """
     reference = reference.strip()
     if reference in ADAPTER_KINDS:

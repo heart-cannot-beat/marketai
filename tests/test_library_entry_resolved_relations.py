@@ -3,7 +3,8 @@
 Some content names a target *entry* that publish resolves to the entry's
 current version: a TruthResolutionPolicy's ``source_priority`` (#70), a
 ManualFactSet's ``data_source_entry_id`` (#64) and its rows'
-``offer_entry_id`` (#54), a DimensionSchema's ``product_entry_id``. The
+``offer_entry_id`` (#54), a DimensionSchema's ``product_entry_id``, a
+WorkspacePromptPolicy's ``allowed_template_entry_ids`` (#100). The
 stored edge points at the version current at publish and is never rewritten,
 so after the target is republished a Withdraw preview of the *new* version
 used to list nothing. ``contracts.ENTRY_RESOLVED_RELATIONS`` registers these
@@ -51,6 +52,7 @@ from app.library.contracts import (
     ENTRY_TRUTH_RESOLUTION_POLICY,
     REL_FACT_SET_DATA_SOURCE,
     REL_FACT_SET_OFFER,
+    REL_POLICY_TEMPLATE,
     REL_SCHEMA_PRODUCT,
     REL_TRUTH_POLICY_DATA_SOURCE,
     RELATION_TARGET_TYPES,
@@ -178,6 +180,7 @@ class TestEntryResolvedRelationsRegistry(LibraryFixtures):
         )
         self.assertEqual(ENTRY_RESOLVED_RELATIONS, {
             REL_SCHEMA_PRODUCT, REL_FACT_SET_DATA_SOURCE, REL_FACT_SET_OFFER, REL_TRUTH_POLICY_DATA_SOURCE,
+            REL_POLICY_TEMPLATE,
         })
 
     def _resolves_an_entry_id(self, relation: str) -> bool:
