@@ -29,7 +29,9 @@ every type and would fail the rest as ``unsupported_job_type``.
 Scale never performs Meta writes: this Worker dispatches only
 ``scale_evaluate`` (spec §3.1/§3.4, ``app.scale.service.run_scale_evaluation``),
 ``scale_advice_expire`` (spec §3.5, ``app.scale.advice.expire_advice_thread``),
-and ``scale_export`` (Issue #87 Task 5, ``app.scale.exports.run_scale_export``)
+``scale_collect_sources`` (#109, ``app.scale.collector.run_source_collection``,
+which reads stored observation pages and resolves no adapter) and
+``scale_export`` (Issue #87 Task 5, ``app.scale.exports.run_scale_export``)
 jobs. None of these calls reach ``app.adapters.meta.write_client`` or
 ``app.launch`` at any depth.
 """
@@ -47,6 +49,12 @@ from app.platform import jobs
 from app.platform.runtime_role import WORKER_ROLE, runs_as
 from app.platform.tenancy import TenantContext
 from app.scale.advice import AdviceLifecycleError, advice_expire_job_context, expire_advice_thread
+from app.scale.collector import (
+    SourceCollectionError,
+    SourceCollectionFailed,
+    collection_job_input,
+    run_source_collection,
+)
 from app.scale.exports import ExportError, export_job_context, run_scale_export
 from app.scale.service import ScaleOrchestrationError, evaluation_job_context, run_scale_evaluation
 
@@ -83,6 +91,9 @@ class ScaleWorkerRuntime:
             return True
         if job.type == "scale_advice_expire":
             self._scale_advice_expire(job)
+            return True
+        if job.type == "scale_collect_sources":
+            self._scale_collect_sources(job)
             return True
         if job.type == "scale_export":
             self._scale_export(job)
@@ -192,6 +203,37 @@ class ScaleWorkerRuntime:
                 code="scale_advice_expire_failed",
                 detail=str(exc),
                 retryable=False,
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _scale_collect_sources(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_collect_sources`` job (#109), the
+        same as the shared Worker's: the Meta mode comes from the payload,
+        and a partial failure is retried (each Episode's manifest is found
+        again by its collection key)."""
+        try:
+            request = collection_job_input(job.context, job.payload)
+        except SourceCollectionError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_source_collection(
+                request.context,
+                connection_id=request.connection_id,
+                target_date=request.target_date,
+                run_generation=request.run_generation,
+            )
+            jobs.succeed(job.context, job.id, self.owner)
+        except SourceCollectionFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_collect_sources_failed", detail=str(exc), retryable=True,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_collect_sources_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
             )
 
     @runs_as(WORKER_ROLE)

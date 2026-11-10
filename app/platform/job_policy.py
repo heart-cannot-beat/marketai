@@ -114,6 +114,10 @@ JOB_POLICIES: dict[str, JobPolicy] = {
         _NONE_REQUEUE, "Phase A/B/C 检查点可续跑（tests/test_scale_recovery.py）；调度未接（#101）"),
     "scale_advice_expire": _policy(
         _NONE_REQUEUE, "在线程行锁下复查，非 active 即不写；Phase C 按截止时间延迟入队（#111）"),
+    "scale_collect_sources": _policy(
+        _NONE_REQUEUE,
+        "只读已存的观察页，不调用适配器；每个 Episode 在行锁下单事务写 manifest，"
+        "按收集键找回已写的，重放不分配新 revision（#109）"),
     # -- Paid, but the handler fences the call through its own durable record.
     "marketing.plan": _policy(_PAID_REQUEUE, "调用记录挡住重复付费"),
     "marketing.ai_qc": _policy(_PAID_REQUEUE, "调用记录挡住重复付费"),

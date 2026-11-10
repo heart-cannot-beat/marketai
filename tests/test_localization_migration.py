@@ -113,8 +113,9 @@ class TestLocalizationMigration(unittest.TestCase):
             # zzb1e2f3a4b5 (the Worker rolls Scale Episodes over, Issue #92) and
             # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
             # zzd3a4b5c6d7 (platform Meta connection reads across Workspaces, #102) and
-            # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107).
-            self.assertIn("zze4f5a6b7c8", revisions)
+            # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107) and
+            # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109).
+            self.assertIn("zzf5a6b7c8d9", revisions)
 
     def test_downgrade_and_upgrade(self):
         up = self._alembic("upgrade", "head")

@@ -22,10 +22,12 @@ FORCE RLS, inside ``tenant_session`` exactly as the Job handler calls it:
   run and changes nothing, and the Worker cannot insert an Episode into
   another Workspace;
 * the privilege matrix of ``scale_episodes``;
-* the migration: below it the Worker is refused exactly as production was,
-  and the refused evaluation leaves the run ``requested`` with no snapshot
-  and the Enrollment on its old Episode; after it the same run rolls over
-  with no manual step.
+* the migration: below it the Worker has no INSERT, and above it it has.
+  Without that grant (the migration's downgrade statement, applied at head
+  because later migrations add columns the evaluation reads, #109) the
+  Worker is refused exactly as production was, and the refused evaluation
+  leaves the run ``requested`` with no snapshot and the Enrollment on its
+  old Episode; with it the same run rolls over with no manual step.
 
 The fixture is seeded as the schema owner (BYPASSRLS), as the SQLite test
 seeds it. It opens no Job or Operation. Its rows stay, because the Scale
@@ -319,30 +321,44 @@ class ScaleEpisodeRolloverPostgresTests(unittest.TestCase):
             return connection.execute(text(
                 "SELECT has_table_privilege('marketai_domain_worker', 'scale_episodes', 'INSERT')")).scalar()
 
+    def _set_worker_insert(self, granted: bool) -> None:
+        """The migration's own statement: its upgrade (GRANT) or downgrade (REVOKE)."""
+        statement = ("GRANT INSERT ON TABLE scale_episodes TO marketai_domain_worker" if granted
+                     else "REVOKE INSERT ON TABLE scale_episodes FROM marketai_domain_worker")
+        with self.owner.begin() as connection:
+            connection.execute(text(statement))
+
     def test_the_migration_grants_insert_and_a_refused_rollover_recovers_on_the_next_run(self):
         head = self._alembic("current")  # later migrations may follow REVISION
         self.assertIn("(head)", head)
         self.addCleanup(self._alembic, "upgrade", "head")  # never leave the cluster below head
         seeded = self._seed("ws_rollover_pg_migration")
 
-        # Below the migration the Worker is refused as production was, and
-        # the whole Phase A transaction rolls back with it.
+        # The migration grants the INSERT: below it the Worker has none.
         self._alembic("downgrade", DOWN_REVISION)
         self.assertIn(DOWN_REVISION, self._alembic("current"))
         self.assertFalse(self._worker_inserts())
+        self._alembic("upgrade", REVISION)
+        self.assertIn(REVISION, self._alembic("current"))
+        self.assertTrue(self._worker_inserts())
+        self._alembic("upgrade", "head")
+        self.assertEqual(self._alembic("current"), head)
+
+        # The evaluation itself runs against the head schema: later
+        # migrations add columns the ORM reads (#109), so it cannot run
+        # below them. Without the grant -- the migration's downgrade
+        # statement -- the Worker is refused as production was, and the
+        # whole Phase A transaction rolls back with it.
+        self.addCleanup(self._set_worker_insert, True)
+        self._set_worker_insert(False)
         with self.assertRaises(DBAPIError) as caught:
             self._evaluate(self._context(seeded["workspace_id"]), seeded["run_id"])
         self.assertIn("permission denied for table scale_episodes", str(caught.exception))
         self._assert_untouched(seeded)
 
         # With it, the next evaluation of the same run rolls the Episode over.
-        self._alembic("upgrade", REVISION)
-        self.assertIn(REVISION, self._alembic("current"))
-        self.assertTrue(self._worker_inserts())
+        self._set_worker_insert(True)
         self._assert_rolled_over(seeded, self._evaluate(self._context(seeded["workspace_id"]), seeded["run_id"]))
-
-        self._alembic("upgrade", "head")
-        self.assertEqual(self._alembic("current"), head)
         self.test_the_privilege_matrix_of_scale_episodes_holds()
 
 

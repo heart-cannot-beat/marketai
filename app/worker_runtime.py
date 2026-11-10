@@ -353,6 +353,9 @@ class WorkerRuntime:
         if job.type == "scale_advice_expire":
             self._scale_advice_expire(job)
             return True
+        if job.type == "scale_collect_sources":
+            self._scale_collect_sources(job)
+            return True
         if job.type == "scale_export":
             self._scale_export(job)
             return True
@@ -1874,6 +1877,48 @@ class WorkerRuntime:
             )
 
     @runs_as(WORKER_ROLE)
+    def _scale_collect_sources(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_collect_sources`` job (#109, #101
+        S3). Like ``_scale_evaluate`` it only delegates to ``app.scale``: the
+        collector reads the observation batch's stored pages and parses them
+        with ``app.meta``'s pure parsers; it resolves no adapter (ADR 0017).
+        The Meta mode comes from the payload. Each Episode's manifest
+        commits on its own and is found again by its collection key, so a
+        retry after a crash or a partial failure writes nothing twice.
+        """
+        from app.scale.collector import (
+            SourceCollectionError,
+            SourceCollectionFailed,
+            collection_job_input,
+            run_source_collection,
+        )
+
+        try:
+            request = collection_job_input(job.context, job.payload)
+        except SourceCollectionError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_source_collection(
+                request.context,
+                connection_id=request.connection_id,
+                target_date=request.target_date,
+                run_generation=request.run_generation,
+            )
+            jobs.succeed(job.context, job.id, self.owner)
+        except SourceCollectionFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_collect_sources_failed", detail=str(exc), retryable=True,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_collect_sources_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
     def _scale_export(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_export`` job (#55).
 
@@ -2021,7 +2066,13 @@ class WorkerRuntime:
         state (#107). Reads go through the sandbox adapter, resolved per
         transaction and never held by this runtime (ADR 0017). Runs resume
         from their last committed page; on the Job's last attempt the runs
-        that still fail are marked ``failed``."""
+        that still fail are marked ``failed``.
+
+        Once every run is terminal -- all succeeded, or the last attempt
+        failed the rest -- Scale's collection of the batch is enqueued
+        (#109, #101 S3) before the Job is settled: a failed batch becomes a
+        blocked manifest, not a silent gap. The collection key names the
+        batch, so a rerun of this Job names the same collection Job."""
         from datetime import date
 
         from .meta.observation_sync import (
@@ -2052,18 +2103,36 @@ class WorkerRuntime:
                 final_attempt=job.attempt >= job.max_attempts,
                 heartbeat=lambda: jobs.heartbeat(job.context, job.id, self.owner),
             )
+            self._enqueue_source_collection(context, connection_id, target_date, run_generation)
             jobs.succeed(job.context, job.id, self.owner)
         except ObservationLeaseLost:
             return  # the Job is no longer ours to settle
         except ObservationBatchFailed as exc:
+            detail = str(exc)
+            if exc.final:
+                try:
+                    self._enqueue_source_collection(context, connection_id, target_date, run_generation)
+                except Exception as enqueue_error:  # noqa: BLE001 -- the batch's failure is still recorded
+                    detail = f"{detail}; collection not enqueued: {type(enqueue_error).__name__}"
             jobs.fail(
                 job.context, job.id, self.owner,
-                code="meta_observation_sync_failed", detail=str(exc), retryable=not exc.final,
+                code="meta_observation_sync_failed", detail=detail, retryable=not exc.final,
             )
         except Exception as exc:
             jobs.fail(
                 job.context, job.id, self.owner,
                 code="meta_observation_sync_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @staticmethod
+    def _enqueue_source_collection(context: TenantContext, connection_id: str, target_date, run_generation: int) -> None:
+        """Scale's collection of a finished batch (#109); nothing when no
+        Enrollment on the connection could use it."""
+        from .scale.collector import enqueue_source_collection
+
+        with tenant_session(context) as session:
+            enqueue_source_collection(
+                session, context, connection_id=connection_id, target_date=target_date, run_generation=run_generation,
             )
 
     @runs_as(WORKER_ROLE)
@@ -2511,7 +2580,7 @@ def _warn_if_onboarding_delivery_unconfigured(base_url: str, service_token: str)
 
 
 # ADR 0017: this Worker runs Scale handlers (`scale_evaluate`,
-# `scale_advice_expire`, `scale_export`), so the process must hold no Meta
+# `scale_advice_expire`, `scale_collect_sources`, `scale_export`), so the process must hold no Meta
 # write capability. Every concrete Meta write
 # client in the codebase is listed here; each refuses construction without the
 # write configuration (`config.meta_write_ready()`, which needs a non-empty
