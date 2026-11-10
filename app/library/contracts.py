@@ -1484,6 +1484,21 @@ RELATION_TARGET_TYPES = {
     REL_TRUTH_POLICY_DATA_SOURCE: ENTRY_DATA_SOURCE,
 }
 
+# Relations whose content names the target *entry*, which publish resolves to
+# that entry's current version (``service._validate_dependencies``). The stored
+# edge points at the version that was current at publish and is never moved,
+# while the dependent keeps resolving to whatever version is current now. The
+# reverse walk behind every impact preview and Withdraw (``dependents``) reads
+# these edges by entry: an edge to any version of the entry counts (#88).
+# ``tests/test_library_entry_resolved_relations.py`` probes the resolver and
+# fails when a relation resolves an entry id without being listed here.
+ENTRY_RESOLVED_RELATIONS = frozenset({
+    REL_SCHEMA_PRODUCT,  # DimensionSchema.product_entry_id
+    REL_FACT_SET_DATA_SOURCE,  # ManualFactSet.data_source_entry_id (#64)
+    REL_FACT_SET_OFFER,  # ManualFactSet facts[].offer_entry_id (#54)
+    REL_TRUTH_POLICY_DATA_SOURCE,  # TruthResolutionPolicy rules[].source_priority (#70)
+})
+
 
 def extract_reference_bindings(entry_type: str, content: dict) -> list[dict]:
     """把内容里的参考绑定摊平成待物化的 ReferenceBinding 行（§7.1）。"""

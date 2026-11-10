@@ -95,6 +95,7 @@ from .contracts import (
     mapping_data_source_findings,
     validate_content,
 )
+from .dependents import dependent_versions
 
 
 def size_params(limit_bytes: int) -> dict:
@@ -853,6 +854,8 @@ def _validate_dependencies(
         # identity, not one frozen version) rather than a Version ID. Resolve it
         # through the product's current effective version so the persisted
         # LibraryDependencyRecord stays version-to-version like every other edge.
+        # Every relation resolved here from an entry ID is listed in
+        # ENTRY_RESOLVED_RELATIONS, which impact previews read by entry (#88).
         if edge.relation == REL_SCHEMA_PRODUCT:
             product_entry = session.get(LibraryEntryRecord, edge.to_version_id)
             if product_entry is None or product_entry.workspace_id != context.workspace_id:
@@ -953,10 +956,12 @@ def _truth_policy_source_edge(
 
     The item names a data source entry and resolves to that entry's current
     version, like ``product_entry_id`` above, so the stored edge stays
-    version-to-version and withdrawing that version lists the policy in its
-    impact preview. A data source version ID -- the only form publish
-    accepted before #70 -- maps back to its entry and resolves the same way,
-    which is also what Truth resolution reads (``truth._policy_data_source``).
+    version-to-version. Impact previews read the edge by entry (#88):
+    withdrawing the data source's current effective version lists the policy
+    whichever version its edge names. A data
+    source version ID -- the only form publish accepted before #70 -- maps
+    back to its entry and resolves the same way, which is also what Truth
+    resolution reads (``truth._policy_data_source``).
     The common checks below (withdrawn, archived, blocked) then run on the
     resolved version. ``None`` means a blocking finding was recorded.
     """
@@ -1005,11 +1010,12 @@ def _fact_set_offer_target(session, context: TenantContext, reference: str) -> s
 
     A row names the Offer *entry*, the way a TruthResolutionPolicy names its
     data sources (#70): it resolves to the entry's current effective version,
-    so the stored edge stays version-to-version and withdrawing that version
-    lists the fact set in its impact preview. Republishing the Offer leaves
-    the row valid: Truth matches rows by the entry of the batch's
-    OfferVersion. The common checks (withdrawn, blocked, archived) then run
-    on the resolved version.
+    so the stored edge stays version-to-version. Impact previews read the edge
+    by entry (#88): withdrawing the Offer's current effective version lists
+    the fact set whichever version its edge names.
+    Republishing the Offer leaves the row valid: Truth matches rows by the
+    entry of the batch's OfferVersion. The common checks (withdrawn, blocked,
+    archived) then run on the resolved version.
 
     Anything that is not an Offer entry of this Workspace reads alike, so an
     id guessed from another Workspace learns nothing. The caller adds the
@@ -1702,35 +1708,16 @@ def _effective_version(session, entry: LibraryEntryRecord) -> LibraryVersionReco
 # --------------------------------------------------------------------------
 
 
-def _dependent_versions(session, context: TenantContext, root_ids: set[str]) -> list[LibraryVersionRecord]:
-    """沿 DependencyIndex 反向做传递闭包，返回受影响的下游版本。"""
-    found: dict[str, LibraryVersionRecord] = {}
-    frontier = list(root_ids)
-    seen: set[str] = set(root_ids)
-    while frontier:
-        current = frontier.pop()
-        rows = session.scalars(
-            select(LibraryDependencyRecord).where(
-                LibraryDependencyRecord.to_version_id == current,
-                LibraryDependencyRecord.workspace_id == context.workspace_id,
-            )
-        ).all()
-        for row in rows:
-            if row.from_version_id in seen:
-                continue
-            seen.add(row.from_version_id)
-            version = session.get(LibraryVersionRecord, row.from_version_id)
-            if version is None or version.workspace_id != context.workspace_id:
-                continue
-            found[version.id] = version
-            frontier.append(version.id)
-    return list(found.values())
-
-
 def _impact_payload(
-    session, context: TenantContext, version: LibraryVersionRecord, *, reason: str = ""
+    session,
+    context: TenantContext,
+    version: LibraryVersionRecord,
+    *,
+    reason: str = "",
+    dependents: list[LibraryVersionRecord] | None = None,
 ) -> dict:
-    dependents = _dependent_versions(session, context, {version.id})
+    if dependents is None:
+        dependents = dependent_versions(session, context, {version.id})
     payload = {
         "version_id": version.id,
         "entry_id": version.entry_id,
@@ -1813,6 +1800,10 @@ def withdraw_version(
                 code="library_version_not_withdrawable",
             )
 
+        # Walk before the state changes: an entry's current effective version
+        # also reaches the dependents that name its entry (#88), and that
+        # must match the preview the impact token was issued for.
+        impacted = dependent_versions(session, context, {version.id})
         previous_state = version.state
         now = utcnow()
         version.state = VERSION_WITHDRAWN
@@ -1837,7 +1828,6 @@ def withdraw_version(
             entry.current_version_id = None
             entry.updated_at = now
 
-        impacted = _dependent_versions(session, context, {version.id})
         for dependent in impacted:
             if dependent.eligibility != ELIGIBILITY_BLOCKED:
                 dependent.eligibility = ELIGIBILITY_BLOCKED
@@ -1880,7 +1870,7 @@ def withdraw_version(
                     "affected_entities": [],
                 },
             )
-        result = _impact_payload(session, context, version, reason=clean_reason)
+        result = _impact_payload(session, context, version, reason=clean_reason, dependents=impacted)
         _audit(
             session,
             context,

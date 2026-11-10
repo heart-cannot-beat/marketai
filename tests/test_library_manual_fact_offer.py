@@ -257,14 +257,16 @@ class TestOnlyRealDependencies(OfferFixtures):
         self.assertNotIn(fact_set_v1, self.withdraw_preview_lists(c_1), "no row names Offer C")
 
         # Republishing Offer A supersedes A v1; the published fact set keeps
-        # its frozen edge to A v1, and nothing about Offer B changes.
+        # its frozen edge to A v1, and nothing about Offer B changes. The rows
+        # name Offer A's entry and resolve to A v2, so a withdraw preview of
+        # A v2, the current version, lists the fact set too (#88).
         a_2 = republish_offer(self.ctx, offer_a, {
             **service.get_version(self.ctx, a_1)["content"],
             "landing_page_url": "https://acme-charge.example/offers/acme-65w-new",
         })
         self.assertEqual(self.offer_edges(fact_set_v1), {a_1, b_1})
         self.assertIn(fact_set_v1, self.withdraw_preview_lists(a_1))
-        self.assertNotIn(fact_set_v1, self.withdraw_preview_lists(a_2))
+        self.assertIn(fact_set_v1, self.withdraw_preview_lists(a_2))
         self.assertIn(fact_set_v1, self.withdraw_preview_lists(b_1))
         self.assertEqual(service.get_version(self.ctx, fact_set_v1)["state"], "effective")
 

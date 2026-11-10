@@ -32,7 +32,6 @@ from app.platform.tenancy import TenantContext
 from ..adapters.persistence.database import tenant_session
 from ..adapters.persistence.models import (
     LibraryCommandImpactRecord,
-    LibraryDependencyRecord,
     LibraryDraftRecord,
     LibraryEntryRecord,
     LibraryVersionRecord,
@@ -47,6 +46,7 @@ from .contracts import (
     VERSION_WITHDRAWN,
     validate_content,
 )
+from .dependents import dependent_versions
 
 IMPACT_TTL = timedelta(minutes=5)
 
@@ -147,30 +147,6 @@ def _effective_version(session, entry: LibraryEntryRecord) -> LibraryVersionReco
             LibraryVersionRecord.state == VERSION_EFFECTIVE,
         )
     ).one_or_none()
-
-
-def _dependent_versions(session, context: TenantContext, root_ids: set[str]) -> list[LibraryVersionRecord]:
-    found: dict[str, LibraryVersionRecord] = {}
-    frontier = list(root_ids)
-    seen: set[str] = set(root_ids)
-    while frontier:
-        current = frontier.pop()
-        rows = session.scalars(
-            select(LibraryDependencyRecord).where(
-                LibraryDependencyRecord.to_version_id == current,
-                LibraryDependencyRecord.workspace_id == context.workspace_id,
-            )
-        ).all()
-        for row in rows:
-            if row.from_version_id in seen:
-                continue
-            seen.add(row.from_version_id)
-            ver = session.get(LibraryVersionRecord, row.from_version_id)
-            if ver is None or ver.workspace_id != context.workspace_id:
-                continue
-            found[ver.id] = ver
-            frontier.append(ver.id)
-    return list(found.values())
 
 
 def _build_report(session, context, entry, content, *, today=None):
@@ -275,7 +251,7 @@ def preview_withdraw_impact(
             )
 
         entry = _entry(session, context, version.entry_id)
-        dependents = _dependent_versions(session, context, {version.id})
+        dependents = dependent_versions(session, context, {version.id})
         dependent_summaries = [
             {
                 "version_id": d.id,
@@ -377,7 +353,7 @@ def preview_archive_impact(
         ]
 
         all_version_ids = {v.id for v in all_versions}
-        dependents = _dependent_versions(session, context, all_version_ids) if all_version_ids else []
+        dependents = dependent_versions(session, context, all_version_ids) if all_version_ids else []
         dependent_summaries = [
             {
                 "version_id": d.id,
