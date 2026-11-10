@@ -9,7 +9,7 @@ import asyncio
 import unittest
 from pathlib import Path
 
-from sqlalchemy import Column, MetaData, String, Table, create_engine, insert, update
+from sqlalchemy import Column, MetaData, String, Table, create_engine, func, insert, select, update
 
 from app.platform import runtime_role
 from app.platform.runtime_role import API_ROLE, WORKER_ROLE, current_role, entered_as, runs_as
@@ -18,8 +18,11 @@ from tests.support.grant_guard import (
     SQLITE_ONLY_WRITES,
     GrantGuard,
     KnownGap,
+    Read,
     SqliteOnlyWrite,
     classify,
+    qualified_columns,
+    reads,
 )
 from tests.support.grant_matrix import (
     ROLE_FILE,
@@ -143,6 +146,60 @@ class StatementClassificationTests(unittest.TestCase):
             self.assertEqual(classify(sql), (), sql)
 
 
+class ReadClassificationTests(unittest.TestCase):
+    def test_scanned_tables_with_their_aliases_and_level(self):
+        self.assertEqual(
+            reads(
+                "SELECT a.id, b.x \nFROM jobs AS a JOIN runs AS b ON a.id = b.job_id, other "
+                "\nWHERE a.id IN (SELECT c.id FROM checks AS c) FOR UPDATE"
+            ),
+            (
+                Read("jobs", frozenset({"jobs", "a"}), True, True),
+                Read("other", frozenset({"other"}), True, True),
+                Read("runs", frozenset({"runs", "b"}), True, True),
+                Read("checks", frozenset({"checks", "c"}), True, False),
+            ),
+        )
+
+    def test_ctes_subqueries_functions_and_sqlite_internals_are_not_tables(self):
+        self.assertEqual(
+            reads(
+                "WITH recent AS (SELECT jobs.id FROM jobs) SELECT anon_1.n FROM "
+                "(SELECT count(*) AS n FROM recent) AS anon_1, json_each(?) AS j"
+            ),
+            (Read("jobs", frozenset({"jobs"}), True, False),),
+        )
+        self.assertEqual(reads("SELECT name FROM sqlite_master WHERE name = 'x FROM y'"), ())
+        self.assertEqual(
+            reads("SELECT t.a FROM t WHERE t.a IS NOT DISTINCT FROM t.b"),
+            (Read("t", frozenset({"t"}), True, True),),
+        )
+
+    def test_a_write_target_is_read_by_its_where_and_set_expressions(self):
+        self.assertEqual(
+            reads("UPDATE jobs SET state=?, revision=(jobs.revision + ?) WHERE jobs.id = ?"),
+            (Read("jobs", frozenset({"jobs"}), False),),
+        )
+        self.assertEqual(
+            reads("DELETE FROM jobs WHERE jobs.id IN (SELECT runs.job_id FROM runs)"),
+            (Read("runs", frozenset({"runs"}), True, False), Read("jobs", frozenset({"jobs"}), False)),
+        )
+        self.assertEqual(reads("INSERT INTO jobs (id) VALUES (?)"), ())
+
+    def test_qualified_columns(self):
+        sql = (
+            "SELECT credential_versions_1.id, credential_versions.state FROM credential_versions "
+            "JOIN credential_versions AS credential_versions_1 ON credential_versions_1.id = ? "
+            "WHERE credential_versions.workspace_id = 'credential_versions.secret'"
+        )
+        self.assertEqual(
+            qualified_columns(sql, frozenset({"credential_versions"})),
+            frozenset({"state", "workspace_id"}),
+        )
+        self.assertEqual(qualified_columns(sql, frozenset({"credential_versions_1"})), frozenset({"id"}))
+        self.assertIsNone(qualified_columns("SELECT t.* FROM t", frozenset({"t"})))
+
+
 class RoleMarkingTests(unittest.TestCase):
     def test_the_innermost_entry_wins(self):
         self.assertTrue(runtime_role.RECORDING, "tests/conftest.py turns marking on")
@@ -201,6 +258,30 @@ class RoleMarkingTests(unittest.TestCase):
         )
         self.assertEqual(callers, [])
 
+    def test_no_row_lock_is_taken_only_on_postgresql(self):
+        """SQLAlchemy leaves FOR UPDATE out of SQLite's SQL on its own, and
+        the guard reads the lock from the statement. A lock added only when
+        the dialect is PostgreSQL never reaches the guard."""
+        app_root = Path(__file__).resolve().parents[1] / "app"
+        hidden = []
+        for path in app_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.If, ast.IfExp)):
+                    continue
+                condition = ast.unparse(node.test)
+                if "dialect" not in condition and "postgresql" not in condition:
+                    continue
+                branch = (
+                    ast.Module(body=node.body, type_ignores=[]) if isinstance(node, ast.If) else node.body
+                )
+                if any(
+                    isinstance(call, ast.Call) and getattr(call.func, "attr", None) == "with_for_update"
+                    for call in ast.walk(branch)
+                ):
+                    hidden.append(f"{path.relative_to(app_root.parent)}:{node.lineno}")
+        self.assertEqual(hidden, [])
+
     def test_marking_off_returns_the_function_itself(self):
         def handler():
             return None
@@ -214,6 +295,11 @@ class RoleMarkingTests(unittest.TestCase):
 
 
 def _sending_function(engine, statement):
+    with engine.begin() as connection:
+        connection.execute(statement)
+
+
+def _sending_with_secret(engine, statement, *, include_secret=False):
     with engine.begin() as connection:
         connection.execute(statement)
 
@@ -237,6 +323,8 @@ class GuardTests(unittest.TestCase):
         self.matrix = evaluate(
             f"GRANT INSERT, UPDATE ON jobs TO {ROLE_B};\n"
             f"GRANT UPDATE (state) ON marketing_image_edits TO {ROLE_B};\n"
+            f"GRANT SELECT (id, state) ON marketing_image_edits TO {ROLE_B};\n"
+            f"GRANT SELECT ON jobs TO {ROLE_A};\n"
         )
 
     def _guard(self, **kwargs) -> GrantGuard:
@@ -265,6 +353,59 @@ class GuardTests(unittest.TestCase):
         self.assertTrue(all(v.test == "tests/x.py::test_y" for v in violations))
         self.assertEqual(guard.unreported(), [], "each violation is reported once")
 
+    def test_a_read_needs_select_on_every_column_it_names(self):
+        guard = self._guard()
+        with entered_as(ROLE_B):
+            _sending_function(self.engine, select(self.edits.c.id, self.edits.c.state))
+            _sending_function(self.engine, select(func.count()).select_from(self.edits))
+            _sending_function(self.engine, select(self.edits.c.id).where(self.edits.c.prompt == "p"))
+            _sending_function(self.engine, select(self.jobs.c.id))
+        with entered_as(ROLE_A):
+            _sending_function(self.engine, select(self.jobs))
+        violations = guard.unreported()
+        self.assertEqual(
+            sorted((v.role, v.operation, v.table, v.columns, v.why) for v in violations),
+            [
+                (ROLE_B, "SELECT", "jobs", None, "read"),
+                (ROLE_B, "SELECT", "marketing_image_edits", frozenset({"prompt"}), "read"),
+            ],
+        )
+        jobs = next(v for v in violations if v.table == "jobs")
+        self.assertIn("has no SELECT grant on jobs, which the statement reads", jobs.describe())
+        roles = guard.summary()["roles"]
+        self.assertEqual(roles[ROLE_B]["reads"], 4)
+        self.assertEqual(roles[ROLE_A]["read_tables"], 1)
+
+    def test_a_write_needs_select_on_what_its_where_reads(self):
+        guard = self._guard()
+        with entered_as(ROLE_B):
+            _sending_function(
+                self.engine, update(self.edits).where(self.edits.c.id == "e").values(state="done")
+            )
+            _sending_function(
+                self.engine, update(self.edits).where(self.edits.c.prompt == "p").values(state="done")
+            )
+        self.assertEqual(
+            [(v.operation, v.table, v.columns, v.why) for v in guard.unreported()],
+            [("SELECT", "marketing_image_edits", frozenset({"prompt"}), "where")],
+        )
+
+    def test_a_row_lock_needs_update_on_some_column(self):
+        """SQLite leaves FOR UPDATE out of the SQL; the guard reads it from
+        the statement."""
+        guard = self._guard()
+        with entered_as(ROLE_B):
+            _sending_function(self.engine, select(self.edits.c.id).with_for_update())
+        with entered_as(ROLE_A):
+            _sending_function(self.engine, select(self.jobs.c.id))
+            _sending_function(self.engine, select(self.jobs.c.id).with_for_update(read=True))
+        violations = guard.unreported()
+        self.assertEqual(
+            [(v.role, v.operation, v.table) for v in violations], [(ROLE_A, "LOCK", "jobs")]
+        )
+        self.assertIn("no UPDATE grant on any column of jobs", violations[0].describe())
+        self.assertEqual(guard.summary()["roles"][ROLE_A]["locks"], 1)
+
     def test_writes_outside_a_role_are_counted_not_checked(self):
         guard = self._guard()
         _sending_function(self.engine, insert(self.edits).values(id="e1", prompt="p"))
@@ -273,13 +414,17 @@ class GuardTests(unittest.TestCase):
 
     def test_every_exempted_site_still_exists(self):
         import importlib
+        import inspect
 
+        conditions = {e.site: e.when for e in SQLITE_ONLY_WRITES if e.when}
         for site in {e.site for e in SQLITE_ONLY_WRITES} | {g.site for g in KNOWN_GAPS}:
             module_name, qualname = site.split(":")
             target = importlib.import_module(module_name)
             for part in qualname.split("."):
                 target = getattr(target, part)
             self.assertTrue(callable(target), site)
+            if site in conditions:
+                self.assertIn(conditions[site][0], inspect.signature(target).parameters, site)
 
     def test_every_known_gap_is_still_missing_from_the_role_file(self):
         """A grant that lands for a known gap must take its exemption with
@@ -287,10 +432,13 @@ class GuardTests(unittest.TestCase):
         matrix = load_grant_matrix()
         for gap in KNOWN_GAPS:
             with self.subTest(gap=gap):
-                self.assertFalse(
-                    matrix.allows(gap.role, gap.table, gap.operation),
-                    f"#{gap.issue} is granted now: remove its KNOWN_GAPS entry",
+                privileges = matrix.privileges(gap.role, gap.table)
+                granted = (
+                    privileges.allows_any("UPDATE")
+                    if gap.operation == "LOCK"
+                    else privileges.allows(gap.operation, None)
                 )
+                self.assertFalse(granted, f"#{gap.issue} is granted now: remove its KNOWN_GAPS entry")
 
     def test_exemptions_are_narrow(self):
         site = f"{__name__}:_sending_function"
@@ -310,6 +458,18 @@ class GuardTests(unittest.TestCase):
             [(ROLE_B, "INSERT", "marketing_image_edits")],
         )
         self.assertIn("test_exemptions_are_narrow", violations[0].site)
+
+    def test_a_conditional_exemption_holds_only_for_its_argument(self):
+        guard = self._guard(sqlite_only=(SqliteOnlyWrite(
+            "jobs", "SELECT", f"{__name__}:_sending_with_secret", "test", when=("include_secret", False),
+        ),))
+        with entered_as(ROLE_B):
+            _sending_with_secret(self.engine, select(self.jobs.c.id))
+            self.assertEqual(guard.unreported(), [])
+            _sending_with_secret(self.engine, select(self.jobs.c.id), include_secret=True)
+        self.assertEqual(
+            [(v.role, v.operation, v.table) for v in guard.unreported()], [(ROLE_B, "SELECT", "jobs")]
+        )
 
 
 if __name__ == "__main__":

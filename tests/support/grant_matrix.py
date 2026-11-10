@@ -64,6 +64,11 @@ class TablePrivileges:
         granted = self.columns.get(privilege, set())
         return columns <= granted
 
+    def allows_any(self, privilege: str) -> bool:
+        """Whether ``privilege`` is granted on the table or on at least one
+        column: what ``SELECT ... FOR UPDATE/SHARE`` needs of UPDATE."""
+        return privilege in self.table or bool(self.columns.get(privilege))
+
 
 @dataclass
 class GrantMatrix:

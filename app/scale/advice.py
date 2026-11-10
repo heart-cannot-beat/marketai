@@ -164,10 +164,10 @@ def _ensure_utc(value: datetime | None) -> datetime | None:
 
 
 def _for_update(session: Session, stmt):
-    """PostgreSQL row locking; SQLite (tests, bounded local path) is a no-op."""
-    if session.get_bind().dialect.name == "postgresql":
-        return stmt.with_for_update()
-    return stmt
+    """PostgreSQL row locking. SQLite (tests, bounded local path) has no
+    ``FOR UPDATE`` and SQLAlchemy leaves it out there, but the statement
+    keeps the lock, so the SQLite grant guard (#59) sees it."""
+    return stmt.with_for_update()
 
 
 def _require_meta_mode(context: TenantContext) -> str:

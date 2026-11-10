@@ -207,9 +207,10 @@ def dispatch_schedules(
     On PostgreSQL, ``FOR UPDATE SKIP LOCKED`` lets multiple dispatcher
     instances run concurrently: each claims a disjoint set of ready
     schedules instead of blocking on rows another dispatcher already holds.
-    SQLite has no ``SKIP LOCKED`` -- the fallback plain select is safe there
-    because SQLite's single-writer model means only one dispatcher runs at a
-    time in tests and local development.
+    SQLite has no ``SKIP LOCKED``, and SQLAlchemy leaves the lock out of its
+    SQL there; the plain select is safe because SQLite's single-writer model
+    means only one dispatcher runs at a time in tests and local development.
+    The statement keeps the lock, so the SQLite grant guard (#59) checks it.
     """
     now = utcnow()
     stmt = (
@@ -221,8 +222,7 @@ def dispatch_schedules(
         )
         .order_by(MetaObservationSyncScheduleRecord.next_fire_at)
         .limit(batch_size)
+        .with_for_update(skip_locked=True)
     )
-    if session.get_bind().dialect.name == "postgresql":
-        stmt = stmt.with_for_update(skip_locked=True)
 
     return list(session.scalars(stmt).all())
