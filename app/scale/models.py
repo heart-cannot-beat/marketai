@@ -63,6 +63,7 @@ SOURCE_MANIFEST_STATE_VALUES = "('complete', 'blocked')"
 DATA_QUALITY_IMPACT_VALUES = "('warning', 'blocking')"
 EVIDENCE_MATURITY_VALUES = "('warming', 'monitorable', 'economics_ready', 'insufficient')"
 DATA_QUALITY_STATE_VALUES = "('pass', 'warning', 'blocked')"
+DELIVERY_DIAGNOSTIC_STATE_VALUES = "('unknown', 'none', 'learning', 'learning_limited')"
 
 # Shared CHECK value lists for §1.8-§1.9 snapshot and evaluation records.
 SCALE_HEALTH_VALUES = (
@@ -1093,6 +1094,10 @@ class ScaleDeliveryConfigSourceRecord(Base):
             SCENARIO_BICONDITIONAL_SQL,
             name="ck_sdcs_scenario_biconditional",
         ),
+        CheckConstraint(
+            f"diagnostic_state IN {DELIVERY_DIAGNOSTIC_STATE_VALUES}",
+            name="ck_sdcs_diagnostic_state",
+        ),
         UniqueConstraint(
             "workspace_id", "meta_mode", "episode_id", "source_revision",
             name="uq_sdcs_revision",
@@ -1138,6 +1143,26 @@ class ScaleDeliveryConfigSourceRecord(Base):
     call_intent_id: Mapped[str] = mapped_column(String(64), nullable=False)
     reconciliation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # -- Delivery diagnostic and status history (#109, contract §8/§19) -----
+    # Sealed into `DeliveryConfigSnapshot` from snapshot schema v3 on; v1/v2
+    # snapshots never read them. `diagnostic_state` is `unknown` unless the
+    # Meta read returned the field, and then `diagnostic_source_field` and
+    # `diagnostic_observed_at` record which field and when.
+    diagnostic_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="unknown", server_default=text("'unknown'"),
+    )
+    diagnostic_source_field: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    diagnostic_observed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    # One entry per Episode day the configuration was read for and entity
+    # level: `{"local_day": "YYYY-MM-DD", "entity_level": "campaign" |
+    # "ad_set" | "ad", "status": <effective status>}`, sorted. Sealing turns
+    # each into a `DeliveryStatusEvent` at local noon of that day in the
+    # Episode's time zone, so the evaluator's `observed_at.date()` is the day.
+    status_history: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow,
     )
@@ -1186,6 +1211,16 @@ class ScaleEvidenceSourceManifestRecord(Base):
             "workspace_id", "meta_mode", "episode_id", "source_revision",
             name="uq_sesm_episode_revision",
         ),
+        # A replayed or concurrent `scale_collect_sources` Job finds the
+        # manifest its batch already produced instead of allocating a new
+        # source revision (#109). Manifests without a key are unconstrained.
+        Index(
+            "uq_sesm_episode_collection_key",
+            "workspace_id", "meta_mode", "episode_id", "collection_key",
+            unique=True,
+            postgresql_where=text("collection_key IS NOT NULL"),
+            sqlite_where=text("collection_key IS NOT NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("sesm"))
@@ -1205,6 +1240,10 @@ class ScaleEvidenceSourceManifestRecord(Base):
     safe_watermark: Mapped[date] = mapped_column(Date, nullable=False)
     terminal_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     canonical_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # `scale-collect:{connection_id}:{D}:{run_generation}`: the observation
+    # batch this manifest was collected from (#109). Null for manifests not
+    # written by the collector.
+    collection_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow,
     )

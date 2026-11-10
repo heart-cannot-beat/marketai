@@ -103,6 +103,7 @@ __all__ = [
     "next_fire_after",
     "latest_fire_at_or_before",
     "observation_target_date",
+    "occurrence_id",
 ]
 
 #: The daily metric contract (Scale ``MetricContractType.DAILY``): ad-level
@@ -445,6 +446,18 @@ def observation_target_date(fire_at: datetime, timezone_name: str) -> date:
     that is retried hours later still observes the same day.
     """
     return _as_utc(fire_at).astimezone(_zone(timezone_name)).date() - timedelta(days=1)
+
+
+def occurrence_id(generation_id: str, target_date: date, instance: str | None = None) -> str:
+    """A scheduled sync run's occurrence: ``obs:{generation_id}:{D}:{instance}``
+    (#101 S2); a #107 run has no instance.
+
+    Lives here, not in ``app.meta.observation_sync``, so Scale's collector
+    (#109) can name the runs it reads without importing the executor, which
+    resolves adapters (ADR 0017).
+    """
+    base = f"obs:{generation_id}:{target_date.isoformat()}"
+    return base if instance is None else f"{base}:{instance}"
 
 
 # ---------------------------------------------------------------------------

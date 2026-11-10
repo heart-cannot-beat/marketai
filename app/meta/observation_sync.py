@@ -26,7 +26,10 @@ attested evidence, each a durable Job the Worker runs:
    generation that no longer matches the Scale read contract it names gets
    no run and an audit event instead. A fire time older than the latest due
    slot (the Worker was down) is not run: the schedule jumps to the latest
-   slot and a tick for that slot is enqueued instead (#101 Q9). Everything
+   slot and a tick for that slot is enqueued instead (#101 Q9). Runs of
+   earlier days that no batch will finish -- their batch Job was rejected
+   for a stale authorization epoch, or ended otherwise without reaching
+   them -- are failed with their Operations first (#109). Everything
    commits in one transaction.
 3. **Batch** (:func:`run_observation_sync`). One Job per connection and day
    drives each of its runs to a terminal state, page by page: resolve the
@@ -102,6 +105,7 @@ from .observation import (
     next_fire_after,
     observation_read_plan,
     observation_target_date,
+    occurrence_id,
     record_coverage,
 )
 from .scale_read_contracts import (
@@ -266,12 +270,6 @@ def tick_idempotency_key(connection_id: str, fire_at: datetime) -> str:
 
 def sync_idempotency_key(connection_id: str, target_date: date, run_generation: int) -> str:
     return f"meta-obs-sync:{connection_id}:{target_date.isoformat()}:{run_generation}"
-
-
-def occurrence_id(generation_id: str, target_date: date, instance: str | None = None) -> str:
-    """``obs:{generation_id}:{D}:{instance}`` (#101 S2); #107 runs have no instance."""
-    base = f"obs:{generation_id}:{target_date.isoformat()}"
-    return base if instance is None else f"{base}:{instance}"
 
 
 def _occurrence_of(run: MetaObservationSyncRunRecord) -> tuple[date, str | None]:
@@ -478,6 +476,13 @@ def run_observation_tick(
         for latest in sorted(skipped_to)
     ]
 
+    if due:
+        _close_abandoned_runs(
+            session, context, connection_id,
+            before=min(observation_target_date(fire_at, generation.local_timezone) for _row, generation in due),
+            now=now,
+        )
+
     runs_by_date: dict[date, list[str]] = defaultdict(list)
     for row, generation in due:
         row.last_fired_at = fire_at
@@ -519,6 +524,86 @@ def run_observation_tick(
         sync_job_ids=tuple(sync_jobs),
         next_tick_job_ids=tuple(next_ticks),
     )
+
+
+#: Job states after which no Worker will run the Job again.
+_ENDED_JOB_STATES = frozenset({"succeeded", "failed", "cancelled", "uncertain"})
+
+
+def _close_abandoned_runs(
+    session: Session, context: TenantContext, connection_id: str, *, before: date, now: datetime,
+) -> list[str]:
+    """Fail the connection's earlier runs that no batch will finish (#107 residual, #109).
+
+    A batch Job the claim function rejects -- the Workspace's authorization
+    epoch moved after it was enqueued (``authorization_epoch_stale``) -- or
+    that ended any other way before reaching its runs leaves them, and the
+    Operations the tick created for them, ``queued`` for good. One Job
+    drives many runs and Operations, so ``app.legacy_operations`` cannot
+    settle them. The next tick of the connection is the first place that
+    runs again for it: every run of a target day before ``before`` still
+    ``queued`` or ``running`` whose batch Job has ended (or was never
+    created) becomes ``failed``, with its Operation, in the tick's
+    transaction, and the audit event names the batch Job's ending. A run
+    whose batch Job may still run is left alone.
+    """
+    generation_ids = list(session.scalars(
+        select(ObservationContractGenerationRecord.id).where(
+            ObservationContractGenerationRecord.workspace_id == context.workspace_id,
+            ObservationContractGenerationRecord.meta_mode == context.meta_mode,
+            ObservationContractGenerationRecord.meta_connection_id == connection_id,
+        )
+    ))
+    if not generation_ids:
+        return []
+    runs = list(session.scalars(
+        select(MetaObservationSyncRunRecord)
+        .where(
+            MetaObservationSyncRunRecord.workspace_id == context.workspace_id,
+            MetaObservationSyncRunRecord.meta_mode == context.meta_mode,
+            MetaObservationSyncRunRecord.contract_generation_id.in_(generation_ids),
+            MetaObservationSyncRunRecord.state.in_(("queued", "running")),
+        )
+        .order_by(MetaObservationSyncRunRecord.occurrence_id, MetaObservationSyncRunRecord.id)
+        .with_for_update()
+    ))
+    closed = []
+    for run in runs:
+        try:
+            target_date, _instance = _occurrence_of(run)
+        except ObservationSyncError:
+            continue  # not a scheduled occurrence: not this executor's to close
+        if target_date >= before:
+            continue
+        key = sync_idempotency_key(connection_id, target_date, run.run_generation)
+        job = session.scalar(
+            select(JobRecord).where(JobRecord.workspace_id == context.workspace_id, JobRecord.idempotency_key == key)
+        )
+        if job is not None and job.state not in _ENDED_JOB_STATES:
+            continue
+        ending = "never enqueued" if job is None else f"{job.state}/{job.error_code or '-'}"
+        run.state = "failed"
+        run.completed_at = now
+        session.flush()
+        _move_operation(
+            session, run.operation_id, OperationState.FAILED,
+            f"scheduled sync abandoned: its batch Job ended {ending}"[:500],
+        )
+        append_event(
+            session,
+            event_type="meta.sync_run.abandoned",
+            resource_type="meta_sync_run",
+            resource_id=run.id,
+            details={
+                "contract_generation_id": run.contract_generation_id,
+                "target_date": target_date.isoformat(),
+                "batch_job_id": job.id if job is not None else None,
+                "batch_job_state": job.state if job is not None else None,
+                "batch_job_error_code": (job.error_code or None) if job is not None else None,
+            },
+        )
+        closed.append(run.id)
+    return closed
 
 
 def _plan_or_audit(session: Session, generation: ObservationContractGenerationRecord) -> ReadPlan | None:

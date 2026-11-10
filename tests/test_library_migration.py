@@ -127,8 +127,9 @@ class LibraryMigrationDowngradeTests(unittest.TestCase):
         # zzb1e2f3a4b5 (the Worker rolls Scale Episodes over, Issue #92) and
         # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
         # zzd3a4b5c6d7 (platform Meta connection reads across Workspaces, #102) and
-        # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107).
-        self.assertEqual(revision, "zze4f5a6b7c8")
+        # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107) and
+        # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109).
+        self.assertEqual(revision, "zzf5a6b7c8d9")
         self.assertEqual(event_type, "library.withdrawal.affects_market_asset_binding")
 
 
@@ -221,8 +222,9 @@ class LibraryTemplatesDatasourcesMigrationTests(unittest.TestCase):
         # zzb1e2f3a4b5 (the Worker rolls Scale Episodes over, Issue #92) and
         # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
         # zzd3a4b5c6d7 (platform Meta connection reads across Workspaces, #102) and
-        # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107).
-        self.assertEqual(revision, "zze4f5a6b7c8")
+        # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107) and
+        # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109).
+        self.assertEqual(revision, "zzf5a6b7c8d9")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as connection:

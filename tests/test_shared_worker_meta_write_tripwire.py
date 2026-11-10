@@ -1,8 +1,8 @@
 """Tripwire: Scale handlers share the main Worker only while it cannot write to Meta.
 
 ADR 0017 amends Scale contract §20: the shared Worker (``python -m worker.main``
--> ``app.worker_runtime``) may run ``scale_evaluate``, ``scale_advice_expire``
-and ``scale_export`` only while the process has
+-> ``app.worker_runtime``) may run ``scale_evaluate``, ``scale_advice_expire``,
+``scale_collect_sources`` and ``scale_export`` only while the process has
 
 1. no Meta write port and no write-side client it can construct,
 2. no Launch dispatch that reaches a real Meta write client, and
@@ -44,7 +44,7 @@ from tests.test_job_policy import _dispatched_types
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app"
-SCALE_JOB_TYPES = {"scale_evaluate", "scale_advice_expire", "scale_export"}
+SCALE_JOB_TYPES = {"scale_evaluate", "scale_advice_expire", "scale_collect_sources", "scale_export"}
 SENTINEL_TOKEN = "ci-only-write-token-sentinel"
 #: Everything ``config.meta_write_ready()`` needs, with fictional values.
 FULL_WRITE_CONFIG = {
