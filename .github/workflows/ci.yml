@@ -563,6 +563,22 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_scale_evaluate_worker_pg -v
 
+      # Advice expiry as a delayed Job (#111): Phase C schedules each active
+      # thread's scale_advice_expire Job with next_attempt_at at its freshness
+      # deadline, in the transaction that writes the thread. As the Worker
+      # role, the unchanged claim function leaves a Job that is not due
+      # unleased and claims the Jobs queued after it; a due Job expires the
+      # thread; a later evaluation schedules a new key and the old Job changes
+      # nothing. A crash before Phase C's commit leaves neither; a stale
+      # authorization epoch rejects the delayed Job (the thread stays active
+      # until #109's fallback scan); another Workspace or mode sees nothing.
+      - name: Scale Advice expiry runs as a delayed Job under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_advice_expiry_pg -v
+
       # Localization isolated-output adoption (#46): the API publishes the
       # child AssetVersion, publication, lineage and binding in its own
       # transaction, under RLS; while QC is incomplete it answers 422

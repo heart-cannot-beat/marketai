@@ -10,7 +10,12 @@ comparability hash, so the run evaluates instead of rolling the Episode over
 
 ``seed_active_thread`` then opens an Advice thread on the evaluated
 Episode, the way Phase C's Advice processing does: the happy-path
-evaluation itself produces no Advice candidate.
+evaluation itself produces no Advice candidate. With
+``delivery_anomaly=True`` the last two days deliver nothing, the evaluator
+itself reports a delivery anomaly, and Phase C opens an
+``investigate_delivery_anomaly`` thread (#111). ``seed_later_run`` adds a
+second live run on the same manifest with a later freshness reference: the
+next evaluation, which moves every active thread's deadline.
 
 Every id is new, so the rows can stay in a shared database: the Scale
 evidence tables refuse DELETE. The caller owns the transaction and has
@@ -20,6 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -27,6 +33,7 @@ from app.adapters.persistence.models import new_id
 from app.platform.tenancy import TenantContext, system_context
 from app.scale.advice import process_advice_candidates
 from app.scale.models import (
+    ScaleEvaluationRunRecord,
     ScaleMetricSemanticContractSetMemberRecord,
     ScaleMetricSemanticContractSetRecord,
 )
@@ -48,6 +55,12 @@ AS_OF = date(2026, 9, 5)
 #: The run's freshness reference. The Policy's 24-hour freshness lag put its
 #: Advice deadline at 2026-09-07 04:00 UTC, long past.
 FRESHNESS_REFERENCE_AT = datetime(2026, 9, 6, 4, 0, tzinfo=timezone.utc)
+#: The seeded Policy's ``freshness_floor_maximum_lag_hours``.
+FRESHNESS_LAG = timedelta(hours=24)
+#: The last days of the current window that deliver nothing under
+#: ``delivery_anomaly=True``: two such days make the evaluator report a
+#: delivery anomaly (one does not; seven close the Episode instead).
+ANOMALY_DAYS = (AS_OF - timedelta(days=1), AS_OF)
 
 
 @dataclass(frozen=True)
@@ -65,7 +78,14 @@ def worker_context(workspace_id: str, meta_mode: str | None = MODE) -> TenantCon
     return replace(system_context(workspace_id, initiator_id="user_1"), meta_mode=meta_mode)
 
 
-def seed_evaluable_run(session: Session, workspace_id: str, *, meta_mode: str = MODE) -> SeededRun:
+def seed_evaluable_run(
+    session: Session,
+    workspace_id: str,
+    *,
+    meta_mode: str = MODE,
+    delivery_anomaly: bool = False,
+    freshness_reference_at: datetime = FRESHNESS_REFERENCE_AT,
+) -> SeededRun:
     current_start = AS_OF - timedelta(days=6)
     current_end = AS_OF + timedelta(days=1)
     baseline_start = current_start - timedelta(days=7)
@@ -90,6 +110,12 @@ def seed_evaluable_run(session: Session, workspace_id: str, *, meta_mode: str = 
 
     days = [baseline_start + timedelta(days=offset) for offset in range((current_end - baseline_start).days)]
     daily = {day: _daily_source(workspace_id, meta_mode, episode.id, day) for day in days}
+    if delivery_anomaly:
+        for day in ANOMALY_DAYS:
+            row = daily[day]
+            row.delivered = False
+            row.spend = row.purchase_value = Decimal("0")
+            row.impressions = row.link_clicks = row.purchases = 0
     exact = {role: _exact_source(workspace_id, meta_mode, episode.id, role, start, end)
              for role, start, end in (("current_7d", current_start, current_end),
                                       ("baseline_7d", baseline_start, current_start),
@@ -109,13 +135,36 @@ def seed_evaluable_run(session: Session, workspace_id: str, *, meta_mode: str = 
     ])
     session.flush()
     run = _run(workspace_id, meta_mode, episode.id, enrollment.id, manifest, AS_OF, policy_id=policy.id)
-    run.freshness_reference_at = FRESHNESS_REFERENCE_AT
+    run.freshness_reference_at = freshness_reference_at
     session.add(run)
     session.flush()
     return SeededRun(
         workspace_id=workspace_id, meta_mode=meta_mode, enrollment_id=enrollment.id,
         episode_id=episode.id, policy_id=policy.id, run_id=run.id,
     )
+
+
+def seed_later_run(session: Session, seeded: SeededRun, freshness_reference_at: datetime) -> str:
+    """A second ``requested`` live run on the seeded run's manifest, one
+    semantic event later, with a later freshness reference: once evaluated,
+    it is the Episode's freshest evidence and moves each active thread's
+    deadline to ``freshness_reference_at`` plus the Policy's lag."""
+    first = session.get(ScaleEvaluationRunRecord, seeded.run_id)
+    run = ScaleEvaluationRunRecord(
+        id=new_id("sevr"),
+        freshness_reference_at=freshness_reference_at,
+        semantic_event_sequence=first.semantic_event_sequence + 1,
+        run_state="requested",
+        **{key: getattr(first, key) for key in (
+            "workspace_id", "meta_mode", "meta_connection_id", "scenario_scope_key", "episode_id",
+            "enrollment_id", "target_local_day", "trigger_kind", "source_manifest_id",
+            "source_manifest_hash", "source_revision", "policy_version_id", "target_version_id",
+            "normalized_target_key", "algorithm_version", "replay_generation",
+            "original_initiator_id", "cancellation_generation")},
+    )
+    session.add(run)
+    session.flush()
+    return run.id
 
 
 def seed_active_thread(

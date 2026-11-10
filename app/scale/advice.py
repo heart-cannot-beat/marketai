@@ -26,12 +26,16 @@ this deliberately rather than by surprise):
   separate cross-cutting change, not one of this task's six required
   functions, and not in its required test list. ``ScaleAdviceNotification
   DecisionRecord`` is left for that later integration.
-* **When to schedule the freshness-deadline job is #101's.**
+* **The freshness-deadline job is delayed to the deadline (#111).**
   ``expire_advice_thread`` is the complete, directly callable,
   lock-recheck handler; ``enqueue_advice_expiry`` enqueues its
   ``scale_advice_expire`` Job with the thread's Meta mode in the payload
-  (#97), and ``advice_expire_job_context`` reads it back for the Worker.
-  Nothing in this module calls the enqueue yet.
+  (#97) and ``not_before`` set to the deadline, and
+  ``advice_expire_job_context`` reads the mode back for the Worker.
+  ``app.scale.service``'s Phase C calls ``enqueue_episode_advice_expiries``
+  once its run is ``evaluated``, in the transaction that wrote the thread
+  changes. The fallback scan for Jobs a stale authorization epoch rejects
+  waits for the source-collection Job (#109).
 * **Episode-close supersession is applied lazily, at recurrence.** The
   ``ScaleAdviceThreadEventRecord`` CHECK constraint
   (``ck_sate_superseded_shape``) requires a non-null ``successor_thread_id``
@@ -300,12 +304,17 @@ def process_advice_candidates(
     projection_eligible: bool,
     occurred_at: datetime | None = None,
     executor_id: str = _SYSTEM_EXECUTOR,
+    commit: bool = True,
 ) -> list[str]:
     """Resolve every candidate to a thread, append occurrences, apply
     eligible-miss resolution and semantic-change/recurrence supersession.
 
     Returns the ordered, de-duplicated list of thread ids this call
     created, appended to, resolved, or superseded.
+
+    ``commit=False`` leaves the changes flushed in the caller's
+    transaction. Phase C passes it so the thread changes, their expiry
+    Jobs and the run's terminal state commit together (spec §3.4, #111).
     """
     meta_mode = _require_meta_mode(context)
     occurred_at = _ensure_utc(occurred_at) or utcnow()
@@ -534,7 +543,10 @@ def process_advice_candidates(
                 thread.lifecycle_reason = _format_miss_streak(streak, evaluated_local_day)
             touched_thread_ids.append(thread.id)
 
-    commit_and_rebind(session)
+    if commit:
+        commit_and_rebind(session)
+    else:
+        session.flush()
 
     seen: set[str] = set()
     result: list[str] = []
@@ -1059,12 +1071,12 @@ def enqueue_advice_expiry(
     that key already names. A thread that is no longer active has no
     deadline: nothing is enqueued.
 
-    The queue has no delayed start, so a Job is claimed as soon as it is
-    enqueued; one enqueued before its deadline rechecks, finds the deadline
-    ahead and changes nothing. When to call this is #101's scheduling. The
-    payload carries the thread's Meta mode (#97): the Worker's claimed
-    context names none, and the thread is visible under RLS only to a
-    context that does.
+    The Job is not claimable before the deadline (``not_before``, #111).
+    When later evidence moves the deadline, the next call enqueues a new Job
+    under the new key; the earlier one, once due, rechecks, finds the
+    deadline ahead and changes nothing. The payload carries the thread's
+    Meta mode (#97): the Worker's claimed context names none, and the thread
+    is visible under RLS only to a context that does.
     """
     meta_mode = _require_meta_mode(context)
     thread = session.execute(
@@ -1076,7 +1088,8 @@ def enqueue_advice_expiry(
         raise AdviceLifecycleError("thread_not_found", thread_id)
     if thread.lifecycle != "active":
         return None
-    deadline = _freshness_deadline(session, context, meta_mode, thread)
+    # In UTC, so one instant names one key whatever the session's time zone.
+    deadline = _freshness_deadline(session, context, meta_mode, thread).astimezone(timezone.utc)
     with tenant_scope(session, context):
         return enqueue_in_session(
             session,
@@ -1086,7 +1099,31 @@ def enqueue_advice_expiry(
             idempotency_key=f"scale-advice-expire:{thread.id}:{deadline.isoformat()}",
             resource_type="scale_advice_thread",
             resource_id=thread.id,
+            not_before=deadline,
         )
+
+
+def enqueue_episode_advice_expiries(
+    session: Session, context: TenantContext, episode_id: str,
+) -> list[JobRecord]:
+    """Schedule the deadline Job of every active thread of one Episode
+    (spec §3.5: "Every projection-eligible Evaluation advances the ...
+    deadline for all active Episode threads").
+
+    Phase C calls this after its run is flushed as ``evaluated``, so the
+    deadline each key carries is the one ``expire_advice_thread`` will
+    recompute; and before its one commit, so a thread is never committed
+    without the Job for its current deadline. The threads are locked, as
+    the handler locks them. Returns the Jobs in thread-id order.
+    """
+    meta_mode = _require_meta_mode(context)
+    threads = _load_active_threads(session, context, meta_mode, episode_id)
+    scheduled: list[JobRecord] = []
+    for thread in sorted(threads.values(), key=lambda row: row.id):
+        job = enqueue_advice_expiry(session, context, thread.id)
+        if job is not None:
+            scheduled.append(job)
+    return scheduled
 
 
 def advice_expire_job_context(context: TenantContext, payload: Mapping[str, Any]) -> TenantContext:

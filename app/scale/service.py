@@ -39,7 +39,9 @@ Known Task-12 scoping decisions (the full generality is later tasks' job):
 * Advice lifecycle processing (thread resolution, occurrence creation,
   dispositions/cooldowns, notification intents -- spec §3.5) is delegated to
   :func:`app.scale.advice.process_advice_candidates`, called from Phase C
-  step 6 with the Evaluation's own persisted advice candidates.
+  step 6 with the Evaluation's own persisted advice candidates. Phase C
+  step 10 schedules every active thread's delayed ``scale_advice_expire``
+  Job (#111). Both land in Phase C's one transaction.
 * Deciding when to request and enqueue an evaluation (spec §3.8 trigger
   sources) is #101's scheduling. ``request_scale_evaluation`` only
   creates/reuses the durable run checkpoint; ``enqueue_scale_evaluation``
@@ -84,7 +86,7 @@ from app.platform.tenancy import (
 )
 from app.scale._canonical import canonical_encode, canonical_hash
 from app.scale._contracts import ScaleEvaluation, ScaleEvidenceSnapshot
-from app.scale.advice import process_advice_candidates
+from app.scale.advice import enqueue_episode_advice_expiries, process_advice_candidates
 from app.scale.enrollment import (
     DeliveryConfigBaseline,
     EpisodeContext,
@@ -804,16 +806,15 @@ def _phase_c(
     if not no_delivery_closing:
         # Step 6: Advice lifecycle processing (spec §3.5) -- thread
         # resolution, occurrence creation, eligible-miss transitions, and
-        # recurrence/semantic-change supersession. Note that
-        # `process_advice_candidates` commits its own transaction
-        # internally; the Evaluation/projection writes above are already
-        # flushed (and visible to it within this same session) by the time
-        # it runs.
+        # recurrence/semantic-change supersession. It flushes into this
+        # transaction instead of committing its own (#111): the thread
+        # changes commit with their expiry Jobs and the run's terminal state.
         process_advice_candidates(
             session, context, episode.id, evaluation_row.id, evaluation.advice_candidates,
             trigger_kind=run.trigger_kind,
             evaluated_local_day=snapshot.as_of_local_day,
             projection_eligible=projection_eligible,
+            commit=False,
         )
 
     # Step 7: audit.
@@ -826,13 +827,20 @@ def _phase_c(
         episode.phase_run_id = None
         episode.revision += 1
 
-    # Step 9: CAS the run to its terminal outcome and commit.
+    # Step 9: CAS the run to its terminal outcome.
     outcome_kind = RunOutcomeKind.ALREADY_EVALUATED if reused else RunOutcomeKind.EVALUATED
     run.run_state = "evaluated"
     run.outcome_kind = outcome_kind.value
     run.evaluation_id = evaluation_row.id
     run.updated_at = utcnow()
     session.flush()
+
+    # Step 10: schedule each active thread's freshness-deadline Job (spec
+    # §3.5, #111). After the flush above, so the deadline counts this run's
+    # freshness reference the way the handler's recheck will; before the
+    # commit below, so no thread is committed without the Job for its
+    # current deadline. A deadline this run did not move keeps its Job.
+    enqueue_episode_advice_expiries(session, context, episode.id)
     session.commit()
 
     return ScaleRunOutcome(

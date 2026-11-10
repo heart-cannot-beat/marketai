@@ -14,7 +14,14 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.adapters.persistence.database import Base
-from app.adapters.persistence.models import AuditEventRecord, WorkspaceRecord, new_id, utcnow
+from app.adapters.persistence.models import (
+    AuditEventRecord,
+    JobRecord,
+    OperationRecord,
+    WorkspaceRecord,
+    new_id,
+    utcnow,
+)
 from app.platform.tenancy import TenantContext
 from app.scale.enrollment import ScaleEnrollmentEventRecord
 from app.scale.evidence import seal_snapshot
@@ -86,6 +93,9 @@ BASELINE_END = CURRENT_START
 _ALL_TABLES = [
     WorkspaceRecord.__table__,
     AuditEventRecord.__table__,
+    # Phase C schedules each active thread's Advice expiry Job (#111).
+    OperationRecord.__table__,
+    JobRecord.__table__,
     ScaleAdviceThreadRecord.__table__,
     ScaleAdviceOccurrenceRecord.__table__,
     ScaleAdviceThreadEventRecord.__table__,
