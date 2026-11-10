@@ -1035,6 +1035,15 @@ class MetaObservationSyncScheduleRecord(Base):
     )
 
 
+# The dispatcher's scan (#107): due active schedules, oldest slot first.
+Index(
+    "ix_msched_active_next_fire",
+    MetaObservationSyncScheduleRecord.next_fire_at,
+    sqlite_where=text("state = 'active'"),
+    postgresql_where=text("state = 'active'"),
+)
+
+
 # ---------------------------------------------------------------------------
 # §3.22 EvidencePublicationRecord
 # ---------------------------------------------------------------------------

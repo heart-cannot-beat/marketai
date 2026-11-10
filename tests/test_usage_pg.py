@@ -325,7 +325,8 @@ class UsagePostgresTests(unittest.TestCase):
     # -- Slice S2: Operations and AssetVersions ------------------------------
 
     def _operation(self, ctx: TenantContext) -> str:
-        """Commands are admitted by the API: the Worker cannot INSERT operation_records."""
+        """A command the API admits. (The Worker opens Operations only for the
+        scheduled Meta observation sync, which has no API command, #107.)"""
         with self._as(API), tenant_session(ctx) as session:
             return create_operation(session, command_type="usage.pg_test", context=ctx).id
 

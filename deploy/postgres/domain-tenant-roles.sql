@@ -528,6 +528,9 @@ BEGIN
     'meta_entity_status_events', 'meta_ad_bindings', 'launch_steps',
     'launch_audit_log', 'experiment_ad_bindings', 'meta_sync_runs',
     'meta_ingestions', 'jobs', 'operation_state_events',
+    -- A scheduled Meta observation sync has no API command to admit it:
+    -- its tick Job opens one Operation per sync run (zze4f5a6b7c8, #107).
+    'operation_records',
     'library_entries', 'library_drafts', 'library_events', 'library_audit',
     -- The reference gate (#158) and product intake (#161) run in the Worker:
     -- intake quarantines the images it fetched as reference objects.
@@ -843,6 +846,14 @@ BEGIN
   IF to_regprocedure('public.marketai_admitted_operation_candidates_v1(integer)') IS NOT NULL THEN
     EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_admitted_operation_candidates_v1(integer) FROM PUBLIC';
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_admitted_operation_candidates_v1(integer) TO marketai_domain_worker';
+  END IF;
+
+  -- Meta observation dispatch (zze4f5a6b7c8, #107): due schedules become
+  -- meta_observation_tick Jobs and their job.enqueued audit events, nothing
+  -- else; the tick then runs in a signed TenantContext under RLS.
+  IF to_regprocedure('public.marketai_dispatch_meta_observation_ticks_v1(integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_dispatch_meta_observation_ticks_v1(integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_dispatch_meta_observation_ticks_v1(integer) TO marketai_domain_worker';
   END IF;
 
   -- Platform Meta API (zzc2f3a4b5c6, #91 and #94). The API keeps SELECT only
