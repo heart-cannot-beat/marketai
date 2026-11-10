@@ -522,6 +522,20 @@ jobs:
           DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
         run: python -m unittest tests.test_scale_targets_pg -v
 
+      # Scale Episode rollover (#92): an evaluation that sees the delivery
+      # configuration change closes the Episode and opens the next one as the
+      # Worker role, under RLS, in one transaction with the Enrollment update,
+      # the new baseline delivery source and the closure event. Another
+      # Workspace or Meta mode changes nothing. Then the privilege matrix of
+      # scale_episodes, and the migration: below it the rollover is refused
+      # and leaves the run requested; after it the same run rolls over.
+      - name: Scale Episode rollover holds under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_episode_rollover_pg -v
+
       # Localization isolated-output adoption (#46): the API publishes the
       # child AssetVersion, publication, lineage and binding in its own
       # transaction, under RLS; while QC is incomplete it answers 422

@@ -426,7 +426,9 @@ class ReleaseEntryPointTests(unittest.TestCase):
                 self.assertIn(f"'{table}'", section)
 
     def test_domain_role_replay_preserves_scale_evidence_and_advice_grants(self):
-        """The role replay repeats f5eeeab4e9b9's Scale grant matrix exactly.
+        """The role replay repeats f5eeeab4e9b9's Scale grant matrix exactly,
+        plus the Worker's INSERT on scale_episodes that zzb1e2f3a4b5 (#92)
+        added to it.
 
         Every release revokes all table grants and re-grants only what the
         role file lists, so a Scale table the file forgets fails closed after
@@ -458,7 +460,12 @@ class ReleaseEntryPointTests(unittest.TestCase):
                 r"ARRAY\['(\w+)', '([A-Z, ]*)', '([A-Z, ]*)'\]", scale
             )
         }
-        self.assertEqual(replayed, module.GRANT_MATRIX)
+        # f5eeeab4e9b9 is history; the Worker's rollover INSERT came later.
+        expected = dict(module.GRANT_MATRIX)
+        api, worker = expected["scale_episodes"]
+        self.assertNotIn("INSERT", worker)
+        expected["scale_episodes"] = (api, ("INSERT",) + worker)
+        self.assertEqual(replayed, expected)
         self.assertIn(
             "GRANT SELECT ON TABLE public.%I TO marketai_domain_api, "
             "marketai_domain_worker, marketai_domain_readonly",

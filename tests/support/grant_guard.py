@@ -96,10 +96,6 @@ KNOWN_GAPS: tuple[KnownGap, ...] = (
     # Platform Meta bootstrap creates a Workspace the domain database does
     # not have yet, as the API role, which holds only SELECT on workspaces.
     KnownGap(API_ROLE, "workspaces", "INSERT", "app.meta.platform_api:_ensure_workspace", 91),
-    # A Scale evaluation that sees the delivery configuration change rolls
-    # the Episode over in the Worker, which holds only UPDATE on
-    # scale_episodes.
-    KnownGap(WORKER_ROLE, "scale_episodes", "INSERT", "app.scale.service:_apply_episode_rollover", 92),
 )
 
 

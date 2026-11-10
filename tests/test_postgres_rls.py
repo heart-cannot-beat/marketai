@@ -1501,7 +1501,8 @@ class RowLevelSecurityTests(unittest.TestCase):
             ).scalar())
 
     def test_scale_runtime_grants_match_the_migration_matrix(self):
-        """A released cluster grants Scale exactly f5eeeab4e9b9's matrix.
+        """A released cluster grants Scale exactly f5eeeab4e9b9's matrix,
+        plus the grants later commands needed (``beyond_matrix``).
 
         The role replay revokes every table grant on each release, so this
         checks the privileges that survive it rather than the migration's.
@@ -1530,9 +1531,12 @@ class RowLevelSecurityTests(unittest.TestCase):
                 ).scalar())
 
             # Activation (an API command added after that matrix) records
-            # the Episode's baseline delivery configuration.
+            # the Episode's baseline delivery configuration, and an
+            # evaluation that sees the delivery configuration change opens
+            # the next Episode in the Worker (zzb1e2f3a4b5, #92).
             beyond_matrix = {
                 ("marketai_domain_api", "scale_delivery_config_sources"): ("INSERT",),
+                ("marketai_domain_worker", "scale_episodes"): ("INSERT",),
             }
             for table, matrix in module.GRANT_MATRIX.items():
                 for role, index in roles.items():
