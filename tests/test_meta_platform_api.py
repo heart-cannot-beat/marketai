@@ -45,9 +45,13 @@ from app.adapters.persistence.models import AuditEventRecord, WorkspaceRecord
 from app.entitlements.credential_admin import CredentialAdmin
 from app.entitlements.credentials import CredentialVersionRecord
 from app.main import app
+from app.meta.models import MetaConnectionRecord, MetaDataSourceBindingRecord
 from app.meta.platform_api import (
+    CONNECTION_LIST_LIMIT,
     PLATFORM_EXECUTOR,
     LegacyPlatformContext,
+    _binding_dict,
+    _connection_dict,
     _get_protector,
     request_platform_context,
 )
@@ -84,6 +88,28 @@ def _workspace_audit(workspace_id: str) -> list[tuple[str, str, str | None, str]
                 )
             )
         ]
+
+
+def _bump_epoch(workspace_id: str) -> None:
+    """A membership or entitlement change after the connection was made."""
+    with platform_session() as session:
+        session.get(WorkspaceRecord, workspace_id).authorization_epoch += 1
+
+
+def _connections_in(*workspace_ids: str) -> list[dict]:
+    """These Workspaces' connections, read directly, in list order."""
+    with platform_session() as session:
+        return [
+            _connection_dict(row)
+            for row in session.scalars(
+                select(MetaConnectionRecord)
+                .where(MetaConnectionRecord.workspace_id.in_(workspace_ids))
+                .order_by(MetaConnectionRecord.created_at, MetaConnectionRecord.id)
+            )
+        ]
+
+
+CONNECTIONS = "/api/platform/v1/meta/connections"
 
 
 class PlatformApiTestCase(unittest.TestCase):
@@ -369,13 +395,24 @@ class PlatformAuthGuardTests(unittest.TestCase):
 
 
 class ConnectionReadTests(PlatformApiTestCase):
+    def _list_all(self) -> list[dict]:
+        """Every page of the list: the database is shared, so ours may not be first."""
+        items: list[dict] = []
+        params: dict = {}
+        while True:
+            resp = self.client.get(CONNECTIONS, params=params)
+            self.assertEqual(resp.status_code, 200, resp.text)
+            page = resp.json()["items"]
+            items.extend(page)
+            if len(page) < CONNECTION_LIST_LIMIT:
+                return items
+            params = {"after": page[-1]["id"]}
+
     def test_list_and_get_connection(self):
         created = self._bootstrap()
         connection_id = created["connection_id"]
 
-        listed = self.client.get("/api/platform/v1/meta/connections")
-        self.assertEqual(listed.status_code, 200)
-        ids = [row["id"] for row in listed.json()["items"]]
+        ids = [row["id"] for row in self._list_all()]
         self.assertIn(connection_id, ids)
 
         got = self.client.get(f"/api/platform/v1/meta/connections/{connection_id}")
@@ -386,6 +423,47 @@ class ConnectionReadTests(PlatformApiTestCase):
     def test_get_connection_not_found(self):
         resp = self.client.get("/api/platform/v1/meta/connections/mcon_does_not_exist")
         self.assertEqual(resp.status_code, 404)
+
+    def test_list_reads_each_workspace_and_mode_at_its_current_epoch(self):
+        """SQLite refuses a context signed for a stale epoch, as RLS does (#102)."""
+        customer_ws = f"ws_platform_api_customer_{uuid.uuid4().hex[:12]}"
+        _provision_customer_workspace(customer_ws)
+        self._bootstrap()
+        for meta_mode in ("customer_sandbox", "controlled_mock"):
+            self._bootstrap(workspace_id=customer_ws, meta_mode=meta_mode,
+                            access_token_material=None, app_secret_material=None)
+        _bump_epoch(customer_ws)
+
+        expected = _connections_in(self.workspace_id, customer_ws)
+        self.assertEqual(len(expected), 3)
+        listed = [
+            row for row in self._list_all() if row["workspace_id"] in (self.workspace_id, customer_ws)
+        ]
+        self.assertEqual(listed, expected)
+        for row in expected:
+            got = self.client.get(f"{CONNECTIONS}/{row['id']}")
+            self.assertEqual((got.status_code, got.json()), (200, row))
+
+    def test_list_pages_after_a_connection(self):
+        workspace_ids = [f"ws_platform_api_page{index}_{uuid.uuid4().hex[:8]}" for index in range(3)]
+        for workspace_id in workspace_ids:
+            _provision_customer_workspace(workspace_id)
+            self._bootstrap(workspace_id=workspace_id, meta_mode="customer_sandbox",
+                            access_token_material=None, app_secret_material=None)
+        ours = _connections_in(*workspace_ids)
+
+        first = self.client.get(CONNECTIONS, params={"after": ours[0]["id"], "limit": 1})
+        self.assertEqual((first.status_code, first.json()["items"]), (200, [ours[1]]))
+        rest = self.client.get(CONNECTIONS, params={"after": ours[1]["id"], "limit": 2})
+        self.assertEqual(rest.json()["items"][0], ours[2])
+        self.assertEqual(self.client.get(CONNECTIONS, params={"after": ours[2]["id"]}).json(),
+                         {"items": []})
+
+        unknown = self.client.get(CONNECTIONS, params={"after": "mcon_does_not_exist"})
+        self.assertEqual((unknown.status_code, unknown.json()["code"]), (400, "invalid_cursor"))
+        for limit in (0, CONNECTION_LIST_LIMIT + 1):
+            with self.subTest(limit=limit):
+                self.assertEqual(self.client.get(CONNECTIONS, params={"limit": limit}).status_code, 422)
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +491,27 @@ class ReconcileTests(PlatformApiTestCase):
             "/api/platform/v1/meta/connections/mcon_does_not_exist/reconcile"
         )
         self.assertEqual(resp.status_code, 404)
+
+    def test_reconcile_answers_with_the_connections_own_workspace_only(self):
+        """Two Workspaces, same Meta mode and ad account, one at a later epoch."""
+        created = {}
+        for epoch in (1, 7):
+            workspace_id = f"ws_platform_api_mix{epoch}_{uuid.uuid4().hex[:8]}"
+            _provision_customer_workspace(workspace_id, authorization_epoch=epoch)
+            created[workspace_id] = self._bootstrap(
+                workspace_id=workspace_id, meta_mode="customer_sandbox",
+                ad_account_id="act_shared_account",
+                access_token_material=None, app_secret_material=None,
+            )
+        for workspace_id, made in created.items():
+            with self.subTest(workspace_id=workspace_id):
+                [connection] = _connections_in(workspace_id)
+                with platform_session() as session:
+                    binding = _binding_dict(session.get(MetaDataSourceBindingRecord, made["binding_id"]))
+                resp = self.client.post(f"{CONNECTIONS}/{made['connection_id']}/reconcile")
+                self.assertEqual(resp.status_code, 200, resp.text)
+                self.assertEqual(resp.json(), {"connection": connection, "active_binding": binding})
+                self.assertEqual(binding["workspace_id"], workspace_id)
 
 
 # ---------------------------------------------------------------------------

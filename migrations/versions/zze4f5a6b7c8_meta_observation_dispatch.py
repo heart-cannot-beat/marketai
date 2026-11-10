@@ -1,7 +1,7 @@
 """Let the Worker dispatch due Meta observation schedules (#107, #101 S1).
 
 Revision ID: zze4f5a6b7c8
-Revises: zzc2f3a4b5c6
+Revises: zzd3a4b5c6d7
 
 A ``customer_sandbox`` observation contract generation now gets a
 ``meta_sync_schedule_records`` row (``app.meta.observation``), and the Worker
@@ -47,7 +47,7 @@ from alembic import op
 
 
 revision = "zze4f5a6b7c8"
-down_revision = "zzc2f3a4b5c6"
+down_revision = "zzd3a4b5c6d7"
 branch_labels = None
 depends_on = None
 
