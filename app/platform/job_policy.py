@@ -105,7 +105,8 @@ JOB_POLICIES: dict[str, JobPolicy] = {
         "在计划行锁下复核到期，推进 next_fire_at 与建 run 同一事务（#107）"),
     "meta_observation_sync": _policy(
         _NONE_REQUEUE,
-        "只读沙箱 insights；按页断点续跑，终页、完成、发布、attestation 同一事务（#107）"),
+        "只读沙箱 insights 和投放配置；每个查询实例一个 run，按页断点续跑，"
+        "终页、完成、发布、attestation 同一事务（#107、#108）"),
     "launch_recovery": _policy(_NONE_REQUEUE, "只读外部证据来解析不确定的写入，不重放"),
     "marketing.resolve_call": _policy(_NONE_REQUEUE, "核对已有调用记录，不重发"),
     "marketing.export": _policy(_NONE_REQUEUE, "只写 BlobStore"),

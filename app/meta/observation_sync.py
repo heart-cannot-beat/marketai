@@ -17,28 +17,38 @@ attested evidence, each a durable Job the Worker runs:
 2. **Tick** (:func:`run_observation_tick`), in a TenantContext with the Meta
    mode from the payload. Under the schedule rows' lock it re-checks that the
    persisted fire time is still the one due, advances ``next_fire_at``, and
-   for every due generation creates one Operation and one sync run for target
-   day D (the fire time's local date minus one -- from the persisted fire
-   time, never the clock), occurrence ``obs:{generation_id}:{D}``. Then it
-   enqueues one ``meta_observation_sync`` batch Job for the connection and
-   day. A fire time older than the latest due slot (the Worker was down) is
-   not run: the schedule jumps to the latest slot and a tick for that slot is
-   enqueued instead (#101 Q9). Everything commits in one transaction.
+   for every query instance of every due generation's read plan
+   (:func:`app.meta.observation.observation_read_plan`, #101 S2) creates one
+   Operation and one sync run for target day D (the fire time's local date
+   minus one -- from the persisted fire time, never the clock), occurrence
+   ``obs:{generation_id}:{D}:{instance}``. Then it enqueues one
+   ``meta_observation_sync`` batch Job for the connection and day. A
+   generation that no longer matches the Scale read contract it names gets
+   no run and an audit event instead. A fire time older than the latest due
+   slot (the Worker was down) is not run: the schedule jumps to the latest
+   slot and a tick for that slot is enqueued instead (#101 Q9). Everything
+   commits in one transaction.
 3. **Batch** (:func:`run_observation_sync`). One Job per connection and day
    drives each of its runs to a terminal state, page by page: resolve the
    adapter, commit a call intent and a ``started`` fetch attempt, read the
    page, then record the outcome and the page and advance the run's cursor
-   checkpoint in one transaction (§6.3-§6.4). The terminal page, the run's
-   ``succeeded`` transition, the publication, the attestation and the
-   coverage-ledger entry for D commit together (§6.5), with the Operation
-   settled in the same transaction. A Worker that dies mid-run resumes from
-   the last committed page. A run still failing on the Job's last attempt is
-   marked ``failed`` and gets no attestation.
+   checkpoint in one transaction (§6.3-§6.4). Each query instance has its own
+   run and so its own page chain; the configuration instance pages through
+   its edges (account, ads, ad sets, campaigns) in order, its checkpoint
+   naming the edge. The terminal page, the run's ``succeeded`` transition,
+   the publication and the attestation (watermarked with the instance's
+   window) commit together (§6.5), with the Operation settled in the same
+   transaction; the coverage-ledger entry for D is written with the last of
+   a generation's instances to succeed. A Worker that dies mid-run resumes
+   from the last committed page. A run still failing on the Job's last
+   attempt is marked ``failed`` and gets no attestation; the other runs of
+   the batch finish as usual.
 
 Every write runs in a TenantContext signed for the Job's Workspace and the
 payload's Meta mode, under the same RLS as any Worker transaction. The
-executor only ever reads through :class:`MetaInsightsReadPort`; the adapter
-is resolved per transaction and never held by the Worker runtime (ADR 0017).
+executor only ever reads through :class:`MetaObservationReadPort`; the
+adapter is resolved per transaction and never held by the Worker runtime
+(ADR 0017).
 """
 from __future__ import annotations
 
@@ -47,7 +57,7 @@ import hashlib
 import json
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Callable, Protocol, Sequence
 
 from sqlalchemy import func, select, text
@@ -87,11 +97,19 @@ from .models import (
     ObservationCoverageLedgerRecord,
 )
 from .observation import (
-    SCHEDULED_CONTRACT_TYPES,
+    ReadPlan,
     latest_fire_at_or_before,
     next_fire_after,
+    observation_read_plan,
     observation_target_date,
     record_coverage,
+)
+from .scale_read_contracts import (
+    CONFIGURATION_EDGES,
+    CONFIGURATION_READ,
+    PAGE_LIMIT,
+    QueryInstance,
+    ScaleReadContractError,
 )
 from .sync_pipeline import (
     TERMINAL_RUN_STATES,
@@ -109,6 +127,7 @@ __all__ = [
     "ObservationSyncError",
     "ObservationBatchFailed",
     "ObservationLeaseLost",
+    "MetaObservationReadPort",
     "MetaInsightsReadPort",
     "TickResult",
     "BatchResult",
@@ -163,8 +182,8 @@ class ObservationBatchFailed(RuntimeError):
         super().__init__(f"{len(failures)} sync run(s) did not finish: {detail}")
 
 
-class MetaInsightsReadPort(Protocol):
-    """The only adapter capability the executor uses: a read."""
+class MetaObservationReadPort(Protocol):
+    """The only adapter capabilities the executor uses: two reads."""
 
     def read_insights(
         self,
@@ -175,7 +194,26 @@ class MetaInsightsReadPort(Protocol):
         until: date,
         limit: int = ...,
         after: str | None = None,
+        time_increment: str = ...,
+        breakdowns: Sequence[str] = ...,
+        action_attribution_windows: Sequence[str] = ...,
+        action_report_time: str | None = ...,
     ) -> Any: ...
+
+    def read_delivery_configuration(
+        self,
+        *,
+        ad_account_id: str,
+        edge: str,
+        fields: Sequence[str],
+        as_of: date,
+        limit: int = ...,
+        after: str | None = None,
+    ) -> Any: ...
+
+
+#: The #107 name of the port.
+MetaInsightsReadPort = MetaObservationReadPort
 
 
 @dataclass(frozen=True)
@@ -230,15 +268,31 @@ def sync_idempotency_key(connection_id: str, target_date: date, run_generation: 
     return f"meta-obs-sync:{connection_id}:{target_date.isoformat()}:{run_generation}"
 
 
-def occurrence_id(generation_id: str, target_date: date) -> str:
-    return f"obs:{generation_id}:{target_date.isoformat()}"
+def occurrence_id(generation_id: str, target_date: date, instance: str | None = None) -> str:
+    """``obs:{generation_id}:{D}:{instance}`` (#101 S2); #107 runs have no instance."""
+    base = f"obs:{generation_id}:{target_date.isoformat()}"
+    return base if instance is None else f"{base}:{instance}"
 
 
-def _target_date_of(run: MetaObservationSyncRunRecord) -> date:
-    prefix, _, day = run.occurrence_id.rpartition(":")
-    if not prefix.startswith("obs:"):
+def _occurrence_of(run: MetaObservationSyncRunRecord) -> tuple[date, str | None]:
+    """Target day and query instance of a scheduled run."""
+    parts = run.occurrence_id.split(":")
+    if parts[0] != "obs" or len(parts) not in (3, 4) or parts[1] != run.contract_generation_id:
         raise ObservationSyncError("meta_sync_occurrence_invalid", f"run {run.id} is not a scheduled occurrence")
-    return date.fromisoformat(day)
+    try:
+        target_date = date.fromisoformat(parts[2])
+    except ValueError:
+        raise ObservationSyncError(
+            "meta_sync_occurrence_invalid", f"run {run.id} is not a scheduled occurrence",
+        ) from None
+    return target_date, (parts[3] if len(parts) == 4 else None)
+
+
+def _plan_occurrences(generation_id: str, target_date: date, plan: ReadPlan) -> list[str]:
+    occurrences = [occurrence_id(generation_id, target_date, instance.name) for instance in plan.instances]
+    if len(plan.instances) == 1:
+        occurrences.append(occurrence_id(generation_id, target_date))  # a #107 run
+    return occurrences
 
 
 def observation_job_context(claimed: TenantContext, payload: dict[str, Any]) -> TenantContext:
@@ -428,11 +482,13 @@ def run_observation_tick(
     for row, generation in due:
         row.last_fired_at = fire_at
         row.next_fire_at = next_fire_after(row.cron_expression, generation.local_timezone, fire_at)
-        if generation.contract_type not in SCHEDULED_CONTRACT_TYPES:
+        plan = _plan_or_audit(session, generation)
+        if plan is None:
             continue
         target_date = observation_target_date(fire_at, generation.local_timezone)
-        run = _ensure_run(session, context, generation, target_date)
-        runs_by_date[target_date].append(run.id)
+        for instance in plan.instances:
+            run = _ensure_run(session, context, generation, target_date, instance.name)
+            runs_by_date[target_date].append(run.id)
 
     sync_jobs = [
         enqueue_in_session(
@@ -465,14 +521,30 @@ def run_observation_tick(
     )
 
 
+def _plan_or_audit(session: Session, generation: ObservationContractGenerationRecord) -> ReadPlan | None:
+    """The generation's read plan; a drifted Scale contract is audited, not read."""
+    try:
+        return observation_read_plan(generation)
+    except ScaleReadContractError as exc:
+        append_event(
+            session,
+            event_type="meta.observation.contract_mismatch",
+            resource_type="observation_contract_generation",
+            resource_id=generation.id,
+            details={"code": exc.code, "detail": str(exc)[:500]},
+        )
+        return None
+
+
 def _ensure_run(
     session: Session,
     context: TenantContext,
     generation: ObservationContractGenerationRecord,
     target_date: date,
+    instance: str,
 ) -> MetaObservationSyncRunRecord:
-    """The run for ``(generation, D)`` and its Operation, created once."""
-    occurrence = occurrence_id(generation.id, target_date)
+    """The run for ``(generation, D, instance)`` and its Operation, created once."""
+    occurrence = occurrence_id(generation.id, target_date, instance)
     existing = session.scalar(
         select(MetaObservationSyncRunRecord).where(
             MetaObservationSyncRunRecord.workspace_id == context.workspace_id,
@@ -556,26 +628,33 @@ def run_observation_sync(
 def _batch_run_ids(
     session: Session, context: TenantContext, connection_id: str, target_date: date, run_generation: int,
 ) -> list[str]:
-    generation_ids = session.scalars(
-        select(ObservationContractGenerationRecord.id).where(
+    generations = session.scalars(
+        select(ObservationContractGenerationRecord).where(
             ObservationContractGenerationRecord.workspace_id == context.workspace_id,
             ObservationContractGenerationRecord.meta_mode == context.meta_mode,
             ObservationContractGenerationRecord.meta_connection_id == connection_id,
         )
     ).all()
-    if not generation_ids:
+    occurrences = []
+    for generation in generations:
+        try:
+            plan = observation_read_plan(generation)
+        except ScaleReadContractError:
+            plan = None  # the tick created no run for it
+        if plan is not None:
+            occurrences.extend(_plan_occurrences(generation.id, target_date, plan))
+    if not occurrences:
         return []
     return list(session.scalars(
         select(MetaObservationSyncRunRecord.id)
         .where(
             MetaObservationSyncRunRecord.workspace_id == context.workspace_id,
             MetaObservationSyncRunRecord.meta_mode == context.meta_mode,
-            MetaObservationSyncRunRecord.occurrence_id.in_(
-                [occurrence_id(generation_id, target_date) for generation_id in generation_ids]
-            ),
+            MetaObservationSyncRunRecord.occurrence_id.in_(occurrences),
             MetaObservationSyncRunRecord.run_generation == run_generation,
         )
-        .order_by(MetaObservationSyncRunRecord.contract_generation_id, MetaObservationSyncRunRecord.id)
+        .order_by(MetaObservationSyncRunRecord.contract_generation_id, MetaObservationSyncRunRecord.occurrence_id,
+                  MetaObservationSyncRunRecord.id)
     ))
 
 
@@ -602,24 +681,112 @@ def _lock_run(session: Session, run_id: str) -> MetaObservationSyncRunRecord:
     return run
 
 
-def _insights_request(
-    generation: ObservationContractGenerationRecord, target_date: date, after: str | None,
-) -> dict[str, Any]:
+@dataclass(frozen=True)
+class _PageRead:
+    """One page to fetch: where the intent says it goes, and how to read it."""
+
+    endpoint: str
+    request: dict[str, Any]
+    edge: str | None = None
+    adapter_cursor: str | None = None
+
+
+def _contract_identity(plan: ReadPlan, instance: QueryInstance) -> dict[str, Any]:
+    identity: dict[str, Any] = {"instance": instance.name}
+    if plan.contract is not None:
+        identity.update({
+            "scale_read_contract": plan.contract.contract_type,
+            "version": plan.contract.version,
+            "definition_hash": plan.contract.contract_hash,
+        })
+    return identity
+
+
+def _edge_cursor(cursor: str | None) -> tuple[str, str | None]:
+    """The configuration checkpoint: which edge is next, and where in it."""
+    if cursor is None:
+        return CONFIGURATION_EDGES[0][0], None
+    try:
+        state = json.loads(cursor)
+        edge, after = state["edge"], state.get("after")
+    except (ValueError, TypeError, KeyError):
+        raise ObservationSyncError("meta_sync_checkpoint_invalid", f"unreadable configuration cursor {cursor!r}") \
+            from None
+    if edge not in dict(CONFIGURATION_EDGES) or (after is not None and not isinstance(after, str)):
+        raise ObservationSyncError("meta_sync_checkpoint_invalid", f"unreadable configuration cursor {cursor!r}")
+    return edge, after
+
+
+def _encode_edge_cursor(edge: str, after: str | None) -> str:
+    return json.dumps({"edge": edge, "after": after}, sort_keys=True, separators=(",", ":"))
+
+
+def _page_read(
+    generation: ObservationContractGenerationRecord,
+    plan: ReadPlan,
+    instance: QueryInstance,
+    target_date: date,
+    cursor: str | None,
+) -> _PageRead:
     """The persisted request identity of one page (``request_parameters``)."""
-    request: dict[str, Any] = {
+    request: dict[str, Any] = {"contract": _contract_identity(plan, instance), "limit": PAGE_LIMIT}
+    if instance.read == CONFIGURATION_READ:
+        edge, after = _edge_cursor(cursor)
+        request.update({"edge": edge, "fields": list(dict(CONFIGURATION_EDGES)[edge]),
+                        "as_of": target_date.isoformat()})
+        if after is not None:
+            request["after"] = after
+        endpoint = f"/{generation.ad_account_id}" if edge == "account" else f"/{generation.ad_account_id}/{edge}"
+        return _PageRead(endpoint, request, edge=edge, adapter_cursor=after)
+    since, until = instance.time_range(target_date)
+    request.update({
         "level": "ad",
-        "fields": sorted(generation.fields or []),
-        "time_range": {
-            "since": (target_date - timedelta(days=LOOKBACK_DAYS - 1)).isoformat(),
-            "until": target_date.isoformat(),
-        },
-        "time_increment": 1,
-        "attribution_window": generation.attribution_window or {},
-        "breakdowns": sorted(generation.breakdowns or []),
-    }
-    if after is not None:
-        request["after"] = after
-    return request
+        "fields": list(plan.fields),
+        "time_range": {"since": since.isoformat(), "until": until.isoformat()},
+        "time_increment": instance.time_increment,
+        "attribution": plan.attribution,
+        "breakdowns": list(plan.breakdowns),
+    })
+    if cursor is not None:
+        request["after"] = cursor
+    return _PageRead(f"/{generation.ad_account_id}/insights", request, adapter_cursor=cursor)
+
+
+def _read_page(port: MetaObservationReadPort, generation: ObservationContractGenerationRecord, plan: ReadPlan,
+               instance: QueryInstance, target_date: date, read: _PageRead) -> tuple[Any, str | None]:
+    """Fetch the page; return it and the run's checkpoint after it (``None``: last page)."""
+    if read.edge is not None:
+        page = port.read_delivery_configuration(
+            ad_account_id=generation.ad_account_id, edge=read.edge, fields=read.request["fields"],
+            as_of=target_date, limit=PAGE_LIMIT, after=read.adapter_cursor,
+        )
+        if page.next_cursor is not None:
+            return page, _encode_edge_cursor(read.edge, page.next_cursor)
+        edges = [edge for edge, _fields in CONFIGURATION_EDGES]
+        position = edges.index(read.edge)
+        return page, (_encode_edge_cursor(edges[position + 1], None) if position + 1 < len(edges) else None)
+    since, until = instance.time_range(target_date)
+    page = port.read_insights(
+        ad_account_id=generation.ad_account_id,
+        fields=list(plan.fields),
+        since=since,
+        until=until,
+        limit=PAGE_LIMIT,
+        after=read.adapter_cursor,
+        time_increment=instance.time_increment or "1",
+        breakdowns=list(plan.breakdowns),
+        action_attribution_windows=list(plan.attribution.get("action_attribution_windows") or []),
+        action_report_time=plan.attribution.get("action_report_time"),
+    )
+    return page, page.next_cursor
+
+
+def _watermark(instance: QueryInstance, target_date: date) -> str:
+    """The days an instance's attestation vouches for: its window, or D."""
+    if instance.read == CONFIGURATION_READ:
+        return f"[{target_date.isoformat()},{target_date.isoformat()}]"
+    since, until = instance.time_range(target_date)
+    return f"[{since.isoformat()},{until.isoformat()}]"
 
 
 def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> str:
@@ -628,7 +795,16 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
     if run.state in TERMINAL_RUN_STATES:
         return run.state
     generation = session.get(ObservationContractGenerationRecord, run.contract_generation_id)
-    target_date = _target_date_of(run)
+    target_date, instance_name = _occurrence_of(run)
+    try:
+        plan = observation_read_plan(generation)
+    except ScaleReadContractError as exc:
+        raise ObservationSyncError(exc.code, str(exc)) from exc
+    if plan is None:
+        raise ObservationSyncError(
+            "meta_schedule_contract_unsupported", f"generation {generation.id} has no read plan",
+        )
+    instance = plan.instance(instance_name)
     page_order = (run.last_completed_page_order or 0) + 1
     input_cursor = run.output_cursor if page_order > 1 else None
     if page_order > 1 and input_cursor is None:
@@ -649,7 +825,7 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         connection_id=generation.meta_connection_id,
         ad_account_id=generation.ad_account_id,
     )
-    request = _insights_request(generation, target_date, input_cursor)
+    read = _page_read(generation, plan, instance, target_date, input_cursor)
 
     # The intent and a `started` attempt commit before the read (§4.2,
     # §6.3): a Worker that dies mid-page leaves them as the evidence of it,
@@ -662,8 +838,8 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         binding=resolved.binding,
         operation_id=run.operation_id,
         meta_api_method="GET",
-        meta_api_endpoint=f"/{generation.ad_account_id}/insights",
-        request_parameters=request,
+        meta_api_endpoint=read.endpoint,
+        request_parameters=read.request,
         call_type="page_fetch",
         scenario_version_id=resolved.scenario_version_id,
         executor=READ_EXECUTOR,
@@ -695,7 +871,6 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         intent.network_dispatched_at = utcnow()
     session.flush()
     intent_id, attempt_id, operation_id = intent.id, attempt.id, run.operation_id
-    ad_account_id, fields = generation.ad_account_id, request["fields"]
     commit_and_rebind(session)
 
     run = _lock_run(session, run_id)
@@ -704,15 +879,9 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         _close_attempt(session, attempt_id, "failed", "superseded by another attempt")
         commit_and_rebind(session)
         return run.state
-    port: MetaInsightsReadPort = resolved.adapter
+    port: MetaObservationReadPort = resolved.adapter
     try:
-        page = port.read_insights(
-            ad_account_id=ad_account_id,
-            fields=fields,
-            since=target_date - timedelta(days=LOOKBACK_DAYS - 1),
-            until=target_date,
-            after=input_cursor,
-        )
+        page, output_cursor = _read_page(port, generation, plan, instance, target_date, read)
     except Exception as exc:
         # Nothing of this page is kept but the evidence that the read failed.
         session.rollback()
@@ -749,7 +918,7 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
     )
     session.add(outcome)
     session.flush()
-    is_terminal = page.next_cursor is None
+    is_terminal = output_cursor is None
     record_page(
         session,
         sync_run_id=run.id,
@@ -760,7 +929,7 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         intent_id=intent_id,
         outcome_id=outcome.id,
         input_cursor=input_cursor,
-        output_cursor=page.next_cursor,
+        output_cursor=output_cursor,
         is_terminal=is_terminal,
     )
     _close_attempt(session, attempt_id, "succeeded", None)
@@ -771,7 +940,7 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
             )
         )
         complete_sync_run(session, sync_run_id=run.id, total_pages=page_order, total_rows=int(total_rows))
-        _publish(session, run, generation, target_date)
+        _publish(session, run, generation, plan, instance, target_date)
         _move_operation(
             session, run.operation_id, OperationState.SUCCEEDED, "scheduled sync published",
             result_ref=OperationResultRef("meta_sync_run", run.id),
@@ -793,12 +962,16 @@ def _publish(
     session: Session,
     run: MetaObservationSyncRunRecord,
     generation: ObservationContractGenerationRecord,
+    plan: ReadPlan,
+    instance: QueryInstance,
     target_date: date,
 ) -> None:
-    """Publication, attestation and coverage of D for a run that just succeeded.
+    """Publication and attestation of a run that just succeeded, and coverage of D.
 
     Each step finds what an earlier pass of the same transaction boundary
-    wrote, so the three exist once per run.
+    wrote, so each exists once per run. The generation covers D once all its
+    query instances for D succeeded: the run that completes the set writes
+    the ledger entry.
     """
     publication = publish_evidence(session, sync_run_id=run.id, operation_id=run.operation_id)
     attestation = session.scalar(
@@ -807,7 +980,7 @@ def _publish(
         .order_by(EvidenceAttestationRecord.created_at, EvidenceAttestationRecord.id)
         .limit(1)
     )
-    watermark = f"[{(target_date - timedelta(days=LOOKBACK_DAYS - 1)).isoformat()},{target_date.isoformat()}]"
+    watermark = _watermark(instance, target_date)
     if attestation is None:
         attestation = create_attestation(
             session,
@@ -821,7 +994,7 @@ def _publish(
             ObservationCoverageLedgerRecord.coverage_date == target_date,
         )
     )
-    if covered is None:
+    if covered is None and _all_instances_succeeded(session, run, generation, plan, target_date):
         record_coverage(
             session,
             generation_id=generation.id,
@@ -840,10 +1013,33 @@ def _publish(
             "attestation_id": attestation.id,
             "evidence_watermark": attestation.evidence_watermark,
             "coverage_date": target_date.isoformat(),
+            "query_instance": instance.name,
             "total_pages": run.total_pages,
             "total_rows": run.total_rows,
         },
     )
+
+
+def _all_instances_succeeded(
+    session: Session,
+    run: MetaObservationSyncRunRecord,
+    generation: ObservationContractGenerationRecord,
+    plan: ReadPlan,
+    target_date: date,
+) -> bool:
+    if len(plan.instances) == 1:
+        return True
+    occurrences = [occurrence_id(generation.id, target_date, instance.name) for instance in plan.instances]
+    succeeded = set(session.scalars(
+        select(MetaObservationSyncRunRecord.occurrence_id).where(
+            MetaObservationSyncRunRecord.workspace_id == run.workspace_id,
+            MetaObservationSyncRunRecord.meta_mode == run.meta_mode,
+            MetaObservationSyncRunRecord.occurrence_id.in_(occurrences),
+            MetaObservationSyncRunRecord.run_generation == run.run_generation,
+            MetaObservationSyncRunRecord.state == "succeeded",
+        )
+    ))
+    return succeeded == set(occurrences)
 
 
 def _move_operation(

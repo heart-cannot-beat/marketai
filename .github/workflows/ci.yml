@@ -419,6 +419,21 @@ jobs:
           DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
         run: python -m unittest tests.test_meta_observation_sync_pg -v
 
+      # #108 (#101 S2): production code, as the API role, builds a sandbox
+      # connection's Scale contract set (daily, exact window, delivery
+      # configuration; no breakdown family yet) and a DeliveryTarget on it;
+      # the Worker alone then reads all five query instances in one tick and
+      # one batch and attests each. A controlled_mock fault fails one instance
+      # while the others finish; another Workspace or a Member can neither
+      # establish nor read the set.
+      - name: Scale read contracts run every query instance under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_meta_scale_observation_sync_pg -v
+
       # SQLite cannot see a missing grant (#284): every competitor write
       # command runs here as the role that serves it in production.
       - name: Competitor API and Worker writes hold under the real roles

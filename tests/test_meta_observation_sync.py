@@ -13,6 +13,13 @@ deployed ``WorkerRuntime`` alone takes it to evidence:
   its intent, outcome and fetch attempt, and commits the terminal page with
   the run's success, publication, attestation and coverage of D.
 
+A daily contract made through the API is not built from a Scale read
+contract, so it reads the one 14-day daily instance (occurrence
+``obs:{generation}:{D}:daily``). The sandbox follows its timeline (#101 S2):
+every ad is paused one day and idle one day in every 14, and those days have
+no row. ``tests/test_meta_scale_observation_sync.py`` covers the Scale
+contract set's several instances per day.
+
 Replays change nothing, missed slots run only the latest one, a Worker that
 dies after page 1 resumes at page 2, a controlled-mock read fault fails the
 run without evidence, and retired connections or generations are never read
@@ -80,6 +87,7 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.operations import OperationRecord
 from app.platform.tenancy import TenantContext
 from app.worker_runtime import WorkerRuntime, meta_write_capability_findings
+from app.adapters.meta import sandbox_timeline
 from tests.support.meta_observation import (
     AD_ACCOUNT,
     DAILY_FIELDS,
@@ -254,6 +262,10 @@ class ObservationSyncTestCase(unittest.TestCase):
     def _count(self, model, **filters) -> int:
         return len(self._rows(model, **filters))
 
+    def _ads(self) -> list[dict]:
+        return [{"remote_object_id": row.remote_object_id}
+                for row in self._rows(FakeMetaObjectRecord, object_type="ad")]
+
 
 class ScheduleLifecycleTests(ObservationSyncTestCase):
     def test_a_sandbox_daily_contract_gets_an_active_schedule_at_the_next_local_0400(self):
@@ -289,7 +301,8 @@ class ScheduleLifecycleTests(ObservationSyncTestCase):
         response = self.client.post("/api/v1/meta/contracts", json=daily_contract_body(
             sandbox_connection["id"], "customer_sandbox", contract_type="delivery_configuration"))
         self.assertEqual(response.status_code, 201, response.text)
-        self.assertIsNone(self._schedule(response.json()["id"]), "no executor for this type yet (S2)")
+        self.assertIsNone(self._schedule(response.json()["id"]),
+                          "only a Scale read contract of this type has a read plan (S2)")
         self.assertEqual(self._count(MetaObservationSyncScheduleRecord), 1, "only the sandbox daily contract")
 
     def test_an_internal_validation_generation_is_not_scheduled(self):
@@ -367,7 +380,7 @@ class ScheduleLifecycleTests(ObservationSyncTestCase):
 
 class WorkerPathTests(ObservationSyncTestCase):
     def test_the_worker_alone_takes_a_due_schedule_to_attested_evidence(self):
-        connection, generation = self._sandbox(ads=2)  # 2 ads x 14 days = 28 rows, two pages
+        connection, generation = self._sandbox(ads=3)  # 3 ads x 12 delivering days = 36 rows, two pages
         fire_at = self._make_due(generation["id"])
         target = observation_target_date(fire_at, TIMEZONE)
 
@@ -392,20 +405,27 @@ class WorkerPathTests(ObservationSyncTestCase):
         run, = self._rows(MetaObservationSyncRunRecord)
         self.assertEqual((run.state, run.occurrence_id, run.run_generation, run.total_pages, run.total_rows,
                           run.last_completed_page_order, run.output_cursor),
-                         ("succeeded", f"obs:{generation['id']}:{target.isoformat()}", 1, 2, 28, 2, None))
+                         ("succeeded", f"obs:{generation['id']}:{target.isoformat()}:daily", 1, 2, 36, 2, None))
         pages = sorted(self._rows(MetaEvidencePageRecord), key=lambda page: page.page_order)
         self.assertEqual([(p.page_order, p.row_count, p.is_terminal) for p in pages],
-                         [(1, 25, False), (2, 3, True)])
+                         [(1, 25, False), (2, 11, True)])
         self.assertEqual(pages[1].input_cursor, pages[0].output_cursor)
         rows = [row for page in pages for row in json.loads(gzip.decompress(page.payload_compressed))["data"]]
-        days = {row["date_start"] for row in rows}
-        self.assertEqual(days, {(target - timedelta(days=n)).isoformat() for n in range(14)})
+        window = [target - timedelta(days=n) for n in range(14)]
+        self.assertEqual({(row["ad_id"], row["date_start"]) for row in rows},
+                         {(ad["remote_object_id"], day.isoformat()) for ad in self._ads() for day in window
+                          if sandbox_timeline.day_state(ad["remote_object_id"], day) == sandbox_timeline.DELIVERING},
+                         "a paused or idle day has no row")
         self.assertEqual(set(rows[0]) - {"account_id", "ad_id", "date_start", "date_stop"}, set(DAILY_FIELDS))
 
         intents = self._rows(MetaCallIntentRecord)
         self.assertEqual({(i.call_type, i.meta_api_method, i.write_permitted, i.network_dispatched_at)
                           for i in intents}, {("page_fetch", "GET", False, None)})
         self.assertEqual(len(intents), 2)
+        self.assertEqual(intents[0].request_parameters["time_range"],
+                         {"since": window[-1].isoformat(), "until": target.isoformat()})
+        self.assertEqual(intents[0].request_parameters["contract"], {"instance": "daily"},
+                         "an API-made daily contract is not a Scale read contract")
         outcomes = self._rows(MetaCallOutcomeRecord)
         self.assertEqual({(o.network_attempted, o.http_status, o.error_category) for o in outcomes},
                          {(False, None, None)}, "the sandbox reads this database, not the network")
@@ -484,12 +504,12 @@ class WorkerPathTests(ObservationSyncTestCase):
                           observation_sync.fire_at_text(latest)])
         run, = self._rows(MetaObservationSyncRunRecord)
         self.assertEqual(run.occurrence_id,
-                         f"obs:{generation['id']}:{observation_target_date(latest, TIMEZONE).isoformat()}")
+                         f"obs:{generation['id']}:{observation_target_date(latest, TIMEZONE).isoformat()}:daily")
         self.assertEqual(self._utc(self._schedule(generation["id"]).next_fire_at),
                          next_fire_after(DEFAULT_SYNC_CRON, TIMEZONE, latest))
 
     def test_a_worker_killed_after_page_one_resumes_at_page_two(self):
-        _connection, generation = self._sandbox(ads=2)
+        _connection, generation = self._sandbox(ads=3)
         self._make_due(generation["id"])
         real_read = FakeMetaAdapter.read_insights
 
@@ -511,7 +531,7 @@ class WorkerPathTests(ObservationSyncTestCase):
         self._drain()
 
         run, = self._rows(MetaObservationSyncRunRecord)
-        self.assertEqual((run.state, run.total_pages, run.total_rows), ("succeeded", 2, 28))
+        self.assertEqual((run.state, run.total_pages, run.total_rows), ("succeeded", 2, 36))
         self.assertEqual(sorted(p.page_order for p in self._rows(MetaEvidencePageRecord)), [1, 2])
         self.assertEqual(sorted((a.page_order, a.attempt_number, a.state)
                                 for a in self._rows(MetaPageFetchAttemptRecord)),
@@ -677,8 +697,8 @@ class FakeInsightsReadTests(ObservationSyncTestCase):
             first, second = self._read_all(adapter, **request), self._read_all(adapter, **request)
             self.assertEqual(session.scalar(select(func.count()).select_from(FakeMetaObjectRecord)), objects)
         self.assertEqual(first, second)
-        self.assertEqual(len(first), 42)
-        self.assertEqual(len({(row["ad_id"], row["date_start"]) for row in first}), 42)
+        self.assertEqual(len(first), 36, "3 ads x 12 delivering days of 14")
+        self.assertEqual(len({(row["ad_id"], row["date_start"]) for row in first}), 36)
         self.assertEqual(set(first[0]), {"account_id", "ad_id", "date_start", "date_stop", "impressions", "spend"},
                          "a field the sandbox cannot answer is left out, not invented")
         for row in first:

@@ -216,7 +216,7 @@ class MetaObservationSyncPostgresTests(unittest.TestCase):
         self.assertEqual((local.hour, local.minute), (4, 0))
 
         with self._as(WORKER):  # a sandbox Launch's ads
-            seed_sandbox_ads(worker_context(owner.workspace_id, SANDBOX), connection["id"], 2)
+            seed_sandbox_ads(worker_context(owner.workspace_id, SANDBOX), connection["id"], 3)
         fire_at = self._make_due(generation["id"])
         target = observation_target_date(fire_at, TIMEZONE)
 
@@ -245,7 +245,7 @@ class MetaObservationSyncPostgresTests(unittest.TestCase):
 
         run, = self._rows(MetaObservationSyncRunRecord, owner.workspace_id)
         self.assertEqual((run.state, run.occurrence_id, run.total_pages, run.total_rows),
-                         ("succeeded", f"obs:{generation['id']}:{target.isoformat()}", 2, 28))
+                         ("succeeded", f"obs:{generation['id']}:{target.isoformat()}:daily", 2, 36))
         pages = sorted(self._rows(MetaEvidencePageRecord, owner.workspace_id), key=lambda p: p.page_order)
         self.assertEqual([(p.page_order, p.is_terminal) for p in pages], [(1, False), (2, True)])
         publication, = self._rows(EvidencePublicationRecord, owner.workspace_id)
@@ -299,7 +299,7 @@ class MetaObservationSyncPostgresTests(unittest.TestCase):
         owner = self._workspace("kill")
         connection, generation = self._create(owner)
         with self._as(WORKER):
-            seed_sandbox_ads(worker_context(owner.workspace_id, SANDBOX), connection["id"], 2)
+            seed_sandbox_ads(worker_context(owner.workspace_id, SANDBOX), connection["id"], 3)
         self._make_due(generation["id"])
         self._quarantine_others(owner.workspace_id)
 
@@ -337,7 +337,7 @@ class MetaObservationSyncPostgresTests(unittest.TestCase):
         self._drain(runtime, owner.workspace_id)
 
         run, = self._rows(MetaObservationSyncRunRecord, owner.workspace_id)
-        self.assertEqual((run.state, run.total_pages, run.total_rows), ("succeeded", 2, 28))
+        self.assertEqual((run.state, run.total_pages, run.total_rows), ("succeeded", 2, 36))
         self.assertEqual(sorted(p.page_order for p in self._rows(MetaEvidencePageRecord, owner.workspace_id)),
                          [1, 2])
         self.assertEqual(sorted((a.page_order, a.attempt_number, a.state)
