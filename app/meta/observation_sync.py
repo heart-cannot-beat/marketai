@@ -9,11 +9,15 @@ attested evidence, each a durable Job the Worker runs:
    and the Worker has no tenant to read them under, so it calls the narrow
    SECURITY DEFINER ``marketai_dispatch_meta_observation_ticks_v1``: due
    active schedules (``FOR UPDATE SKIP LOCKED``) become one
-   ``meta_observation_tick`` Job per ``(connection, fire time)``, keyed
-   ``meta-obs-tick:{connection_id}:{fire_at}`` with ``ON CONFLICT DO NOTHING``
-   and a ``job.enqueued`` audit event. It never moves ``next_fire_at``. On
-   SQLite :func:`app.meta.sync_pipeline.dispatch_schedules` reads the same
-   rows and the Jobs go through ``enqueue_in_session``.
+   ``meta_observation_tick`` Job per ``(connection, fire time, authorization
+   epoch)``, keyed ``meta-obs-tick:{connection_id}:{fire_at}:{epoch}`` with
+   ``ON CONFLICT DO NOTHING`` and a ``job.enqueued`` audit event. It never
+   moves ``next_fire_at``. The epoch is in the key because the claim fails a
+   tick whose epoch went stale (``authorization_epoch_stale``) while its slot
+   stays due: the next dispatch gives that slot one tick under the new epoch
+   instead of finding the rejected one and stalling the schedule. On SQLite
+   :func:`app.meta.sync_pipeline.dispatch_schedules` reads the same rows and
+   the Jobs go through ``enqueue_in_session``.
 2. **Tick** (:func:`run_observation_tick`), in a TenantContext with the Meta
    mode from the payload. Under the schedule rows' lock it re-checks that the
    persisted fire time is still the one due, advances ``next_fire_at``, and
@@ -260,8 +264,14 @@ def parse_fire_at(value: str) -> datetime:
     return datetime.strptime(value, _FIRE_AT_FORMAT).replace(tzinfo=timezone.utc)
 
 
-def tick_idempotency_key(connection_id: str, fire_at: datetime) -> str:
-    return f"meta-obs-tick:{connection_id}:{fire_at_text(fire_at)}"
+def tick_idempotency_key(connection_id: str, fire_at: datetime, *, authorization_epoch: int) -> str:
+    """One tick per slot and authorization epoch, as the dispatch function keys it.
+
+    A tick the claim rejects as ``authorization_epoch_stale`` leaves its slot
+    due; under the new epoch the slot gets a new key, so it is dispatched
+    again rather than stalled behind the rejected Job.
+    """
+    return f"meta-obs-tick:{connection_id}:{fire_at_text(fire_at)}:{int(authorization_epoch)}"
 
 
 def sync_idempotency_key(connection_id: str, target_date: date, run_generation: int) -> str:
@@ -324,9 +334,10 @@ def dispatch_due_observation_ticks(*, limit: int = DISPATCH_BATCH_SIZE, now: dat
     """Enqueue one tick Job per due ``(connection, fire time)``; return how many are new.
 
     Replays and concurrent dispatchers converge on the same Jobs: the tick
-    key names the connection and the persisted fire time, and nothing here
-    moves ``next_fire_at``. ``now`` is honoured on SQLite only; PostgreSQL
-    reads its own clock.
+    key names the connection, the persisted fire time and the Workspace's
+    authorization epoch, and nothing here moves ``next_fire_at``. A slot whose
+    tick an epoch change rejected gets a new one. ``now`` is honoured on
+    SQLite only; PostgreSQL reads its own clock.
     """
     with platform_session() as session:
         if is_postgres(session):
@@ -373,12 +384,13 @@ def _due_slots(session: Session, *, limit: int, now: datetime) -> list[_Slot]:
 def enqueue_tick(
     session: Session, context: TenantContext, *, connection_id: str, fire_at: datetime,
 ) -> tuple[JobRecord, bool]:
-    """The tick Job for ``(connection, fire_at)``, and whether this call created it.
+    """The tick Job for ``(connection, fire_at)`` under the context's epoch, and
+    whether this call created it.
 
     Same type, payload and key as the dispatch function writes, so the two
     paths name one Job.
     """
-    key = tick_idempotency_key(connection_id, fire_at)
+    key = tick_idempotency_key(connection_id, fire_at, authorization_epoch=context.authorization_epoch)
     existed = session.scalar(
         select(JobRecord.id).where(
             JobRecord.workspace_id == context.workspace_id, JobRecord.idempotency_key == key,

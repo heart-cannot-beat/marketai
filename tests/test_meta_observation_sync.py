@@ -20,11 +20,13 @@ every ad is paused one day and idle one day in every 14, and those days have
 no row. ``tests/test_meta_scale_observation_sync.py`` covers the Scale
 contract set's several instances per day.
 
-Replays change nothing, missed slots run only the latest one, a Worker that
-dies after page 1 resumes at page 2, a controlled-mock read fault fails the
-run without evidence, and retired connections or generations are never read
-again. ``tests/test_meta_observation_sync_pg.py`` runs the same path with the
-real roles under FORCE RLS.
+Replays change nothing, missed slots run only the latest one, a tick the
+claim rejects as ``authorization_epoch_stale`` is dispatched again under the
+new epoch instead of stalling its schedule, a Worker that dies after page 1
+resumes at page 2, a controlled-mock read fault fails the run without
+evidence, and retired connections or generations are never read again.
+``tests/test_meta_observation_sync_pg.py`` runs the same path with the real
+roles under FORCE RLS.
 """
 from __future__ import annotations
 
@@ -391,7 +393,7 @@ class WorkerPathTests(ObservationSyncTestCase):
         self.assertEqual((tick.state, batch.state), ("succeeded", "succeeded"))
         self.assertEqual(tick.payload_json, {"connection_id": connection["id"], "meta_mode": "customer_sandbox",
                                              "fire_at": observation_sync.fire_at_text(fire_at)})
-        self.assertEqual(tick.idempotency_key, observation_sync.tick_idempotency_key(connection["id"], fire_at))
+        self.assertEqual(tick.idempotency_key, observation_sync.tick_idempotency_key(connection["id"], fire_at, authorization_epoch=0))
         self.assertTrue(tick.safe_to_retry_after_crash)
         self.assertEqual(batch.payload_json, {"connection_id": connection["id"], "meta_mode": "customer_sandbox",
                                               "target_date": target.isoformat(), "run_generation": 1})
@@ -607,6 +609,92 @@ class WorkerPathTests(ObservationSyncTestCase):
              mock.patch("app.platform.jobs.claim_next", return_value=None) as claim:
             self.assertFalse(asyncio.run(self.runtime.run_once()))
         claim.assert_called_once()
+
+
+class StaleAuthorizationEpochTests(ObservationSyncTestCase):
+    """A tick rejected as ``authorization_epoch_stale`` must not stall its schedule.
+
+    Only the tick moves ``next_fire_at``. When the Workspace's authorization
+    epoch changes between dispatch and claim, the claim fails the tick, the
+    slot stays due, and the next dispatch has to give it a tick the claim
+    accepts -- or the connection is never read again.
+    """
+
+    def _bump_epoch(self) -> None:
+        with platform_session() as session:  # a membership change, as the control plane makes it
+            session.get(WorkspaceRecord, self.workspace_id).authorization_epoch += 1
+
+    def _claim_tick(self) -> jobs.ClaimedJob | None:
+        quarantine_foreign_jobs(self.workspace_id)
+        return jobs.claim_next(self.runtime.owner, job_types=(observation_sync.TICK_JOB_TYPE,))
+
+    def _ticks(self) -> list[tuple[str, str, int]]:
+        return [(t.state, t.error_code, t.authorization_epoch) for t in self._jobs(observation_sync.TICK_JOB_TYPE)]
+
+    def test_a_tick_rejected_for_a_stale_epoch_is_dispatched_again_and_its_slot_runs(self):
+        connection, generation = self._sandbox(ads=1)
+        fire_at = self._make_due(generation["id"])
+        self.assertEqual(observation_sync.dispatch_due_observation_ticks(), 1)
+        self._bump_epoch()
+        self.assertIsNone(self._claim_tick(), "the claim rejects the tick")
+        self.assertEqual(self._ticks(), [("failed", "authorization_epoch_stale", 0)])
+        self.assertEqual(self._utc(self._schedule(generation["id"]).next_fire_at), fire_at, "still due")
+
+        self.assertEqual(observation_sync.dispatch_due_observation_ticks(), 1, "the slot gets a new tick")
+        self.assertEqual(observation_sync.dispatch_due_observation_ticks(), 0, "once per epoch")
+        self._drain()
+
+        schedule = self._schedule(generation["id"])
+        self.assertEqual((self._utc(schedule.last_fired_at), self._utc(schedule.next_fire_at)),
+                         (fire_at, next_fire_after(DEFAULT_SYNC_CRON, TIMEZONE, fire_at)))
+        self.assertEqual(self._ticks(), [("failed", "authorization_epoch_stale", 0), ("succeeded", "", 1)])
+        stale, fresh = self._jobs(observation_sync.TICK_JOB_TYPE)
+        self.assertEqual(fresh.payload_json, stale.payload_json)
+        self.assertEqual(
+            (stale.idempotency_key, fresh.idempotency_key),
+            (observation_sync.tick_idempotency_key(connection["id"], fire_at, authorization_epoch=0),
+             observation_sync.tick_idempotency_key(connection["id"], fire_at, authorization_epoch=1)))
+        run, = self._rows(MetaObservationSyncRunRecord)
+        self.assertEqual(run.state, "succeeded")
+        self.assertEqual(self._count(EvidenceAttestationRecord), 1)
+        self.assertEqual(observation_sync.dispatch_due_observation_ticks(), 0, "the slot moved on")
+
+    def test_an_epoch_change_before_the_claim_still_runs_the_slot_once(self):
+        _connection, generation = self._sandbox(ads=1)
+        fire_at = self._make_due(generation["id"])
+        self.assertEqual(observation_sync.dispatch_due_observation_ticks(), 1)
+        self._bump_epoch()
+        self.assertEqual(observation_sync.dispatch_due_observation_ticks(), 1, "a tick the claim accepts")
+
+        self._drain()
+
+        self.assertEqual(self._ticks(), [("failed", "authorization_epoch_stale", 0), ("succeeded", "", 1)])
+        self.assertEqual(self._utc(self._schedule(generation["id"]).last_fired_at), fire_at)
+        self.assertEqual([run.state for run in self._rows(MetaObservationSyncRunRecord)], ["succeeded"])
+        self.assertEqual(len(self._jobs(observation_sync.SYNC_JOB_TYPE)), 1)
+
+    def test_a_fast_forward_tick_rejected_for_a_stale_epoch_is_dispatched_again(self):
+        connection, generation = self._sandbox()
+        latest = latest_fire_at_or_before(DEFAULT_SYNC_CRON, TIMEZONE, utcnow())
+        missed = self._make_due(generation["id"], latest - timedelta(days=3))
+        context = worker_context(self.workspace_id, "customer_sandbox")
+        with tenant_session(context) as session:  # the Worker was down: the tick jumps to the latest slot
+            jumped = observation_sync.run_observation_tick(
+                session, context, connection_id=connection["id"], fire_at=missed)
+        self.assertEqual((jumped.status, len(jumped.next_tick_job_ids)), ("fast_forwarded", 1))
+        self._bump_epoch()
+        self.assertIsNone(self._claim_tick())
+        self.assertEqual(self._ticks(), [("failed", "authorization_epoch_stale", 0)])
+
+        self.assertEqual(observation_sync.dispatch_due_observation_ticks(), 1)
+        self._drain()
+
+        run, = self._rows(MetaObservationSyncRunRecord)
+        self.assertEqual((run.state, run.occurrence_id),
+                         ("succeeded",
+                          f"obs:{generation['id']}:{observation_target_date(latest, TIMEZONE).isoformat()}:daily"))
+        self.assertEqual(self._utc(self._schedule(generation["id"]).next_fire_at),
+                         next_fire_after(DEFAULT_SYNC_CRON, TIMEZONE, latest))
 
 
 class TenantAndInputTests(ObservationSyncTestCase):

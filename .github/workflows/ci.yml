@@ -407,9 +407,11 @@ jobs:
       # #107 (#101 S1): a sandbox daily contract made through the API gets a
       # schedule; the Worker alone dispatches it through its worker-only
       # function, runs the tick and the batch, and ends with a current
-      # attestation. Two dispatchers make one tick, a SIGKILLed Worker resumes
-      # at its next page, and the negatives (API cannot dispatch, another
-      # Workspace reads nothing, retired connection, controlled_mock fault).
+      # attestation. Two dispatchers make one tick, a tick rejected as
+      # authorization_epoch_stale gets a new one under the new epoch instead of
+      # stalling the schedule (#101), a SIGKILLed Worker resumes at its next
+      # page, and the negatives (API cannot dispatch, another Workspace reads
+      # nothing, retired connection, controlled_mock fault).
       - name: Scheduled Meta observation sync runs under the real roles
         env:
           MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain

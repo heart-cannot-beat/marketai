@@ -15,6 +15,9 @@ through ``TestClient`` and the Worker as ``marketai_domain_worker``:
   returns;
 * two Workers dispatching at once create one tick for a slot (``SKIP LOCKED``
   and the tick key), and dispatching again creates none;
+* a tick the claim rejects as ``authorization_epoch_stale`` does not stall
+  its schedule: the next dispatch gives the still-due slot one tick under the
+  new epoch, and the Worker runs it;
 * a Worker process killed with SIGKILL after page 1 leaves page 1 and its
   checkpoint; the next Worker resumes at page 2 and writes no page twice;
 * negatives: only the Worker may execute the function; Workspace B's context
@@ -77,6 +80,7 @@ from app.meta.observation import (
     next_fire_after,
     observation_target_date,
 )
+from app.platform import jobs
 from app.platform.http_identity import request_tenant_context
 from app.platform.operations import OperationRecord
 from app.platform.tenancy import TenantContext
@@ -229,7 +233,7 @@ class MetaObservationSyncPostgresTests(unittest.TestCase):
         self.assertTrue(tick.id.startswith("job_mobs_"), "inserted by the dispatch function")
         self.assertEqual(tick.payload_json, {"connection_id": connection["id"], "meta_mode": SANDBOX,
                                              "fire_at": observation_sync.fire_at_text(fire_at)})
-        self.assertEqual(tick.idempotency_key, observation_sync.tick_idempotency_key(connection["id"], fire_at))
+        self.assertEqual(tick.idempotency_key, observation_sync.tick_idempotency_key(connection["id"], fire_at, authorization_epoch=0))
         self.assertEqual((tick.initiator_role, tick.safe_to_retry_after_crash, tick.authorization_epoch),
                          ("system", True, 0))
         self.assertEqual(batch.payload_json["target_date"], target.isoformat())
@@ -288,12 +292,60 @@ class MetaObservationSyncPostgresTests(unittest.TestCase):
 
         ticks = self._jobs(owner.workspace_id, observation_sync.TICK_JOB_TYPE)
         self.assertEqual([t.idempotency_key for t in ticks],
-                         [observation_sync.tick_idempotency_key(connection["id"], fire_at)])
+                         [observation_sync.tick_idempotency_key(connection["id"], fire_at, authorization_epoch=0)])
         with Session(self.owner) as session:
             self.assertEqual(session.scalar(select(func.count()).select_from(AuditEventRecord).where(
                 AuditEventRecord.resource_id == ticks[0].id, AuditEventRecord.event_type == "job.enqueued")), 1)
         schedule, = self._rows(MetaObservationSyncScheduleRecord, owner.workspace_id)
         self.assertEqual(schedule.next_fire_at, fire_at, "dispatch never moves the slot")
+
+    def test_a_tick_rejected_for_a_stale_epoch_is_dispatched_again_and_its_slot_runs(self):
+        owner = self._workspace("stale")
+        connection, generation = self._create(owner)
+        fire_at = self._make_due(generation["id"])
+        dispatch = text("SELECT public.marketai_dispatch_meta_observation_ticks_v1(500)")
+        with self.worker.begin() as connection_:
+            connection_.execute(dispatch)
+        with Session(self.owner) as session, session.begin():  # a membership change, as the control plane makes it
+            session.execute(update(WorkspaceRecord).where(WorkspaceRecord.id == owner.workspace_id)
+                            .values(authorization_epoch=WorkspaceRecord.authorization_epoch + 1))
+        self._quarantine_others(owner.workspace_id)
+        with self._as(WORKER):
+            self.assertIsNone(jobs.claim_next("ci-only-meta-obs-pg-stale",
+                                              job_types=(observation_sync.TICK_JOB_TYPE,)))
+        stale, = self._jobs(owner.workspace_id, observation_sync.TICK_JOB_TYPE)
+        self.assertEqual((stale.state, stale.error_code, stale.authorization_epoch),
+                         ("failed", "authorization_epoch_stale", 0))
+
+        for _ in range(2):  # the slot is still due; once per epoch
+            with self.worker.begin() as connection_:
+                connection_.execute(dispatch)
+        ticks = self._jobs(owner.workspace_id, observation_sync.TICK_JOB_TYPE)
+        self.assertEqual(len(ticks), 2, "the stale tick's slot gets a new tick")
+        fresh = ticks[1]
+        self.assertEqual((fresh.state, fresh.authorization_epoch, fresh.payload_json),
+                         ("queued", 1, stale.payload_json))
+        self.assertEqual(
+            (stale.idempotency_key, fresh.idempotency_key),
+            (observation_sync.tick_idempotency_key(connection["id"], fire_at, authorization_epoch=0),
+             observation_sync.tick_idempotency_key(connection["id"], fire_at, authorization_epoch=1)))
+        self.assertTrue(fresh.id.startswith("job_mobs_") and fresh.id != stale.id)
+        with Session(self.owner) as session:
+            enqueued = session.scalars(select(AuditEventRecord).where(
+                AuditEventRecord.resource_id == fresh.id, AuditEventRecord.event_type == "job.enqueued")).one()
+        self.assertEqual((enqueued.authorization_epoch, enqueued.executor), (1, "system:worker"))
+
+        self._drain(WorkerRuntime(owner=f"ci-only-meta-obs-pg-{uuid.uuid4().hex[:6]}"), owner.workspace_id)
+
+        self.assertEqual([(t.state, t.authorization_epoch)
+                          for t in self._jobs(owner.workspace_id, observation_sync.TICK_JOB_TYPE)],
+                         [("failed", 0), ("succeeded", 1)])
+        schedule, = self._rows(MetaObservationSyncScheduleRecord, owner.workspace_id)
+        self.assertEqual((schedule.last_fired_at, schedule.next_fire_at),
+                         (fire_at, next_fire_after(DEFAULT_SYNC_CRON, TIMEZONE, fire_at)))
+        run, = self._rows(MetaObservationSyncRunRecord, owner.workspace_id)
+        self.assertEqual(run.state, "succeeded")
+        self.assertEqual(len(self._rows(EvidenceAttestationRecord, owner.workspace_id)), 1)
 
     def test_a_worker_killed_after_page_one_resumes_at_page_two_without_a_duplicate_page(self):
         owner = self._workspace("kill")
