@@ -244,8 +244,8 @@ def _workspace_scope(workspace_id: str) -> _WorkspaceScope | None:
         return _WorkspaceScope(workspace.authorization_epoch, workspace.is_platform_workspace)
 
 
-#: The one audit event a platform Workspace's creation writes; its id is
-#: derived from the Workspace id, exactly as the PostgreSQL function does.
+#: The audit event a platform Workspace's creation writes, once: its id is
+#: derived from the Workspace id, the same way the PostgreSQL function does.
 PLATFORM_WORKSPACE_CREATED = "workspace.platform_created"
 
 
