@@ -845,6 +845,21 @@ BEGIN
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_admitted_operation_candidates_v1(integer) TO marketai_domain_worker';
   END IF;
 
+  -- Platform Meta API (zzc2f3a4b5c6, #91 and #94). The API keeps SELECT only
+  -- on workspaces and only the non-secret columns of credential_versions:
+  -- bootstrap creates the platform Workspace (is_platform_workspace = true,
+  -- never an existing row) through the first function, and credential
+  -- revocation learns which Workspace owns a version (the id, nothing else)
+  -- through the second, then revokes in a signed TenantContext under RLS.
+  IF to_regprocedure('public.marketai_create_platform_workspace_v1(text,text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_create_platform_workspace_v1(text, text) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_create_platform_workspace_v1(text, text) TO marketai_domain_api';
+  END IF;
+  IF to_regprocedure('public.marketai_credential_version_workspace_v1(text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_credential_version_workspace_v1(text) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_credential_version_workspace_v1(text) TO marketai_domain_api';
+  END IF;
+
   -- ---- projection_writer: mutable projection tables ----
   FOREACH relation_name IN ARRAY ARRAY[
     'experiment_eligibility_projections',

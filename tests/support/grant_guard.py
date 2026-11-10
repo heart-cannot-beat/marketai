@@ -82,6 +82,11 @@ _PROVISIONED = (
     "TenantScopeError instead, because the control-plane projection owns "
     "Workspace rows"
 )
+_PLATFORM_WORKSPACE = (
+    "PostgreSQL creates the platform Workspace through the SECURITY DEFINER "
+    "marketai_create_platform_workspace_v1() (#91); only SQLite writes the row "
+    "from Python"
+)
 
 SQLITE_ONLY_WRITES: tuple[SqliteOnlyWrite, ...] = (
     SqliteOnlyWrite("entitlement_snapshot_inbox", "INSERT", _PROJECTION_INGEST, _PROJECTED),
@@ -90,13 +95,14 @@ SQLITE_ONLY_WRITES: tuple[SqliteOnlyWrite, ...] = (
     SqliteOnlyWrite("workspaces", "UPDATE", _PROJECTION_INGEST, _PROJECTED),
     SqliteOnlyWrite("workspaces", "INSERT", "app.store:_ensure_workspace", _PROVISIONED),
     SqliteOnlyWrite("workspaces", "INSERT", "app.meta.service:_ensure_workspace_and_account", _PROVISIONED),
+    SqliteOnlyWrite(
+        "workspaces", "INSERT", "app.meta.platform_api:_create_platform_workspace", _PLATFORM_WORKSPACE,
+    ),
 )
 
-KNOWN_GAPS: tuple[KnownGap, ...] = (
-    # Platform Meta bootstrap creates a Workspace the domain database does
-    # not have yet, as the API role, which holds only SELECT on workspaces.
-    KnownGap(API_ROLE, "workspaces", "INSERT", "app.meta.platform_api:_ensure_workspace", 91),
-)
+# Empty while every gap the guard has found is fixed; a new one goes here
+# with the issue that tracks it.
+KNOWN_GAPS: tuple[KnownGap, ...] = ()
 
 
 # --------------------------------------------------------- classification --

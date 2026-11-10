@@ -2363,6 +2363,7 @@
   "error-workspace_membership_required": "You are not a member of this Workspace.",
   "error-workspace_mismatch": "This request belongs to a different Workspace.",
   "error-workspace_not_found": "This Workspace does not exist.",
+  "error-workspace_not_provisioned": "This Workspace has not been created yet.",
   "error-workspace_provisioning": "This Workspace is still being set up. Try again shortly.",
   "error-workspace_suspended": "This Workspace is suspended.",
   "error-wrong_advice_type": "This kind of advice does not support that action.",

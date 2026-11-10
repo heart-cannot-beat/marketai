@@ -10,6 +10,17 @@ Workspaces use ``platform_session()`` (untenanted) rather than
 ``tenant_session()`` (RLS-scoped to one Workspace), mirroring the existing
 cross-tenant callers ``app.platform.jobs`` and ``app.library.prompt_policy``.
 
+On PostgreSQL ``marketai_domain_api`` is NOBYPASSRLS and the domain tables
+are FORCE RLS, so an untenanted session reads nothing. Bootstrap and
+credential revocation therefore learn what they need before a TenantContext
+exists through narrow ``SECURITY DEFINER`` functions -- the Workspace's
+epoch and platform flag (``marketai_workspace_admission``), the platform
+Workspace's creation (``marketai_create_platform_workspace_v1``) and a
+credential version's owning Workspace
+(``marketai_credential_version_workspace_v1``) -- and do everything else in
+a TenantContext signed for that Workspace's current epoch. SQLite has no RLS
+and reads and writes those rows directly.
+
 Routes (per spec §8.2 platform allowlist / §8.7):
 
 * ``POST /api/platform/v1/meta/bootstrap`` -- creates the initial
@@ -19,7 +30,11 @@ Routes (per spec §8.2 platform allowlist / §8.7):
   platform Workspace may hold ``internal_validation`` connections, and only
   a platform operator may create sandbox connections' initial credential
   material -- there is deliberately no self-service "create my first
-  connection" affordance for internal_validation).
+  connection" affordance for internal_validation). A customer Workspace
+  must already exist: only the control-plane projection creates one, and
+  bootstrap answers 409 ``workspace_not_provisioned`` otherwise (#91). The
+  platform Workspace, which the control plane does not project, is created
+  here on its first ``internal_validation`` bootstrap.
 * ``GET /api/platform/v1/meta/connections`` / ``GET .../{id}`` -- the
   platform-wide read view across every Workspace, for operators diagnosing
   a specific tenant's connection without knowing its Workspace up front.
@@ -52,6 +67,7 @@ both auth mechanisms. It is overridden directly in tests via
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 from dataclasses import dataclass
@@ -59,18 +75,18 @@ from dataclasses import dataclass
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from . import connections as connections_service
 from .models import MetaConnectionRecord, MetaDataSourceBindingRecord
 from .. import config
 from ..adapters.persistence.database import platform_session, tenant_session
-from ..adapters.persistence.models import WorkspaceRecord, utcnow
+from ..adapters.persistence.models import AuditEventRecord, WorkspaceRecord, utcnow
 from ..entitlements.credential_admin import CredentialAdmin
 from ..entitlements.credential_protector import LocalKmsAdapter
 from ..entitlements.credentials import CredentialVersionRecord
 from ..platform.platform_operator_identity import PlatformTokenError
-from ..platform.tenancy import VALID_META_MODES, TenantContext
+from ..platform.tenancy import VALID_META_MODES, TenantContext, is_postgres
 
 router = APIRouter(prefix="/api/platform/v1", tags=["platform-admin"])
 
@@ -193,29 +209,138 @@ def _get_protector() -> LocalKmsAdapter:
     return LocalKmsAdapter(secret.encode() if isinstance(secret, str) else secret)
 
 
-def _ensure_workspace(workspace_id: str, *, is_platform: bool) -> None:
-    """Create the Workspace row if bootstrap targets one that does not exist yet.
+@dataclass(frozen=True)
+class _WorkspaceScope:
+    """What a platform route needs to sign a TenantContext for a Workspace."""
 
-    Bootstrap is how a Workspace gets its *first* Meta connection (module
-    docstring) -- requiring the Workspace to already exist would just move
-    workspace creation into a separate, unspecified platform route. An
-    already-existing Workspace's ``is_platform_workspace`` flag is left
-    untouched: silently promoting an existing tenant Workspace to a
-    platform Workspace on a bootstrap call would be a surprising side
-    effect, so that case instead surfaces as the ordinary
-    ``ConnectionLifecycleError`` from ``create_connection`` (mapped to 400
-    below).
+    authorization_epoch: int
+    is_platform_workspace: bool
+
+
+def _workspace_scope(workspace_id: str) -> _WorkspaceScope | None:
+    """The Workspace's current epoch and platform flag, or ``None`` if the
+    domain database has no such Workspace.
+
+    No TenantContext exists yet and ``workspaces`` is FORCE RLS on
+    PostgreSQL, so the pre-tenant admission function (``SECURITY DEFINER``,
+    granted to the API) is the read the API role has; SQLite has no RLS and
+    reads the row directly.
     """
     with platform_session() as session:
-        if session.get(WorkspaceRecord, workspace_id) is None:
-            session.add(
-                WorkspaceRecord(
-                    id=workspace_id,
-                    name=workspace_id,
-                    created_at=utcnow(),
-                    is_platform_workspace=is_platform,
-                )
+        if is_postgres(session):
+            row = session.execute(
+                text(
+                    "SELECT workspace_id, authorization_epoch, is_platform_workspace "
+                    "FROM public.marketai_workspace_admission(:workspace_id)"
+                ),
+                {"workspace_id": workspace_id},
+            ).first()
+            if row is None or row.workspace_id is None:
+                return None
+            return _WorkspaceScope(int(row.authorization_epoch), bool(row.is_platform_workspace))
+        workspace = session.get(WorkspaceRecord, workspace_id)
+        if workspace is None:
+            return None
+        return _WorkspaceScope(workspace.authorization_epoch, workspace.is_platform_workspace)
+
+
+#: The one audit event a platform Workspace's creation writes; its id is
+#: derived from the Workspace id, exactly as the PostgreSQL function does.
+PLATFORM_WORKSPACE_CREATED = "workspace.platform_created"
+
+
+def _create_platform_workspace(workspace_id: str, *, initiator_id: str) -> bool:
+    """Create ``workspace_id`` as the platform Workspace; ``False`` if it exists.
+
+    Customer Workspaces come only from the control-plane projection, so this
+    creates a row with ``is_platform_workspace = true`` and nothing else, and
+    leaves an existing row exactly as it is (a customer Workspace is never
+    promoted). On PostgreSQL the API role holds no INSERT on ``workspaces``:
+    ``marketai_create_platform_workspace_v1`` (migration ``zzc2f3a4b5c6``)
+    makes the row and its audit event. SQLite has no roles and writes the
+    same two rows here.
+    """
+    with platform_session() as session:
+        if is_postgres(session):
+            return bool(
+                session.execute(
+                    text(
+                        "SELECT public.marketai_create_platform_workspace_v1("
+                        ":workspace_id, :initiator_id)"
+                    ),
+                    {"workspace_id": workspace_id, "initiator_id": initiator_id},
+                ).scalar_one()
             )
+        if session.get(WorkspaceRecord, workspace_id) is not None:
+            return False
+        session.add(
+            WorkspaceRecord(
+                id=workspace_id,
+                name=workspace_id,
+                created_at=utcnow(),
+                is_platform_workspace=True,
+            )
+        )
+        session.flush()
+        audit_key = f"{workspace_id}|platform-workspace-created".encode("utf-8")
+        session.add(
+            AuditEventRecord(
+                id="audit_" + hashlib.md5(audit_key, usedforsecurity=False).hexdigest(),
+                workspace_id=workspace_id,
+                initiator_id=initiator_id,
+                initiator_role="system",
+                executor=PLATFORM_EXECUTOR,
+                request_id="",
+                trace_id="",
+                authorization_epoch=0,
+                meta_mode=None,
+                event_type=PLATFORM_WORKSPACE_CREATED,
+                resource_type="workspace",
+                resource_id=workspace_id,
+                details_json={"is_platform_workspace": True},
+            )
+        )
+        return True
+
+
+def _credential_version_workspace(credential_version_id: str) -> str | None:
+    """The Workspace that owns ``credential_version_id``, or ``None``.
+
+    On PostgreSQL ``credential_versions`` is FORCE RLS and the API may read
+    only its non-secret columns, so the owner comes from
+    ``marketai_credential_version_workspace_v1``, which returns that id and
+    nothing else. SQLite reads the one column directly.
+    """
+    with platform_session() as session:
+        if is_postgres(session):
+            return session.execute(
+                text("SELECT public.marketai_credential_version_workspace_v1(:version_id)"),
+                {"version_id": credential_version_id},
+            ).scalar_one()
+        return session.scalar(
+            select(CredentialVersionRecord.workspace_id).where(
+                CredentialVersionRecord.id == credential_version_id
+            )
+        )
+
+
+def _platform_tenant_context(
+    workspace_id: str,
+    scope: _WorkspaceScope,
+    platform: LegacyPlatformContext,
+    *,
+    meta_mode: str | None = None,
+) -> TenantContext:
+    """A TenantContext for one Workspace, signed for its current epoch."""
+    return TenantContext(
+        workspace_id=workspace_id,
+        role="owner",
+        initiator_id=platform.actor_id,
+        executor=PLATFORM_EXECUTOR,
+        authorization_epoch=scope.authorization_epoch,
+        meta_mode=meta_mode,
+        is_platform_workspace=scope.is_platform_workspace,
+    )
 
 
 def _connection_dict(row: MetaConnectionRecord) -> dict:
@@ -298,14 +423,29 @@ def bootstrap(
             },
         )
 
-    _ensure_workspace(body.workspace_id, is_platform=(body.meta_mode == "internal_validation"))
+    # Customer Workspaces exist only once the control plane has projected
+    # them. The platform Workspace, which it does not project, is the only
+    # one bootstrap creates; an existing Workspace keeps its flag, so
+    # internal_validation on a customer Workspace still fails below with
+    # meta_platform_workspace_required.
+    scope = _workspace_scope(body.workspace_id)
+    if scope is None:
+        if body.meta_mode != "internal_validation":
+            raise HTTPException(
+                409,
+                {
+                    "code": "workspace_not_provisioned",
+                    "message": f"Workspace {body.workspace_id!r} has not been provisioned "
+                    "by the control plane yet.",
+                },
+            )
+        _create_platform_workspace(body.workspace_id, initiator_id=_platform.actor_id)
+        scope = _workspace_scope(body.workspace_id)
+        if scope is None:  # pragma: no cover -- the row was just committed
+            raise RuntimeError(f"platform Workspace {body.workspace_id!r} was not created")
 
-    context = TenantContext(
-        workspace_id=body.workspace_id,
-        role="owner",
-        initiator_id=_platform.actor_id,
-        executor=PLATFORM_EXECUTOR,
-        meta_mode=body.meta_mode,
+    context = _platform_tenant_context(
+        body.workspace_id, scope, _platform, meta_mode=body.meta_mode,
     )
 
     protector = _get_protector()
@@ -449,25 +589,33 @@ async def revoke_credential(
     body: RevokeCredentialRequest,
     _platform: LegacyPlatformContext = Depends(request_platform_context),
 ) -> dict:
-    with platform_session() as session:
-        version = session.get(CredentialVersionRecord, credential_version_id)
-        if version is None:
-            raise HTTPException(404, "credential version not found")
-        workspace_id = version.workspace_id
-        credential_key = version.credential_key
+    # Which Workspace owns the version is the only thing read untenanted;
+    # the version itself is read (non-secret columns only) and revoked in a
+    # TenantContext signed for that Workspace (#94).
+    workspace_id = _credential_version_workspace(credential_version_id)
+    scope = _workspace_scope(workspace_id) if workspace_id is not None else None
+    if workspace_id is None or scope is None:
+        raise HTTPException(404, "credential version not found")
 
-    context = TenantContext(
-        workspace_id=workspace_id,
-        role="owner",
-        initiator_id=_platform.actor_id,
-        executor=PLATFORM_EXECUTOR,
-    )
+    context = _platform_tenant_context(workspace_id, scope, _platform)
 
     protector = _get_protector()
     admin = CredentialAdmin(protector)
     with tenant_session(context) as session:
+        version = session.execute(
+            select(CredentialVersionRecord.credential_key, CredentialVersionRecord.state).where(
+                CredentialVersionRecord.id == credential_version_id,
+                CredentialVersionRecord.workspace_id == workspace_id,
+            )
+        ).first()
+        if version is None:
+            raise HTTPException(404, "credential version not found")
+        # Revocation acts on the key's active version: a version that is no
+        # longer active must not revoke whichever one replaced it.
+        if version.state != "active":
+            raise HTTPException(404, f"credential version is not active (state={version.state!r})")
         try:
-            admin.revoke(session, context, credential_key=credential_key, reason=body.reason)
+            admin.revoke(session, context, credential_key=version.credential_key, reason=body.reason)
         except ValueError as exc:
             raise HTTPException(404, str(exc)) from exc
 
