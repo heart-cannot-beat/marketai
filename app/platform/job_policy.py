@@ -103,9 +103,9 @@ JOB_POLICIES: dict[str, JobPolicy] = {
     "marketing.resolve_call": _policy(_NONE_REQUEUE, "核对已有调用记录，不重发"),
     "marketing.export": _policy(_NONE_REQUEUE, "只写 BlobStore"),
     "scale_evaluate": _policy(
-        _NONE_REQUEUE, "Phase A/B/C 检查点可续跑（tests/test_scale_recovery.py）；目前没有入队点"),
+        _NONE_REQUEUE, "Phase A/B/C 检查点可续跑（tests/test_scale_recovery.py）；调度未接（#101）"),
     "scale_advice_expire": _policy(
-        _NONE_REQUEUE, "在线程行锁下复查，非 active 即不写；目前没有入队点"),
+        _NONE_REQUEUE, "在线程行锁下复查，非 active 即不写；调度未接（#101）"),
     # -- Paid, but the handler fences the call through its own durable record.
     "marketing.plan": _policy(_PAID_REQUEUE, "调用记录挡住重复付费"),
     "marketing.ai_qc": _policy(_PAID_REQUEUE, "调用记录挡住重复付费"),

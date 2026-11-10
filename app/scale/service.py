@@ -22,16 +22,28 @@ exposes exactly two public entry points:
     applicable, append an audit event, and CAS the run to its terminal
     outcome.
 
+  Inside a ``tenant_session`` each phase's transaction carries the session's
+  TenantContext (#96): ``SET LOCAL`` ends with the transaction, so Phase A
+  commits with ``commit_and_rebind`` and Phase C opens its own bound
+  transaction. Without that, PostgreSQL's FORCE RLS hides every Scale row
+  from the statements after Phase A's commit.
+
+Two helpers serve the ``scale_evaluate`` Job (#97):
+:func:`enqueue_scale_evaluation` enqueues a run with its Meta mode in the
+payload, and :func:`evaluation_job_context` reads it back for the handler. A
+claimed Job's context is frozen from the Job row, which records no mode, and
+every Scale table's RLS policy needs one.
+
 Known Task-12 scoping decisions (the full generality is later tasks' job):
 
 * Advice lifecycle processing (thread resolution, occurrence creation,
   dispositions/cooldowns, notification intents -- spec §3.5) is delegated to
   :func:`app.scale.advice.process_advice_candidates`, called from Phase C
   step 6 with the Evaluation's own persisted advice candidates.
-* Job dispatch for the ``scale_evaluate`` job (spec §3.8) is Task 14's
-  concern. ``request_scale_evaluation`` only creates/reuses the durable run
-  checkpoint; the run id is already the complete job payload the future
-  dispatcher needs.
+* Deciding when to request and enqueue an evaluation (spec §3.8 trigger
+  sources) is #101's scheduling. ``request_scale_evaluation`` only
+  creates/reuses the durable run checkpoint; ``enqueue_scale_evaluation``
+  is the enqueue the scheduler calls.
 * Forward-replay lineage reconciliation (spec §3.8 "Backfill lineage") is not
   implemented: a ``forward_replay`` run never wins the projection CAS here.
   The run/Evaluation records still carry every field a later task needs to
@@ -52,15 +64,24 @@ Known Task-12 scoping decisions (the full generality is later tasks' job):
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.adapters.persistence.models import AuditEventRecord, new_id, utcnow
-from app.platform.tenancy import TenantContext
+from app.adapters.persistence.models import AuditEventRecord, JobRecord, new_id, utcnow
+from app.platform.jobs import enqueue_in_session
+from app.platform.tenancy import (
+    VALID_META_MODES,
+    TenantContext,
+    apply_to_session,
+    commit_and_rebind,
+    tenant_scope,
+)
 from app.scale._canonical import canonical_encode, canonical_hash
 from app.scale._contracts import ScaleEvaluation, ScaleEvidenceSnapshot
 from app.scale.advice import process_advice_candidates
@@ -104,6 +125,8 @@ __all__ = [
     "ScaleEvaluationRequest",
     "ScaleRunOutcome",
     "ScaleOrchestrationError",
+    "enqueue_scale_evaluation",
+    "evaluation_job_context",
     "request_scale_evaluation",
     "run_scale_evaluation",
 ]
@@ -319,13 +342,53 @@ def request_scale_evaluation(
             raise
         return recovered.id
 
-    # Job enqueuing (spec §3.8): the actual `scale_evaluate` dispatch
-    # mechanism, its lease, and its idempotency key
-    # (`scale-eval:{run_id}:{algorithm_version}`) are Task 14's concern. The
-    # durable run this function just created/reused is already the complete
-    # payload a future dispatcher needs -- recording the intent here means
-    # nothing more than handing back this id.
+    # Enqueuing is a separate step (`enqueue_scale_evaluation`); when to
+    # request and enqueue a run is #101's scheduling.
     return run.id
+
+
+def enqueue_scale_evaluation(
+    session: Session, context: TenantContext, evaluation_run_id: str,
+) -> JobRecord:
+    """Enqueue the ``scale_evaluate`` Job for one durable run (spec §3.8),
+    or return the Job its idempotency key already names.
+
+    The key is the spec's ``scale-eval:{run_id}:{algorithm_version}``. The
+    payload carries the run's Meta mode beside its id (#97): the Worker's
+    claimed context is frozen from the Job row, which records no mode, and
+    the run is visible under RLS only to a context that names it.
+    """
+    meta_mode = _require_meta_mode(context)
+    run = session.execute(
+        select(ScaleEvaluationRunRecord).filter_by(
+            workspace_id=context.workspace_id, meta_mode=meta_mode, id=evaluation_run_id,
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise ScaleOrchestrationError("run_not_found", evaluation_run_id)
+    with tenant_scope(session, context):
+        return enqueue_in_session(
+            session,
+            context=context,
+            job_type="scale_evaluate",
+            payload={"evaluation_run_id": run.id, "meta_mode": meta_mode},
+            idempotency_key=f"scale-eval:{run.id}:{run.algorithm_version}",
+            resource_type="scale_evaluation_run",
+            resource_id=run.id,
+        )
+
+
+def evaluation_job_context(context: TenantContext, payload: Mapping[str, Any]) -> TenantContext:
+    """The TenantContext a ``scale_evaluate`` Job evaluates under (#97).
+
+    The claimed context names no Meta mode; the payload does. A payload
+    without a valid mode is refused as ``missing_input`` before the Job
+    runs, instead of failing inside the evaluation as ``meta_mode_required``.
+    """
+    meta_mode = str(payload.get("meta_mode") or "")
+    if meta_mode not in VALID_META_MODES:
+        raise ScaleOrchestrationError("missing_input", "缺少或无效的 meta_mode")
+    return replace(context, meta_mode=meta_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +419,25 @@ def run_scale_evaluation(
 
     evaluation = evaluate_scale(snapshot)
 
+    # Spec §3.4 Phase C: "Open a second tenant transaction".
+    _begin_bound_transaction(session)
     return _phase_c(session, context, run_id, snapshot, evaluation)
+
+
+def _begin_bound_transaction(session: Session) -> None:
+    """Open a transaction carrying the session's TenantContext (#96).
+
+    ``commit_and_rebind`` without the commit: Phase B has already closed its
+    transaction, and binding before ``evaluate_scale`` would hold one open
+    through the computation. A session with no bound context (a bare
+    ``Session``) needs nothing.
+    """
+    context = session.info.get("tenant_context")
+    if context is None:
+        return
+    if not session.in_transaction():
+        session.begin()
+    apply_to_session(session, context)
 
 
 def _fail_after_seal(session: Session, context: TenantContext, run_id: str, detail: str) -> ScaleRunOutcome:
@@ -505,7 +586,9 @@ def _phase_a(
         session.commit()
         return outcome
 
-    session.commit()
+    # Phase B reads in the next transaction (the sealed snapshot, or this
+    # run again in `_fail_after_seal`), so the context goes with it (#96).
+    commit_and_rebind(session)
     return run.id, snapshot_id
 
 
