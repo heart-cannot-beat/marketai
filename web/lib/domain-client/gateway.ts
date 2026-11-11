@@ -1529,6 +1529,14 @@ export interface DomainGateway {
     metaMode: string;
   }): Promise<DomainResultFor<'list_scale_enrollment_candidates'>>;
 
+  /** The ads the Workspace's active connections in this mode have observed
+   * (#129), for picking a Winner's DeliveryTarget. */
+  listScaleObservedAds(params: {
+    workspaceSlug: string;
+    metaMode: string;
+    metaConnectionId?: string;
+  }): Promise<DomainResultFor<'list_scale_observed_ads'>>;
+
   // ---- Scale commands ----
 
   createScaleEnrollment(params: {
@@ -1552,6 +1560,18 @@ export interface DomainGateway {
   }): Promise<
     | DomainResultFor<'create_scale_enrollment_candidate'>
     | ReconciliationRequired
+  >;
+
+  /** Makes a Winner's DeliveryTarget from one observed ad (#129). The server
+   * resolves the delivery slot from recorded evidence and answers a typed
+   * reason when the ad does not match the Winner. */
+  createScaleDeliveryTarget(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    metaMode: string;
+    body: DomainOperationMap['create_scale_delivery_target']['requestBody'];
+  }): Promise<
+    DomainResultFor<'create_scale_delivery_target'> | ReconciliationRequired
   >;
 
   /** Pre-activation evidence snapshot + lineage-guard preview (spec §4.5,
@@ -5639,6 +5659,19 @@ export class DefaultDomainGateway implements DomainGateway {
     return this.sendSafe<'list_scale_enrollment_candidates'>(path);
   }
 
+  async listScaleObservedAds(params: {
+    workspaceSlug: string;
+    metaMode: string;
+    metaConnectionId?: string;
+  }): Promise<DomainResultFor<'list_scale_observed_ads'>> {
+    const path =
+      buildBffPath('list_scale_observed_ads', {
+        slug: params.workspaceSlug,
+        meta_mode: params.metaMode,
+      }) + this.buildQuery({ meta_connection_id: params.metaConnectionId });
+    return this.sendSafe<'list_scale_observed_ads'>(path);
+  }
+
   // ==== Scale commands ====
 
   async createScaleEnrollment(params: {
@@ -5655,6 +5688,29 @@ export class DefaultDomainGateway implements DomainGateway {
     });
     return this.runCommand(
       'create_scale_enrollment',
+      params.actionInstanceId,
+      path,
+      'POST',
+      params.body,
+      201,
+      'created'
+    );
+  }
+
+  async createScaleDeliveryTarget(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    metaMode: string;
+    body: DomainOperationMap['create_scale_delivery_target']['requestBody'];
+  }): Promise<
+    DomainResultFor<'create_scale_delivery_target'> | ReconciliationRequired
+  > {
+    const path = buildBffPath('create_scale_delivery_target', {
+      slug: params.workspaceSlug,
+      meta_mode: params.metaMode,
+    });
+    return this.runCommand(
+      'create_scale_delivery_target',
       params.actionInstanceId,
       path,
       'POST',

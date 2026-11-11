@@ -66,6 +66,7 @@ from .candidates import create_enrollment_candidate, list_eligible_candidates
 from .command_journal import lookup_command_outcome
 from .enrollment import activate_enrollment, close_enrollment, create_draft_enrollment, pause_enrollment, resume_enrollment
 from .exports import create_export, create_export_download_intent
+from .observed_ads import create_delivery_target_from_ad, list_observed_ads
 from .models import (
     ScaleAdviceConversionRecord,
     ScaleAdviceDispositionRecord,
@@ -95,6 +96,8 @@ from .schemas import (
     CommandOutcomeResponse,
     ConversionRequest,
     ConversionResponse,
+    DeliveryTargetCreateRequest,
+    DeliveryTargetResponse,
     EnrollmentActivateRequest,
     EnrollmentCloseRequest,
     EnrollmentCreateRequest,
@@ -107,6 +110,7 @@ from .schemas import (
     ExportCreateRequest,
     ExportDownloadIntentResponse,
     ExportResponse,
+    ObservedAdListResponse,
     TargetContextResponse,
     TargetCreateRequest,
     TargetListResponse,
@@ -131,10 +135,12 @@ from .types import AdviceType
 from .v1_router import (
     _META_MODE_PATTERN,
     _candidate_dict,
+    _delivery_target_dict,
     _enrollment_dict,
     _episode_dict,
     _evidence_detail_dict,
     _limit_query,
+    _observed_ads_dict,
     _paginate,
     _preview_dict,
     _target_dict,
@@ -1011,6 +1017,42 @@ def platform_create_enrollment_candidate(
             idempotency_key=idempotency_key,
         )
         return _candidate_dict(candidate)
+
+
+@platform_scale_mode.get(
+    "/observed-ads",
+    operation_id="platform_list_scale_observed_ads",
+    response_model=ObservedAdListResponse,
+)
+def platform_list_observed_ads(
+    context: TenantContext = Depends(_platform_context),
+    meta_connection_id: str | None = Query(default=None, min_length=1, max_length=64),
+):
+    with tenant_session(context) as session:
+        return _observed_ads_dict(list_observed_ads(session, context, connection_id=meta_connection_id))
+
+
+@platform_scale_mode.post(
+    "/delivery-targets",
+    operation_id="platform_create_scale_delivery_target",
+    response_model=DeliveryTargetResponse,
+    status_code=201,
+    openapi_extra={"x-marketai-idempotent": True},
+)
+def platform_create_delivery_target(
+    body: DeliveryTargetCreateRequest,
+    context: TenantContext = Depends(_platform_context),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
+):
+    with tenant_session(context) as session:
+        target = create_delivery_target_from_ad(
+            session, context,
+            decision_id=body.winner_decision_id,
+            connection_id=body.meta_connection_id,
+            ad_remote_id=body.ad_remote_id,
+            idempotency_key=idempotency_key,
+        )
+        return _delivery_target_dict(target)
 
 
 # Mount every mode-scoped route onto the root router at ``/{meta_mode}``.

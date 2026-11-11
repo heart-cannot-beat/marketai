@@ -617,7 +617,7 @@ def _build_episode_from_evidence(
         observed_at=observed_at,
         reconciliation_id=None,
         offer_version_id=target.offer_version_id,
-        landing_page_version_id=target.landing_page_version_id,
+        landing_page_version_id=target.landing_page_evidence_hash,
     )
     episode_context = EpisodeContext(
         metric_semantic_contract_set_id=metric_semantic_contract_set_id,
@@ -780,7 +780,7 @@ def create_draft_enrollment(
         product_version_id=winner.product_version_id,
         offer_version_id=winner.offer_version_id,
         market_code=winner.market_code,
-        landing_page_version_id=winner.landing_page_version_id,
+        landing_page_version_id=winner.landing_page_evidence_hash,
         market_asset_binding_id=winner.market_asset_binding_id,
         campaign_remote_id=target.campaign_remote_id,
         ad_set_remote_id=target.adset_remote_id,

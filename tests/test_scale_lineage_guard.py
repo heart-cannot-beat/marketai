@@ -173,7 +173,7 @@ class LineageGuardTestBase(unittest.TestCase):
         if upstream is None:
             upstream = self._make_curated_scenario_context(meta_mode)
         offer_id = self._make_library_version("offer")
-        landing_id = self._make_library_version("landing_page")
+        landing_id = "f" * 64  # the Landing Page evidence hash a Winner froze (#129)
         creative_asset_version_id = self._make_asset_version()
         request = DeliveryTargetRequest(
             meta_connection_id=upstream["meta_connection_id"],
@@ -190,7 +190,7 @@ class LineageGuardTestBase(unittest.TestCase):
             attribution_setting="7d_click_1d_view",
             contract_generation_id=upstream["contract_generation_id"],
             offer_version_id=offer_id,
-            landing_page_version_id=landing_id,
+            landing_page_evidence_hash=landing_id,
             source_type="curated_scenario",
             source_manifest={"schema_version": 1, "source_type": "curated_scenario"},
             observed_at=OBSERVED_AT,

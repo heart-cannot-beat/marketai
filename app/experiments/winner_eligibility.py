@@ -46,16 +46,13 @@ delegation needs no translation layer. Checks 8-10 introduce new codes
 ``reference_rights_ineligible``) that only ``validate_winner_eligibility()``
 can raise.
 
-Landing Page assumption: no Landing Page Library entity/version exists yet
-anywhere in this codebase (no ``entry_type == 'landing_page'``, no
-``landing_page_version_id`` column). ``ExperimentVersionRecord`` freezes
-only a ``landing_page_evidence_hash``. Until a real Landing Page version
-entity ships, ``EligibleWinnerLineage.landing_page_version_id`` is
-populated from that hash -- the closest available frozen identity for the
-Landing Page bound at freeze time. New explicit marketing handoffs instead
-use the immutable OfferVersion that declares the exact landing-page URL;
-the separate URL evidence hash remains preserved. Legacy records retain
-their original identity.
+Landing Page: the Landing Page belongs to the OfferVersion
+(creative-library contract §5.2) and has no version entity of its own. An
+ExperimentVersion freezes it as ``landing_page_evidence_hash``, and
+``EligibleWinnerLineage.landing_page_evidence_hash`` is that frozen hash for
+every Winner, legacy experiment and marketing handoff alike (#129). A
+DeliveryTarget carries the hash frozen by the ExperimentVersion its ad came
+from, and the lineage gate compares the two.
 """
 from __future__ import annotations
 
@@ -87,6 +84,7 @@ __all__ = [
     "WinnerEligibilityFinding",
     "WinnerIneligibleError",
     "WinnerIdentity",
+    "attribution_semantics_hash_for",
     "evaluate_winner_identity",
     "validate_winner_eligibility",
 ]
@@ -95,6 +93,20 @@ __all__ = [
 def _versioned_hash(version: str, mapping: object) -> str:
     """Version-prefixed SHA-256 over canonical JSON (spec §4.7)."""
     return _sha256(f"{version}:".encode("utf-8") + _canonical_bytes(mapping))
+
+
+def attribution_semantics_hash_for(click_window_days: int, view_window_days: int) -> str:
+    """The ``attribution-semantics-v1`` hash of a click/view window pair.
+
+    A Winner hashes the windows its ExperimentVersion froze; a DeliveryTarget
+    hashes the windows its Scale metric contracts read with (#129), so the
+    lineage gate compares what the Winner was judged on with what Scale
+    measures.
+    """
+    return _versioned_hash(
+        "attribution-semantics-v1",
+        {"click_window_days": click_window_days, "view_window_days": view_window_days},
+    )
 
 
 def _aware_utc(value: datetime) -> datetime:
@@ -131,7 +143,7 @@ class EligibleWinnerLineage:
     offer_version_id: str
     market_code: str
     placement: str
-    landing_page_version_id: str
+    landing_page_evidence_hash: str
     market_asset_binding_id: str
     attribution_semantics_hash: str
     reference_rights_hash: str
@@ -415,7 +427,7 @@ def validate_winner_eligibility(
     decision = identity.decision
     now = datetime.now(timezone.utc)
 
-    market_code = placement = landing_page_version_id = ""
+    market_code = placement = landing_page_evidence_hash = ""
     attribution_semantics_hash = ""
     binding: MarketAssetBindingRecord | None = None
     reference_rights_hash = ""
@@ -434,16 +446,10 @@ def validate_winner_eligibility(
         experiment_version = identity.experiment_version
         market_code = experiment_version.market
         placement = experiment_version.placement
-        from app.marketing.evidence_handoff import origin
-        marketing_proof = origin(experiment_version)
-        landing_page_version_id = (marketing_proof.get("landing_page_version_id", "") if marketing_proof
-            else experiment_version.landing_page_evidence_hash)
-        attribution_semantics_hash = _versioned_hash(
-            "attribution-semantics-v1",
-            {
-                "click_window_days": experiment_version.attribution_click_window_days,
-                "view_window_days": experiment_version.attribution_view_window_days,
-            },
+        landing_page_evidence_hash = experiment_version.landing_page_evidence_hash
+        attribution_semantics_hash = attribution_semantics_hash_for(
+            experiment_version.attribution_click_window_days,
+            experiment_version.attribution_view_window_days,
         )
 
         # 9. MarketAssetBinding: exact AssetVersion + market + offer match,
@@ -542,7 +548,8 @@ def validate_winner_eligibility(
             "offer_version_state": identity.offer_version.state,
             "market_code": market_code,
             "placement": placement,
-            "landing_page_version_id": landing_page_version_id,
+            # Historical key name; the value is the frozen evidence hash (#129).
+            "landing_page_version_id": landing_page_evidence_hash,
             "attribution_semantics_hash": attribution_semantics_hash,
             "binding_id": binding.id,
             "binding_truth_freshness": binding.truth_freshness,
@@ -563,7 +570,7 @@ def validate_winner_eligibility(
         offer_version_id=identity.offer_version.id,
         market_code=market_code,
         placement=placement,
-        landing_page_version_id=landing_page_version_id,
+        landing_page_evidence_hash=landing_page_evidence_hash,
         market_asset_binding_id=binding.id,
         attribution_semantics_hash=attribution_semantics_hash,
         reference_rights_hash=reference_rights_hash,

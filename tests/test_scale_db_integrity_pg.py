@@ -204,7 +204,7 @@ INSERT INTO scale_delivery_targets
     (id, workspace_id, meta_mode, meta_connection_id, ad_account_id, scenario_scope_key,
      campaign_remote_id, adset_remote_id, ad_remote_id, ad_creative_id,
      creative_asset_version_id, creative_binding_evidence_hash, market_code, placement,
-     attribution_setting, contract_generation_id, offer_version_id, landing_page_version_id,
+     attribution_setting, contract_generation_id, offer_version_id, landing_page_evidence_hash,
      source_type, scenario_version_id, source_sync_run_id, source_publication_id,
      source_attestation_id, source_manifest, source_manifest_hash,
      target_fingerprint, remote_binding_key, observed_at, expires_at, created_at)
@@ -212,7 +212,7 @@ VALUES
     (:id, :workspace_id, :meta_mode, :meta_connection_id, :ad_account_id, :scenario_scope_key,
      :campaign_remote_id, :adset_remote_id, :ad_remote_id, :ad_creative_id,
      :creative_asset_version_id, :h64, :market_code, :placement,
-     :attribution_setting, :contract_generation_id, :offer_version_id, :landing_page_version_id,
+     :attribution_setting, :contract_generation_id, :offer_version_id, :landing_page_evidence_hash,
      :source_type, :scenario_version_id, :source_sync_run_id, :source_publication_id,
      :source_attestation_id, '{}', :h64,
      :h64, :remote_binding_key, now(), :expires_at, now())
@@ -406,7 +406,7 @@ def _seed_delivery_target(
     n = uuid.uuid4().hex[:10]
     target_id = f"sdt_{n}"
     offer_id = _seed_library_version(conn, workspace_id, "offer")
-    landing_id = _seed_library_version(conn, workspace_id, "landing_page")
+    landing_id = "f" * 64  # the Landing Page evidence hash a Winner froze (#129)
     asset_version_id = _seed_asset_version(conn, workspace_id)
     params = dict(
         id=target_id,
@@ -425,7 +425,7 @@ def _seed_delivery_target(
         attribution_setting="7d_click_1d_view",
         contract_generation_id=upstream["contract_generation_id"],
         offer_version_id=offer_id,
-        landing_page_version_id=landing_id,
+        landing_page_evidence_hash=landing_id,
         source_type="curated_scenario",
         scenario_version_id=upstream["scenario_version_id"],
         source_sync_run_id=None,

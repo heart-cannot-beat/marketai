@@ -8,6 +8,7 @@ import {
   prepareLocalizationBatchThroughUi,
   seedExperimentMetrics,
   seedLocalizationInfrastructure,
+  seedScaleActivationEvidence,
   seedScaleInfrastructure,
 } from './domain-helpers';
 import { en } from '../support/copy';
@@ -547,7 +548,7 @@ test('v9 Beta golden path', async ({
         winner.winnerDecision.runtimeId,
         ownerInvitation.email
       );
-      expect(seeded.deliveryTargetId).toBeTruthy();
+      expect(seeded.winnerAdId).toBeTruthy();
       expect(seeded.policyVersionId).toBeTruthy();
       expect(seeded.marketCode).toBe('US');
       return seeded;
@@ -567,9 +568,31 @@ test('v9 Beta golden path', async ({
       await page
         .getByRole('button', { name: winner.winnerDecision.runtimeId })
         .click();
+      // #129: pick the observed ad the Winner runs in -- the sandbox ad its
+      // PAUSED Launch created. The server makes the DeliveryTarget from that
+      // ad's recorded evidence and the dialog fills it in.
+      const pickResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/delivery-targets') &&
+          response.request().method() === 'POST',
+        { timeout: 15_000 }
+      );
+      await page
+        .getByRole('button', { name: `Use Meta ad ${scaleInfra.winnerAdId}` })
+        .click();
+      const pickResponse = await pickResponsePromise;
+      expect(pickResponse.status(), await pickResponse.text()).toBe(201);
+      const picked = (await pickResponse.json()) as {
+        id: string;
+        market_code: string;
+        ad_remote_id: string;
+      };
+      expect(picked.ad_remote_id).toBe(scaleInfra.winnerAdId);
+      expect(picked.market_code).toBe(scaleInfra.marketCode);
       const deliveryTargetInput = page.getByLabel(/delivery.*target/i);
-      await expect(deliveryTargetInput).toBeVisible({ timeout: 5_000 });
-      await deliveryTargetInput.fill(scaleInfra.deliveryTargetId);
+      await expect(deliveryTargetInput).toHaveValue(picked.id, {
+        timeout: 5_000,
+      });
 
       const enrollResponsePromise = page.waitForResponse(
         (response) =>
@@ -584,6 +607,13 @@ test('v9 Beta golden path', async ({
         lifecycle: string;
       };
       expect(enrollment.lifecycle).toBe('draft');
+      // Activation needs an attestation of the target's delivery read; the
+      // sandbox would publish one only at its next daily slot (README).
+      seedScaleActivationEvidence(
+        workspaceRef,
+        picked.id,
+        ownerInvitation.email
+      );
       return {
         schemaVersion: 1,
         area: 'scale',

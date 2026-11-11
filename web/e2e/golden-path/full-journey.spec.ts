@@ -41,6 +41,7 @@ import {
 import {
   seedInfrastructure,
   seedLocalizationInfrastructure,
+  seedScaleActivationEvidence,
   seedScaleInfrastructure,
   seedExperimentMetrics,
   advanceManifest,
@@ -2279,6 +2280,7 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
   // =========================================================================
 
   let scaleInfra: ReturnType<typeof seedScaleInfrastructure>;
+  let deliveryTargetId = '';
 
   await test.step('Seed Scale infrastructure', async () => {
     scaleInfra = seedScaleInfrastructure(
@@ -2286,7 +2288,7 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
       decisionId,
       ownerUserId
     );
-    expect(scaleInfra.deliveryTargetId).toBeTruthy();
+    expect(scaleInfra.winnerAdId).toBeTruthy();
     expect(scaleInfra.policyVersionId).toBeTruthy();
     expect(scaleInfra.marketCode).toBe('US');
   });
@@ -2311,10 +2313,32 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
     await expect(decisionOption).toBeVisible({ timeout: 10_000 });
     await decisionOption.click();
 
-    // Step 2: Enter delivery_target_id — this is a plain text input, not a select
+    // Step 2: pick the observed ad the Winner runs in -- the sandbox ad its
+    // PAUSED Launch created (#129). The server makes the DeliveryTarget from
+    // that ad's recorded evidence and the dialog fills the target in.
+    const pickResponsePromise = page.waitForResponse(
+      (r) =>
+        r.url().includes('/delivery-targets') &&
+        r.request().method() === 'POST',
+      { timeout: 15_000 }
+    );
+    await page
+      .getByRole('button', { name: `Use Meta ad ${scaleInfra.winnerAdId}` })
+      .click();
+    const pickResponse = await pickResponsePromise;
+    expect(pickResponse.status(), await pickResponse.text()).toBe(201);
+    const picked = (await pickResponse.json()) as {
+      id: string;
+      market_code: string;
+      ad_remote_id: string;
+    };
+    expect(picked.ad_remote_id).toBe(scaleInfra.winnerAdId);
+    expect(picked.market_code).toBe(scaleInfra.marketCode);
+    deliveryTargetId = picked.id;
     const deliveryTargetInput = page.getByLabel(/delivery.*target/i);
-    await expect(deliveryTargetInput).toBeVisible({ timeout: 5_000 });
-    await deliveryTargetInput.fill(scaleInfra.deliveryTargetId);
+    await expect(deliveryTargetInput).toHaveValue(picked.id, {
+      timeout: 5_000,
+    });
 
     // Policy version is server-computed, not a UI input
 
@@ -2335,6 +2359,17 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
     };
     enrollmentId = enrollment.id;
     expect(enrollment.lifecycle).toBe('draft');
+  });
+
+  await test.step('Seed the attestation activation needs', async () => {
+    // The sandbox would publish its delivery read only at the connection's
+    // next daily slot; the contract set is the one the pick made (README).
+    const evidence = seedScaleActivationEvidence(
+      ws.workspaceId,
+      deliveryTargetId,
+      ownerUserId
+    );
+    expect(evidence.contractSetId).toBeTruthy();
   });
 
   await test.step('Activate Scale enrollment through UI', async () => {

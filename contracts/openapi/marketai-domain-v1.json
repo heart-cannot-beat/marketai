@@ -12271,6 +12271,69 @@
         }
       }
     },
+    "/api/v1/scale/{meta_mode}/delivery-targets": {
+      "post": {
+        "operationId": "create_scale_delivery_target",
+        "summary": "Create Delivery Target Route",
+        "description": "Create a Winner's DeliveryTarget from one observed ad (#129). Owners\nand Members alike; the server resolves the slot from recorded evidence\nand returns a typed reason when the ad does not match the Winner.",
+        "parameters": [
+          {
+            "name": "meta_mode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(customer_sandbox|controlled_mock|internal_validation)$",
+              "description": "Meta evidence mode (URL path segment)."
+            },
+            "description": "Meta evidence mode (URL path segment)."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliveryTargetCreateRequest"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryTargetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scale/{meta_mode}/enrollment-candidates": {
       "get": {
         "operationId": "list_scale_enrollment_candidates",
@@ -13221,6 +13284,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ExportDownloadIntentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scale/{meta_mode}/observed-ads": {
+      "get": {
+        "operationId": "list_scale_observed_ads",
+        "summary": "List Observed Ads Route",
+        "description": "The ads the Workspace's active connections in this mode have\nobserved, for picking a Winner's DeliveryTarget. Reads only.",
+        "parameters": [
+          {
+            "name": "meta_mode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(customer_sandbox|controlled_mock|internal_validation)$",
+              "description": "Meta evidence mode (URL path segment)."
+            },
+            "description": "Meta evidence mode (URL path segment)."
+          },
+          {
+            "name": "meta_connection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservedAdListResponse"
                 }
               }
             }
@@ -24879,6 +25001,117 @@
           "landing_page"
         ]
       },
+      "DeliveryTargetCreateRequest": {
+        "properties": {
+          "winner_decision_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "meta_connection_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ad_remote_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "winner_decision_id",
+          "meta_connection_id",
+          "ad_remote_id"
+        ],
+        "description": "Pick one observed ad as a Winner's DeliveryTarget (#129). Only the\nad is named: the server resolves the hierarchy, creative, Offer, Landing\nPage, market, placement and attribution from recorded evidence."
+      },
+      "DeliveryTargetResponse": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "meta_mode": {
+            "type": "string"
+          },
+          "meta_connection_id": {
+            "type": "string"
+          },
+          "ad_account_id": {
+            "type": "string"
+          },
+          "campaign_remote_id": {
+            "type": "string"
+          },
+          "adset_remote_id": {
+            "type": "string"
+          },
+          "ad_remote_id": {
+            "type": "string"
+          },
+          "ad_creative_id": {
+            "type": "string"
+          },
+          "creative_asset_version_id": {
+            "type": "string"
+          },
+          "market_code": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "offer_version_id": {
+            "type": "string"
+          },
+          "landing_page_evidence_hash": {
+            "type": "string"
+          },
+          "attribution_setting": {
+            "type": "string"
+          },
+          "contract_generation_id": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "meta_mode",
+          "meta_connection_id",
+          "ad_account_id",
+          "campaign_remote_id",
+          "adset_remote_id",
+          "ad_remote_id",
+          "ad_creative_id",
+          "creative_asset_version_id",
+          "market_code",
+          "placement",
+          "offer_version_id",
+          "landing_page_evidence_hash",
+          "attribution_setting",
+          "contract_generation_id",
+          "source_type",
+          "observed_at",
+          "expires_at",
+          "created_at"
+        ]
+      },
       "DirectionAdd": {
         "properties": {
           "title": {
@@ -35449,6 +35682,88 @@
         "required": [
           "type",
           "description"
+        ]
+      },
+      "ObservedAdListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ObservedAdResponse"
+            },
+            "type": "array"
+          },
+          "unavailable": {
+            "items": {
+              "$ref": "#/components/schemas/ObservedAdUnavailableResponse"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "unavailable"
+        ]
+      },
+      "ObservedAdResponse": {
+        "properties": {
+          "meta_connection_id": {
+            "type": "string"
+          },
+          "ad_account_id": {
+            "type": "string"
+          },
+          "campaign_remote_id": {
+            "type": "string"
+          },
+          "adset_remote_id": {
+            "type": "string"
+          },
+          "ad_remote_id": {
+            "type": "string"
+          },
+          "ad_creative_id": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "asset_version_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "meta_connection_id",
+          "ad_account_id",
+          "campaign_remote_id",
+          "adset_remote_id",
+          "ad_remote_id",
+          "ad_creative_id",
+          "source_type",
+          "asset_version_ids"
+        ],
+        "description": "One ad a connection has observed (#129): the sandbox scenario's ads,\nor the ads of the connection's published delivery-configuration read."
+      },
+      "ObservedAdUnavailableResponse": {
+        "properties": {
+          "meta_connection_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "meta_connection_id",
+          "reason"
         ]
       },
       "OperationAccepted": {

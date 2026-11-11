@@ -50,11 +50,19 @@ item off here.
   [#127](https://github.com/heart-cannot-beat/marketai/issues/127). A
   migration publishes the Beta default Policy, and the golden path and the
   Scale suite evaluate under it.
-- The curated-scenario DeliveryTarget, with its delivery_configuration
-  contract generation, activation evidence and contract set
-  ([#129](https://github.com/heart-cannot-beat/marketai/issues/129)).
-- The landing_page LibraryVersion keyed by the Winner's frozen
-  `landing_page_evidence_hash`
+- ~~The curated-scenario DeliveryTarget, with its delivery_configuration
+  contract generation and contract set~~: removed by
+  [#129](https://github.com/heart-cannot-beat/marketai/issues/129). In New
+  Enrollment the journey picks the Winner's observed sandbox ad, and the
+  server makes the DeliveryTarget and the connection's Scale contract set.
+- ~~The landing_page LibraryVersion keyed by the Winner's frozen
+  `landing_page_evidence_hash`~~: removed by
+  [#129](https://github.com/heart-cannot-beat/marketai/issues/129). The
+  lineage gate compares the frozen hash itself.
+- The attestation of the picked DeliveryTarget's delivery_configuration
+  generation, which activation needs (`seed-scale-activation-evidence`). The
+  sandbox's scheduled read publishes one only at the connection's next daily
+  slot, so the journey cannot wait for it
   ([#129](https://github.com/heart-cannot-beat/marketai/issues/129)).
 
 ## Localization, Scale and Experiments on a local stack

@@ -154,6 +154,9 @@ class ScaleEnrollmentRecord(Base):
     product_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     offer_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     market_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Holds the Landing Page evidence hash the Winner's ExperimentVersion froze
+    # (#129): the column keeps its historical name; no Landing Page version
+    # entity exists, the Landing Page belongs to the OfferVersion.
     landing_page_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     market_asset_binding_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Normalized before the binding key is calculated; a campaign-only or
@@ -300,6 +303,9 @@ class ScaleEpisodeRecord(Base):
     product_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     offer_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     market_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Holds the Landing Page evidence hash the Winner's ExperimentVersion froze
+    # (#129): the column keeps its historical name; no Landing Page version
+    # entity exists, the Landing Page belongs to the OfferVersion.
     landing_page_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     market_asset_binding_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     meta_connection_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1134,6 +1140,9 @@ class ScaleDeliveryConfigSourceRecord(Base):
     # only inside protected raw evidence, never in this projection-visible row.
     targeting_safety_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     offer_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Holds the Landing Page evidence hash the Winner's ExperimentVersion froze
+    # (#129): the column keeps its historical name; no Landing Page version
+    # entity exists, the Landing Page belongs to the OfferVersion.
     landing_page_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     comparability_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -3140,7 +3149,8 @@ class ScaleDeliveryTargetRecord(Base):
     v3's delivery-target row only stored the Meta remote hierarchy. This one
     independently proves the *complete* delivery context: the remote
     hierarchy, its source provenance per level, the creative content bound to
-    it, market, attribution, and the exact library versions -- everything
+    it, market, attribution, the OfferVersion and the Landing Page evidence
+    hash frozen from it (#129) -- everything
     ``lock_and_validate_enrollment_lineage`` (Task 9) needs to prove a Winner
     and a delivery slot are the same offer, market, placement and
     attribution, not just that both happen to exist. Spec §4.3.
@@ -3206,12 +3216,6 @@ class ScaleDeliveryTargetRecord(Base):
             name="fk_sdt_offer_version",
             ondelete="RESTRICT",
         ),
-        ForeignKeyConstraint(
-            ["workspace_id", "landing_page_version_id"],
-            ["library_versions.workspace_id", "library_versions.id"],
-            name="fk_sdt_landing_page_version",
-            ondelete="RESTRICT",
-        ),
         # Nullable composite FKs: PostgreSQL's default MATCH SIMPLE means a
         # NULL in any referencing column exempts the row from the check, so
         # each of these is only actually enforced for the one source_type
@@ -3257,14 +3261,14 @@ class ScaleDeliveryTargetRecord(Base):
             "adset_remote_id", "ad_remote_id", "ad_creative_id",
             "creative_asset_version_id", "market_code", "placement",
             "attribution_setting", "offer_version_id",
-            "landing_page_version_id", "target_fingerprint",
+            "landing_page_evidence_hash", "target_fingerprint",
             name="uq_sdt_exact_context",
         ),
         UniqueConstraint(
             "workspace_id", "meta_mode", "id", "meta_connection_id",
             "ad_account_id", "scenario_scope_key", "campaign_remote_id",
             "adset_remote_id", "ad_remote_id", "creative_asset_version_id",
-            "market_code", "offer_version_id", "landing_page_version_id",
+            "market_code", "offer_version_id", "landing_page_evidence_hash",
             "target_fingerprint",
             name="uq_sdt_enrollment_binding",
         ),
@@ -3343,9 +3347,13 @@ class ScaleDeliveryTargetRecord(Base):
     attribution_setting: Mapped[str] = mapped_column(String(64), nullable=False)
     contract_generation_id: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    # -- Library versions bound to this delivery slot --------------------------
+    # -- Offer and Landing Page bound to this delivery slot ------------------
     offer_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    landing_page_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The Landing Page evidence hash the source ExperimentVersion froze from
+    # its OfferVersion (#129). The Landing Page is part of the OfferVersion
+    # (creative-library contract §5.2), so there is no Landing Page version
+    # to reference and no foreign key.
+    landing_page_evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
     # -- Source provenance (typed, individual per hierarchy level) -----------
     source_type: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -3376,7 +3384,7 @@ SCALE_COMMAND_TYPE_VALUES = (
     "'activate_enrollment', 'resume_enrollment', "
     "'create_target_publication_preview', 'publish_scale_target', "
     "'create_target_withdrawal_preview', 'withdraw_scale_target', "
-    "'create_scale_export')"
+    "'create_scale_export', 'create_delivery_target')"
 )
 
 

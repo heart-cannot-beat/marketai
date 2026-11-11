@@ -174,7 +174,7 @@ class TestMarketingEvidenceHandoff(MarketingWorkflowFixtures):
                     ad_creative_id='controlled-creative',creative_asset_version_id=chain['asset_version_id'],creative_binding_evidence_hash='a'*64,
                     market_code='US',placement='feed',attribution_setting=chain['attribution_semantics_hash'],
                     contract_generation_id=upstream['contract_generation_id'],offer_version_id=chain['offer_version_id'],
-                    landing_page_version_id=chain['offer_version_id'],source_type='curated_scenario',
+                    landing_page_evidence_hash=chain['landing_page_evidence_hash'],source_type='curated_scenario',
                     source_manifest={'schema_version':1,'source_type':'curated_scenario','fixture':'not real delivery'},
                     observed_at=now,expires_at=now+timedelta(days=30),scenario_version_id=upstream['scenario_version_id']))
                 return target.id
@@ -185,7 +185,7 @@ class TestMarketingEvidenceHandoff(MarketingWorkflowFixtures):
             ready=fixtures._build_ready_winner_and_target('marketing-'+decision_id[-8:],admission)
         with tenant_session(sandbox) as session:
             eligible=validate_winner_eligibility(session,sandbox,decision_id=decision_id)
-            self.assertEqual(eligible.landing_page_version_id,chain['offer_version_id'])
+            self.assertEqual(eligible.landing_page_evidence_hash,chain['landing_page_evidence_hash'])
             choices=list_eligible_candidates(session,sandbox)
             selected=next(item for item in choices if item.decision_id==decision_id)
             self.assertIn(ready['delivery_target_id'],[item['id'] for item in selected.delivery_targets])

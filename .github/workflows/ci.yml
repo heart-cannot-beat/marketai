@@ -710,6 +710,21 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_localization_binding_review_pg -v
 
+      # The DeliveryTarget entry (#129): an Owner and a Member pick an observed
+      # sandbox ad through the API, as the API role under RLS. The pick makes
+      # the DeliveryTarget on the connection's Scale contract set, which the
+      # system executor creates with the picker as initiator; a replay returns
+      # the same target, a mismatched ad answers its reason and writes
+      # nothing, and another Workspace sees none of the ads, cannot name the
+      # connection and cannot pick the first Workspace's Winner.
+      - name: Picking an observed ad makes a DeliveryTarget under the real API role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_observed_ads_pg -v
+
       # An already-provisioned cluster may still carry the former shared role's
       # persistent BYPASSRLS bit. Prove the release revokes it and the retired
       # role fails closed.

@@ -91,6 +91,8 @@ describe('DomainGateway operation coverage', () => {
     // 236 -> 238: competitor discovery (`list_competitor_scan_discoveries`,
     // `decide_competitor_discovery`) (#276).
     // 238 -> 239: `get_library_data_source_connection_check` (#383).
-    expect(DOMAIN_ALLOWLIST.length).toBe(239);
+    // 239 -> 241: `list_scale_observed_ads` and `create_scale_delivery_target`
+    // (#129).
+    expect(DOMAIN_ALLOWLIST.length).toBe(241);
   });
 });

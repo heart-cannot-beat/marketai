@@ -4327,6 +4327,64 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['audience', 'market', 'placement', 'offer', 'landing_page'],
   },
+  DeliveryTargetCreateRequest: {
+    properties: {
+      winner_decision_id: { type: 'string', minLength: 1 },
+      meta_connection_id: { type: 'string', minLength: 1 },
+      ad_remote_id: { type: 'string', minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['winner_decision_id', 'meta_connection_id', 'ad_remote_id'],
+    description:
+      "Pick one observed ad as a Winner's DeliveryTarget (#129). Only the\nad is named: the server resolves the hierarchy, creative, Offer, Landing\nPage, market, placement and attribution from recorded evidence.",
+  },
+  DeliveryTargetResponse: {
+    properties: {
+      id: { type: 'string' },
+      meta_mode: { type: 'string' },
+      meta_connection_id: { type: 'string' },
+      ad_account_id: { type: 'string' },
+      campaign_remote_id: { type: 'string' },
+      adset_remote_id: { type: 'string' },
+      ad_remote_id: { type: 'string' },
+      ad_creative_id: { type: 'string' },
+      creative_asset_version_id: { type: 'string' },
+      market_code: { type: 'string' },
+      placement: { type: 'string' },
+      offer_version_id: { type: 'string' },
+      landing_page_evidence_hash: { type: 'string' },
+      attribution_setting: { type: 'string' },
+      contract_generation_id: { type: 'string' },
+      source_type: { type: 'string' },
+      observed_at: { type: 'string', format: 'date-time' },
+      expires_at: { type: 'string', format: 'date-time' },
+      created_at: { type: 'string', format: 'date-time' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'meta_mode',
+      'meta_connection_id',
+      'ad_account_id',
+      'campaign_remote_id',
+      'adset_remote_id',
+      'ad_remote_id',
+      'ad_creative_id',
+      'creative_asset_version_id',
+      'market_code',
+      'placement',
+      'offer_version_id',
+      'landing_page_evidence_hash',
+      'attribution_setting',
+      'contract_generation_id',
+      'source_type',
+      'observed_at',
+      'expires_at',
+      'created_at',
+    ],
+  },
   DirectionAdd: {
     properties: {
       title: { type: 'string', maxLength: 120, minLength: 1 },
@@ -9215,6 +9273,56 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     },
     type: 'object',
     required: ['type', 'description'],
+  },
+  ObservedAdListResponse: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/ObservedAdResponse' },
+        type: 'array',
+      },
+      unavailable: {
+        items: { $ref: '#/components/schemas/ObservedAdUnavailableResponse' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items', 'unavailable'],
+  },
+  ObservedAdResponse: {
+    properties: {
+      meta_connection_id: { type: 'string' },
+      ad_account_id: { type: 'string' },
+      campaign_remote_id: { type: 'string' },
+      adset_remote_id: { type: 'string' },
+      ad_remote_id: { type: 'string' },
+      ad_creative_id: { type: 'string' },
+      source_type: { type: 'string' },
+      asset_version_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'meta_connection_id',
+      'ad_account_id',
+      'campaign_remote_id',
+      'adset_remote_id',
+      'ad_remote_id',
+      'ad_creative_id',
+      'source_type',
+      'asset_version_ids',
+    ],
+    description:
+      "One ad a connection has observed (#129): the sandbox scenario's ads,\nor the ads of the connection's published delivery-configuration read.",
+  },
+  ObservedAdUnavailableResponse: {
+    properties: {
+      meta_connection_id: { type: 'string' },
+      reason: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['meta_connection_id', 'reason'],
   },
   OperationAccepted: {
     properties: {
@@ -15357,6 +15465,64 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['until'],
   },
+  create_scale_delivery_target_201: {
+    properties: {
+      id: { type: 'string' },
+      meta_mode: { type: 'string' },
+      meta_connection_id: { type: 'string' },
+      ad_account_id: { type: 'string' },
+      campaign_remote_id: { type: 'string' },
+      adset_remote_id: { type: 'string' },
+      ad_remote_id: { type: 'string' },
+      ad_creative_id: { type: 'string' },
+      creative_asset_version_id: { type: 'string' },
+      market_code: { type: 'string' },
+      placement: { type: 'string' },
+      offer_version_id: { type: 'string' },
+      landing_page_evidence_hash: { type: 'string' },
+      attribution_setting: { type: 'string' },
+      contract_generation_id: { type: 'string' },
+      source_type: { type: 'string' },
+      observed_at: { type: 'string', format: 'date-time' },
+      expires_at: { type: 'string', format: 'date-time' },
+      created_at: { type: 'string', format: 'date-time' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'meta_mode',
+      'meta_connection_id',
+      'ad_account_id',
+      'campaign_remote_id',
+      'adset_remote_id',
+      'ad_remote_id',
+      'ad_creative_id',
+      'creative_asset_version_id',
+      'market_code',
+      'placement',
+      'offer_version_id',
+      'landing_page_evidence_hash',
+      'attribution_setting',
+      'contract_generation_id',
+      'source_type',
+      'observed_at',
+      'expires_at',
+      'created_at',
+    ],
+  },
+  create_scale_delivery_target_request: {
+    properties: {
+      winner_decision_id: { type: 'string', minLength: 1 },
+      meta_connection_id: { type: 'string', minLength: 1 },
+      ad_remote_id: { type: 'string', minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['winner_decision_id', 'meta_connection_id', 'ad_remote_id'],
+    description:
+      "Pick one observed ad as a Winner's DeliveryTarget (#129). Only the\nad is named: the server resolves the hierarchy, creative, Offer, Landing\nPage, market, placement and attribution from recorded evidence.",
+  },
   create_scale_enrollment_201: {
     properties: {
       id: { type: 'string' },
@@ -18705,6 +18871,21 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['items'],
   },
+  list_scale_observed_ads_200: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/ObservedAdResponse' },
+        type: 'array',
+      },
+      unavailable: {
+        items: { $ref: '#/components/schemas/ObservedAdUnavailableResponse' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items', 'unavailable'],
+  },
   list_scale_target_contexts_200: {},
   list_scale_targets_200: {
     properties: {
@@ -21398,6 +21579,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['create_scale_advice_snooze_request'],
     ],
     [
+      'create_scale_delivery_target_201',
+      VALIDATOR_FUNCTIONS['create_scale_delivery_target_201'],
+    ],
+    [
+      'create_scale_delivery_target_request',
+      VALIDATOR_FUNCTIONS['create_scale_delivery_target_request'],
+    ],
+    [
       'create_scale_enrollment_201',
       VALIDATOR_FUNCTIONS['create_scale_enrollment_201'],
     ],
@@ -21831,6 +22020,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'list_scale_enrollments_200',
       VALIDATOR_FUNCTIONS['list_scale_enrollments_200'],
+    ],
+    [
+      'list_scale_observed_ads_200',
+      VALIDATOR_FUNCTIONS['list_scale_observed_ads_200'],
     ],
     [
       'list_scale_target_contexts_200',
@@ -22487,6 +22680,11 @@ export const REQUEST_VALIDATORS = {
     'create_scale_advice_snooze_request'
   ] as ValidateFunction<
     DomainOperationMap['create_scale_advice_snooze']['requestBody']
+  >,
+  create_scale_delivery_target: VALIDATOR_FUNCTIONS[
+    'create_scale_delivery_target_request'
+  ] as ValidateFunction<
+    DomainOperationMap['create_scale_delivery_target']['requestBody']
   >,
   create_scale_enrollment: VALIDATOR_FUNCTIONS[
     'create_scale_enrollment_request'

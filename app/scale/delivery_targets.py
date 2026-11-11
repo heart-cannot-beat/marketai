@@ -10,13 +10,11 @@ application-level fail-fast (a caller gets a typed exception, not a raw
 ``IntegrityError``, when it hands this module a malformed source shape).
 
 Scope: this module takes each delivery-slot field as an already-resolved
-value. Actually *resolving* those values -- reading ``FakeMetaObjectRecord``
-hierarchy state for ``curated_scenario``, or evidence pages and
-``ObservationContractGenerationRecord.attribution_window`` for
-``evidence_observation`` (spec §4.3's Population table), including "exactly
-one AssetVersion" creative-mapping validation -- is future population-path
-work, not this task's file list. :func:`create_delivery_target` is the
-narrow-waist boundary that work will call through.
+value. Resolving them from an observed ad -- the sandbox scenario's
+hierarchy or published evidence pages, the creative's one AssetVersion, the
+source ExperimentVersion's Offer, Landing Page, market and placement, and
+the contract set's attribution -- is :mod:`app.scale.observed_ads` (#129),
+which calls :func:`create_delivery_target_with_contract_set`.
 
 Metric contract set (#101 S2): :func:`ensure_metric_contract_set` builds,
 for the connection a DeliveryTarget lives on, every observation contract
@@ -31,7 +29,6 @@ connection's generations are scheduled as they are created.
 :func:`create_delivery_target_with_contract_set` is the population path that
 binds a new DeliveryTarget to that set's delivery-configuration generation,
 the one Enrollment activation resolves the set and the attestation from.
-The DeliveryTarget product entry is #63.
 """
 from __future__ import annotations
 
@@ -137,9 +134,8 @@ class DeliveryTargetExpiredError(DeliveryTargetError):
 class DeliveryTargetRequest:
     """One delivery slot's caller-resolved, ready-to-persist fields.
 
-    The caller (a future population path) is responsible for resolving
-    these from ``FakeMetaObjectRecord``/evidence pages and validating the
-    creative-to-AssetVersion mapping is exact (spec §4.3 Population);
+    The caller (:mod:`app.scale.observed_ads`) resolves these from recorded
+    evidence and validates the creative-to-AssetVersion mapping is exact;
     this module trusts the values and only re-validates what it can
     determine from the request shape itself.
     """
@@ -161,7 +157,7 @@ class DeliveryTargetRequest:
     contract_generation_id: str
 
     offer_version_id: str
-    landing_page_version_id: str
+    landing_page_evidence_hash: str
 
     source_type: str
     source_manifest: dict
@@ -237,7 +233,8 @@ def _target_fingerprint(request: DeliveryTargetRequest, source_manifest_hash: st
             "attribution_setting": request.attribution_setting,
             "contract_generation_id": request.contract_generation_id,
             "offer_version_id": request.offer_version_id,
-            "landing_page_version_id": request.landing_page_version_id,
+            # Historical key name; the value is the frozen evidence hash (#129).
+            "landing_page_version_id": request.landing_page_evidence_hash,
             "source_manifest_hash": source_manifest_hash,
         },
     )
@@ -247,6 +244,8 @@ def create_delivery_target(
     session: Session,
     context: TenantContext,
     request: DeliveryTargetRequest,
+    *,
+    target_id: str | None = None,
 ) -> ScaleDeliveryTargetRecord:
     """Construct, validate and persist one ``ScaleDeliveryTargetRecord``.
 
@@ -254,6 +253,8 @@ def create_delivery_target(
     database when ``request``'s source-type/provenance-reference/meta_mode
     combination cannot satisfy the table's CHECK constraints -- the
     database is still the authority (this is fail-fast, not a replacement).
+    ``target_id`` is a caller-preallocated id, for a command journal that
+    claims its result id before the row exists.
     """
     meta_mode = _require_meta_mode(context)
     _validate_source_provenance(meta_mode, request)
@@ -268,7 +269,7 @@ def create_delivery_target(
     )
 
     target = ScaleDeliveryTargetRecord(
-        id=new_id("sdt"),
+        id=target_id or new_id("sdt"),
         workspace_id=context.workspace_id,
         meta_mode=meta_mode,
         meta_connection_id=request.meta_connection_id,
@@ -285,7 +286,7 @@ def create_delivery_target(
         attribution_setting=request.attribution_setting,
         contract_generation_id=request.contract_generation_id,
         offer_version_id=request.offer_version_id,
-        landing_page_version_id=request.landing_page_version_id,
+        landing_page_evidence_hash=request.landing_page_evidence_hash,
         source_type=request.source_type,
         scenario_version_id=request.scenario_version_id,
         source_sync_run_id=request.source_sync_run_id,
@@ -533,6 +534,7 @@ def create_delivery_target_with_contract_set(
     *,
     currency: str | None = None,
     timezone_name: str | None = None,
+    target_id: str | None = None,
 ) -> tuple[ScaleDeliveryTargetRecord, MetricContractSet]:
     """Create a DeliveryTarget on its connection's Scale metric contract set.
 
@@ -550,5 +552,7 @@ def create_delivery_target_with_contract_set(
             "scale_contract_generation_conflict",
             f"target names generation {request.contract_generation_id}, the contract set {generation_id}",
         )
-    target = create_delivery_target(session, context, replace(request, contract_generation_id=generation_id))
+    target = create_delivery_target(
+        session, context, replace(request, contract_generation_id=generation_id), target_id=target_id,
+    )
     return target, contract_set

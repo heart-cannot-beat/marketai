@@ -98,6 +98,10 @@ def test_scale_openapi_has_no_meta_mutation_surface() -> None:
         "CommandOutcomeResponse",
         "ConversionRequest",
         "ConversionResponse",
+        # #129: a DeliveryTarget is a Scale record made from an ad Meta has
+        # already reported; picking it reads evidence and writes nothing to Meta.
+        "DeliveryTargetCreateRequest",
+        "DeliveryTargetResponse",
         "EnrollmentActivateRequest",
         "EnrollmentCloseRequest",
         "EnrollmentCreateRequest",
@@ -113,6 +117,9 @@ def test_scale_openapi_has_no_meta_mutation_surface() -> None:
         "ExportCreateRequest",
         "ExportDownloadIntentResponse",
         "ExportResponse",
+        "ObservedAdListResponse",
+        "ObservedAdResponse",
+        "ObservedAdUnavailableResponse",
         "ProblemDetails",
         "TargetListResponse",
         "TargetPublicationPreviewRequest",

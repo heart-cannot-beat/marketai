@@ -132,6 +132,8 @@ from .candidates import (
     list_eligible_candidates,
 )
 from .breakdowns import BreakdownNotAvailableError, query_snapshot_breakdowns
+from .delivery_targets import DeliveryTargetError
+from .observed_ads import ObservedAdListing, create_delivery_target_from_ad, list_observed_ads
 from .command_journal import CommandOutcomeNotFoundError, IdempotencyConflictError, lookup_command_outcome
 from .enrollment import (
     CandidateFingerprintDriftError,
@@ -186,6 +188,8 @@ from .schemas import (
     CandidateResponse,
     CommandOutcomeResponse,
     ConversionRequest,
+    DeliveryTargetCreateRequest,
+    DeliveryTargetResponse,
     ConversionResponse,
     EnrollmentActivateRequest,
     EnrollmentCloseRequest,
@@ -200,6 +204,7 @@ from .schemas import (
     ExportDownloadIntentRequest,
     ExportDownloadIntentResponse,
     ExportResponse,
+    ObservedAdListResponse,
     TargetContextResponse,
     TargetCreateRequest,
     TargetListResponse,
@@ -1384,6 +1389,100 @@ def create_enrollment_candidate_route(
         return _candidate_dict(candidate)
 
 
+# ---------------------------------------------------------------------------
+# DeliveryTarget entry (#129): pick an already-observed ad
+# ---------------------------------------------------------------------------
+
+
+def _observed_ads_dict(listing: ObservedAdListing) -> dict:
+    return {
+        "items": [
+            {
+                "meta_connection_id": ad.meta_connection_id,
+                "ad_account_id": ad.ad_account_id,
+                "campaign_remote_id": ad.campaign_remote_id,
+                "adset_remote_id": ad.adset_remote_id,
+                "ad_remote_id": ad.ad_remote_id,
+                "ad_creative_id": ad.ad_creative_id,
+                "source_type": ad.source_type,
+                "asset_version_ids": list(ad.asset_version_ids),
+            }
+            for ad in listing.ads
+        ],
+        "unavailable": [
+            {"meta_connection_id": connection_id, "reason": reason}
+            for connection_id, reason in listing.unavailable
+        ],
+    }
+
+
+def _delivery_target_dict(target) -> dict:
+    return {
+        "id": target.id,
+        "meta_mode": target.meta_mode,
+        "meta_connection_id": target.meta_connection_id,
+        "ad_account_id": target.ad_account_id,
+        "campaign_remote_id": target.campaign_remote_id,
+        "adset_remote_id": target.adset_remote_id,
+        "ad_remote_id": target.ad_remote_id,
+        "ad_creative_id": target.ad_creative_id,
+        "creative_asset_version_id": target.creative_asset_version_id,
+        "market_code": target.market_code,
+        "placement": target.placement,
+        "offer_version_id": target.offer_version_id,
+        "landing_page_evidence_hash": target.landing_page_evidence_hash,
+        "attribution_setting": target.attribution_setting,
+        "contract_generation_id": target.contract_generation_id,
+        "source_type": target.source_type,
+        "observed_at": target.observed_at,
+        "expires_at": target.expires_at,
+        "created_at": target.created_at,
+    }
+
+
+@mode_router.get(
+    "/observed-ads",
+    operation_id="list_scale_observed_ads",
+    response_model=ObservedAdListResponse,
+)
+def list_observed_ads_route(
+    effective: TenantContext = Depends(_mode_effective_context),
+    meta_connection_id: str | None = Query(default=None, min_length=1, max_length=64),
+):
+    """The ads the Workspace's active connections in this mode have
+    observed, for picking a Winner's DeliveryTarget. Reads only."""
+    with tenant_session(effective) as session:
+        return _observed_ads_dict(
+            list_observed_ads(session, effective, connection_id=meta_connection_id)
+        )
+
+
+@mode_router.post(
+    "/delivery-targets",
+    operation_id="create_scale_delivery_target",
+    response_model=DeliveryTargetResponse,
+    status_code=201,
+    openapi_extra={"x-marketai-idempotent": True},
+)
+def create_delivery_target_route(
+    body: DeliveryTargetCreateRequest,
+    effective: TenantContext = Depends(_mode_effective_context),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
+):
+    """Create a Winner's DeliveryTarget from one observed ad (#129). Owners
+    and Members alike; the server resolves the slot from recorded evidence
+    and returns a typed reason when the ad does not match the Winner."""
+    with tenant_session(effective) as session:
+        target = create_delivery_target_from_ad(
+            session, effective,
+            decision_id=body.winner_decision_id,
+            connection_id=body.meta_connection_id,
+            ad_remote_id=body.ad_remote_id,
+            idempotency_key=idempotency_key,
+        )
+        return _delivery_target_dict(target)
+
+
 # Mount every mode-scoped route onto the root router at ``/{meta_mode}``
 # (spec §3.11). Must run after every ``@mode_router...`` registration above.
 router.include_router(mode_router, prefix="/{meta_mode}")
@@ -1468,6 +1567,32 @@ _TARGET_ERROR_STATUS = {
     "invalid_lifecycle": 409,
     "no_controlled_mock_enrollment": 409,
     "idempotency_result_missing": 400,
+}
+
+#: The DeliveryTarget entry's typed reasons (#129) and the contract-set and
+#: provenance codes of ``app.scale.delivery_targets`` it can surface.
+_DELIVERY_TARGET_ERROR_STATUS = {
+    "meta_mode_required": 400,
+    "idempotency_result_missing": 400,
+    "forbidden": 403,
+    "connection_not_found": 404,
+    "ad_not_observed": 404,
+    "delivery_target_not_found": 404,
+    "delivery_configuration_not_observed": 409,
+    "delivery_target_expired": 409,
+    "scale_contract_generation_conflict": 409,
+    "scale_contract_set_drift": 409,
+    "target_creative_mismatch": 409,
+    "target_market_mismatch": 409,
+    "target_placement_mismatch": 409,
+    "target_offer_mismatch": 409,
+    "target_landing_page_mismatch": 409,
+    "target_attribution_mismatch": 409,
+    "creative_unmapped": 422,
+    "creative_ambiguous": 422,
+    "provenance_unresolved": 422,
+    "provenance_ambiguous": 422,
+    "attribution_contract_unresolved": 422,
 }
 
 _BREAKDOWN_ERROR_STATUS = {
@@ -1570,6 +1695,10 @@ def register_scale_v1_problem_handlers(app) -> None:
     @app.exception_handler(TargetLifecycleError)
     async def _target_lifecycle(request: Request, exc: TargetLifecycleError):
         return _problem(request, _TARGET_ERROR_STATUS.get(exc.code, 400), exc.code, str(exc))
+
+    @app.exception_handler(DeliveryTargetError)
+    async def _delivery_target_error(request: Request, exc: DeliveryTargetError):
+        return _problem(request, _DELIVERY_TARGET_ERROR_STATUS.get(exc.code, 422), exc.code, str(exc))
 
     @app.exception_handler(BreakdownNotAvailableError)
     async def _breakdown_error(request: Request, exc: BreakdownNotAvailableError):

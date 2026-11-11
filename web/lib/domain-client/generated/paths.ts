@@ -514,6 +514,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'create_scale_delivery_target',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/scale/:meta_mode/delivery-targets',
+    pathParams: ['meta_mode'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'create_scale_enrollment',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/scale/:meta_mode/enrollments',
@@ -1339,6 +1346,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     operationId: 'list_scale_enrollments',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/scale/:meta_mode/enrollments',
+    pathParams: ['meta_mode'],
+    requiresIdempotency: false,
+  },
+  {
+    operationId: 'list_scale_observed_ads',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/scale/:meta_mode/observed-ads',
     pathParams: ['meta_mode'],
     requiresIdempotency: false,
   },

@@ -108,7 +108,18 @@
     "marketing-boundary": "This combination is supported only under the recorded conditions and user-supplied delivery evidence. Choose a currently compatible observed delivery target. This prepares monitoring and never creates, activates or changes an ad.",
     "match-delivery": "Matching observed delivery",
     "choose-delivery": "Choose the matching Meta ad",
-    "delivery-not-ready": "Complete current source-market truth and asset readiness, then sync the matching actual delivery through an authorized read-only connection. No compatible observed target is ready yet; monitoring cannot be created."
+    "delivery-not-ready": "Complete current source-market truth and asset readiness, then sync the matching actual delivery through an authorized read-only connection. No compatible observed target is ready yet; monitoring cannot be created.",
+    "observed-ads-title": "Pick the ad this Winner runs in",
+    "observed-ads-description": "These are the ads your connections in this mode have observed. MarketAI makes the delivery target from what it recorded about the ad and only reads; it never creates or changes an ad.",
+    "observed-ads-empty": "No connection in this mode has observed an ad yet.",
+    "observed-ad-label": "Meta ad {{ad}} · ad set {{adset}}",
+    "observed-ad-assets": "Creative version: {{ids}}",
+    "observed-ad-unmapped": "No creative version recorded for this ad",
+    "use-observed-ad": "Use Meta ad {{ad}}",
+    "use-observed-ad-short": "Use this ad",
+    "observed-ad-picking": "Checking…",
+    "observed-ad-picked": "Delivery target ready: {{market}} · {{placement}} · Meta ad {{ad}}",
+    "observed-ad-option": "{{market}} · {{placement}} · Meta ad {{ad}} (just picked)"
   },
   "detail": {
     "not-found": "Enrollment not found",

@@ -90,6 +90,62 @@ class CandidateResponse(_Base):
     created_at: datetime
 
 
+class ObservedAdResponse(_Base):
+    """One ad a connection has observed (#129): the sandbox scenario's ads,
+    or the ads of the connection's published delivery-configuration read."""
+
+    meta_connection_id: str
+    ad_account_id: str
+    campaign_remote_id: str
+    adset_remote_id: str
+    ad_remote_id: str
+    ad_creative_id: str
+    source_type: str
+    asset_version_ids: list[str]
+
+
+class ObservedAdUnavailableResponse(_Base):
+    meta_connection_id: str
+    reason: str
+
+
+class ObservedAdListResponse(_Base):
+    items: list[ObservedAdResponse]
+    unavailable: list[ObservedAdUnavailableResponse]
+
+
+class DeliveryTargetCreateRequest(_Base):
+    """Pick one observed ad as a Winner's DeliveryTarget (#129). Only the
+    ad is named: the server resolves the hierarchy, creative, Offer, Landing
+    Page, market, placement and attribution from recorded evidence."""
+
+    winner_decision_id: str = Field(min_length=1)
+    meta_connection_id: str = Field(min_length=1)
+    ad_remote_id: str = Field(min_length=1)
+
+
+class DeliveryTargetResponse(_Base):
+    id: str
+    meta_mode: str
+    meta_connection_id: str
+    ad_account_id: str
+    campaign_remote_id: str
+    adset_remote_id: str
+    ad_remote_id: str
+    ad_creative_id: str
+    creative_asset_version_id: str
+    market_code: str
+    placement: str
+    offer_version_id: str
+    landing_page_evidence_hash: str
+    attribution_setting: str
+    contract_generation_id: str
+    source_type: str
+    observed_at: datetime
+    expires_at: datetime
+    created_at: datetime
+
+
 class EnrollmentActivateRequest(_Base):
     """Issue #86 Task 11: the only field a caller may supply is the id of an
     already-consumed-server-side ``ScaleActivationPreviewRecord`` --

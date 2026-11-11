@@ -10,6 +10,18 @@ jest.mock('next-i18next', () => ({
 jest.mock('@/hooks/scale/useScaleCandidates', () => ({
   useScaleEnrollmentCandidates: () => mockCandidates(),
 }));
+jest.mock('@/hooks/scale/useScaleObservedAds', () => ({
+  useScaleObservedAds: () => ({
+    data: { items: [], unavailable: [] },
+    isLoading: false,
+  }),
+  useCreateScaleDeliveryTarget: () => ({
+    run: jest.fn(),
+    reset: jest.fn(),
+    isPending: false,
+    problem: null,
+  }),
+}));
 jest.mock('@/hooks/scale', () => ({
   useCreateScaleEnrollmentCandidate: () => ({
     run: mockCreate,
