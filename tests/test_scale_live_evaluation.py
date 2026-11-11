@@ -61,7 +61,7 @@ from app.scale.models import (
     ScalePolicyVersionRecord,
     ScaleTargetVersionRecord,
 )
-from app.scale.platform_policy import BETA_DEFAULT_POLICY_V1
+from app.scale.platform_policy import BETA_DEFAULT_POLICY_V2, PUBLISHED_POLICY_VERSIONS
 from app.scale.service import (
     EVALUATION_JOB_MAX_ATTEMPTS,
     ScaleOrchestrationError,
@@ -69,7 +69,7 @@ from app.scale.service import (
 )
 from app.worker_runtime import WorkerRuntime
 from tests.support.queue_hygiene import quarantine_foreign_jobs
-from tests.test_scale_evidence import _policy
+from tests.test_scale_evidence import _SIGNAL_THRESHOLDS, _policy
 from tests.test_scale_source_collection import (
     MOCK,
     OWNER_ID,
@@ -98,9 +98,12 @@ class LiveEvaluationTestCase(CollectionTestCase):
     def _publish_policy(self, **overrides) -> str:
         """A Policy published after the migrated Beta default, so the live
         trigger prefers it; unpublished again when the test ends, so no other
-        file's collection finds it in the shared database."""
+        file's collection finds it in the shared database. It runs the
+        deployed algorithm, as the live trigger requires (beta-v2 also reads
+        the consecutive breakdown hits, #133)."""
         fields = dict(mode_permissions={SANDBOX: True, MOCK: True}, published_at=utcnow(),
-                      canonical_schema_version="scale-snapshot-v3")
+                      algorithm_version=CURRENT_ALGORITHM_VERSION, canonical_schema_version="scale-snapshot-v4",
+                      signal_thresholds={**_SIGNAL_THRESHOLDS, "consecutive_breakdown_hits_required": 2})
         fields.update(overrides)
         policy = _policy(**fields)
         with platform_session() as session:
@@ -114,15 +117,17 @@ class LiveEvaluationTestCase(CollectionTestCase):
                             .values(is_published=False))
 
     def _withdraw_platform_policy(self) -> None:
-        """Take the migrated Beta default (#127) out of selection for this test
-        only, so no Policy is eligible; published again when the test ends."""
-        self._unpublish(BETA_DEFAULT_POLICY_V1.id)
+        """Take the migrated Beta defaults (#127, #132) out of selection for
+        this test only, so no Policy is eligible; published again when the
+        test ends."""
+        for version in PUBLISHED_POLICY_VERSIONS:
+            self._unpublish(version.id)
         self.addCleanup(self._republish_platform_policy)
 
     def _republish_platform_policy(self) -> None:
         with platform_session() as session:
             session.execute(update(ScalePolicyVersionRecord)
-                            .where(ScalePolicyVersionRecord.id == BETA_DEFAULT_POLICY_V1.id)
+                            .where(ScalePolicyVersionRecord.id.in_([v.id for v in PUBLISHED_POLICY_VERSIONS]))
                             .values(is_published=True))
 
     def _activated(self, connection_id: str, established, ad_id: str, started: date, *,
@@ -247,11 +252,12 @@ class LiveTrigger(LiveEvaluationTestCase):
         self.assertEqual(self._readiness(episode_id).maturity, "warming")
 
     def test_without_a_test_policy_the_run_freezes_the_migrated_beta_default(self):
-        """#127: the database only ran the migrations, and the live trigger
-        finds the Beta default they published -- no ``no_eligible_policy``."""
+        """#127, #132: the database only ran the migrations, and the live
+        trigger finds the latest Beta default they published that runs the
+        deployed algorithm, v2 -- no ``no_eligible_policy``."""
         self._unpublish(self.policy_id)
         with platform_session() as session:
-            self.assertEqual(live_trigger.eligible_live_policy(session, SANDBOX).id, BETA_DEFAULT_POLICY_V1.id)
+            self.assertEqual(live_trigger.eligible_live_policy(session, SANDBOX).id, BETA_DEFAULT_POLICY_V2.id)
             self.assertIsNone(live_trigger.eligible_live_policy(session, MOCK), "#127 P1: not controlled_mock")
         day = _local_today() - timedelta(days=3)
         _connection, _set, _ads, _enrollment_id, episode_id = self._sandbox(started=day - timedelta(days=2))
@@ -260,12 +266,13 @@ class LiveTrigger(LiveEvaluationTestCase):
 
         [run] = self._runs_of(episode_id)
         self.assertEqual((run.policy_version_id, run.algorithm_version, run.run_state, run.outcome_kind),
-                         (BETA_DEFAULT_POLICY_V1.id, CURRENT_ALGORITHM_VERSION, "evaluated", "evaluated"))
+                         (BETA_DEFAULT_POLICY_V2.id, CURRENT_ALGORITHM_VERSION, "evaluated", "evaluated"))
         self.assertEqual(self._events("scale.live_evaluation.skipped"), [])
         [requested] = self._events("scale.live_evaluation.requested")
-        self.assertEqual(requested.details_json["policy_version_id"], BETA_DEFAULT_POLICY_V1.id)
+        self.assertEqual(requested.details_json["policy_version_id"], BETA_DEFAULT_POLICY_V2.id)
         [snapshot] = self._rows(ScaleEvidenceSnapshotRecord, episode_id=episode_id)
-        self.assertEqual(snapshot.policy_version_id, BETA_DEFAULT_POLICY_V1.id)
+        self.assertEqual((snapshot.policy_version_id, snapshot.canonical_schema_version),
+                         (BETA_DEFAULT_POLICY_V2.id, "scale-snapshot-v4"))
 
     def test_another_creative_than_the_target_named_is_not_adopted_and_rolls_the_episode_over(self):
         day = _local_today() - timedelta(days=3)
@@ -386,6 +393,7 @@ class NoLiveRun(LiveEvaluationTestCase):
         for overrides in ({"mode_permissions": {}}, {"mode_permissions": {MOCK: True}},
                           {"mode_permissions": {SANDBOX: "yes"}},
                           {"algorithm_version": "beta-v0", "mode_permissions": {SANDBOX: True}},
+                          {"algorithm_version": "beta-v1", "mode_permissions": {SANDBOX: True}},  # replays only
                           {"is_published": False, "published_at": None, "mode_permissions": {SANDBOX: True}}):
             self._publish_policy(**{"published_at": later, **overrides})
         day = _local_today() - timedelta(days=3)

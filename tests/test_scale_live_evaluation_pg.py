@@ -87,7 +87,7 @@ from app.scale.models import (
     ScaleEvidenceSnapshotRecord,
     ScaleEvidenceSourceManifestRecord,
 )
-from app.scale.platform_policy import BETA_DEFAULT_POLICY_V1
+from app.scale.platform_policy import BETA_DEFAULT_POLICY_V2
 from app.scale.service import EVALUATION_JOB_MAX_ATTEMPTS
 from app.worker_runtime import WorkerRuntime, meta_write_capability_findings
 from tests.support.meta_observation import seed_sandbox_ads, worker_context
@@ -261,11 +261,11 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
 
     def _migrated_policy(self) -> str:
         """The Policy a live sandbox run freezes, as the Worker selects it: the
-        Beta default the migrations published (#127)."""
+        latest Beta default the migrations published, v2 (#127, #132)."""
         with Session(self.engines[WORKER]) as session:
             policy = eligible_live_policy(session, SANDBOX)
         self.assertIsNotNone(policy, "no_eligible_policy: the release published no Policy")
-        self.assertEqual(policy.id, BETA_DEFAULT_POLICY_V1.id)
+        self.assertEqual(policy.id, BETA_DEFAULT_POLICY_V2.id)
         return policy.id
 
     def _activated_enrollment(self, owner: TenantContext, activation_day: date) -> dict:

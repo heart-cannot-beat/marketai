@@ -216,7 +216,8 @@ class LandingPageHashMigration(unittest.TestCase):
         self._alembic("upgrade", "head")
         self.assertEqual(self._values(), {})
         self._alembic("downgrade", PREVIOUS)
-        self._alembic("upgrade", "head")
+        # Back to this revision; later ones (#132) sit above it.
+        self._alembic("upgrade", REVISION)
         current = self._alembic("current")
         self.assertIn(REVISION, current.stdout)
 

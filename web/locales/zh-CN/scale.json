@@ -271,7 +271,9 @@
       "explained_by_pause": "投放暂停可以解释，不计为命中",
       "bootstrap_unavailable": "有效抽样不足，无法计算区间",
       "data_quality_blocked": "数据质量阻塞，未计算",
-      "episode_window_incomplete": "未计算：观察段还不满 14 天窗口"
+      "episode_window_incomplete": "未计算：观察段还不满 14 天窗口",
+      "economics_not_ready": "未计算：证据还没有达到经济评估门槛",
+      "spend_floor_currency_unsupported": "未计算：平台没有为这个广告账户的币种设定最低花费"
     },
     "streak-counters": "连续计数",
     "unknown-signal": "未知信号"

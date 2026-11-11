@@ -177,14 +177,15 @@ class TestAlgorithmVersioning(unittest.TestCase):
     ``test_scale_evaluator.py`` for the rejection path)."""
 
     def test_current_algorithm_version_is_stable_literal(self):
-        self.assertEqual(CURRENT_ALGORITHM_VERSION, "beta-v1")
+        self.assertEqual(CURRENT_ALGORITHM_VERSION, "beta-v2")  # #132, #133
 
     def test_result_carries_the_snapshot_algorithm_version(self):
         result = evaluate_scale(_flat_snapshot())
         # ScaleEvaluation.algorithm_version travels through from the Policy,
         # not from a separate evaluator-global constant, so a Policy pinned
         # to an older-but-still-registered version stays reproducible.
-        self.assertEqual(result.algorithm_version, CURRENT_ALGORITHM_VERSION)
+        self.assertEqual(result.algorithm_version, "beta-v1")
+        self.assertNotEqual(result.algorithm_version, CURRENT_ALGORITHM_VERSION)
 
 
 class TestGoldenVectorRegressionPin(unittest.TestCase):

@@ -299,6 +299,8 @@ const NOT_SHOWN: Record<string, string> = {
     'an InvalidScaleSnapshot check, raised only inside the evaluation Worker',
   invalid_freshness_reference:
     'an InvalidScaleSnapshot check, raised only inside the evaluation Worker',
+  invalid_policy:
+    'an InvalidScaleSnapshot check, raised only inside the evaluation Worker',
   test_error: "a test's own made-up code (`tests/test_coordinator.py`)",
   some_code: "a test's own made-up code (`tests/test_delegated_identity.py`)",
   usage_metric_unknown:
