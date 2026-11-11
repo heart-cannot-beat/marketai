@@ -24,7 +24,7 @@ from alembic import op
 from app.entitlements.guardrail_defaults import SPEND_GUARDRAIL_DEFAULTS_V1 as DEFAULTS
 
 revision = "zzg126a1b2c3"
-down_revision = "zzf6b7c8d9e0"
+down_revision = "zzg7d8e9f0a1"
 branch_labels = None
 depends_on = None
 

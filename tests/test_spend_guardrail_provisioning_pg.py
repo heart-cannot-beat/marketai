@@ -62,7 +62,7 @@ ROLE_URLS = {
 }
 ROOT = Path(__file__).resolve().parents[1]
 #: The migration that provisions at the defaults, and the one below it.
-REVISION, DOWN_REVISION = "zzg126a1b2c3", "zzf6b7c8d9e0"
+REVISION, DOWN_REVISION = "zzg126a1b2c3", "zzg7d8e9f0a1"
 FUNCTION = "marketai_apply_workspace_projection_v2"
 SIGNING_KEY = b"isolated-provisioning-regression-only"
 #: Contract §11, as decimal strings the API serialises (Numeric(24, 12)).

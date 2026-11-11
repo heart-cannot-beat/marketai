@@ -35,6 +35,9 @@ _PLATFORM_MANAGED_TABLES = frozenset(
         "market_policies",
         "market_policy_versions",
         "market_policy_version_events",
+        # The migrations publish the platform's ScalePolicyVersions (#127):
+        # the target already holds every one, the source's copies included.
+        "scale_policy_versions",
     }
 )
 

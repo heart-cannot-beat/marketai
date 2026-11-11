@@ -2394,8 +2394,9 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
 
   await test.step('Advance Scale evidence and evaluate', async () => {
     // customer_sandbox: Scale decisions are ineligible under controlled_mock
-    // (ADR 0009). The seeded policy needs 14 complete days before evidence
-    // is economics_ready. Only confirmed creative fatigue opens
+    // (ADR 0009). The Beta default Policy the migrations published (#127)
+    // needs 14 complete days before evidence is economics_ready. Only
+    // confirmed creative fatigue opens
     // refresh_creative -- the one Advice that converts to a GenerationDraft
     // (app/scale/advice.py::convert_occurrence_to_draft) -- and it needs,
     // on consecutive evaluations, high and growing frequency, a supported

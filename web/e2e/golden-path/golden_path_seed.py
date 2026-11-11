@@ -3,7 +3,7 @@
 
 This script seeds ONLY platform/test infrastructure — controlled-Mock
 scenarios, sandbox connections, metric clocks, and published platform
-policies.  It MUST NOT create Products, Assets, reviews, Winners,
+market policies.  It MUST NOT create Products, Assets, reviews, Winners,
 batches, enrollments, advice, drafts, or any other domain business
 objects.  The exception is a stand-in for a product surface that does
 not exist yet, documented on _seed_scale_infrastructure: the landing_page
@@ -28,7 +28,9 @@ Subcommands:
     Given a workspace_id and a decision_id (confirmed Winner), checks
     that the journey approved the Winner-market MarketAssetBinding its
     Localization batch published, and creates the Scale DeliveryTarget,
-    activation evidence, metric-semantic contract set, and policy version.
+    activation evidence and metric-semantic contract set. Scale evaluates
+    under the Beta default ScalePolicyVersion the migrations published
+    (#127); its id is returned as policyVersionId.
 
   seed-experiment-metrics
     Drives experiment metrics through the real sync/projection
@@ -451,8 +453,11 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
         lineage gate uses that hash as landing_page_version_id and
         scale_delivery_targets references library_versions;
       * the curated-scenario DeliveryTarget with its delivery_configuration
-        contract generation, activation evidence and contract set;
-      * a published ScalePolicyVersion.
+        contract generation, activation evidence and contract set.
+
+    The ScalePolicyVersion is not seeded: the journey evaluates under the
+    Beta default the migrations published, the one a live customer_sandbox
+    run would freeze (#127).
 
     The Winner-market MarketAssetBinding the journey's Localization batch
     published is not seeded: the journey approves its localized
@@ -482,11 +487,9 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
     )
     from app.meta.observation import create_contract_generation
     from app.scale.delivery_targets import DeliveryTargetRequest, create_delivery_target
-    from app.scale.models import ScalePolicyVersionRecord
     from tests.support.scale_candidate_fixtures import seed_activation_evidence_prereqs
 
     ctx = _tenant_context(env)
-    owner_user_id = env["E2E_OWNER_USER_ID"]
     sandbox_mode = "customer_sandbox"
     target_ctx = _tenant_context(env, meta_mode=sandbox_mode)
     decision_id = args.decision_id
@@ -679,67 +682,7 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
         )
 
     with tenant_session(target_ctx) as session:
-        policy = ScalePolicyVersionRecord(
-            id=f"spol_{tag}",
-            algorithm_version="beta-v1",
-            canonical_schema_version="scale-snapshot-v1",
-            decimal_precision=28,
-            decimal_rounding="round_half_even",
-            z_value=Decimal("1.96"),
-            evidence_floor_minimum_spend=Decimal("50"),
-            evidence_floor_minimum_days=14,
-            evidence_floor_minimum_conversions=1,
-            activity_floor_minimum_impressions=500,
-            sample_floor_minimum_clicks=5,
-            spend_floor_minimum_daily_spend=Decimal("5"),
-            freshness_floor_maximum_lag_hours=48,
-            signal_thresholds={
-                "confidence_level": "0.95",
-                "confidence_z": "1.96",
-                "frequency_level_threshold": "3",
-                "frequency_growth_threshold": "0.2",
-                "ctr_decline_threshold": "0.2",
-                "ctr_stability_tolerance": "0.05",
-                "cvr_decline_threshold": "0.2",
-                "cvr_stability_tolerance": "0.05",
-                "cpm_increase_threshold": "0.2",
-                "delivery_decline_threshold": "0.2",
-                "cpa_worsening_threshold": "0.2",
-                "roas_worsening_threshold": "0.2",
-                "bootstrap_lower_percentile": "0.025",
-                "bootstrap_upper_percentile": "0.975",
-                "breakdown_min_spend_share": "0.05",
-                "active_day_floor": 3,
-                "consecutive_composite_fatigue_hits_required": 2,
-                "consecutive_healthy_evaluations_required": 2,
-                "breakdown_min_sample_impressions": 500,
-                "breakdown_min_sample_clicks": 10,
-                "breakdown_min_sample_purchases": 2,
-                "quality_warning_permitted_codes": ["freshness_slo_exceeded"],
-                "streak_reset_reason_codes": ["policy_version_changed"],
-                "advice_construction_parameters": [],
-            },
-            streak_rules={},
-            bootstrap_prng_algorithm="bootstrap-prng-v1",
-            bootstrap_draw_count=200,
-            bootstrap_valid_draw_ratio=Decimal("0.80"),
-            bootstrap_percentile_method="nearest_rank",
-            bootstrap_draw_order="sequential",
-            breakdown_families={"age_gender": {"breakdowns": ["age", "gender"]}},
-            breakdown_sample_gate_minimum=100,
-            breakdown_share_gate_minimum_ratio=Decimal("0.05"),
-            bh_fdr_alpha=Decimal("0.05"),
-            advice_severity_thresholds={"fatigue": "warning", "quality_gate": "critical"},
-            notification_cooldown_hours=24,
-            conversion_safe_values={"currency": "USD"},
-            mode_permissions={"customer_sandbox": True, "controlled_mock": False},
-            is_published=True,
-            published_at=now,
-            created_by=owner_user_id,
-        )
-        session.add(policy)
-        session.flush()
-        policy_version_id = policy.id
+        policy_version_id = scale_suite._platform_policy_version_id(session)
 
     return {
         "deliveryTargetId": delivery_target_id,
