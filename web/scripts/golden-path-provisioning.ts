@@ -16,6 +16,10 @@ async function main() {
 
   const subcommand = process.argv[2];
   const input = await readJsonStdin();
+  // The fixture sends the signing key base64-encoded. Both subcommands sign
+  // with the decoded bytes: the API verifies begin's provisioning snapshot
+  // as well as complete's activation snapshot (#126).
+  const signingKey = Buffer.from(input.signingKey ?? '', 'base64');
 
   try {
     if (subcommand === 'begin') {
@@ -52,7 +56,7 @@ async function main() {
         },
         update: {},
       });
-      const result = await beginProvisioning(prisma, input);
+      const result = await beginProvisioning(prisma, { ...input, signingKey });
       process.stdout.write(
         JSON.stringify({
           provisioningRef: result.provisioningRef,
@@ -67,7 +71,7 @@ async function main() {
       const result = await completeProvisioning(prisma, {
         provisioningRef: input.provisioningRef,
         signingKeyId: input.signingKeyId,
-        signingKey: Buffer.from(input.signingKey, 'base64'),
+        signingKey,
       });
       await deliverSnapshots(prisma, result.workspaceRef);
       process.stdout.write(JSON.stringify(result));

@@ -277,6 +277,10 @@ def test_container_journey_provisions_through_the_delivered_snapshot() -> None:
     assert provisioning.index("completeProvisioning(prisma") < provisioning.index(
         "await deliverSnapshots(prisma"
     )
+    # Both subcommands sign with the decoded key: begin's provisioning
+    # snapshot is delivered and verified too, not only complete's.
+    assert provisioning.count("Buffer.from(input.signingKey") == 1
+    assert "beginProvisioning(prisma, { ...input, signingKey })" in provisioning
 
     seed = (golden_path / "golden_path_seed.py").read_text(encoding="utf-8")
     assert "SpendGuardrailRecord(" not in seed
@@ -301,7 +305,7 @@ def test_container_provisioning_materializes_the_operator_user_before_begin() ->
     ).read_text(encoding="utf-8")
 
     operator = provisioning.index("prisma.user.upsert")
-    begin = provisioning.index("beginProvisioning(prisma, input)")
+    begin = provisioning.index("beginProvisioning(prisma,")
     assert operator < begin
 
 
