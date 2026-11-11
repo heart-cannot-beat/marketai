@@ -42,7 +42,8 @@ entry reads, and writes the contract sets it creates
 runs with ``row_security`` off, like every revision run by the schema owner.
 
 Downgrade restores the column name and the constraints, so a release can
-always be rolled back. A target made after the upgrade names a hash no
+always be rolled back. The command-type check stays widened while the
+append-only journal holds a ``create_delivery_target`` row. A target made after the upgrade names a hash no
 LibraryVersion has; while one exists, PostgreSQL gets the foreign key back as
 ``NOT VALID`` (checked for new rows only) and SQLite goes without it, and the
 migration log says how many rows are the reason.
@@ -229,11 +230,20 @@ def upgrade() -> None:
 def downgrade() -> None:
     conn = op.get_bind()
     postgres = conn.dialect.name == "postgresql"
-    _set_command_types(_COMMAND_TYPES_BEFORE)
-    if _NEW not in _column_names():
-        return
     if postgres:
         conn.execute(sa.text("SELECT set_config('row_security', 'off', true)"))
+    journaled = conn.execute(sa.text(
+        "SELECT count(*) FROM scale_command_journal WHERE command_type = 'create_delivery_target'"
+    )).scalar_one()
+    if journaled:
+        # The journal is append-only; the earlier code never writes this type.
+        _log.warning(
+            "%d journaled create_delivery_target command(s) keep ck_scj_command_type widened", journaled,
+        )
+    else:
+        _set_command_types(_COMMAND_TYPES_BEFORE)
+    if _NEW not in _column_names():
+        return
     orphans = conn.execute(sa.text(
         f'SELECT count(*) FROM "{_TABLE}" t WHERE NOT EXISTS ('
         "SELECT 1 FROM library_versions v "

@@ -38,7 +38,9 @@ from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import (
     AuditEventRecord,
     ExperimentDecisionRecord,
+    JobRecord,
     WorkspaceRecord,
+    utcnow,
 )
 from app.main import app
 from app.meta.models import MetaObservationSyncScheduleRecord
@@ -90,8 +92,10 @@ class ObservedAdDeliveryTargetPostgresTests(unittest.TestCase):
                              request_id="test-req", trace_id="trace-test")
 
     def _quiesce(self) -> None:
-        """Leave no due observation schedule behind: the pick made the
-        connection's Scale contracts, and a sandbox connection's are scheduled."""
+        """Leave no due observation schedule and no open Job behind: the pick
+        made the connection's Scale contracts, which a sandbox connection
+        schedules, and the Winner fixture's Localization chain queued Jobs
+        that are not this test's (a later step counts the queue)."""
         if not self.workspaces:
             return
         with Session(self.owner_engine) as session, session.begin():
@@ -99,6 +103,11 @@ class ObservedAdDeliveryTargetPostgresTests(unittest.TestCase):
                             .where(MetaObservationSyncScheduleRecord.workspace_id.in_(self.workspaces),
                                    MetaObservationSyncScheduleRecord.state == "active")
                             .values(state="paused"))
+            session.execute(update(JobRecord)
+                            .where(JobRecord.workspace_id.in_(self.workspaces),
+                                   JobRecord.state.in_(("queued", "retry_wait", "leased", "running")))
+                            .values(state="cancelled", finished_at=utcnow(), lease_owner=None,
+                                    lease_expires_at=None))
 
     def _epoch(self, workspace_id: str) -> int:
         with Session(self.owner_engine) as session:
