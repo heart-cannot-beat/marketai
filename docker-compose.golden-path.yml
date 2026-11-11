@@ -121,6 +121,14 @@ services:
       DATABASE_URL: postgresql://marketai_control_app:compose_control_app@postgres:5432/marketai_control
       MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:compose_domain_owner@postgres:5432/marketai_domain
       MARKETAI_TENANT_CONTEXT_SECRET: compose-tenant-context-secret-32-bytes-min
+      # Provisioning's signed snapshots reach the API's entitlement inbox as
+      # the production dispatcher delivers them (#126): signed with the key
+      # the web BFF signs with and the API verifies, pushed with the inbox
+      # token. The domain then provisions the Workspace, its guardrail
+      # included, instead of a seed.
+      ENTITLEMENT_SNAPSHOT_SIGNING_KEY: compose-entitlement-signing-key-32-bytes-minimum
+      ENTITLEMENT_SNAPSHOT_SIGNING_KEY_ID: compose-beta-v1
+      CONTROL_PLANE_TO_DOMAIN_ENTITLEMENT_TOKEN: compose-entitlement-inbox-token
       CONTROLLED_PROVIDER_URL: http://controlled-provider:9090
       MAIL_SINK_URL: http://mail-sink:8025
       MAIL_SINK_TOKEN_FILE: /run/secrets/mail_sink_token

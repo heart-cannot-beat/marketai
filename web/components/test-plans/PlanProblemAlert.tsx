@@ -3,6 +3,7 @@ import { useTranslation } from 'next-i18next';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { problemKey } from '@/lib/test-plans/plan-model';
 import { PROVIDER_CREDENTIALS_ANCHOR } from './GenerationDefaultsBanner';
+import { SPEND_GUARDRAIL_ANCHOR } from '@/lib/entitlements/spend-guardrail';
 
 /** Problems the Owner fixes in Settings (key, guardrail, defaults). */
 const SETTINGS_CODES = new Set([
@@ -15,6 +16,12 @@ const SETTINGS_CODES = new Set([
   'aspect_ratio_unsupported',
   'variants_invalid',
   'provider_unavailable',
+]);
+
+/** Of those, the ones fixed in Settings' spending limits (#126). */
+const GUARDRAIL_CODES = new Set([
+  'guardrail_exceeded',
+  'spend_guardrail_exceeded',
 ]);
 
 interface PlanProblemAlertProps {
@@ -57,7 +64,11 @@ export function PlanProblemAlert({
         {needsSettings &&
           (isOwner ? (
             <Link
-              href={`/w/${current.slug}/settings#${PROVIDER_CREDENTIALS_ANCHOR}`}
+              href={`/w/${current.slug}/settings#${
+                GUARDRAIL_CODES.has(code)
+                  ? SPEND_GUARDRAIL_ANCHOR
+                  : PROVIDER_CREDENTIALS_ANCHOR
+              }`}
               className="link font-medium"
             >
               {t('problem-go-settings')}

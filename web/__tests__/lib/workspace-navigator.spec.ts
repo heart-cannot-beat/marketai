@@ -41,14 +41,14 @@ describe('computeTargetRoute', () => {
     ).toBe('/w/beta/settings');
   });
 
-  it('falls back to /experiments when Member targets Owner-only page', () => {
+  it('preserves settings for Member target: a Member reads its spending limits there', () => {
     expect(
       computeTargetRoute({
         targetSlug: 'beta',
         targetRole: 'MEMBER',
         currentPathname: '/w/alpha/settings',
       })
-    ).toBe('/w/beta/experiments');
+    ).toBe('/w/beta/settings');
   });
 
   it('falls back to /experiments when Member targets members page', () => {

@@ -10,6 +10,7 @@ import type { PasteInput } from '@/hooks/products/useProductIntake';
 import { PasteBox } from './PasteBox';
 import { MockIntakeBadge } from './IntakeProgress';
 import { errorCodeMessage } from '@/lib/i18n/domain-errors';
+import { SPEND_GUARDRAIL_ANCHOR } from '@/lib/entitlements/spend-guardrail';
 
 interface IntakeFailureProps {
   detail: IntakeDetail;
@@ -25,8 +26,8 @@ interface IntakeFailureProps {
  * A failed intake, explained by what the user can do next
  * (`failure.suggested_action`): add text or screenshots in place, check the
  * link, retry, or -- for the Owner -- bind the OpenAI key / adjust the spend
- * guardrail in Settings. The reason reads by the failure's code (#253);
- * the server's own sentence is a diagnostic.
+ * guardrail in Settings (its spending-limits section, #126). The reason reads
+ * by the failure's code (#253); the server's own sentence is a diagnostic.
  */
 export function IntakeFailure({
   detail,
@@ -99,7 +100,14 @@ export function IntakeFailure({
           </button>
         )}
         {ownerScoped && isOwner && (
-          <Link href={`/w/${slug}/settings`} className="btn btn-primary btn-sm">
+          <Link
+            href={
+              action === 'adjust_spend_guardrail'
+                ? `/w/${slug}/settings#${SPEND_GUARDRAIL_ANCHOR}`
+                : `/w/${slug}/settings`
+            }
+            className="btn btn-primary btn-sm"
+          >
             {action === 'bind_openai_key'
               ? t('failure-open-credentials')
               : t('failure-open-guardrail')}

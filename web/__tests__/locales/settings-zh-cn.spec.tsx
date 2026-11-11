@@ -25,6 +25,7 @@ jest.mock('@/hooks/domain/useDomainCommand', () => ({
 
 import { MetaConnectionSection } from '@/components/workspace/MetaConnectionSection';
 import { ProviderCredentialsSection } from '@/components/workspace/ProviderCredentialsSection';
+import { SpendGuardrailSection } from '@/components/workspace/SpendGuardrailSection';
 import { useDomainQuery } from '@/hooks/domain/useDomainQuery';
 
 /**
@@ -53,7 +54,17 @@ const reads = (meta: unknown) =>
           ]
         : operationId === 'get_generation_capabilities'
           ? { credential_readiness: {} }
-          : meta;
+          : operationId === 'get_spend_guardrail'
+            ? {
+                workspace_id: 'ws_1',
+                revision: 1,
+                budget_currency: 'USD',
+                per_operation_limit: '5.000000000000',
+                rolling_24h_limit: '20.000000000000',
+                period_limit: '100.000000000000',
+                outstanding_exposure_limit: '10.000000000000',
+              }
+            : meta;
     return { data, isLoading: false, refresh: jest.fn() };
   }) as never);
 
@@ -75,6 +86,7 @@ const settingsPage = (
   <>
     <ProviderCredentialsSection />
     <MetaConnectionSection />
+    <SpendGuardrailSection />
   </>
 );
 
@@ -106,6 +118,12 @@ describe('Settings sections in zh-CN and en', () => {
     expect(screen.getByText('Meta 连接')).toBeInTheDocument();
     expect(screen.getByText('已启用')).toBeInTheDocument();
     expect(screen.getByText('沙箱')).toBeInTheDocument();
+    expect(screen.getByText('支出上限')).toBeInTheDocument();
+    expect(screen.getByText('单次操作')).toBeInTheDocument();
+    expect(screen.getByText('同时未结算')).toBeInTheDocument();
+    expect(
+      screen.getByText('只有工作区 Owner 可以修改这些上限。')
+    ).toBeInTheDocument();
     const text = container.textContent ?? '';
     expect(ENGLISH_COPY.filter((copy) => text.includes(copy))).toEqual([]);
     expect(text).not.toContain('Sandbox');

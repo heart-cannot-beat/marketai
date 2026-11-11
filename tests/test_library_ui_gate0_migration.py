@@ -144,8 +144,9 @@ class Gate0MigrationTests(unittest.TestCase):
         # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107) and
         # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109) and
         # zzf6b7c8d9e0 (observation ticks keyed by authorization epoch, #119) and
-        # zzg7d8e9f0a1 (the Beta default ScalePolicyVersion is published, #127).
-        self.assertEqual(revision, "zzg7d8e9f0a1")
+        # zzg7d8e9f0a1 (the Beta default ScalePolicyVersion is published, #127) and
+        # zzg126a1b2c3 (provisioning creates the guardrail at the Beta defaults, #126).
+        self.assertEqual(revision, "zzg126a1b2c3")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as conn:
