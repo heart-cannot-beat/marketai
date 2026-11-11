@@ -42,8 +42,10 @@ item off here.
   [#128](https://github.com/heart-cannot-beat/marketai/issues/128). The
   journey approves the localized AssetVersion in the Assets area, and that
   review moves the binding to `ready_for_experiment`.
-- The published ScalePolicyVersion
-  ([#127](https://github.com/heart-cannot-beat/marketai/issues/127)).
+- ~~The published ScalePolicyVersion~~: removed by
+  [#127](https://github.com/heart-cannot-beat/marketai/issues/127). A
+  migration publishes the Beta default Policy, and the golden path and the
+  Scale suite evaluate under it.
 - The curated-scenario DeliveryTarget, with its delivery_configuration
   contract generation, activation evidence and contract set
   ([#129](https://github.com/heart-cannot-beat/marketai/issues/129)).

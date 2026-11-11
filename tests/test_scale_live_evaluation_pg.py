@@ -4,10 +4,12 @@ This is #101's acceptance. On a cluster released with ``make db-release`` the
 API runs as ``marketai_domain_api`` and the Worker as
 ``marketai_domain_worker``. The Winner and the rows a DeliveryTarget refers
 to are fixtures (their product entries are #63), seeded as the schema owner
-the way the control plane opens a Workspace; the Policy is published as the
-owner too (#63). The connection and its binding go through the API, and
-production code builds the Scale contract set and the DeliveryTarget on the
-sandbox ad, with the campaign, ad set and creative the sandbox returns.
+the way the control plane opens a Workspace. The Policy is the Beta default
+the migrations published (#127): nothing else publishes one, and the live
+trigger selects it under the Worker's role, so no day is skipped as
+``no_eligible_policy``. The connection and its binding go through the API,
+and production code builds the Scale contract set and the DeliveryTarget on
+the sandbox ad, with the campaign, ad set and creative the sandbox returns.
 
 1. After the batch for A-1 attested the configuration, the Enrollment is
    activated through the API on day A: Candidate, draft, preview, activate.
@@ -38,8 +40,8 @@ everything else are real, after every simulated slot, so every slot is due
 and every target day has ended.
 
 Scale evidence tables refuse DELETE, so every Workspace id is new; the test
-pauses its schedules, cancels its open Jobs and unpublishes its Policy when it
-ends. Run with ``DOMAIN_OWNER_DATABASE_URL``, ``DOMAIN_API_DATABASE_URL``,
+pauses its schedules and cancels its open Jobs when it ends. Run with
+``DOMAIN_OWNER_DATABASE_URL``, ``DOMAIN_API_DATABASE_URL``,
 ``DOMAIN_WORKER_DATABASE_URL``, ``MARKETAI_DATABASE_URL`` (the owner) and
 ``MARKETAI_TENANT_CONTEXT_SECRET``. Fictional brand only: Acme Charge.
 """
@@ -74,6 +76,7 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
 from app.scale.collector import COLLECT_JOB_TYPE
 from app.scale.delivery_targets import create_delivery_target_with_contract_set
+from app.scale.live_trigger import eligible_live_policy
 from app.scale.models import (
     ScaleAdviceNotificationDecisionRecord,
     ScaleAdviceOccurrenceRecord,
@@ -83,8 +86,8 @@ from app.scale.models import (
     ScaleEvidenceReadinessProjectionRecord,
     ScaleEvidenceSnapshotRecord,
     ScaleEvidenceSourceManifestRecord,
-    ScalePolicyVersionRecord,
 )
+from app.scale.platform_policy import BETA_DEFAULT_POLICY_V1
 from app.scale.service import EVALUATION_JOB_MAX_ATTEMPTS
 from app.worker_runtime import WorkerRuntime, meta_write_capability_findings
 from tests.support.meta_observation import seed_sandbox_ads, worker_context
@@ -98,7 +101,6 @@ from tests.support.scale_contract_set import (
     delivery_target_request,
     sandbox_ad_hierarchy,
 )
-from tests.test_scale_evidence import _policy
 
 URLS = [os.getenv(key) for key in (
     "DOMAIN_OWNER_DATABASE_URL", "DOMAIN_API_DATABASE_URL", "DOMAIN_WORKER_DATABASE_URL",
@@ -148,7 +150,6 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
         self.client = TestClient(app, raise_server_exceptions=False)
         self.addCleanup(self.client.close)
         self.workspaces: list[str] = []
-        self.policies: list[str] = []
         self.addCleanup(self._quiesce)
 
     # -- roles, Workspaces and cleanup --------------------------------------
@@ -169,10 +170,6 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
 
     def _quiesce(self) -> None:
         with Session(self.owner) as session, session.begin():
-            if self.policies:  # no other test's collection may pick it up
-                session.execute(update(ScalePolicyVersionRecord)
-                                .where(ScalePolicyVersionRecord.id.in_(self.policies))
-                                .values(is_published=False))
             if self.workspaces:
                 session.execute(update(MetaObservationSyncScheduleRecord)
                                 .where(MetaObservationSyncScheduleRecord.workspace_id.in_(self.workspaces),
@@ -263,14 +260,14 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
 
     # -- the fixture --------------------------------------------------------
 
-    def _publish_policy(self) -> str:
-        policy = _policy(mode_permissions={SANDBOX: True}, published_at=utcnow(),
-                         canonical_schema_version="scale-snapshot-v3", created_by="platform-admin")
-        policy_id = policy.id
-        with Session(self.owner) as session, session.begin():
-            session.add(policy)
-        self.policies.append(policy_id)
-        return policy_id
+    def _migrated_policy(self) -> str:
+        """The Policy a live sandbox run freezes, as the Worker selects it: the
+        Beta default the migrations published (#127)."""
+        with Session(self.engines[WORKER]) as session:
+            policy = eligible_live_policy(session, SANDBOX)
+        self.assertIsNotNone(policy, "no_eligible_policy: the release published no Policy")
+        self.assertEqual(policy.id, BETA_DEFAULT_POLICY_V1.id)
+        return policy.id
 
     def _activated_enrollment(self, owner: TenantContext, activation_day: date) -> dict:
         """The Winner (fixture), the connection and DeliveryTarget (API and
@@ -337,7 +334,7 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
     def test_an_api_activated_sandbox_enrollment_is_evaluated_daily_by_the_worker_alone(self):
         owner = self._workspace("main")
         workspace_id = owner.workspace_id
-        policy_id = self._publish_policy()
+        policy_id = self._migrated_policy()
         activation_day = utcnow().astimezone(ZONE).date() - timedelta(days=25)
         made = self._activated_enrollment(owner, activation_day)
         enrollment_id = made["enrollment"]["id"]
@@ -376,6 +373,8 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
                     # Health is decided now; with mixed signals it is none,
                     # and the reason says why (spec §12).
                     self.assertNotEqual(evidence["health_reason"], "episode_window_incomplete")
+        self.assertEqual(self._rows(AuditEventRecord, workspace_id, event_type="scale.live_evaluation.skipped"), [],
+                         "no day skipped: never no_eligible_policy (#127)")
         episode = self._api("GET", f"/enrollments/{enrollment_id}/episodes/{episode_id}")
         self.assertEqual((episode["phase"], episode["closure_reason"]), ("collecting", None))
         [adopted] = self._rows(AuditEventRecord, workspace_id, event_type="scale.episode.baseline_verified")
