@@ -114,6 +114,34 @@ class ObservedAdListResponse(_Base):
     unavailable: list[ObservedAdUnavailableResponse]
 
 
+class MetricContractSetCreateRequest(_Base):
+    """Set up a connection's Scale read contracts (#112, platform only).
+
+    A real account's currency and time zone are frozen into its contracts;
+    the account itself is read back and compared on every configuration
+    read (``currency_mismatch`` / ``timezone_mismatch``). A sandbox
+    connection may omit both: its scenario simulates them."""
+
+    meta_connection_id: str = Field(min_length=1, max_length=64)
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    timezone_name: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class MetricContractSetGenerationResponse(_Base):
+    contract_type: str
+    generation_id: str
+    schedule_state: str | None
+    next_fire_at: datetime | None
+
+
+class MetricContractSetResponse(_Base):
+    id: str
+    meta_mode: str
+    meta_connection_id: str
+    created: bool
+    generations: list[MetricContractSetGenerationResponse]
+
+
 class DeliveryTargetCreateRequest(_Base):
     """Pick one observed ad as a Winner's DeliveryTarget (#129). Only the
     ad is named: the server resolves the hierarchy, creative, Offer, Landing

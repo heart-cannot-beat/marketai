@@ -29,12 +29,16 @@ part of the generation's lifecycle:
   ``MetaObservationSyncScheduleRecord`` of a generation, with ``next_fire_at``
   the next daily slot in the generation's frozen ``local_timezone``.
   :func:`create_contract_generation` calls it for every
-  ``customer_sandbox`` generation the scheduled executor
-  (``app.meta.observation_sync``) can read -- one with a
-  :func:`observation_read_plan`. ``controlled_mock`` generations are never
-  scheduled automatically (ADR 0009: fault injection only, no evidence for
-  decisions); tests and e2e call this function for them explicitly.
-  ``internal_validation`` waits for its read adapter (#101 S6). Every open
+  ``customer_sandbox`` and ``internal_validation`` generation the scheduled
+  executor (``app.meta.observation_sync``) can read -- one with a
+  :func:`observation_read_plan`. ``internal_validation`` reads the real
+  Graph API (#112, #101 S6), so its schedule exists only in the platform
+  Workspace (ADR 0009): a generation of that mode anywhere else gets none,
+  and asking for one explicitly is refused with
+  ``meta_platform_workspace_required``. ``controlled_mock`` generations
+  are never scheduled automatically (ADR 0009: fault injection only, no
+  evidence for decisions); tests and e2e call this function for them
+  explicitly. Every open
   schedule of one connection shares one cron expression and one time zone:
   the batch Job is keyed by (connection, D), so two schedules firing at
   different moments for the same D would find the first one's batch already
@@ -46,7 +50,8 @@ part of the generation's lifecycle:
 * :func:`retire_contract_generation` -- ``active -> retired``, retiring the
   generation's schedule in the same transaction.
 * :func:`parse_daily_cron`, :func:`next_fire_after`,
-  :func:`latest_fire_at_or_before`, :func:`observation_target_date` -- the
+  :func:`latest_fire_at_or_before`, :func:`observation_target_date`,
+  :func:`fire_at_for_target_date` -- the
   only cron form accepted is the daily ``M H * * *`` (#101 Q5), computed in
   the generation's time zone without a cron dependency.
 """
@@ -64,7 +69,7 @@ from sqlalchemy.orm import Session
 from dataclasses import dataclass
 from typing import Any
 
-from ..adapters.persistence.models import new_id, utcnow
+from ..adapters.persistence.models import WorkspaceRecord, new_id, utcnow
 from .models import (
     MetaConnectionRecord,
     MetaObservationSyncScheduleRecord,
@@ -103,6 +108,7 @@ __all__ = [
     "next_fire_after",
     "latest_fire_at_or_before",
     "observation_target_date",
+    "fire_at_for_target_date",
     "occurrence_id",
 ]
 
@@ -119,8 +125,10 @@ SCHEDULED_CONTRACT_TYPES = frozenset({
 #: The one read of a ``daily`` generation not built from a Scale read
 #: contract (#107): ad-level insights, one row per local day, D-13..D.
 GENERIC_DAILY_INSTANCE = QueryInstance("daily", INSIGHTS_READ, -13, 0, "1")
-#: Modes whose new generations are scheduled automatically (#101 §6).
-AUTO_SCHEDULED_MODES = frozenset({"customer_sandbox"})
+#: Modes whose new generations are scheduled automatically (#101 §6, #112).
+AUTO_SCHEDULED_MODES = frozenset({"customer_sandbox", "internal_validation"})
+#: Modes that read the real Graph API: the platform Workspace only (ADR 0009).
+PLATFORM_ONLY_MODES = frozenset({"internal_validation"})
 #: 04:00 in the account's time zone, once a day (#101 Q3): the local day is
 #: over, Meta has had a few hours to settle it, and it avoids the 02:00-03:00
 #: daylight-saving jump.
@@ -262,9 +270,24 @@ def create_contract_generation(
     )
     session.add(generation)
     session.flush()
-    if meta_mode in AUTO_SCHEDULED_MODES and _read_plan_or_raise(generation) is not None:
+    if (meta_mode in AUTO_SCHEDULED_MODES and _read_plan_or_raise(generation) is not None
+            and (meta_mode not in PLATFORM_ONLY_MODES or _is_platform_workspace(session, workspace_id))):
         ensure_observation_schedule(session, generation)
     return generation
+
+
+def _is_platform_workspace(session: Session, workspace_id: str) -> bool:
+    workspace = session.get(WorkspaceRecord, workspace_id)
+    return workspace is not None and bool(workspace.is_platform_workspace)
+
+
+def _require_platform_workspace(session: Session, workspace_id: str, meta_mode: str) -> None:
+    """``internal_validation`` schedules: the platform Workspace only (ADR 0009)."""
+    if not _is_platform_workspace(session, workspace_id):
+        raise ContractError(
+            f"{meta_mode} reads Meta only in the platform Workspace, not {workspace_id!r}",
+            code="meta_platform_workspace_required",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +471,16 @@ def observation_target_date(fire_at: datetime, timezone_name: str) -> date:
     return _as_utc(fire_at).astimezone(_zone(timezone_name)).date() - timedelta(days=1)
 
 
+def fire_at_for_target_date(expression: str, timezone_name: str, target_date: date) -> datetime:
+    """The slot whose firing observes ``target_date``: its local day after, as UTC.
+
+    The inverse of :func:`observation_target_date`. A batch the rate limits
+    deferred must resume before the slot of the next target day (#112).
+    """
+    minute, hour = parse_daily_cron(expression)
+    return _daily_slot(target_date + timedelta(days=1), minute, hour, _zone(timezone_name))
+
+
 def occurrence_id(generation_id: str, target_date: date, instance: str | None = None) -> str:
     """A scheduled sync run's occurrence: ``obs:{generation_id}:{D}:{instance}``
     (#101 S2); a #107 run has no instance.
@@ -497,6 +530,8 @@ def ensure_observation_schedule(
             f"contract generation {generation.id!r} is {generation.state!r}",
             code="meta_contract_not_active",
         )
+    if generation.meta_mode in PLATFORM_ONLY_MODES:
+        _require_platform_workspace(session, generation.workspace_id, generation.meta_mode)
     if _read_plan_or_raise(generation) is None:
         raise ContractError(
             f"contract type {generation.contract_type!r} has no scheduled executor",

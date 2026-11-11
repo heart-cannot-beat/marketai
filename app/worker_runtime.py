@@ -2078,10 +2078,16 @@ class WorkerRuntime:
     @runs_as(WORKER_ROLE)
     def _meta_observation_sync(self, job: jobs.ClaimedJob) -> None:
         """Run one connection's sync runs for one target day to a terminal
-        state (#107). Reads go through the sandbox adapter, resolved per
-        transaction and never held by this runtime (ADR 0017). Runs resume
-        from their last committed page; on the Job's last attempt the runs
-        that still fail are marked ``failed``.
+        state (#107). Reads go through the mode's read adapter -- the sandbox
+        adapter, or for ``internal_validation`` the GET-only Graph API reader
+        (#112) -- resolved per transaction and never held by this runtime
+        (ADR 0017). Runs resume from their last committed page; on the Job's
+        last attempt the runs that still fail are marked ``failed``.
+
+        Meta's rate limits defer the Job instead (#112): it waits the
+        back-off in ``retry_wait`` without spending an attempt, and resumes
+        every run from its checkpoint. A refused credential fails the runs
+        at once, without retries.
 
         Once every run is terminal -- all succeeded, or the last attempt
         failed the rest -- Scale's collection of the batch is enqueued
@@ -2091,6 +2097,7 @@ class WorkerRuntime:
         from datetime import date
 
         from .meta.observation_sync import (
+            ObservationBatchDeferred,
             ObservationBatchFailed,
             ObservationLeaseLost,
             ObservationSyncError,
@@ -2122,6 +2129,11 @@ class WorkerRuntime:
             jobs.succeed(job.context, job.id, self.owner)
         except ObservationLeaseLost:
             return  # the Job is no longer ours to settle
+        except ObservationBatchDeferred as exc:
+            jobs.defer(
+                job.context, job.id, self.owner,
+                code="meta_read_rate_limited", detail=str(exc), delay_seconds=exc.retry_after,
+            )
         except ObservationBatchFailed as exc:
             detail = str(exc)
             if exc.final:

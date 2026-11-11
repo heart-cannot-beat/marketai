@@ -305,7 +305,10 @@ class ContractSetEstablishment(ScaleObservationTestCase):
         established = self._ensure(connection_id, "internal_validation", context=owner, currency="USD",
                                    timezone_name=TIMEZONE)
         self.assertTrue(established.created)
-        self.assertEqual(self._rows(MetaObservationSyncScheduleRecord, platform_id), [], "waits for S6")
+        schedules = self._rows(MetaObservationSyncScheduleRecord, platform_id)
+        self.assertEqual(sorted(row.contract_generation_id for row in schedules),
+                         sorted(established.generation_ids.values()), "#112: each generation reads daily")
+        self.assertEqual({(row.state, row.cron_expression) for row in schedules}, {("active", "0 4 * * *")})
 
     def test_another_workspace_mode_or_a_member_cannot_establish_it(self):
         connection_id = self._connection()

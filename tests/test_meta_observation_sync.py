@@ -307,25 +307,44 @@ class ScheduleLifecycleTests(ObservationSyncTestCase):
                           "only a Scale read contract of this type has a read plan (S2)")
         self.assertEqual(self._count(MetaObservationSyncScheduleRecord), 1, "only the sandbox daily contract")
 
-    def test_an_internal_validation_generation_is_not_scheduled(self):
-        platform_id = f"ws_meta_obs_platform_{uuid.uuid4().hex[:8]}"
-        self._provision(platform_id, is_platform_workspace=True)
-        self.addCleanup(self._quiesce, platform_id)
-        context = replace(worker_context(platform_id, "internal_validation"), is_platform_workspace=True)
+    def _internal_validation_generation(self, workspace_id: str) -> str:
+        context = replace(worker_context(workspace_id, "internal_validation"), is_platform_workspace=True)
         with tenant_session(context) as session:
-            session.add(MetaConnectionRecord(id=f"mcon_{uuid.uuid4().hex[:12]}", workspace_id=platform_id,
+            connection_id = f"mcon_{uuid.uuid4().hex[:12]}"
+            session.add(MetaConnectionRecord(id=connection_id, workspace_id=workspace_id,
                                              meta_mode="internal_validation", ad_account_id=AD_ACCOUNT))
             session.flush()
-            connection_id = session.scalars(select(MetaConnectionRecord.id).where(
-                MetaConnectionRecord.workspace_id == platform_id)).one()
-            generation = create_contract_generation(
-                session, workspace_id=platform_id, meta_mode="internal_validation",
+            return create_contract_generation(
+                session, workspace_id=workspace_id, meta_mode="internal_validation",
                 connection_id=connection_id, contract_type="daily", ad_account_id=AD_ACCOUNT,
                 fields=DAILY_FIELDS, attribution_window={}, breakdowns=[], time_window={},
                 local_timezone=TIMEZONE,
-            )
-            generation_id = generation.id
-        self.assertIsNone(self._schedule(generation_id), "internal_validation waits for S6")
+            ).id
+
+    def test_an_internal_validation_generation_in_the_platform_workspace_gets_its_schedule(self):
+        platform_id = f"ws_meta_obs_platform_{uuid.uuid4().hex[:8]}"
+        self._provision(platform_id, is_platform_workspace=True)
+        self.addCleanup(self._quiesce, platform_id)
+        before = utcnow()
+        generation_id = self._internal_validation_generation(platform_id)
+        schedule = self._schedule(generation_id)
+        self.assertIsNotNone(schedule, "#112: internal_validation reads on the same daily schedule")
+        self.assertEqual((schedule.state, schedule.cron_expression, schedule.meta_mode),
+                         ("active", DEFAULT_SYNC_CRON, "internal_validation"))
+        self.assertEqual(self._utc(schedule.next_fire_at), next_fire_after(DEFAULT_SYNC_CRON, TIMEZONE, before))
+
+        with tenant_session(worker_context(platform_id, "internal_validation")) as session:
+            retire_contract_generation(session, generation_id=generation_id)
+        self.assertEqual(self._schedule(generation_id).state, "retired")
+
+    def test_an_internal_validation_generation_outside_the_platform_workspace_gets_no_schedule(self):
+        generation_id = self._internal_validation_generation(self.workspace_id)
+        self.assertIsNone(self._schedule(generation_id), "ADR 0009: real reads are the platform Workspace's")
+        with tenant_session(worker_context(self.workspace_id, "internal_validation")) as session:
+            with self.assertRaises(ContractError) as refused:
+                ensure_observation_schedule(session, session.get(ObservationContractGenerationRecord, generation_id))
+        self.assertEqual(refused.exception.code, "meta_platform_workspace_required")
+        self.assertEqual(self._count(MetaObservationSyncScheduleRecord), 0)
 
     def test_a_sandbox_daily_contract_in_an_unknown_time_zone_is_refused(self):
         connection = self.client.post("/api/v1/meta/connections",

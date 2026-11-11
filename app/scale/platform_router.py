@@ -53,6 +53,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Requ
 from sqlalchemy import select
 
 from app.adapters.persistence.database import tenant_session
+from app.meta.models import MetaObservationSyncScheduleRecord
 from app.platform.etag import extract_if_match, set_etag
 from app.platform.meta_mode_auth import MetaModeNotPermitted, require_meta_mode
 from app.platform.platform_operator_identity import require_platform_operator_jwt
@@ -66,6 +67,7 @@ from .candidates import create_enrollment_candidate, list_eligible_candidates
 from .command_journal import lookup_command_outcome
 from .enrollment import activate_enrollment, close_enrollment, create_draft_enrollment, pause_enrollment, resume_enrollment
 from .exports import create_export, create_export_download_intent
+from .delivery_targets import ensure_metric_contract_set
 from .observed_ads import create_delivery_target_from_ad, list_observed_ads
 from .models import (
     ScaleAdviceConversionRecord,
@@ -110,6 +112,9 @@ from .schemas import (
     ExportCreateRequest,
     ExportDownloadIntentResponse,
     ExportResponse,
+    MetricContractSetCreateRequest,
+    MetricContractSetGenerationResponse,
+    MetricContractSetResponse,
     ObservedAdListResponse,
     TargetContextResponse,
     TargetCreateRequest,
@@ -1053,6 +1058,61 @@ def platform_create_delivery_target(
             idempotency_key=idempotency_key,
         )
         return _delivery_target_dict(target)
+
+
+@platform_scale_mode.post(
+    "/metric-contract-sets",
+    operation_id="platform_ensure_scale_metric_contract_set",
+    response_model=MetricContractSetResponse,
+    status_code=200,
+)
+def platform_ensure_metric_contract_set(
+    body: MetricContractSetCreateRequest,
+    context: TenantContext = Depends(_platform_context),
+):
+    """Set up a connection's Scale read contracts; idempotent (#112).
+
+    The one way to give an ``internal_validation`` connection its Scale
+    contracts: daily, exact window and delivery configuration, frozen to the
+    account's currency and time zone. Each new generation gets its daily
+    schedule (account-local 04:00), so the platform Workspace's reads start
+    at the next slot; #129's observed ads list the ads of the first attested
+    configuration read. A repeat with the same account returns the same set
+    (200, ``created`` false); a different currency or time zone is a
+    conflict with the active generations, never a silent replacement.
+    """
+    with tenant_session(context) as session:
+        contract_set = ensure_metric_contract_set(
+            session, context, connection_id=body.meta_connection_id,
+            currency=body.currency, timezone_name=body.timezone_name,
+        )
+        schedules = {
+            row.contract_generation_id: row
+            for row in session.scalars(
+                select(MetaObservationSyncScheduleRecord).where(
+                    MetaObservationSyncScheduleRecord.workspace_id == context.workspace_id,
+                    MetaObservationSyncScheduleRecord.meta_mode == context.meta_mode,
+                    MetaObservationSyncScheduleRecord.contract_generation_id.in_(
+                        list(contract_set.generation_ids.values())),
+                    MetaObservationSyncScheduleRecord.state.in_(("active", "paused")),
+                )
+            )
+        }
+        return MetricContractSetResponse(
+            id=contract_set.contract_set_id,
+            meta_mode=context.meta_mode,
+            meta_connection_id=body.meta_connection_id,
+            created=contract_set.created,
+            generations=[
+                MetricContractSetGenerationResponse(
+                    contract_type=contract_type,
+                    generation_id=generation_id,
+                    schedule_state=schedules[generation_id].state if generation_id in schedules else None,
+                    next_fire_at=schedules[generation_id].next_fire_at if generation_id in schedules else None,
+                )
+                for contract_type, generation_id in sorted(contract_set.generation_ids.items())
+            ],
+        )
 
 
 # Mount every mode-scoped route onto the root router at ``/{meta_mode}``.

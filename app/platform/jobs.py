@@ -758,6 +758,62 @@ def fail(
         return row.state
 
 
+#: The bounds of :func:`defer`'s wait, the same cap :func:`fail` applies.
+MIN_DEFER_SECONDS = 1
+MAX_DEFER_SECONDS = 3600
+
+
+def defer(
+    context: TenantContext,
+    job_id: str,
+    owner: str,
+    *,
+    code: str,
+    detail: str,
+    delay_seconds: float,
+) -> datetime:
+    """Put a leased Job back to wait, without spending an attempt.
+
+    For work an external limit paused rather than failed -- the Meta read's
+    rate limits (#112): the Job waits ``delay_seconds`` (1 s to 1 h) in
+    ``retry_wait`` and its ``attempt`` goes back by the one this claim took,
+    so waiting never brings it closer to its last attempt. The handler bounds
+    how long it keeps deferring. Returns when the Job may run again.
+    """
+    now = utcnow()
+    with tenant_session(context) as session:
+        row = session.get(JobRecord, job_id)
+        if (
+            not row
+            or row.workspace_id != context.workspace_id
+            or row.lease_owner != owner
+            or row.state not in ("leased", "running")
+        ):
+            raise RuntimeError("任务租约已丢失，不能推迟")
+        not_before = now + timedelta(seconds=max(MIN_DEFER_SECONDS, min(MAX_DEFER_SECONDS, delay_seconds)))
+        row.state = "retry_wait"
+        row.next_attempt_at = not_before
+        row.attempt = max(0, row.attempt - 1)
+        row.error_code = code
+        row.error_detail = detail[:2000]
+        row.lease_owner = None
+        row.lease_expires_at = None
+        row.heartbeat_at = None
+        append_event(
+            session,
+            event_type="job.deferred",
+            resource_type="job",
+            resource_id=job_id,
+            details={
+                "error_code": code,
+                "not_before": not_before.isoformat(),
+                "attempt": row.attempt,
+                "max_attempts": row.max_attempts,
+            },
+        )
+        return not_before
+
+
 def cancel_resource(context: TenantContext, resource_type: str, resource_id: str) -> int:
     with tenant_session(context) as session:
         affected = session.scalars(

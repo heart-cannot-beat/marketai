@@ -725,6 +725,22 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_scale_observed_ads_pg -v
 
+      # #112 (#101 S6): the platform Workspace's internal_validation connection
+      # gets its Scale contracts through the platform route as the API role,
+      # each with a daily schedule. The Worker alone reads a simulated Graph
+      # API (no network, no real token), decrypting the binding's credentials
+      # per read; a usage reading past the threshold defers the batch Job
+      # without spending an attempt, and it resumes to five attested instances
+      # whose ads #129 lists. A customer Workspace, and the platform
+      # Workspace's own sandbox mode, read none of it.
+      - name: internal_validation reads Meta for the platform Workspace only under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_meta_internal_validation_sync_pg -v
+
       # An already-provisioned cluster may still carry the former shared role's
       # persistent BYPASSRLS bit. Prove the release revokes it and the retired
       # role fails closed.
