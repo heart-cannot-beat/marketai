@@ -125,8 +125,14 @@ def _tenant_context(env: dict[str, str], *, meta_mode: str | None = None):
 # seed-platform-infrastructure
 # ---------------------------------------------------------------------------
 
-def _ensure_admission_infrastructure(session, workspace_id: str, actor_id: str) -> None:
-    """Create the durable rows required by paid domain command admission."""
+def _ensure_admission_infrastructure(session, workspace_id: str) -> None:
+    """Create the durable rows required by paid domain command admission.
+
+    The SpendGuardrail is not one of them: provisioning creates it at the
+    contract's Beta defaults when the journey dispatches the first snapshot
+    (#126), before this seed runs. Its absence is a provisioning failure the
+    journey must surface, never one to paper over with a row of our own.
+    """
     from app.adapters.persistence.models import utcnow
     from app.entitlements.cost_models import SpendGuardrailRecord
     from app.entitlements.models import EntitlementProjectionRecord
@@ -150,22 +156,11 @@ def _ensure_admission_infrastructure(session, workspace_id: str, actor_id: str) 
                 applied_at=now,
             )
         )
-    guardrail = session.get(SpendGuardrailRecord, workspace_id)
-    if guardrail is None:
-        session.add(
-            SpendGuardrailRecord(
-                workspace_id=workspace_id,
-                revision=1,
-                budget_currency="USD",
-                per_operation_limit=Decimal("100"),
-                rolling_24h_limit=Decimal("500"),
-                period_limit=Decimal("5000"),
-                outstanding_exposure_limit=Decimal("1000"),
-                platform_policy_version=1,
-                created_at=now,
-                updated_at=now,
-                updated_by=actor_id,
-            )
+    if session.get(SpendGuardrailRecord, workspace_id) is None:
+        raise RuntimeError(
+            f"Workspace {workspace_id} has no SpendGuardrail: provisioning "
+            "(marketai_apply_workspace_projection_v2) should have created it "
+            "when the first snapshot was applied"
         )
 
 def _seed_platform_infrastructure(env: dict[str, str], args: argparse.Namespace) -> dict:
@@ -181,9 +176,7 @@ def _seed_platform_infrastructure(env: dict[str, str], args: argparse.Namespace)
     sandbox_meta_mode = "customer_sandbox"
 
     with tenant_session(ctx) as session:
-        _ensure_admission_infrastructure(
-            session, workspace_id, env["E2E_OWNER_USER_ID"]
-        )
+        _ensure_admission_infrastructure(session, workspace_id)
 
         mock_connection = MetaConnectionRecord(
             id=f"mcon_{tag}_mock",
@@ -333,9 +326,7 @@ def _seed_localization_infrastructure(env: dict[str, str], args: argparse.Namesp
     tag = f"gploc{uuid4().hex[:6]}"
 
     with tenant_session(ctx) as session:
-        _ensure_admission_infrastructure(
-            session, workspace_id, env["E2E_OWNER_USER_ID"]
-        )
+        _ensure_admission_infrastructure(session, workspace_id)
         market_specs = (
             ("GB", "ready", "complete_with_discount", False),
             ("CA", "degraded", "standard_9_market", True),

@@ -134,23 +134,24 @@ export function WorkspaceNavigation({
     if (advancedActive) setExpanded(true);
   }, [advancedActive]);
 
-  const admin: MenuItem[] = [];
+  // Settings is every member's: a Member reads the spending limits there
+  // (#126); everything else on it, and Members, stays the Owner's.
+  const admin: MenuItem[] = [
+    {
+      name: t('workspace-nav-settings'),
+      href: `/w/${slug}/settings`,
+      icon: Cog6ToothIcon,
+      active: isActive('settings'),
+      testId: 'workspace-settings-link',
+    },
+  ];
   if (canAccess('team_member', ['create', 'update', 'delete'])) {
-    admin.push(
-      {
-        name: t('workspace-nav-settings'),
-        href: `/w/${slug}/settings`,
-        icon: Cog6ToothIcon,
-        active: isActive('settings'),
-        testId: 'workspace-settings-link',
-      },
-      {
-        name: t('workspace-nav-members'),
-        href: `/w/${slug}/members`,
-        icon: UserPlusIcon,
-        active: isActive('members'),
-      }
-    );
+    admin.push({
+      name: t('workspace-nav-members'),
+      href: `/w/${slug}/members`,
+      icon: UserPlusIcon,
+      active: isActive('members'),
+    });
   }
 
   const groupId = 'workspace-nav-advanced';

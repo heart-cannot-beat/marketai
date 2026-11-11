@@ -55,6 +55,14 @@ deployment.  Issue #108 integrates these into the Railway service topology.
 | `MARKETAI_PLATFORM_MAX_PERIOD` | No | `100` | Per-period spend limit. |
 | `MARKETAI_PLATFORM_MAX_OUTSTANDING` | No | `10` | Maximum outstanding (unreleased) spend. |
 
+These are the ceilings an Owner cannot raise a Workspace past. Provisioning
+creates each new Workspace's guardrail at the Beta defaults (5 / 20 / 100 / 10
+in its budget currency, `app/entitlements/guardrail_defaults.py`), which equal
+the ceilings above, so with the defaults an Owner can lower a limit in
+Settings and raise it back, but not above the default. A Workspace provisioned
+before migration `zzg126a1b2c3` keeps its 0 limits until its Owner raises them
+there (#126).
+
 ### Railway Bucket
 
 Use the service-specific reference templates in `deploy/railway/env/`. The

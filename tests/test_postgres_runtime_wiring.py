@@ -53,7 +53,8 @@ class PostgresRuntimeWiringTests(unittest.TestCase):
         with self.owner.connect() as connection:
             self.assertEqual(connection.scalar(self.text("SELECT lifecycle FROM workspaces WHERE id=:w"), {"w": workspace}), "provisioning")
             self.assertEqual(connection.scalar(self.text("SELECT count(*) FROM entitlement_snapshot_inbox WHERE workspace_id=:w"), {"w": workspace}), 1)
-            self.assertEqual(connection.scalar(self.text("SELECT per_operation_limit FROM spend_guardrails WHERE workspace_id=:w"), {"w": workspace}), 0)
+            # The contract's Beta guardrail (#126), not the 0 limits that refused every paid call.
+            self.assertEqual(connection.scalar(self.text("SELECT per_operation_limit FROM spend_guardrails WHERE workspace_id=:w"), {"w": workspace}), 5)
             self.assertEqual(connection.scalar(self.text("SELECT count(*) FROM products WHERE workspace_id=:w"), {"w": workspace}), 0)
 
     @classmethod
