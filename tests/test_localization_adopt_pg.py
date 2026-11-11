@@ -141,9 +141,10 @@ def _admission() -> PaidOperationAdmission:
     )
 
 
-@unittest.skipUnless(all(URLS) and os.getenv("MARKETAI_TENANT_CONTEXT_SECRET"),
-                     "requires isolated PostgreSQL runtime roles")
-class LocalizationAdoptPostgresTests(unittest.TestCase):
+class LocalizationPostgresFixture:
+    """The three runtime engines, the API client and the Localization fixture up
+    to a confirmed Batch, shared with ``tests/test_localization_binding_review_pg.py``."""
+
     def setUp(self):
         self.owner, self.api, self.worker = [create_engine(url) for url in URLS]
         for engine in (self.owner, self.api, self.worker):
@@ -257,8 +258,9 @@ class LocalizationAdoptPostgresTests(unittest.TestCase):
             now=now,
         )
 
-    def _confirmed_batch(self, owner: TenantContext, seed: dict) -> dict:
-        """Draft to confirmation with one frozen external step, as the API role."""
+    def _confirmed_batch(self, owner: TenantContext, seed: dict,
+                         external_qc_steps: tuple[str, ...] = ("ocr_check",)) -> dict:
+        """Draft to confirmation, by default with one frozen external step, as the API role."""
         actor, admission = owner.initiator_id, _admission()
         with self._as(API):
             with tenant_session(owner) as session:
@@ -298,10 +300,14 @@ class LocalizationAdoptPostgresTests(unittest.TestCase):
                 item_id = confirm(
                     session, owner, batch_id=batch_id, expected_revision=session.get(LocalizationBatchRecord, batch_id).revision,
                     edit_provider="mock-edit", edit_model="mock-edit-1", edit_adapter_version="mock-edit-v1",
-                    external_qc_steps=("ocr_check",), actor_id=actor, role=ROLE_OWNER, admission=admission,
+                    external_qc_steps=external_qc_steps, actor_id=actor, role=ROLE_OWNER, admission=admission,
                 ).item_ids[0]
         return {"batch_id": batch_id, "item_id": item_id}
 
+
+@unittest.skipUnless(all(URLS) and os.getenv("MARKETAI_TENANT_CONTEXT_SECRET"),
+                     "requires isolated PostgreSQL runtime roles")
+class LocalizationAdoptPostgresTests(LocalizationPostgresFixture, unittest.TestCase):
     def _isolated_output(self, owner: TenantContext, built: dict) -> str:
         """The edit completes as the Worker; its output is preserved, unpublished."""
         with self._as(WORKER):

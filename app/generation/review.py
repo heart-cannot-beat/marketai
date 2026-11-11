@@ -24,6 +24,12 @@ submitting a bare/uncorrelated review while a head already exists raises
 regardless of the head's own value, including a ``cleared`` head: the
 correction chain always continues from the actual last row, not from the
 last *visible* value.
+
+Market bindings (#128): in the same transaction, ``create_review`` moves
+every active ``MarketAssetBinding`` bound to the reviewed version to the
+version's new effective review
+(``app.localization.binding.apply_asset_version_review``). There is no
+separate binding-approval command; who may review is unchanged.
 """
 from __future__ import annotations
 
@@ -253,6 +259,16 @@ def create_review(
         ctx,
         fact_type="quality_review.human_recorded",
         source_resource_id=review.id,
+    )
+    # The exact-version review drives every active MarketAssetBinding of this
+    # version, in this transaction (localization contract §3 step 11, #128).
+    # Imported here: app.localization.binding reaches this module back
+    # through Winner eligibility.
+    from app.localization.binding import apply_asset_version_review
+
+    apply_asset_version_review(
+        session, ctx, asset_version_id=asset_version_id, review_id=review.id,
+        actor_id=actor_id,
     )
     return review
 

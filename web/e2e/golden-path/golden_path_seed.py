@@ -5,10 +5,11 @@ This script seeds ONLY platform/test infrastructure — controlled-Mock
 scenarios, sandbox connections, metric clocks, and published platform
 policies.  It MUST NOT create Products, Assets, reviews, Winners,
 batches, enrollments, advice, drafts, or any other domain business
-objects.  The two exceptions are stand-ins for product surfaces that do
-not exist yet, documented on _seed_scale_infrastructure: the review
-approval of the Winner-market MarketAssetBinding and the landing_page
-LibraryVersion behind the Winner's frozen landing page evidence.
+objects.  The exception is a stand-in for a product surface that does
+not exist yet, documented on _seed_scale_infrastructure: the landing_page
+LibraryVersion behind the Winner's frozen landing page evidence.  The
+Winner-market MarketAssetBinding is no longer approved here: the journey
+approves the localized AssetVersion in the Assets area (#128).
 
 Subcommands:
 
@@ -24,10 +25,10 @@ Subcommands:
     source version, and claim inventory.
 
   seed-scale-infrastructure
-    Given a workspace_id and a decision_id (confirmed Winner), approves
-    the Winner-market MarketAssetBinding the journey's Localization batch
-    published and creates the Scale DeliveryTarget, activation evidence,
-    metric-semantic contract set, and policy version.
+    Given a workspace_id and a decision_id (confirmed Winner), checks
+    that the journey approved the Winner-market MarketAssetBinding its
+    Localization batch published, and creates the Scale DeliveryTarget,
+    activation evidence, metric-semantic contract set, and policy version.
 
   seed-experiment-metrics
     Drives experiment metrics through the real sync/projection
@@ -454,9 +455,6 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
     tests/support/scale_candidate_fixtures.py::build_ready_winner_and_target,
     this seeds only what no product surface creates yet:
 
-      * review approval of the Winner-market MarketAssetBinding that the
-        journey's Localization batch published -- bindings always start
-        pending_review and no binding review command exists;
       * a landing_page LibraryVersion keyed by the frozen
         landing_page_evidence_hash -- no Landing Page entity ships, the
         lineage gate uses that hash as landing_page_version_id and
@@ -464,6 +462,12 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
       * the curated-scenario DeliveryTarget with its delivery_configuration
         contract generation, activation evidence and contract set;
       * a published ScalePolicyVersion.
+
+    The Winner-market MarketAssetBinding the journey's Localization batch
+    published is not seeded: the journey approves its localized
+    AssetVersion in the Assets area, which moves the binding to approved
+    and ready_for_experiment (#128).  This only refuses to continue when
+    that did not happen.
     """
     import hashlib
 
@@ -480,7 +484,6 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
         new_id,
     )
     from app.experiments.winner_eligibility import _versioned_hash
-    from app.localization.binding import _append_event, _snapshot
     from app.meta.models import (
         MetaConnectionRecord,
         ObservationContractGenerationRecord,
@@ -550,18 +553,11 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
                 f"MarketAssetBinding {binding.id} Truth is {binding.truth_freshness!r}"
             )
         if binding.review_state != "approved" or not binding.ready_for_experiment:
-            previous_state = _snapshot(binding)
-            binding.review_state = "approved"
-            # binding.py derives readiness as review_state == 'approved'
-            # AND truth_freshness == 'current'.
-            binding.ready_for_experiment = True
-            binding.revision += 1
-            binding.updated_at = now
-            session.flush()
-            _append_event(
-                session, ctx, binding=binding, event_type="review_approved",
-                dependency_change_id=None, previous_state=previous_state,
-                new_state=_snapshot(binding), actor_id=owner_user_id, now=now,
+            raise RuntimeError(
+                f"MarketAssetBinding {binding.id} is {binding.review_state!r} "
+                f"(ready_for_experiment={binding.ready_for_experiment}): the "
+                "journey must approve the localized AssetVersion "
+                f"{binding.bound_asset_version_id!r} in the Assets area first"
             )
 
         if session.get(LibraryVersionRecord, landing_page_version_id) is None:

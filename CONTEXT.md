@@ -199,7 +199,7 @@ _Avoid_: 四个页面开关、TruthPackage、模型事实
 _Avoid_: 图片 Prompt、翻译草稿、AssetVersion
 
 **MarketAssetBinding**:
-一个目标市场可使用的 AssetVersion 及其资格状态；它可以引用新本地化版本或无需改图的源版本，并在上游真值变化时进入 stale_truth。
+一个目标市场可使用的 AssetVersion 及其资格状态；它可以引用新本地化版本或无需改图的源版本，并在上游真值变化时进入 stale_truth。它的审核状态取自所绑定 AssetVersion 在素材区的有效人工审核，没有单独的绑定审批。
 _Avoid_: 本地化文件、Winner、市场文件夹
 
 **创意库条目**:
