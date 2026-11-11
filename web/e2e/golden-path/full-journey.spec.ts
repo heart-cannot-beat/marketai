@@ -46,6 +46,7 @@ import {
   advanceManifest,
   inspectCanonicalSnapshot,
   inspectFakeMetaObjects,
+  approveLocalizedAssetVersionThroughAssets,
   createLocalizationBatchThroughUi,
   prepareLocalizationBatchThroughUi,
   confirmLocalizationBatchThroughUi,
@@ -2257,6 +2258,20 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
       settled.localization?.items?.find((i) => i.targetMarket === winnerMarket)
         ?.state
     ).toBe('succeeded');
+  });
+
+  await test.step('Approve the Winner-market localized asset in Assets', async () => {
+    // The binding the Winner-market item published waits for review; the
+    // exact-version approval in Asset Detail makes it experiment-ready
+    // (#128), which the Scale lineage gate requires. No seed approves it.
+    const winnerMarket = locInfra.markets.find((m) => m.isWinnerMarket)!.market;
+    const approved = await approveLocalizedAssetVersionThroughAssets(
+      page,
+      slug,
+      batchId,
+      winnerMarket
+    );
+    expect(approved.localizedAssetVersionId).not.toBe(winnerAssetVersionId);
   });
 
   // =========================================================================

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { test, expect } from './fixtures/index';
 import {
   advanceManifest,
+  approveLocalizedAssetVersionThroughAssets,
   confirmLocalizationBatchThroughUi,
   createLocalizationBatchThroughUi,
   prepareLocalizationBatchThroughUi,
@@ -487,6 +488,22 @@ test('v9 Beta golden path', async ({
         localizedAssetVersions,
       };
     });
+
+  await test.step('Step 7.3 — Approve the Winner-market localized asset in Assets', async () => {
+    // The binding the Winner-market item published waits for review; the
+    // exact-version approval in Asset Detail makes it experiment-ready
+    // (#128), which the Scale lineage gate requires. No seed approves it.
+    const winnerMarket = localizationInfra.markets.find(
+      (market) => market.isWinnerMarket
+    );
+    expect(winnerMarket).toBeDefined();
+    await approveLocalizedAssetVersionThroughAssets(
+      session.page(),
+      workspaceSlug,
+      localizationBatchId,
+      winnerMarket!.market
+    );
+  });
 
   // ── Step 8 — Scale ──
 

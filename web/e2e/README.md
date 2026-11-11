@@ -26,6 +26,31 @@ Without `--project`, the `chromium`, `tablet-chromium` and `mobile-chromium`
 projects each run every spec, so a real-backend suite seeds three times. The
 runners pin `--project=chromium --workers=1`.
 
+## Golden-path seed exceptions
+
+The golden path goes through the product's own pages and APIs, except where
+no product entry exists yet. For those, `golden-path/fixtures.ts` and
+`golden-path/golden_path_seed.py` seed the data directly. This is the list of
+what they still seed ([#63](https://github.com/heart-cannot-beat/marketai/issues/63)).
+When a ticket ships the product entry, it removes the seed and crosses its
+item off here.
+
+- The provisioned Workspace's SpendGuardrail (`fixtures.ts`), until
+  provisioning creates it with the contract defaults
+  ([#126](https://github.com/heart-cannot-beat/marketai/issues/126)).
+- ~~Review approval of the Winner-market MarketAssetBinding~~: removed by
+  [#128](https://github.com/heart-cannot-beat/marketai/issues/128). The
+  journey approves the localized AssetVersion in the Assets area, and that
+  review moves the binding to `ready_for_experiment`.
+- The published ScalePolicyVersion
+  ([#127](https://github.com/heart-cannot-beat/marketai/issues/127)).
+- The curated-scenario DeliveryTarget, with its delivery_configuration
+  contract generation, activation evidence and contract set
+  ([#129](https://github.com/heart-cannot-beat/marketai/issues/129)).
+- The landing_page LibraryVersion keyed by the Winner's frozen
+  `landing_page_evidence_hash`
+  ([#129](https://github.com/heart-cannot-beat/marketai/issues/129)).
+
 ## Localization, Scale and Experiments on a local stack
 
 1. Start a disposable Compose stack from the repository root:
