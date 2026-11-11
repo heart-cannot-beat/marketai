@@ -100,6 +100,11 @@ class OperationAggregationQueueTests(LibraryFixtures):
             session.flush()
             return job.id
 
+    def _set_job_state(self, job_id: str, state: str) -> None:
+        """Move one Job directly, the way the dispatcher's SQL does."""
+        with tenant_session(self.context) as session:
+            session.get(JobRecord, job_id).state = state
+
     def _lease(self, job_id: str, *, running: bool = True) -> None:
         """Put one Job under this test's lease without racing the dispatcher."""
         now = utcnow()
@@ -411,6 +416,48 @@ class OperationAggregationQueueTests(LibraryFixtures):
             self._operation_states(operation_id),
             [OperationState.ADMITTED.value, OperationState.FAILED.value],
         )
+
+    def test_sqlite_candidates_are_only_operations_the_fold_can_move(self):
+        """On SQLite the sweep lists its own candidates. They must be what
+        ``marketai_admitted_operation_candidates_v1`` returns on PostgreSQL:
+        Operations with at least one Job and every Job ended, except an
+        uncertain Operation that an uncertain Job already accounts for.
+
+        An Operation still waiting on its Jobs is not a candidate. The fold
+        leaves it alone without touching ``updated_at``. So once a hundred
+        such Operations were open, they filled the oldest-first window
+        permanently, and the sweep never reached one it could fold (#136)."""
+        no_job = self._admit()
+        waiting = self._admit()
+        self._enqueue(waiting)
+        retrying = self._admit()
+        self._set_job_state(self._enqueue(retrying), "retry_wait")
+        half_done = self._admit()
+        self._set_job_state(self._enqueue(half_done), "succeeded")
+        self._enqueue(half_done, resource_id="res_2")
+        already_uncertain = self._admit()
+        self._set_job_state(self._enqueue(already_uncertain), "uncertain")
+        with tenant_session(self.context) as session:
+            session.get(OperationRecord, already_uncertain).state = (
+                OperationState.UNCERTAIN.value
+            )
+        ended = self._admit()
+        self._set_job_state(self._enqueue(ended), "failed")
+        ended_uncertain = self._admit()
+        self._set_job_state(self._enqueue(ended_uncertain), "uncertain")
+
+        with platform_session() as session:
+            listed = {
+                operation_id
+                for _, _, operation_id in jobs._admitted_operation_candidates(
+                    session, 500
+                )
+            }
+
+        self.assertFalse(
+            {no_job, waiting, retrying, half_done, already_uncertain} & listed
+        )
+        self.assertLessEqual({ended, ended_uncertain}, listed)
 
     # -- redelivery and concurrency --------------------------------------
 
