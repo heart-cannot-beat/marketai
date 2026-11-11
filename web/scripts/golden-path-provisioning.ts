@@ -69,6 +69,7 @@ async function main() {
         signingKeyId: input.signingKeyId,
         signingKey: Buffer.from(input.signingKey, 'base64'),
       });
+      await deliverSnapshots(prisma, result.workspaceRef);
       process.stdout.write(JSON.stringify(result));
     } else {
       process.stderr.write('error_code:unknown_subcommand\n');
@@ -83,6 +84,44 @@ async function main() {
     process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
+  }
+}
+
+/** A refusal the fixture reads from stderr as `error_code:<code>`. */
+class DeliveryError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
+/**
+ * Delivers the Workspace's signed snapshots -- provisioning's and the
+ * activation's -- to the API's entitlement inbox, as the production
+ * dispatcher does (#126). The domain then applies them through
+ * `marketai_apply_workspace_projection_v2`, which provisions the Workspace's
+ * entitlement projection and its SpendGuardrail at the Beta defaults: no
+ * seed writes either.
+ */
+async function deliverSnapshots(
+  prisma: import('@prisma/client').PrismaClient,
+  teamId: string
+): Promise<void> {
+  const pushToken = process.env.CONTROL_PLANE_TO_DOMAIN_ENTITLEMENT_TOKEN;
+  const domainBaseUrl = process.env.API_BASE_URL;
+  if (!pushToken || !domainBaseUrl) {
+    throw new DeliveryError('snapshot_delivery_unconfigured');
+  }
+  const { claimAndDispatch } = await import('../lib/entitlements/dispatcher');
+  await claimAndDispatch(prisma, `golden-path:${process.pid}`, {
+    domainBaseUrl,
+    pushToken,
+    batchSize: 100,
+  });
+  const undelivered = await prisma.entitlementSnapshotOutbox.count({
+    where: { teamId, deliveryState: { not: 'DELIVERED' } },
+  });
+  if (undelivered > 0) {
+    throw new DeliveryError('snapshot_undelivered');
   }
 }
 

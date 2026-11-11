@@ -245,6 +245,46 @@ def test_container_evidence_inspector_receives_the_tenant_context_secret() -> No
     )
 
 
+def test_container_journey_provisions_through_the_delivered_snapshot() -> None:
+    """#126: the PR journey's Workspace, its SpendGuardrail included, comes
+    from provisioning's signed snapshots, which completing provisioning
+    delivers to the API's entitlement inbox as the production dispatcher
+    does. They are signed with the key the API verifies, and neither golden
+    path writes a guardrail of its own."""
+    compose = (REPO / "docker-compose.golden-path.yml").read_text(
+        encoding="utf-8"
+    )
+    playwright = compose.split("\n  playwright:\n", 1)[1].split(
+        "\nnetworks:\n", 1
+    )[0]
+    env = _compose_env()
+    for name in (
+        "ENTITLEMENT_SNAPSHOT_SIGNING_KEY",
+        "ENTITLEMENT_SNAPSHOT_SIGNING_KEY_ID",
+        "CONTROL_PLANE_TO_DOMAIN_ENTITLEMENT_TOKEN",
+    ):
+        assert f"{name}: {env[name]}" in playwright, name
+
+    golden_path = REPO / "web" / "e2e" / "golden-path"
+    fixture = (golden_path / "fixtures" / "index.ts").read_text(encoding="utf-8")
+    assert "process.env.ENTITLEMENT_SNAPSHOT_SIGNING_KEY" in fixture
+    assert "randomBytes" not in fixture
+
+    provisioning = (
+        REPO / "web" / "scripts" / "golden-path-provisioning.ts"
+    ).read_text(encoding="utf-8")
+    assert "claimAndDispatch" in provisioning
+    assert provisioning.index("completeProvisioning(prisma") < provisioning.index(
+        "await deliverSnapshots(prisma"
+    )
+
+    seed = (golden_path / "golden_path_seed.py").read_text(encoding="utf-8")
+    assert "SpendGuardrailRecord(" not in seed
+    assert "spend_guardrails" not in (golden_path / "fixtures.ts").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_container_provisioning_uses_the_ts_node_commonjs_hook() -> None:
     fixture = (
         REPO / "web" / "e2e" / "golden-path" / "fixtures" / "provisioning.ts"

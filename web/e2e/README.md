@@ -36,7 +36,10 @@ merges, the seed goes and its line is struck through here.
 
 - ~~The Workspace SpendGuardrail, inserted with high limits before the first
   snapshot. Provisioning now creates it at the contract's Beta defaults, and
-  the Owner changes it in Settings (#126).~~
+  the Owner changes it in Settings (#126). Both specs deliver the signed
+  provisioning snapshots to the API's entitlement inbox, as the production
+  dispatcher does: `full-journey` through `dispatchCurrentSnapshot`,
+  `golden-path.spec.ts` when its provisioning completes.~~
 - The review approval of the Winner-market MarketAssetBinding that the
   journey's Localization batch published: bindings start `pending_review` and
   nothing moves them (#128).
