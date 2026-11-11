@@ -9,7 +9,9 @@ const FEATURE_AREAS = new Set([
   'scale',
   'library',
 ]);
-const OWNER_ONLY_AREAS = new Set(['settings', 'members']);
+/** Every member's, though a Member sees only part of it (#126). */
+const MEMBER_AREAS = new Set(['settings']);
+const OWNER_ONLY_AREAS = new Set(['members']);
 
 export function computeTargetRoute(params: {
   targetSlug: string;
@@ -26,7 +28,7 @@ export function computeTargetRoute(params: {
     return `${base}/experiments`;
   }
 
-  if (FEATURE_AREAS.has(currentArea)) {
+  if (FEATURE_AREAS.has(currentArea) || MEMBER_AREAS.has(currentArea)) {
     return `${base}/${currentArea}`;
   }
 

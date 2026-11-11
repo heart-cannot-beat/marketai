@@ -4,7 +4,6 @@ import { RuntimeSafety } from './runtime-safety';
 import { ServiceControl } from './service-control';
 import { EvidenceInspector } from './evidence-inspector';
 import { EvidenceRecorder } from '../artifacts/evidence-recorder';
-import * as crypto from 'node:crypto';
 import { ProvisioningFixture } from './provisioning';
 import { OnboardingHarness } from './onboarding-harness';
 import { WorkspaceSetup } from './workspace-setup';
@@ -88,9 +87,19 @@ export const test = base.extend<GoldenPathFixtures>({
   },
 
   provisioning: async ({}, use) => {
-    const signingKeyId = `gp-${Date.now()}`;
-    const signingKey = crypto.randomBytes(32);
-    const fixture = new ProvisioningFixture({ signingKeyId, signingKey });
+    // The stack's own key: completing provisioning delivers the snapshots to
+    // the API, which verifies them against its key ring (#126).
+    const signingKeyId = process.env.ENTITLEMENT_SNAPSHOT_SIGNING_KEY_ID;
+    const signingKey = process.env.ENTITLEMENT_SNAPSHOT_SIGNING_KEY;
+    if (!signingKeyId || !signingKey) {
+      throw new Error(
+        'ENTITLEMENT_SNAPSHOT_SIGNING_KEY_ID and ENTITLEMENT_SNAPSHOT_SIGNING_KEY are required'
+      );
+    }
+    const fixture = new ProvisioningFixture({
+      signingKeyId,
+      signingKey: Buffer.from(signingKey, 'utf8'),
+    });
     await use(fixture);
   },
 

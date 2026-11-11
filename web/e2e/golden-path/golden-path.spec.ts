@@ -11,6 +11,7 @@ import {
   seedScaleActivationEvidence,
   seedScaleInfrastructure,
 } from './domain-helpers';
+import { en } from '../support/copy';
 import type {
   EntityKind,
   EntityRef,
@@ -132,11 +133,43 @@ test('v9 Beta golden path', async ({
       'Golden Path Workspace',
     ]);
 
-    // Owner-only settings are forbidden. getWorkspacePageProps answers 200
-    // with owner-only error props and WorkspaceLayout renders ForbiddenState,
-    // as e2e/workspace/owner-member.spec.ts establishes.
+    // Settings is every member's (#126): the Member reads the spending
+    // limits provisioning created when the snapshot was delivered -- the
+    // contract's Beta defaults, through the real API -- and cannot change
+    // them; none of the Owner's sections render.
     const settings = await memberPage.goto(`/w/${workspaceSlug}/settings`);
     expect(settings?.status()).toBe(200);
+    const usd = (amount: number) =>
+      new Intl.NumberFormat('en', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 4,
+      }).format(amount);
+    const betaDefaults = {
+      per_operation_limit: 5,
+      rolling_24h_limit: 20,
+      period_limit: 100,
+      outstanding_exposure_limit: 10,
+    };
+    for (const [field, amount] of Object.entries(betaDefaults)) {
+      await expect(
+        memberPage.getByTestId(`spend-guardrail-value-${field}`)
+      ).toHaveText(usd(amount));
+    }
+    await expect(
+      memberPage.getByTestId('spend-guardrail-owner-only')
+    ).toHaveText(en('settings', 'spend-guardrail.owner-only'));
+    await expect(memberPage.getByTestId('spend-guardrail-edit')).toHaveCount(0);
+    await expect(
+      memberPage.getByTestId('provider-credentials-section')
+    ).toHaveCount(0);
+
+    // Members stays Owner-only. getWorkspacePageProps answers 200 with
+    // owner-only error props and WorkspaceLayout renders ForbiddenState, as
+    // e2e/workspace/owner-member.spec.ts establishes.
+    const members = await memberPage.goto(`/w/${workspaceSlug}/members`);
+    expect(members?.status()).toBe(200);
     await expect(
       memberPage.getByRole('heading', { name: 'Access Denied' })
     ).toBeVisible();

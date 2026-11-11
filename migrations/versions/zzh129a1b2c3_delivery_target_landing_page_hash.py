@@ -1,7 +1,7 @@
 """DeliveryTargets name the Landing Page by its frozen evidence hash (#129).
 
 Revision ID: zzh129a1b2c3
-Revises: zzg7d8e9f0a1
+Revises: zzg126a1b2c3
 
 The Landing Page belongs to the OfferVersion (creative-library contract
 §5.2); an ExperimentVersion freezes it as ``landing_page_evidence_hash``. No
@@ -59,7 +59,7 @@ from alembic import op
 
 
 revision = "zzh129a1b2c3"
-down_revision = "zzg7d8e9f0a1"
+down_revision = "zzg126a1b2c3"
 branch_labels = None
 depends_on = None
 

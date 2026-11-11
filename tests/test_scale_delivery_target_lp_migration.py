@@ -37,7 +37,7 @@ from app.adapters.persistence.database import Base
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = "zzh129a1b2c3"
-PREVIOUS = "zzg7d8e9f0a1"
+PREVIOUS = "zzg126a1b2c3"
 WORKSPACE = "ws_acme_charge_lp"
 LP_HASH = "a" * 64
 WINNER_LP_HASH = "b" * 64

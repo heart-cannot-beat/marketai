@@ -3,6 +3,8 @@ import WorkspaceLayout from '@/components/layouts/WorkspaceLayout';
 import { TeamSettings } from '@/components/team';
 import { MetaConnectionSection } from '@/components/workspace/MetaConnectionSection';
 import { ProviderCredentialsSection } from '@/components/workspace/ProviderCredentialsSection';
+import { SpendGuardrailSection } from '@/components/workspace/SpendGuardrailSection';
+import { SPEND_GUARDRAIL_ANCHOR } from '@/lib/entitlements/spend-guardrail';
 import { GenerationDefaultsSection } from '@/components/test-plans/GenerationDefaultsSection';
 import { PROVIDER_CREDENTIALS_ANCHOR } from '@/components/test-plans/GenerationDefaultsBanner';
 import { getWorkspacePageProps } from '@/lib/workspace-bootstrap';
@@ -18,7 +20,28 @@ interface Props {
   errorContext?: string;
 }
 
-const SettingsPage: NextPageWithLayout<Props> = () => {
+/**
+ * Workspace settings. Every member reads the spending limits here (#126,
+ * subscription-entitlement contract §12); the rest of the page -- the
+ * Workspace itself, provider keys, generation defaults, the Meta connection
+ * -- is the Owner's, and a Member is not shown it.
+ */
+const SettingsPage: NextPageWithLayout<Props> = ({ bootstrap }) => {
+  const { t } = useTranslation(['common', 'settings']);
+  const isOwner = bootstrap?.role === 'OWNER';
+
+  return (
+    <>
+      <h1 className="text-2xl font-bold outline-none">{t('team-settings')}</h1>
+      {isOwner && <OwnerSettings />}
+      <div className="mt-6 scroll-mt-6" id={SPEND_GUARDRAIL_ANCHOR}>
+        <SpendGuardrailSection />
+      </div>
+    </>
+  );
+};
+
+function OwnerSettings() {
   const { t } = useTranslation(['common', 'settings']);
   const { isLoading, isError, team } = useTeam();
   if (isLoading) return <Loading />;
@@ -26,7 +49,6 @@ const SettingsPage: NextPageWithLayout<Props> = () => {
 
   return (
     <>
-      <h1 className="text-2xl font-bold outline-none">{t('team-settings')}</h1>
       <TeamSettings team={team} />
       <div className="mt-6 scroll-mt-6" id={PROVIDER_CREDENTIALS_ANCHOR}>
         <ProviderCredentialsSection />
@@ -39,7 +61,7 @@ const SettingsPage: NextPageWithLayout<Props> = () => {
       </div>
     </>
   );
-};
+}
 
 SettingsPage.getLayout = function getLayout(page: ReactElement) {
   const { bootstrap, errorCode, errorContext } = page.props as Props;
@@ -55,7 +77,6 @@ SettingsPage.getLayout = function getLayout(page: ReactElement) {
 };
 
 export const getServerSideProps = getWorkspacePageProps({
-  ownerOnly: true,
   namespaces: ['common', 'tests', 'settings'],
 });
 export default SettingsPage;

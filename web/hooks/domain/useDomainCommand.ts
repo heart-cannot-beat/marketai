@@ -18,10 +18,10 @@ import type { ReconciliationRequired } from '@/lib/domain-client/intent';
  * `useDomainCommand` may be pointed at. The read operations
  * (`get_identity_probe`, `get_operation`, and the rest) go through
  * `useDomainQuery` instead, which is uncached and never threads
- * `X-Intent-Id`. Of the Issue #18 operations (credentials, spend
- * guardrails) the four credential commands are wired — the Settings page's
- * provider-credential section drives them; the spend-guardrail commands
- * still wait for their own surface.
+ * `X-Intent-Id`. The Issue #18 operations (credentials, spend guardrails)
+ * are wired: the Settings page's provider-credential section drives the four
+ * credential commands, and its spend-guardrail section (#126) the guardrail's
+ * preview and confirm.
  */
 export type CommandOperationId =
   | 'create_upload_intent'
@@ -117,7 +117,9 @@ export type CommandOperationId =
   | 'create_credential'
   | 'rotate_credential'
   | 'bind_credential'
-  | 'revoke_credential';
+  | 'revoke_credential'
+  | 'preview_spend_guardrail'
+  | 'confirm_spend_guardrail';
 
 type CommandParams<K extends CommandOperationId> = {
   pathParams?: DomainOperationMap[K]['pathParams'];
@@ -1075,6 +1077,18 @@ function callCommandOperation<K extends CommandOperationId>(
         body: body as DomainOperationMap['revoke_credential']['requestBody'],
       }) as Promise<DomainResultFor<K> | ReconciliationRequired>;
     }
+    case 'preview_spend_guardrail':
+      return gateway.previewSpendGuardrail({
+        workspaceSlug,
+        actionInstanceId,
+        body: body as DomainOperationMap['preview_spend_guardrail']['requestBody'],
+      }) as Promise<DomainResultFor<K> | ReconciliationRequired>;
+    case 'confirm_spend_guardrail':
+      return gateway.confirmSpendGuardrail({
+        workspaceSlug,
+        actionInstanceId,
+        body: body as DomainOperationMap['confirm_spend_guardrail']['requestBody'],
+      }) as Promise<DomainResultFor<K> | ReconciliationRequired>;
     default: {
       const exhaustiveCheck: never = operationId;
       throw new Error(

@@ -28,10 +28,12 @@ exposure (images + checks) at once. The confirmation quote
 (:func:`quote_recipe`) adds the same amount per image, so the preview's
 Maximum cost, the confirmation and the reservations stay equal.
 
-``SpendGuardrail`` rows are provisioned lazily with the platform's
-conservative defaults (``config.MAX_COST_PER_RUN`` per command,
-``config.MAX_COST_PER_DAY`` per rolling day) the first time a Workspace
-reserves real spend; the Owner raises them through the guardrail API.
+On PostgreSQL provisioning creates the Workspace's ``SpendGuardrail``
+(``marketai_apply_workspace_projection_v2``). Where no row exists -- the
+SQLite compatibility path, which runs no projection function -- the first
+reservation creates it with the same contract defaults
+(``app.entitlements.guardrail_defaults``); the Owner changes them through the
+guardrail preview and confirm.
 """
 from __future__ import annotations
 
@@ -42,9 +44,9 @@ from typing import Sequence
 
 from sqlalchemy.orm import Session
 
-from app import config
 from app.adapters.persistence.models import GenerationRunRecord, JobRecord, WorkspaceRecord, utcnow
 from app.entitlements.cost_models import SpendGuardrailRecord, SpendReservationRecord
+from app.entitlements.guardrail_defaults import SPEND_GUARDRAIL_DEFAULTS
 from app.entitlements.policy import (
     EntitlementPolicy,
     FeatureNotEntitledError,
@@ -155,22 +157,18 @@ def reservation_semantic_key(semantic_fingerprint: str, job_id: str) -> str:
 
 
 def ensure_spend_guardrail(session: Session, ctx: TenantContext) -> SpendGuardrailRecord:
-    """The Workspace's guardrail row, provisioned with platform defaults if absent."""
+    """The Workspace's guardrail row, created at the contract defaults if absent."""
     guardrail = session.get(SpendGuardrailRecord, ctx.workspace_id)
     if guardrail is not None:
         return guardrail
     workspace = session.get(WorkspaceRecord, ctx.workspace_id)
     now = utcnow()
-    per_day = Decimal(config.MAX_COST_PER_DAY)
     guardrail = SpendGuardrailRecord(
         workspace_id=ctx.workspace_id,
         revision=1,
         budget_currency=(workspace.budget_currency if workspace is not None else "USD"),
-        per_operation_limit=Decimal(config.MAX_COST_PER_RUN),
-        rolling_24h_limit=per_day,
-        period_limit=per_day * 30,
-        outstanding_exposure_limit=per_day,
-        platform_policy_version=1,
+        **SPEND_GUARDRAIL_DEFAULTS.limits(),
+        platform_policy_version=SPEND_GUARDRAIL_DEFAULTS.platform_policy_version,
         created_at=now,
         updated_at=now,
         updated_by="system:platform-defaults",

@@ -1788,6 +1788,31 @@ export interface DomainGateway {
     body: DomainOperationMap['revoke_credential']['requestBody'];
   }): Promise<DomainResultFor<'revoke_credential'> | ReconciliationRequired>;
 
+  // ---- Spend guardrail (subscription-entitlement contract §11, §12; #126) ----
+
+  /** The Workspace's spending limits. Every member reads them. */
+  getSpendGuardrail(params: {
+    workspaceSlug: string;
+  }): Promise<DomainResultFor<'get_spend_guardrail'>>;
+
+  /** Stores a proposed change and returns its `preview_token`. Owner only. */
+  previewSpendGuardrail(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['preview_spend_guardrail']['requestBody'];
+  }): Promise<
+    DomainResultFor<'preview_spend_guardrail'> | ReconciliationRequired
+  >;
+
+  /** Applies a stored preview once, at the revision it was made at. Owner only. */
+  confirmSpendGuardrail(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['confirm_spend_guardrail']['requestBody'];
+  }): Promise<
+    DomainResultFor<'confirm_spend_guardrail'> | ReconciliationRequired
+  >;
+
   // ---- Competitors (docs/product/competitor-scan-spec.md §4, §5) ----
 
   /** A product's competitors (or the Workspace's), newest first. */
@@ -6391,6 +6416,57 @@ export class DefaultDomainGateway implements DomainGateway {
     });
     return this.runCommand(
       'revoke_credential',
+      params.actionInstanceId,
+      path,
+      'POST',
+      params.body,
+      200,
+      'ok'
+    );
+  }
+
+  async getSpendGuardrail(params: {
+    workspaceSlug: string;
+  }): Promise<DomainResultFor<'get_spend_guardrail'>> {
+    const path = buildBffPath('get_spend_guardrail', {
+      slug: params.workspaceSlug,
+    });
+    return this.sendSafe<'get_spend_guardrail'>(path);
+  }
+
+  async previewSpendGuardrail(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['preview_spend_guardrail']['requestBody'];
+  }): Promise<
+    DomainResultFor<'preview_spend_guardrail'> | ReconciliationRequired
+  > {
+    const path = buildBffPath('preview_spend_guardrail', {
+      slug: params.workspaceSlug,
+    });
+    return this.runCommand(
+      'preview_spend_guardrail',
+      params.actionInstanceId,
+      path,
+      'POST',
+      params.body,
+      200,
+      'ok'
+    );
+  }
+
+  async confirmSpendGuardrail(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['confirm_spend_guardrail']['requestBody'];
+  }): Promise<
+    DomainResultFor<'confirm_spend_guardrail'> | ReconciliationRequired
+  > {
+    const path = buildBffPath('confirm_spend_guardrail', {
+      slug: params.workspaceSlug,
+    });
+    return this.runCommand(
+      'confirm_spend_guardrail',
       params.actionInstanceId,
       path,
       'POST',

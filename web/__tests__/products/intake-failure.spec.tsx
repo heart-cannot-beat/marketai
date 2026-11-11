@@ -122,7 +122,7 @@ describe('IntakeFailure', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
-  it('points to the spend guardrail', () => {
+  it("lands the Owner on Settings' spending-limits section", () => {
     renderFailure(
       failed('guardrail_exceeded', 'adjust_spend_guardrail', 'failed')
     );
@@ -130,7 +130,7 @@ describe('IntakeFailure', () => {
       screen.getByRole('link', {
         name: 'Adjust the spending guardrail in Settings',
       })
-    ).toBeInTheDocument();
+    ).toHaveAttribute('href', '/w/acme/settings#spend-guardrail');
   });
 });
 

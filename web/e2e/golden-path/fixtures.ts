@@ -262,24 +262,10 @@ export async function provisionWorkspace(options: {
     )
   `;
 
-  // Domain provisioning is specified to create the Workspace SpendGuardrail
-  // when it applies the first snapshot (entitlements design §4.15 step 2),
-  // but marketai_apply_workspace_projection_v2 never inserts one. Every
-  // admission-gated command locks that row (ReservationBook._lock_guardrail)
-  // and fails with NoResultFound without it -- Localization start-preparation
-  // returned 500 -- so seed the guardrail the Localization and cross-area E2E
-  // seeds use.
-  await domainDb.$executeRaw`
-    INSERT INTO spend_guardrails (
-      workspace_id, revision, budget_currency, per_operation_limit,
-      rolling_24h_limit, period_limit, outstanding_exposure_limit,
-      created_at, updated_at, updated_by
-    ) VALUES (
-      ${workspaceId}, 1, 'USD', 100, 500, 5000, 1000,
-      now(), now(), 'golden-path-setup'
-    )
-    ON CONFLICT (workspace_id) DO NOTHING
-  `;
+  // No SpendGuardrail here: applying the first snapshot
+  // (marketai_apply_workspace_projection_v2, dispatchCurrentSnapshot below)
+  // provisions it at the contract's Beta defaults (#126), and the journey
+  // runs on controlled Mock, which reserves nothing against it.
 
   const dispatchCurrentSnapshot = async (
     teamId: string,

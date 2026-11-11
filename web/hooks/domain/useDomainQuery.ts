@@ -22,9 +22,9 @@ import type {
  * `useDomainQuery` may be pointed at. The mutating operations (`POST`/
  * `PUT`/`PATCH`) go through `useDomainCommand` instead, which threads
  * `X-Intent-Id`. Of the Issue #18 operations (credentials, spend
- * guardrails, usage, cost) only `list_credentials` is wired so far — the
- * Settings page's provider-credential section reads it; the rest still
- * wait for their own surface.
+ * guardrails, usage, cost) `list_credentials` and `get_spend_guardrail` are
+ * wired — the Settings page's provider-credential and spend-guardrail
+ * sections read them; usage and cost still wait for their own surface.
  */
 export type ReadOperationId =
   | 'get_identity_probe'
@@ -67,6 +67,7 @@ export type ReadOperationId =
   | 'get_library_data_source_credential_binding'
   | 'get_library_data_source_connection_check'
   | 'list_credentials'
+  | 'get_spend_guardrail'
   | 'get_generation_capabilities'
   | 'list_generation_drafts'
   | 'get_generation_draft'
@@ -474,6 +475,10 @@ function callReadOperation<K extends ReadOperationId>(
     }
     case 'list_credentials':
       return gateway.listCredentials({ workspaceSlug }) as Promise<
+        DomainResultFor<K>
+      >;
+    case 'get_spend_guardrail':
+      return gateway.getSpendGuardrail({ workspaceSlug }) as Promise<
         DomainResultFor<K>
       >;
     case 'get_generation_capabilities':

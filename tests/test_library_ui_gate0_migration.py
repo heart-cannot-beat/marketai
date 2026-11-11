@@ -145,6 +145,7 @@ class Gate0MigrationTests(unittest.TestCase):
         # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109) and
         # zzf6b7c8d9e0 (observation ticks keyed by authorization epoch, #119) and
         # zzg7d8e9f0a1 (the Beta default ScalePolicyVersion is published, #127) and
+        # zzg126a1b2c3 (provisioning creates the guardrail at the Beta defaults, #126) and
         # zzh129a1b2c3 (DeliveryTargets name the Landing Page by its frozen hash, #129).
         self.assertEqual(revision, "zzh129a1b2c3")
 

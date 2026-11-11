@@ -43,6 +43,12 @@ export function signEnvelope(
   keyId: string,
   key: Buffer
 ): SignedEnvelope {
+  // A string would be accepted by createHmac as the key's own text: an
+  // encoded key passed through untyped input would sign with the wrong
+  // bytes, and only the receiving verifier would notice.
+  if (!Buffer.isBuffer(key)) {
+    throw new TypeError('signing key must be bytes');
+  }
   if (key.length === 0) {
     throw new Error('signing key must not be empty');
   }

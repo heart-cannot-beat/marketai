@@ -35,9 +35,13 @@ what they still seed ([#63](https://github.com/heart-cannot-beat/marketai/issues
 When a ticket ships the product entry, it removes the seed and crosses its
 item off here.
 
-- The provisioned Workspace's SpendGuardrail (`fixtures.ts`), until
-  provisioning creates it with the contract defaults
-  ([#126](https://github.com/heart-cannot-beat/marketai/issues/126)).
+- ~~The provisioned Workspace's SpendGuardrail (`fixtures.ts`)~~: removed by
+  [#126](https://github.com/heart-cannot-beat/marketai/issues/126).
+  Provisioning creates it with the contract defaults, and both journeys
+  deliver the signed provisioning snapshots to the API's entitlement inbox as
+  the production dispatcher does (`full-journey` through
+  `dispatchCurrentSnapshot`, `golden-path.spec.ts` when its provisioning
+  completes). The Owner changes the limits in Settings.
 - ~~Review approval of the Winner-market MarketAssetBinding~~: removed by
   [#128](https://github.com/heart-cannot-beat/marketai/issues/128). The
   journey approves the localized AssetVersion in the Assets area, and that
