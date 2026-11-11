@@ -1042,6 +1042,18 @@
     "maxResponseBytes": 65536,
     "forwardConditionalHeaders": false
   },
+  "list_scale_observed_ads": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/observed-ads",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_scale_delivery_target": {
+    "bffPattern": "/api/domain/v1/w/:slug/scale/:meta_mode/delivery-targets",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
   "list_scale_available_modes": {
     "bffPattern": "/api/domain/v1/w/:slug/scale/available-meta-modes",
     "maxRequestBytes": 0,

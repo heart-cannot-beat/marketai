@@ -92,13 +92,22 @@ export function seedLocalizationInfrastructure(
   return JSON.parse(raw.trim()) as LocalizationInfraResult;
 }
 
+/** The Winner's readiness for Scale (#129): the journey picks
+ * `winnerAdId`, the sandbox ad its PAUSED Launch created, to make the
+ * DeliveryTarget itself; nothing here is seeded. */
 export interface ScaleInfraResult {
-  deliveryTargetId: string;
+  winnerAdId: string;
   policyVersionId: string;
-  contractGenerationId: string;
-  contractSetId: string;
   marketAssetBindingId: string;
   marketCode: string;
+}
+
+/** The attestation activation needs, seeded for the DeliveryTarget the
+ * journey made, on the contract set the product made (#129). */
+export interface ScaleActivationEvidenceResult {
+  attestationId: string;
+  contractGenerationId: string;
+  contractSetId: string;
 }
 
 export function seedScaleInfrastructure(
@@ -122,6 +131,29 @@ export function seedScaleInfrastructure(
     }
   );
   return JSON.parse(raw.trim()) as ScaleInfraResult;
+}
+
+export function seedScaleActivationEvidence(
+  workspaceId: string,
+  deliveryTargetId: string,
+  ownerUserId: string
+): ScaleActivationEvidenceResult {
+  const raw = runPython(
+    'golden_path_seed.py',
+    [
+      'seed-scale-activation-evidence',
+      '--workspace-id',
+      workspaceId,
+      '--delivery-target-id',
+      deliveryTargetId,
+    ],
+    {
+      E2E_GOLDEN_PATH_WORKSPACE_ID: workspaceId,
+      E2E_OWNER_USER_ID: ownerUserId,
+      E2E_GOLDEN_PATH_ALLOW_MUTATIONS: '1',
+    }
+  );
+  return JSON.parse(raw.trim()) as ScaleActivationEvidenceResult;
 }
 
 // ---------------------------------------------------------------------------

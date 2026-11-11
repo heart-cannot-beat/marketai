@@ -2,11 +2,13 @@
 
 The contract set itself is always built by production code
 (``app.scale.delivery_targets.ensure_metric_contract_set``). What these
-helpers make is everything around it the product does not create yet:
-the sandbox connection (through the API), the rows a DeliveryTarget refers to
-(an AssetVersion, an Offer and a Landing Page version -- their product entries
-and the DeliveryTarget entry itself are #63), and a DeliveryTarget request on
-the connection. The request names a sandbox ad with the campaign, ad set and
+helpers make is everything around it these tests need: the sandbox
+connection (through the API), the rows a DeliveryTarget refers to (an
+AssetVersion and an Offer version, plus the Landing Page evidence hash a
+Winner would have frozen), and a DeliveryTarget request on the connection.
+These tests exercise the contract set and its reads; the DeliveryTarget
+entry that resolves such a request from an observed ad is
+:mod:`app.scale.observed_ads` (#129). The request names a sandbox ad with the campaign, ad set and
 creative the sandbox's configuration read returns for it
 (:func:`sandbox_ad_hierarchy`): Scale's collector checks them against that
 read, and made-up parents would block every manifest as
@@ -50,7 +52,7 @@ def create_connection_through_api(test, client, meta_mode: str = "customer_sandb
 
 
 def seed_target_references(session, workspace_id: str, tag: str) -> dict[str, str]:
-    """An AssetVersion, an Offer version and a Landing Page version (#63 makes them in the product)."""
+    """An AssetVersion, an Offer version and a Landing Page evidence hash (#129)."""
     product = ProductRecord(id=new_id("prod"), workspace_id=workspace_id, name=f"Acme Charge Dock {tag}")
     session.add(product)
     session.flush()
@@ -80,7 +82,7 @@ def seed_target_references(session, workspace_id: str, tag: str) -> dict[str, st
     session.add(version)
     session.flush()
     library = {}
-    for entry_type in ("offer", "landing_page"):
+    for entry_type in ("offer",):
         entry = LibraryEntryRecord(id=new_id("lent"), workspace_id=workspace_id, entry_type=entry_type,
                                    display_name=f"Acme Charge {entry_type} {tag}")
         session.add(entry)
@@ -94,7 +96,7 @@ def seed_target_references(session, workspace_id: str, tag: str) -> dict[str, st
         session.flush()
         library[entry_type] = row.id
     return {"asset_version_id": version.id, "offer_version_id": library["offer"],
-            "landing_page_version_id": library["landing_page"]}
+            "landing_page_evidence_hash": canonical_hash({"landing_page_url": f"https://acme-charge.example/{tag}"})}
 
 
 @dataclass(frozen=True)
@@ -144,7 +146,7 @@ def delivery_target_request(*, connection_id: str, scenario_version_id: str, met
         attribution_setting=attribution_setting,
         contract_generation_id=contract_generation_id,
         offer_version_id=references["offer_version_id"],
-        landing_page_version_id=references["landing_page_version_id"],
+        landing_page_evidence_hash=references["landing_page_evidence_hash"],
         source_type="curated_scenario",
         source_manifest={"schema_version": 1, "source_type": "curated_scenario"},
         observed_at=observed_at,

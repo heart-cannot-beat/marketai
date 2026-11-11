@@ -7,6 +7,10 @@ import {
 } from '@/hooks/scale';
 import type { ScaleMetaMode } from '@/lib/scale/meta-mode';
 import { errorMessage } from '@/lib/i18n/domain-errors';
+import {
+  ObservedAdPicker,
+  type PickedDeliveryTarget,
+} from './ObservedAdPicker';
 
 interface CandidateSelectorProps {
   open: boolean;
@@ -42,10 +46,12 @@ interface CandidateDiscoveryResponse {
 /**
  * New-Enrollment candidate selection (spec §4.1/§4.4, Issue #86 Task 15).
  *
- * Server discovery supplies eligible decisions. Marketing sources include only
- * observed delivery targets compatible with the exact source conditions; legacy
- * sources keep their existing target input. Creating a candidate and then a
- * draft enrollment revalidates the pair independently on the server.
+ * Server discovery supplies eligible decisions. For the selected Winner the
+ * user picks the observed ad it runs in, and the server makes the
+ * DeliveryTarget from recorded evidence (#129); marketing sources also list
+ * the observed targets already compatible with their exact conditions.
+ * Creating a candidate and then a draft enrollment revalidates the pair
+ * independently on the server.
  */
 export function CandidateSelector({
   open,
@@ -58,6 +64,9 @@ export function CandidateSelector({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [selected, setSelected] = useState<CandidateDiscoveryItem | null>(null);
   const [deliveryTargetId, setDeliveryTargetId] = useState('');
+  const [pickedTarget, setPickedTarget] = useState<PickedDeliveryTarget | null>(
+    null
+  );
 
   const {
     data,
@@ -100,6 +109,7 @@ export function CandidateSelector({
     if (!open) {
       setSelected(null);
       setDeliveryTargetId('');
+      setPickedTarget(null);
       createCandidateCmd.reset();
       createEnrollmentCmd.reset();
     }
@@ -175,6 +185,7 @@ export function CandidateSelector({
                 onClick={() => {
                   setSelected(item);
                   setDeliveryTargetId('');
+                  setPickedTarget(null);
                 }}
               >
                 <span className="flex flex-col items-start text-left">
@@ -196,10 +207,21 @@ export function CandidateSelector({
           ))}
         </ul>
 
+        {selected && (
+          <ObservedAdPicker
+            metaMode={metaMode}
+            winnerDecisionId={selected.decision_id}
+            onPicked={(target) => {
+              setPickedTarget(target);
+              setDeliveryTargetId(target.id);
+            }}
+          />
+        )}
+
         {selected?.evidence_origin === 'marketing_confirmed_combination' ? (
           <div className="mt-4 space-y-3 text-sm">
             <p>{t('candidate-selector.marketing-boundary')}</p>
-            {selected.delivery_targets?.length ? (
+            {selected.delivery_targets?.length || pickedTarget ? (
               <label className="block">
                 {t('candidate-selector.match-delivery')}
                 <select
@@ -210,11 +232,23 @@ export function CandidateSelector({
                   <option value="">
                     {t('candidate-selector.choose-delivery')}
                   </option>
-                  {selected.delivery_targets.map((target) => (
+                  {(selected.delivery_targets ?? []).map((target) => (
                     <option key={target.id} value={target.id}>
                       {target.label}
                     </option>
                   ))}
+                  {pickedTarget &&
+                    !selected.delivery_targets?.some(
+                      (target) => target.id === pickedTarget.id
+                    ) && (
+                      <option value={pickedTarget.id}>
+                        {t('candidate-selector.observed-ad-option', {
+                          market: pickedTarget.market_code,
+                          placement: pickedTarget.placement,
+                          ad: pickedTarget.ad_remote_id,
+                        })}
+                      </option>
+                    )}
                 </select>
               </label>
             ) : (

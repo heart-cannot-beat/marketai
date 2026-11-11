@@ -93,6 +93,7 @@ export type ReadOperationId =
   | 'list_scale_targets'
   | 'list_scale_target_contexts'
   | 'list_scale_enrollment_candidates'
+  | 'list_scale_observed_ads'
   | 'list_scale_available_modes';
 
 type QueryParameterShape<T> = [T] extends [never]
@@ -715,6 +716,16 @@ function callReadOperation<K extends ReadOperationId>(
       return gateway.listScaleEnrollmentCandidates({
         workspaceSlug,
         metaMode: p.meta_mode,
+      }) as Promise<DomainResultFor<K>>;
+    }
+    case 'list_scale_observed_ads': {
+      const p =
+        params as DomainOperationMap['list_scale_observed_ads']['pathParams'] &
+          DomainOperationMap['list_scale_observed_ads']['queryParams'];
+      return gateway.listScaleObservedAds({
+        workspaceSlug,
+        metaMode: p.meta_mode,
+        metaConnectionId: p.meta_connection_id ?? undefined,
       }) as Promise<DomainResultFor<K>>;
     }
     case 'list_scale_available_modes':

@@ -3414,6 +3414,28 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/scale/{meta_mode}/delivery-targets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create Delivery Target Route
+     * @description Create a Winner's DeliveryTarget from one observed ad (#129). Owners
+     *     and Members alike; the server resolves the slot from recorded evidence
+     *     and returns a typed reason when the ad does not match the Winner.
+     */
+    post: operations['create_scale_delivery_target'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/scale/{meta_mode}/enrollment-candidates': {
     parameters: {
       query?: never;
@@ -3644,6 +3666,27 @@ export interface paths {
     put?: never;
     /** Create Export Download Intent Route */
     post: operations['create_scale_export_download_intent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/scale/{meta_mode}/observed-ads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Observed Ads Route
+     * @description The ads the Workspace's active connections in this mode have
+     *     observed, for picking a Winner's DeliveryTarget. Reads only.
+     */
+    get: operations['list_scale_observed_ads'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -6622,6 +6665,40 @@ export interface components {
       offer: string;
       landing_page: string;
     };
+    /**
+     * @description Pick one observed ad as a Winner's DeliveryTarget (#129). Only the
+     *     ad is named: the server resolves the hierarchy, creative, Offer, Landing
+     *     Page, market, placement and attribution from recorded evidence.
+     */
+    DeliveryTargetCreateRequest: {
+      winner_decision_id: string;
+      meta_connection_id: string;
+      ad_remote_id: string;
+    };
+    DeliveryTargetResponse: {
+      id: string;
+      meta_mode: string;
+      meta_connection_id: string;
+      ad_account_id: string;
+      campaign_remote_id: string;
+      adset_remote_id: string;
+      ad_remote_id: string;
+      ad_creative_id: string;
+      creative_asset_version_id: string;
+      market_code: string;
+      placement: string;
+      offer_version_id: string;
+      landing_page_evidence_hash: string;
+      attribution_setting: string;
+      contract_generation_id: string;
+      source_type: string;
+      /** Format: date-time */
+      observed_at: string;
+      /** Format: date-time */
+      expires_at: string;
+      /** Format: date-time */
+      created_at: string;
+    };
     /** @description The user's own idea; omitted factors take each factor's first value. */
     DirectionAdd: {
       title: string;
@@ -9227,6 +9304,28 @@ export interface components {
       severity?: string | null;
       proposed_by?: string | null;
       confirmed?: boolean | null;
+    };
+    ObservedAdListResponse: {
+      items: components['schemas']['ObservedAdResponse'][];
+      unavailable: components['schemas']['ObservedAdUnavailableResponse'][];
+    };
+    /**
+     * @description One ad a connection has observed (#129): the sandbox scenario's ads,
+     *     or the ads of the connection's published delivery-configuration read.
+     */
+    ObservedAdResponse: {
+      meta_connection_id: string;
+      ad_account_id: string;
+      campaign_remote_id: string;
+      adset_remote_id: string;
+      ad_remote_id: string;
+      ad_creative_id: string;
+      source_type: string;
+      asset_version_ids: string[];
+    };
+    ObservedAdUnavailableResponse: {
+      meta_connection_id: string;
+      reason: string;
     };
     /** @description 202 Accepted envelope for async domain commands (connection-checks, manual-fact-imports, reference-gate). */
     OperationAccepted: {
@@ -18420,6 +18519,44 @@ export interface operations {
       };
     };
   };
+  create_scale_delivery_target: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        /** @description Meta evidence mode (URL path segment). */
+        meta_mode: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DeliveryTargetCreateRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryTargetResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   list_scale_enrollment_candidates: {
     parameters: {
       query?: never;
@@ -18959,6 +19096,40 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ExportDownloadIntentResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  list_scale_observed_ads: {
+    parameters: {
+      query?: {
+        meta_connection_id?: string | null;
+      };
+      header?: never;
+      path: {
+        /** @description Meta evidence mode (URL path segment). */
+        meta_mode: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ObservedAdListResponse'];
         };
       };
       /** @description Validation Error */

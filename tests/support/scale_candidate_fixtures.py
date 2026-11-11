@@ -477,24 +477,6 @@ def _make_evidence_observation_context(ctx: TenantContext, session, tag: str) ->
     }
 
 
-def seed_landing_page_version(session, ctx: TenantContext, chain: dict, tag: str) -> None:
-    """The Landing Page version the Winner's experiment names, which a
-    matching DeliveryTarget refers to (#63 makes it in the product)."""
-    landing_entry_id = new_id("le")
-    session.add(LibraryEntryRecord(
-        id=landing_entry_id, workspace_id=ctx.workspace_id,
-        entry_type="landing_page", display_name=f"landing-{tag}",
-    ))
-    session.flush()
-    session.add(LibraryVersionRecord(
-        id=chain["landing_page_evidence_hash"], workspace_id=ctx.workspace_id,
-        entry_id=landing_entry_id, entry_type="landing_page",
-        version_no=1, content_json={}, content_hash="d" * 64,
-        published_by="test-fixture",
-    ))
-    session.flush()
-
-
 def _make_matching_delivery_target(ctx: TenantContext, chain: dict, tag: str, meta_mode: str) -> str:
     is_curated = meta_mode in ("customer_sandbox", "controlled_mock")
     with tenant_session(ctx) as s:
@@ -503,7 +485,6 @@ def _make_matching_delivery_target(ctx: TenantContext, chain: dict, tag: str, me
             if is_curated
             else _make_evidence_observation_context(ctx, s, tag)
         )
-        seed_landing_page_version(s, ctx, chain, tag)
 
     request = DeliveryTargetRequest(
         meta_connection_id=upstream["meta_connection_id"],
@@ -526,7 +507,7 @@ def _make_matching_delivery_target(ctx: TenantContext, chain: dict, tag: str, me
         attribution_setting=chain["attribution_semantics_hash"],
         contract_generation_id=upstream["contract_generation_id"],
         offer_version_id=chain["offer_version_id"],
-        landing_page_version_id=chain["landing_page_evidence_hash"],
+        landing_page_evidence_hash=chain["landing_page_evidence_hash"],
         source_type="curated_scenario" if is_curated else "evidence_observation",
         source_manifest={"schema_version": 1, "source_type": "curated_scenario" if is_curated else "evidence_observation"},
         observed_at=OBSERVED_AT,
@@ -580,8 +561,8 @@ def build_ready_winner(
     caller that puts the target on a connection of its own (#110: the
     sandbox connection the Scale contract set reads). ``chain`` names what
     a matching target must carry: ``market``, ``asset_version_id``,
-    ``offer_version_id``, ``landing_page_evidence_hash`` (the Landing Page
-    version id, see :func:`seed_landing_page_version`) and
+    ``offer_version_id``, ``landing_page_evidence_hash`` (the hash the
+    Winner's ExperimentVersion froze) and
     ``attribution_semantics_hash``.
     """
     admission = admission or PaidOperationAdmission(
@@ -694,29 +675,18 @@ def build_ready_winner(
     return chain
 
 
-def seed_activation_evidence_prereqs(
-    ctx: TenantContext, *, delivery_target_id: str, meta_mode: str, tag: str,
-) -> None:
-    """Seed what issue #86 Task 10/11's ``resolve_activation_evidence``/
-    ``app.scale.enrollment._build_episode_from_evidence`` need for a
-    DeliveryTarget's exact contract generation, beyond what
-    :func:`build_ready_winner_and_target` itself already builds: a valid
-    ``EvidenceAttestationRecord`` (mechanical regardless of the target's own
-    curated-scenario vs. evidence-observation provenance -- an
-    ``evidence_observation`` target already has one from
-    ``_make_evidence_observation_context`` above; creating a second,
-    equally-valid one here is harmless, ``current_attestation()`` just picks
-    the highest-ranked) and a compatible
-    ``ScaleMetricSemanticContractSetRecord`` (spec §6.11 step 6, which no
-    earlier task populates automatically).
-    """
+def seed_activation_attestation(
+    ctx: TenantContext, *, delivery_target_id: str, meta_mode: str,
+) -> str:
+    """A valid ``EvidenceAttestationRecord`` for the DeliveryTarget's exact
+    contract generation, which ``resolve_activation_evidence`` needs before
+    activation: a succeeded sync run, its publication and the attestation.
+    No configuration page is read here; the golden path, whose target the
+    product made on a real contract set (#129), seeds only this. Returns the
+    attestation id."""
     from app.meta.evidence import create_attestation, publish_evidence
     from app.meta.models import MetaObservationSyncRunRecord
-    from app.scale.models import (
-        ScaleDeliveryTargetRecord,
-        ScaleMetricSemanticContractSetMemberRecord,
-        ScaleMetricSemanticContractSetRecord,
-    )
+    from app.scale.models import ScaleDeliveryTargetRecord
 
     with tenant_session(ctx) as session:
         target = session.get(ScaleDeliveryTargetRecord, delivery_target_id)
@@ -737,10 +707,37 @@ def seed_activation_evidence_prereqs(
         session.add(sync_run)
         session.flush()
         pub = publish_evidence(session, sync_run_id=sync_run.id, operation_id=op.id)
-        create_attestation(
+        return create_attestation(
             session, contract_generation_id=contract_generation_id,
             publication_id=pub.id, evidence_watermark="[2026-09-01,2026-09-07]",
-        )
+        ).id
+
+
+def seed_activation_evidence_prereqs(
+    ctx: TenantContext, *, delivery_target_id: str, meta_mode: str, tag: str,
+) -> None:
+    """Seed what issue #86 Task 10/11's ``resolve_activation_evidence``/
+    ``app.scale.enrollment._build_episode_from_evidence`` need for a
+    DeliveryTarget's exact contract generation, beyond what
+    :func:`build_ready_winner_and_target` itself already builds: a valid
+    ``EvidenceAttestationRecord`` (:func:`seed_activation_attestation`;
+    mechanical regardless of the target's own curated-scenario vs.
+    evidence-observation provenance -- an ``evidence_observation`` target
+    already has one from ``_make_evidence_observation_context`` above;
+    creating a second, equally-valid one here is harmless,
+    ``current_attestation()`` just picks the highest-ranked) and a compatible
+    ``ScaleMetricSemanticContractSetRecord`` (spec §6.11 step 6, which a
+    target built outside :mod:`app.scale.observed_ads` does not get).
+    """
+    from app.scale.models import (
+        ScaleDeliveryTargetRecord,
+        ScaleMetricSemanticContractSetMemberRecord,
+        ScaleMetricSemanticContractSetRecord,
+    )
+
+    seed_activation_attestation(ctx, delivery_target_id=delivery_target_id, meta_mode=meta_mode)
+    with tenant_session(ctx) as session:
+        contract_generation_id = session.get(ScaleDeliveryTargetRecord, delivery_target_id).contract_generation_id
 
         contract_set = ScaleMetricSemanticContractSetRecord(
             id=new_id("smcs"), workspace_id=ctx.workspace_id, meta_mode=meta_mode, created_by="user_1",

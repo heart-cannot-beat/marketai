@@ -94,7 +94,6 @@ from tests.support.meta_observation import seed_sandbox_ads, worker_context
 from tests.support.scale_candidate_fixtures import (
     build_ready_winner,
     ensure_governance_prereqs,
-    seed_landing_page_version,
 )
 from tests.support.scale_contract_set import (
     create_connection_through_api,
@@ -279,8 +278,6 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
         with self._as(OWNER):  # what #63 will make in the product
             ensure_governance_prereqs(sandbox, product_id)
             chain = build_ready_winner(sandbox, product_id, tag)
-            with tenant_session(sandbox) as session:
-                seed_landing_page_version(session, sandbox, chain, tag)
 
         self.current = owner
         with self._as(API):
@@ -295,7 +292,7 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
         request = delivery_target_request(
             connection_id=connection_id, scenario_version_id=scenario_id, meta_mode=SANDBOX, hierarchy=hierarchy,
             references={"asset_version_id": chain["asset_version_id"], "offer_version_id": chain["offer_version_id"],
-                        "landing_page_version_id": chain["landing_page_evidence_hash"]},
+                        "landing_page_evidence_hash": chain["landing_page_evidence_hash"]},
             market_code=chain["market"], attribution_setting=chain["attribution_semantics_hash"])
         with self._as(API), tenant_session(sandbox) as session:
             target, _contract_set = create_delivery_target_with_contract_set(session, sandbox, request)

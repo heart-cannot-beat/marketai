@@ -108,7 +108,18 @@
     "marketing-boundary": "这个组合只在记录的条件和用户提供的投放证据下得到支持。请选择一个当前兼容的已观察投放目标。这里只准备监控，永远不会创建、启用或修改广告。",
     "match-delivery": "匹配已观察到的投放",
     "choose-delivery": "选择对应的 Meta 广告",
-    "delivery-not-ready": "请先补全当前的源市场真值和素材准备情况，再通过已授权的只读连接同步对应的实际投放。目前还没有可用的兼容投放目标，无法创建监控。"
+    "delivery-not-ready": "请先补全当前的源市场真值和素材准备情况，再通过已授权的只读连接同步对应的实际投放。目前还没有可用的兼容投放目标，无法创建监控。",
+    "observed-ads-title": "选择这个 Winner 正在投放的广告",
+    "observed-ads-description": "这里列出这个模式下各连接已观察到的广告。MarketAI 依据记录下来的广告信息建立投放目标，只读取，从不创建或修改广告。",
+    "observed-ads-empty": "这个模式下还没有连接观察到广告。",
+    "observed-ad-label": "Meta 广告 {{ad}} · 广告组 {{adset}}",
+    "observed-ad-assets": "素材版本：{{ids}}",
+    "observed-ad-unmapped": "这条广告没有记录对应的素材版本",
+    "use-observed-ad": "使用 Meta 广告 {{ad}}",
+    "use-observed-ad-short": "使用这条广告",
+    "observed-ad-picking": "正在核对…",
+    "observed-ad-picked": "投放目标已就绪：{{market}} · {{placement}} · Meta 广告 {{ad}}",
+    "observed-ad-option": "{{market}} · {{placement}} · Meta 广告 {{ad}}（刚选择）"
   },
   "detail": {
     "not-found": "找不到这个监控",

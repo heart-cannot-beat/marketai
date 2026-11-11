@@ -451,6 +451,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['AdviceSnoozeRequest'];
     successResponses: { 201: components['schemas']['AdviceSnoozeResponse'] };
   };
+  create_scale_delivery_target: {
+    pathParams: { meta_mode: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['DeliveryTargetCreateRequest'];
+    successResponses: { 201: components['schemas']['DeliveryTargetResponse'] };
+  };
   create_scale_enrollment: {
     pathParams: { meta_mode: string };
     queryParams: Record<string, never>;
@@ -1295,6 +1301,12 @@ export type DomainOperationMap = {
     queryParams: { lifecycle?: string; cursor?: string; limit?: string };
     requestBody: never;
     successResponses: { 200: components['schemas']['EnrollmentListResponse'] };
+  };
+  list_scale_observed_ads: {
+    pathParams: { meta_mode: string };
+    queryParams: { meta_connection_id?: string };
+    requestBody: never;
+    successResponses: { 200: components['schemas']['ObservedAdListResponse'] };
   };
   list_scale_target_contexts: {
     pathParams: { meta_mode: string };

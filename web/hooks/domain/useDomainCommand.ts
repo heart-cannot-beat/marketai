@@ -99,6 +99,7 @@ export type CommandOperationId =
   | 'cancel_localization_batch'
   | 'create_scale_enrollment'
   | 'create_scale_enrollment_candidate'
+  | 'create_scale_delivery_target'
   | 'create_scale_activation_preview'
   | 'activate_scale_enrollment'
   | 'pause_scale_enrollment'
@@ -868,6 +869,16 @@ function callCommandOperation<K extends CommandOperationId>(
         actionInstanceId,
         metaMode: p.meta_mode,
         body: body as DomainOperationMap['create_scale_enrollment_candidate']['requestBody'],
+      }) as Promise<DomainResultFor<K> | ReconciliationRequired>;
+    }
+    case 'create_scale_delivery_target': {
+      const p =
+        pathParams as DomainOperationMap['create_scale_delivery_target']['pathParams'];
+      return gateway.createScaleDeliveryTarget({
+        workspaceSlug,
+        actionInstanceId,
+        metaMode: p.meta_mode,
+        body: body as DomainOperationMap['create_scale_delivery_target']['requestBody'],
       }) as Promise<DomainResultFor<K> | ReconciliationRequired>;
     }
     case 'create_scale_activation_preview': {

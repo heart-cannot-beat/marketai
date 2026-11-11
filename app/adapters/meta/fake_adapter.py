@@ -121,6 +121,71 @@ _TYPE_PREFIX = {
 }
 
 
+def _scenario_object_id(scenario_version_id: str, object_type: str, idempotency_key: str) -> str:
+    prefix = _TYPE_PREFIX.get(object_type, f"{object_type}_fake_")
+    digest = hashlib.sha256(
+        f"{scenario_version_id}:{object_type}:{idempotency_key}".encode()
+    ).hexdigest()[:12]
+    return f"{prefix}{digest}"
+
+
+@dataclass(frozen=True)
+class ScenarioAd:
+    """One scenario ad with the ad set, campaign and creative it belongs to."""
+
+    ad_id: str
+    adset_id: str
+    campaign_id: str
+    creative_id: str
+    adset_state: dict[str, Any]
+
+
+def scenario_ad_hierarchy(
+    session: Session, *, workspace_id: str, meta_mode: str, scenario_version_id: str,
+) -> list[ScenarioAd]:
+    """Every ``ad`` object of a scenario, ordered by id, with its hierarchy.
+
+    Reads only. This is the hierarchy the sandbox's ``ads`` configuration
+    edge reports: an ad set or campaign the sandbox Launch did not write gets
+    the deterministic id the sandbox derives for it, and an ad without a
+    creative object the deterministic creative id. Scale's DeliveryTarget
+    entry (#129) lists these ads without constructing an adapter.
+    """
+    def state_of(object_type: str, remote_object_id: str) -> dict[str, Any]:
+        record = session.scalar(
+            select(FakeMetaObjectRecord).where(
+                FakeMetaObjectRecord.workspace_id == workspace_id,
+                FakeMetaObjectRecord.meta_mode == meta_mode,
+                FakeMetaObjectRecord.scenario_version_id == scenario_version_id,
+                FakeMetaObjectRecord.object_type == object_type,
+                FakeMetaObjectRecord.remote_object_id == remote_object_id,
+            )
+        )
+        return dict(record.state or {}) if record is not None else {}
+
+    ads = session.scalars(
+        select(FakeMetaObjectRecord).where(
+            FakeMetaObjectRecord.workspace_id == workspace_id,
+            FakeMetaObjectRecord.meta_mode == meta_mode,
+            FakeMetaObjectRecord.scenario_version_id == scenario_version_id,
+            FakeMetaObjectRecord.object_type == "ad",
+        ).order_by(FakeMetaObjectRecord.remote_object_id)
+    )
+    rows = []
+    for ad in ads:
+        state = ad.state or {}
+        ad_id = ad.remote_object_id
+        adset_id = str(state.get("adset_id")
+                       or _scenario_object_id(scenario_version_id, "adset", f"sandbox:{ad_id}"))
+        adset_state = state_of("adset", adset_id)
+        campaign_id = str(adset_state.get("campaign_id") or state.get("campaign_id")
+                          or _scenario_object_id(scenario_version_id, "campaign", f"sandbox:{adset_id}"))
+        creative_id = str((state.get("creative") or {}).get("creative_id")
+                          or _scenario_object_id(scenario_version_id, "creative", f"sandbox:{ad_id}"))
+        rows.append(ScenarioAd(ad_id, adset_id, campaign_id, creative_id, adset_state))
+    return rows
+
+
 class FakeMetaAdapter:
     is_test_adapter = True
 
@@ -140,11 +205,7 @@ class FakeMetaAdapter:
         self._fault_config = fault_config or {}
 
     def _deterministic_id(self, object_type: str, idempotency_key: str) -> str:
-        prefix = _TYPE_PREFIX.get(object_type, f"{object_type}_fake_")
-        digest = hashlib.sha256(
-            f"{self._scenario_version_id}:{object_type}:{idempotency_key}".encode()
-        ).hexdigest()[:12]
-        return f"{prefix}{digest}"
+        return _scenario_object_id(self._scenario_version_id, object_type, idempotency_key)
 
     def deterministic_object_id(self, object_type: str, idempotency_key: str) -> str:
         """Public, read-only recomputation of the id ``ensure_object`` would use.
@@ -285,9 +346,6 @@ class FakeMetaAdapter:
             ).order_by(FakeMetaObjectRecord.remote_object_id)
         ))
 
-    def _object_state(self, object_type: str, remote_object_id: str) -> dict[str, Any]:
-        return self.read_object(object_type, remote_object_id) or {}
-
     def account(self, ad_account_id: str) -> AccountBinding:
         """The simulated account: currency and time zone from the scenario."""
         scenario = self._session.get(ScenarioVersionRecord, self._scenario_version_id)
@@ -388,17 +446,13 @@ class FakeMetaAdapter:
         if edge == "account":
             return [{"id": ad_account_id, "account_id": _account_number(ad_account_id),
                      "currency": account.currency, "timezone_name": account.timezone_name}]
-        ads = []
-        for ad in self._ads():
-            state = ad.state or {}
-            ad_id = ad.remote_object_id
-            adset_id = str(state.get("adset_id") or self._deterministic_id("adset", f"sandbox:{ad_id}"))
-            adset_state = self._object_state("adset", adset_id)
-            campaign_id = str(adset_state.get("campaign_id") or state.get("campaign_id")
-                              or self._deterministic_id("campaign", f"sandbox:{adset_id}"))
-            creative_id = str((state.get("creative") or {}).get("creative_id")
-                              or self._deterministic_id("creative", f"sandbox:{ad_id}"))
-            ads.append((ad_id, adset_id, campaign_id, creative_id, adset_state))
+        ads = [
+            (row.ad_id, row.adset_id, row.campaign_id, row.creative_id, row.adset_state)
+            for row in scenario_ad_hierarchy(
+                self._session, workspace_id=self._workspace_id, meta_mode=self._meta_mode,
+                scenario_version_id=self._scenario_version_id,
+            )
+        ]
         if edge == "ads":
             return [
                 {"id": ad_id, "account_id": _account_number(ad_account_id), "adset_id": adset_id,
