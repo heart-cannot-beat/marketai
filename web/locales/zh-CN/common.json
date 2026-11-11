@@ -1762,7 +1762,6 @@
   "error-evaluation_not_found": "找不到这次评估。",
   "error-evidence_missing": "AI 调用已完成但结果没有记录，需要核对。",
   "error-evidence_mode_invalid": "请选择正式、沙盒或模拟数据。",
-  "error-evidence_not_available": "还没有可用的评估。",
   "error-evidence_observation_requires_internal_validation": "观测证据只用于内部验证。",
   "error-evidence_projection_incomplete": "证据还不完整，请稍后再试。",
   "error-execution_mode_invalid": "不支持这种生成模式。",

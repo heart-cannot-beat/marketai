@@ -4827,50 +4827,115 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     properties: {
       enrollment_id: { type: 'string' },
       episode_id: { type: 'string' },
-      evaluation_id: { type: 'string' },
-      snapshot_id: { type: 'string' },
-      policy_version_id: { type: 'string' },
-      target_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      algorithm_version: { type: 'string' },
-      metric_semantic_contract_set_hash: { type: 'string' },
-      maturity: { type: 'string' },
-      data_quality_state: { type: 'string' },
-      health: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      health_reason: { type: 'string' },
-      healthy_evaluations: { type: 'integer' },
-      streak_counters: {
-        items: { additionalProperties: true, type: 'object' },
-        type: 'array',
+      readiness: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceReadinessResponse' },
+          { type: 'null' },
+        ],
       },
-      safe_watermark: { type: 'string', format: 'date' },
-      last_complete_local_day: { type: 'string', format: 'date' },
-      last_sync_at: { type: 'string', format: 'date-time' },
-      freshness_reference_at: { type: 'string', format: 'date-time' },
-      complete_local_days_in_episode: { type: 'integer' },
-      active_delivery_days_in_episode: { type: 'integer' },
-      current_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
-      baseline_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
-      rolling_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
+      evaluation_stale: { type: 'boolean' },
+      evaluation_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      snapshot_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      policy_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      target_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      algorithm_version: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      metric_semantic_contract_set_hash: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      },
+      maturity: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      data_quality_state: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      health: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      health_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      healthy_evaluations: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      streak_counters: {
+        anyOf: [
+          {
+            items: { additionalProperties: true, type: 'object' },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
+      },
+      safe_watermark: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      last_complete_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      last_sync_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      freshness_reference_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      complete_local_days_in_episode: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      active_delivery_days_in_episode: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      current_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
+      baseline_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
+      rolling_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
       quality_issues: {
-        items: { $ref: '#/components/schemas/EvidenceQualityIssueResponse' },
-        type: 'array',
+        anyOf: [
+          {
+            items: {
+              $ref: '#/components/schemas/EvidenceQualityIssueResponse',
+            },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
       },
       signals: {
-        items: { $ref: '#/components/schemas/EvidenceSignalResponse' },
-        type: 'array',
+        anyOf: [
+          {
+            items: { $ref: '#/components/schemas/EvidenceSignalResponse' },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
       },
-      cursor_as_of_local_day: { type: 'string', format: 'date' },
-      cursor_source_revision: { type: 'integer' },
-      cursor_semantic_event_sequence: { type: 'integer' },
-      cursor_lineage_generation: { type: 'integer' },
-      revision: { type: 'integer' },
-      updated_at: { type: 'string', format: 'date-time' },
+      cursor_as_of_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      cursor_source_revision: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      cursor_semantic_event_sequence: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      cursor_lineage_generation: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      revision: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      updated_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
     },
     additionalProperties: false,
     type: 'object',
     required: [
       'enrollment_id',
       'episode_id',
+      'readiness',
+      'evaluation_stale',
       'evaluation_id',
       'snapshot_id',
       'policy_version_id',
@@ -4902,7 +4967,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'updated_at',
     ],
     description:
-      "Current evidence/readiness for an Enrollment's active Episode --\nthe accepted-Evaluation projection (spec §3.4 step 3/4), not a raw\nevidence snapshot. Reflects only a projection-eligible result that has\nalready won the structured cursor CAS.",
+      "Current evidence/readiness for an Enrollment's active Episode (#114).\n\n``readiness`` is the Episode's evidence-readiness projection, null until\nthe first source manifest is collected. Every other field but the two\nids belongs to the accepted-Evaluation projection (spec §3.4 step 3/4),\nwhich reflects only a projection-eligible result that has already won\nthe structured cursor CAS; all of them are null until the first\nEvaluation projects. ``evaluation_stale`` says the accepted Evaluation\nwas sealed from an older source revision than the latest manifest: a\nnewer day is collected (its evaluation pending) or blocked, so the\nEvaluation is history, not the current state (contract §8).",
   },
   EnrollmentListResponse: {
     properties: {
@@ -5367,6 +5432,53 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'detail',
       'recovery_action',
     ],
+  },
+  EvidenceReadinessResponse: {
+    properties: {
+      manifest_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      manifest_state: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      source_revision: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      target_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      maturity: { type: 'string' },
+      quality_state: { type: 'string' },
+      last_complete_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      freshness_reference_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      blocking_issue_count: { type: 'integer' },
+      warning_issue_count: { type: 'integer' },
+      recovery_action: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      issues: {
+        items: { $ref: '#/components/schemas/EvidenceQualityIssueResponse' },
+        type: 'array',
+      },
+      revision: { type: 'integer' },
+      updated_at: { type: 'string', format: 'date-time' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'manifest_id',
+      'manifest_state',
+      'source_revision',
+      'target_local_day',
+      'maturity',
+      'quality_state',
+      'last_complete_local_day',
+      'freshness_reference_at',
+      'blocking_issue_count',
+      'warning_issue_count',
+      'recovery_action',
+      'issues',
+      'revision',
+      'updated_at',
+    ],
+    description:
+      "The Episode's evidence readiness (contract §8, §18): the projection\nthe source collector moves with every terminal source manifest, ahead of\nany Evaluation. A ``blocked`` latest manifest reads maturity\n``insufficient``, quality ``blocked``, its typed issues and the recovery\naction; ``last_complete_local_day`` and ``freshness_reference_at`` stay\nwhere the last complete manifest put them (null before one).",
   },
   EvidenceSignalResponse: {
     properties: {
@@ -18226,50 +18338,115 @@ const SCHEMAS: Record<string, object> = {
     properties: {
       enrollment_id: { type: 'string' },
       episode_id: { type: 'string' },
-      evaluation_id: { type: 'string' },
-      snapshot_id: { type: 'string' },
-      policy_version_id: { type: 'string' },
-      target_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      algorithm_version: { type: 'string' },
-      metric_semantic_contract_set_hash: { type: 'string' },
-      maturity: { type: 'string' },
-      data_quality_state: { type: 'string' },
-      health: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      health_reason: { type: 'string' },
-      healthy_evaluations: { type: 'integer' },
-      streak_counters: {
-        items: { additionalProperties: true, type: 'object' },
-        type: 'array',
+      readiness: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceReadinessResponse' },
+          { type: 'null' },
+        ],
       },
-      safe_watermark: { type: 'string', format: 'date' },
-      last_complete_local_day: { type: 'string', format: 'date' },
-      last_sync_at: { type: 'string', format: 'date-time' },
-      freshness_reference_at: { type: 'string', format: 'date-time' },
-      complete_local_days_in_episode: { type: 'integer' },
-      active_delivery_days_in_episode: { type: 'integer' },
-      current_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
-      baseline_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
-      rolling_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
+      evaluation_stale: { type: 'boolean' },
+      evaluation_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      snapshot_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      policy_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      target_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      algorithm_version: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      metric_semantic_contract_set_hash: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      },
+      maturity: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      data_quality_state: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      health: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      health_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      healthy_evaluations: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      streak_counters: {
+        anyOf: [
+          {
+            items: { additionalProperties: true, type: 'object' },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
+      },
+      safe_watermark: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      last_complete_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      last_sync_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      freshness_reference_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      complete_local_days_in_episode: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      active_delivery_days_in_episode: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      current_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
+      baseline_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
+      rolling_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
       quality_issues: {
-        items: { $ref: '#/components/schemas/EvidenceQualityIssueResponse' },
-        type: 'array',
+        anyOf: [
+          {
+            items: {
+              $ref: '#/components/schemas/EvidenceQualityIssueResponse',
+            },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
       },
       signals: {
-        items: { $ref: '#/components/schemas/EvidenceSignalResponse' },
-        type: 'array',
+        anyOf: [
+          {
+            items: { $ref: '#/components/schemas/EvidenceSignalResponse' },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
       },
-      cursor_as_of_local_day: { type: 'string', format: 'date' },
-      cursor_source_revision: { type: 'integer' },
-      cursor_semantic_event_sequence: { type: 'integer' },
-      cursor_lineage_generation: { type: 'integer' },
-      revision: { type: 'integer' },
-      updated_at: { type: 'string', format: 'date-time' },
+      cursor_as_of_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      cursor_source_revision: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      cursor_semantic_event_sequence: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      cursor_lineage_generation: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      revision: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      updated_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
     },
     additionalProperties: false,
     type: 'object',
     required: [
       'enrollment_id',
       'episode_id',
+      'readiness',
+      'evaluation_stale',
       'evaluation_id',
       'snapshot_id',
       'policy_version_id',
@@ -18301,7 +18478,7 @@ const SCHEMAS: Record<string, object> = {
       'updated_at',
     ],
     description:
-      "Current evidence/readiness for an Enrollment's active Episode --\nthe accepted-Evaluation projection (spec §3.4 step 3/4), not a raw\nevidence snapshot. Reflects only a projection-eligible result that has\nalready won the structured cursor CAS.",
+      "Current evidence/readiness for an Enrollment's active Episode (#114).\n\n``readiness`` is the Episode's evidence-readiness projection, null until\nthe first source manifest is collected. Every other field but the two\nids belongs to the accepted-Evaluation projection (spec §3.4 step 3/4),\nwhich reflects only a projection-eligible result that has already won\nthe structured cursor CAS; all of them are null until the first\nEvaluation projects. ``evaluation_stale`` says the accepted Evaluation\nwas sealed from an older source revision than the latest manifest: a\nnewer day is collected (its evaluation pending) or blocked, so the\nEvaluation is history, not the current state (contract §8).",
   },
   get_scale_episode_200: {
     properties: {

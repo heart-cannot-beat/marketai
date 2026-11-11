@@ -195,11 +195,24 @@
   },
   "evidence": {
     "heading": "Evidence",
-    "no-evidence-yet": "No evidence yet for this episode",
+    "no-active-episode": "This enrollment has no active episode, so there is no evidence to show.",
     "unavailable": "Evidence unavailable",
     "as-of": "As of {{day}}",
     "refresh": "Refresh",
     "refresh-stale": "Refresh stale evidence",
+    "state": {
+      "waiting-title": "Waiting for the first complete day",
+      "waiting-body": "Monitoring has started. Evidence is built from complete days in the ad account's time zone, so the first evaluation runs once the first full day has been read from Meta.",
+      "collected-title": "First complete day collected",
+      "collected-body": "Data through {{day}} is in. Its first evaluation is running.",
+      "blocked-title": "Evidence blocked",
+      "blocked-body": "The latest Meta data, for {{day}}, can't be used, so this ad isn't evaluated and no health is shown.",
+      "stale-body": "The evaluation below is from {{day}} and is out of date.",
+      "last-complete-day": "Last complete day: {{day}}",
+      "what-to-do": "What to do:",
+      "pending-title": "New data collected",
+      "pending-body": "Data through {{day}} is in and being evaluated. The evaluation below is from {{evaluated}}."
+    },
     "quality": {
       "pass": "Data quality passed",
       "warning": "Data quality warning",
@@ -209,6 +222,7 @@
     "cursor-revision": "Cursor revision",
     "watermark": "Safe watermark",
     "updated-at": "Updated",
+    "last-evaluation": "Last accepted evaluation, from {{day}}",
     "windows-heading": "Exact evidence windows",
     "window": {
       "current_7d": "Current 7 days",
@@ -245,6 +259,22 @@
     },
     "technical-details": "Technical details",
     "recovery-action": "Recovery: {{action}}",
+    "source-issue": {
+      "connection_ineligible": "The Meta connection is not active",
+      "source_provenance_mismatch": "The Meta data doesn't match this ad's account, time zone, currency or ad",
+      "contract_instance_failed": "A required Meta read is missing or doesn't match the metric contract",
+      "reconciliation_unresolved": "The result of a Meta read is unconfirmed",
+      "incomplete_pagination": "Meta returned only some pages of a read",
+      "transport_exhausted": "A Meta read failed, even after retries",
+      "freshness_slo_exceeded": "Some of the data is older than the freshness limit",
+      "exact_window_value_unavailable": "Reach and frequency are unavailable for a window without delivery"
+    },
+    "recovery": {
+      "repair_connection": "Reconnect or repair the Meta connection in Settings. Collection resumes with the next daily sync.",
+      "wait_for_next_sync": "Nothing to do now. The next daily Meta sync collects the data again.",
+      "reconcile_meta_sync": "An operator has to confirm the unresolved Meta read. The next daily sync also collects the data again.",
+      "retry_meta_sync": "The next daily Meta sync collects the data again. If this keeps happening, check the Meta connection in Settings."
+    },
     "signals-heading": "Deterministic signals and intervals",
     "signal": "Signal",
     "signal-state": "State",

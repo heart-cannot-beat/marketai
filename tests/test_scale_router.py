@@ -442,6 +442,10 @@ class TestEnrollmentLifecycleRoutes(EnrollmentChainTestBase):
         enrollment = self._create()
         enrollment_id = enrollment["id"]
 
+        draft_evidence = self.client.get(f"/api/v1/scale/{self.mode}/enrollments/{enrollment_id}/evidence")
+        self.assertEqual(draft_evidence.status_code, 404, draft_evidence.text)
+        self.assertEqual(draft_evidence.json()["code"], "no_active_episode")
+
         activate_preview_id = self._create_preview(enrollment_id, 1)
         activate_resp = self.client.put(
             f"/api/v1/scale/{self.mode}/enrollments/{enrollment_id}/activate",
@@ -466,8 +470,13 @@ class TestEnrollmentLifecycleRoutes(EnrollmentChainTestBase):
         evidence_resp = self.client.get(
             f"/api/v1/scale/{self.mode}/enrollments/{enrollment_id}/evidence",
         )
-        self.assertEqual(evidence_resp.status_code, 404)
-        self.assertEqual(evidence_resp.json()["code"], "evidence_not_available")
+        # Activated, nothing collected yet: a state, not a missing resource (#114).
+        self.assertEqual(evidence_resp.status_code, 200, evidence_resp.text)
+        evidence = evidence_resp.json()
+        self.assertEqual(
+            (evidence["episode_id"], evidence["readiness"], evidence["evaluation_id"], evidence["evaluation_stale"]),
+            (active["current_episode_id"], None, None, False),
+        )
 
         stale_pause_resp = self.client.put(
             f"/api/v1/scale/{self.mode}/enrollments/{enrollment_id}/pause",
@@ -2039,6 +2048,11 @@ class TestPlatformScaleRouterEnrollmentLifecycle(PlatformScaleRouterTestBase):
         self.assertEqual(list_resp.status_code, 200, list_resp.text)
         self.assertEqual(len(list_resp.json()["items"]), 1)
 
+        evidence_url = f"/api/platform/v1/scale/internal_validation/enrollments/{enrollment['id']}/evidence"
+        draft_evidence = self.client.get(evidence_url, headers=self._headers())
+        self.assertEqual(draft_evidence.status_code, 404, draft_evidence.text)
+        self.assertEqual(draft_evidence.json()["code"], "no_active_episode")
+
         preview_id = self._create_preview(enrollment["id"], 1)
         activate_resp = self.client.put(
             f"/api/platform/v1/scale/internal_validation/enrollments/{enrollment['id']}/activate",
@@ -2050,6 +2064,18 @@ class TestPlatformScaleRouterEnrollmentLifecycle(PlatformScaleRouterTestBase):
         self.assertEqual(active["lifecycle"], "active")
         actions = {a["action"]: a["allowed"] for a in active["allowed_actions"]}
         self.assertEqual(actions, {"activate": False, "pause": True, "resume": False, "close": True})
+
+        # The platform mirror answers the delegated route's body (#114):
+        # activated, nothing collected or evaluated yet.
+        evidence_resp = self.client.get(evidence_url, headers=self._headers())
+        self.assertEqual(evidence_resp.status_code, 200, evidence_resp.text)
+        evidence = evidence_resp.json()
+        self.assertEqual(
+            (evidence["episode_id"], evidence["readiness"], evidence["evaluation_stale"]),
+            (active["current_episode_id"], None, False),
+        )
+        self.assertEqual({key for key, value in evidence.items() if value is not None},
+                         {"enrollment_id", "episode_id", "evaluation_stale"})
 
         pause_resp = self.client.put(
             f"/api/platform/v1/scale/internal_validation/enrollments/{enrollment['id']}/pause",

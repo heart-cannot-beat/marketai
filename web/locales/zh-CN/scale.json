@@ -195,11 +195,24 @@
   },
   "evidence": {
     "heading": "证据",
-    "no-evidence-yet": "这个观察段还没有证据",
+    "no-active-episode": "这个监控没有进行中的观察段，所以没有证据可以显示。",
     "unavailable": "证据不可用",
     "as-of": "截至 {{day}}",
     "refresh": "刷新",
     "refresh-stale": "刷新过时的证据",
+    "state": {
+      "waiting-title": "等待第一个完整日",
+      "waiting-body": "监控已开始。证据按广告账户时区的完整日计算，从 Meta 读完第一个完整日的数据后，才会进行第一次评估。",
+      "collected-title": "第一个完整日已收集",
+      "collected-body": "截至 {{day}} 的数据已收集，第一次评估正在进行。",
+      "blocked-title": "证据被阻塞",
+      "blocked-body": "{{day}} 最新的 Meta 数据无法使用，所以这个广告没有评估，也不显示健康状态。",
+      "stale-body": "下面的评估截至 {{day}}，已经过时。",
+      "last-complete-day": "最后一个完整日：{{day}}",
+      "what-to-do": "处理方式：",
+      "pending-title": "已收集新数据",
+      "pending-body": "截至 {{day}} 的数据已收集，正在评估。下面的评估截至 {{evaluated}}。"
+    },
     "quality": {
       "pass": "数据质量通过",
       "warning": "数据质量警告",
@@ -209,6 +222,7 @@
     "cursor-revision": "游标修订号",
     "watermark": "安全水位",
     "updated-at": "更新时间",
+    "last-evaluation": "最近一次采纳的评估，截至 {{day}}",
     "windows-heading": "确切的证据窗口",
     "window": {
       "current_7d": "最近 7 天",
@@ -245,6 +259,22 @@
     },
     "technical-details": "技术信息",
     "recovery-action": "恢复措施：{{action}}",
+    "source-issue": {
+      "connection_ineligible": "Meta 连接不是启用状态",
+      "source_provenance_mismatch": "Meta 数据与这个广告的账户、时区、币种或广告不一致",
+      "contract_instance_failed": "缺少一项必需的 Meta 读取，或读取与指标合同不一致",
+      "reconciliation_unresolved": "有一次 Meta 读取的结果还没有确认",
+      "incomplete_pagination": "Meta 只返回了一次读取的部分分页",
+      "transport_exhausted": "有一次 Meta 读取在重试后仍然失败",
+      "freshness_slo_exceeded": "部分数据超过了新鲜度时限",
+      "exact_window_value_unavailable": "没有投放的窗口没有覆盖人数和频次"
+    },
+    "recovery": {
+      "repair_connection": "到设置里重新连接或修复 Meta 连接。下一次每日同步时会恢复收集。",
+      "wait_for_next_sync": "现在不用处理。下一次每日 Meta 同步会重新收集这些数据。",
+      "reconcile_meta_sync": "需要运维人员确认这次结果不明的 Meta 读取。下一次每日同步也会重新收集这些数据。",
+      "retry_meta_sync": "下一次每日 Meta 同步会重新收集这些数据。如果反复出现，请到设置里检查 Meta 连接。"
+    },
     "signals-heading": "确定性信号与区间",
     "signal": "信号",
     "signal-state": "状态",

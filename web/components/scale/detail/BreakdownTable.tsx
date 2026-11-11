@@ -84,7 +84,8 @@ export function BreakdownTable({
 
   const { data: evidence, isLoading: evidenceLoading } =
     useScaleEnrollmentEvidence(enrollmentId, metaMode);
-  const snapshotId = evidence?.snapshot_id;
+  // Null until the Episode's first Evaluation projects (#114).
+  const snapshotId = evidence?.snapshot_id ?? undefined;
 
   const {
     page,

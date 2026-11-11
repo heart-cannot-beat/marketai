@@ -49,7 +49,10 @@ mutate durable evidence *between* browser steps, not just once up front:
     transition. `--kind blocked` instead marks the manifest `blocked`
     (spec §4.5 step 5's terminal blocked-manifest scenario) and skips
     building any evidence at all, mirroring
-    `tests/test_scale_evidence.py::TestSealSnapshotBlockedManifest`.
+    `tests/test_scale_evidence.py::TestSealSnapshotBlockedManifest`. Either
+    kind moves the Episode's readiness projection through the source
+    collector's own step (`app.scale.collector._advance_readiness`, #114);
+    a blocked one first records a `transport_exhausted` source issue.
 
 Required environment (see also `web/e2e/scale/helpers.ts`,
 `web/e2e/scale/fixtures.ts`):
@@ -510,12 +513,14 @@ def advance_manifest(
     from app.adapters.persistence.database import tenant_session
     from app.adapters.persistence.models import new_id
     from app.platform.tenancy import commit_and_rebind
+    from app.scale.collector import TRANSPORT_EXHAUSTED, _advance_readiness, _blocked
     from app.scale.models import (
         ScaleAdviceThreadRecord,
         ScaleEpisodeRecord,
         ScaleEvaluationRecord,
         ScaleEvidenceSourceManifestRecord,
         ScaleManifestItemRecord,
+        ScaleSourceQualityIssueRecord,
     )
     from app.scale.service import request_scale_evaluation, run_scale_evaluation, ScaleEvaluationRequest
 
@@ -591,6 +596,26 @@ def advance_manifest(
             ))
             session.add_all(items)
             session.flush()
+
+        # The source collector's readiness step (#109, #114): a blocked
+        # manifest carries its typed issue and moves the Episode's readiness
+        # to insufficient/blocked with the recovery action; a complete one
+        # moves it on again. The same function the collector calls, so the
+        # evidence page reads what production writes.
+        issues = [] if kind != "blocked" else [
+            _blocked(TRANSPORT_EXHAUSTED, f"e2e: the read of {as_of.isoformat()} failed after its retries"),
+        ]
+        session.add_all([
+            ScaleSourceQualityIssueRecord(
+                id=new_id("ssqi"), workspace_id=ctx.workspace_id, meta_mode=meta_mode,
+                manifest_id=manifest.id, code=issue.code, severity="blocking", is_blocking=True,
+                contract_type=issue.contract_type, window_role=issue.window_role, local_day=issue.local_day,
+                detail=issue.detail, recovery_action=issue.recovery_action,
+            )
+            for issue in issues
+        ])
+        session.flush()
+        _advance_readiness(session, ctx, episode, manifest, issues)
 
         request = ScaleEvaluationRequest(
             enrollment_id=enrollment_id,
