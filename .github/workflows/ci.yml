@@ -453,10 +453,26 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_scale_source_collection_pg -v
 
+      # #127: the release published the Beta default ScalePolicyVersion. The
+      # row equals the code constant column for column; the API and the
+      # Worker select it for customer_sandbox and internal_validation and
+      # nothing for controlled_mock; the runtime roles hold exactly the role
+      # file's privileges on scale_policy_versions; running the migration
+      # again adds no row; downgrade keeps a version a run names and fails
+      # rather than trust an RLS-filtered answer.
+      - name: The Beta default ScalePolicyVersion is published by the release
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_platform_policy_pg -v
+
       # #101's acceptance (#110, S4): a customer_sandbox Enrollment activated
       # through the API (candidate, draft, preview, activate), then fourteen
       # days with the slot set into the past and only the Worker running.
-      # Each day's complete manifest requests its live run and enqueues
+      # Under the Beta default Policy the migrations published (#127), each
+      # day's complete manifest requests its live run and enqueues
       # scale_evaluate in the same transaction; the API reads warming on days
       # 1-13 and monitorable from day 14, with the Episode activation opened.
       # Replaying the tick, batch, collection and evaluation Jobs adds

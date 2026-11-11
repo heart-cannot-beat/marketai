@@ -3,12 +3,14 @@
 The fixture is #109's: a ``customer_sandbox`` connection whose Scale contract
 set production code built, sandbox ads, and an active Enrollment whose
 Episode carries the baseline activation synthesizes (``unverified``, the
-DeliveryTarget's creative). A published Policy permits the mode. With the
-day's slot due, only the Worker runs: the tick, the batch, the collection --
+DeliveryTarget's creative). A published Policy permits the mode: the
+migrated Beta default (#127), or one a test publishes later. With the day's
+slot due, only the Worker runs: the tick, the batch, the collection --
 whose complete manifest requests the live run and enqueues ``scale_evaluate``
 in its own transaction -- and the evaluation.
 
-* the run freezes the manifest, its ``terminal_at``, the Policy (#101 Q8),
+* the run freezes the manifest, its ``terminal_at``, the Policy (#101 Q8;
+  without a test's own, the migrated Beta default, #127),
   the active Target or none, and the batch's last sync run; the first
   complete manifest adopts the real configuration as the Episode's baseline,
   so the first evaluation does not roll the Episode over (a different
@@ -59,6 +61,7 @@ from app.scale.models import (
     ScalePolicyVersionRecord,
     ScaleTargetVersionRecord,
 )
+from app.scale.platform_policy import BETA_DEFAULT_POLICY_V1
 from app.scale.service import (
     EVALUATION_JOB_MAX_ATTEMPTS,
     ScaleOrchestrationError,
@@ -93,8 +96,9 @@ class LiveEvaluationTestCase(CollectionTestCase):
     # -- fixtures -----------------------------------------------------------
 
     def _publish_policy(self, **overrides) -> str:
-        """A Policy as #63 will publish it; unpublished again when the test
-        ends, so no other file's collection finds it in the shared database."""
+        """A Policy published after the migrated Beta default, so the live
+        trigger prefers it; unpublished again when the test ends, so no other
+        file's collection finds it in the shared database."""
         fields = dict(mode_permissions={SANDBOX: True, MOCK: True}, published_at=utcnow(),
                       canonical_schema_version="scale-snapshot-v3")
         fields.update(overrides)
@@ -108,6 +112,18 @@ class LiveEvaluationTestCase(CollectionTestCase):
         with platform_session() as session:
             session.execute(update(ScalePolicyVersionRecord).where(ScalePolicyVersionRecord.id == policy_id)
                             .values(is_published=False))
+
+    def _withdraw_platform_policy(self) -> None:
+        """Take the migrated Beta default (#127) out of selection for this test
+        only, so no Policy is eligible; published again when the test ends."""
+        self._unpublish(BETA_DEFAULT_POLICY_V1.id)
+        self.addCleanup(self._republish_platform_policy)
+
+    def _republish_platform_policy(self) -> None:
+        with platform_session() as session:
+            session.execute(update(ScalePolicyVersionRecord)
+                            .where(ScalePolicyVersionRecord.id == BETA_DEFAULT_POLICY_V1.id)
+                            .values(is_published=True))
 
     def _activated(self, connection_id: str, established, ad_id: str, started: date, *,
                    creative_id: str | None = None, **kwargs) -> tuple[str, str]:
@@ -230,6 +246,27 @@ class LiveTrigger(LiveEvaluationTestCase):
         self.assertEqual((projection.evaluation_id, projection.maturity), (run.evaluation_id, "warming"))
         self.assertEqual(self._readiness(episode_id).maturity, "warming")
 
+    def test_without_a_test_policy_the_run_freezes_the_migrated_beta_default(self):
+        """#127: the database only ran the migrations, and the live trigger
+        finds the Beta default they published -- no ``no_eligible_policy``."""
+        self._unpublish(self.policy_id)
+        with platform_session() as session:
+            self.assertEqual(live_trigger.eligible_live_policy(session, SANDBOX).id, BETA_DEFAULT_POLICY_V1.id)
+            self.assertIsNone(live_trigger.eligible_live_policy(session, MOCK), "#127 P1: not controlled_mock")
+        day = _local_today() - timedelta(days=3)
+        _connection, _set, _ads, _enrollment_id, episode_id = self._sandbox(started=day - timedelta(days=2))
+
+        self.assertEqual(self._steps(day), 4, "tick, batch, collection, evaluation")
+
+        [run] = self._runs_of(episode_id)
+        self.assertEqual((run.policy_version_id, run.algorithm_version, run.run_state, run.outcome_kind),
+                         (BETA_DEFAULT_POLICY_V1.id, CURRENT_ALGORITHM_VERSION, "evaluated", "evaluated"))
+        self.assertEqual(self._events("scale.live_evaluation.skipped"), [])
+        [requested] = self._events("scale.live_evaluation.requested")
+        self.assertEqual(requested.details_json["policy_version_id"], BETA_DEFAULT_POLICY_V1.id)
+        [snapshot] = self._rows(ScaleEvidenceSnapshotRecord, episode_id=episode_id)
+        self.assertEqual(snapshot.policy_version_id, BETA_DEFAULT_POLICY_V1.id)
+
     def test_another_creative_than_the_target_named_is_not_adopted_and_rolls_the_episode_over(self):
         day = _local_today() - timedelta(days=3)
         _connection, _set, _ads, enrollment_id, episode_id = self._sandbox(
@@ -344,6 +381,7 @@ class NoLiveRun(LiveEvaluationTestCase):
 
     def test_without_an_eligible_policy_the_manifest_is_collected_and_no_run_is_requested(self):
         self._unpublish(self.policy_id)
+        self._withdraw_platform_policy()
         later = utcnow() + timedelta(minutes=5)
         for overrides in ({"mode_permissions": {}}, {"mode_permissions": {MOCK: True}},
                           {"mode_permissions": {SANDBOX: "yes"}},
