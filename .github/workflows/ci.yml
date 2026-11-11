@@ -679,6 +679,21 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_localization_adopt_pg -v
 
+      # AssetVersion review drives the market binding (#128): the review a
+      # user records in the Assets area moves the localized child's
+      # MarketAssetBinding in the same API transaction, under RLS -- approval
+      # makes it ready_for_experiment, a superseding rejection clears it, each
+      # appends a binding event and keeps both reviews. An unrelated version,
+      # another Workspace and a request without a verified identity move
+      # nothing. Then the privilege matrix of the two binding tables.
+      - name: AssetVersion review moves the market binding under the real API role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_localization_binding_review_pg -v
+
       # An already-provisioned cluster may still carry the former shared role's
       # persistent BYPASSRLS bit. Prove the release revokes it and the retired
       # role fails closed.

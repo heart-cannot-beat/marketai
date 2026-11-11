@@ -13,22 +13,25 @@ the same transaction that creates the child AssetVersion, publication,
 lineage, and successful Item transition. A failure therefore exposes none of
 that publication state, matching the atomic finalization contract in §2G.
 
-Three functions, matching spec §2I verbatim:
+Four functions, the first three matching spec §2I verbatim:
 
 - `publish_binding()`: "atomically supersedes the active binding for the
   same (workspace, source_asset_version, target_market, offer) and inserts
-  the new `localized` or `source_reuse` binding." The child AssetVersion
-  starts with no human QualityReview and no Winner verdict (spec §16.11):
-  a fresh binding therefore always starts `review_state='pending_review'`,
-  `truth_freshness='current'`, `ready_for_experiment=False` -- never
-  inherited from whatever it supersedes.
+  the new `localized` or `source_reuse` binding." A new binding's
+  `review_state` is the bound AssetVersion's current effective review
+  (`app.generation.review.project_effective_review`), never inherited from
+  whatever binding it supersedes. A localized child starts with no human
+  QualityReview and no Winner verdict (spec §16.11), so its binding starts
+  `pending_review` and not experiment-ready; a `source_reuse` binding
+  follows the review the exact source version already has, without
+  copying the review row.
 - `assess_binding_eligibility()`: "requires active lifecycle, a currently
   Approved exact AssetVersion with no blocking QC failure, synchronous
   current Truth, eligible upstream source/Winner context, and compatible
   rights/evidence tier." This module has no QC-failure or Approved-review
-  table of its own to consult beyond `review_state` (a later human-review
-  command, out of this task's scope, is what actually flips
-  `review_state`); it defers exact-version source/Winner eligibility to
+  table of its own to consult beyond `review_state` (which
+  `apply_asset_version_review()` keeps equal to the bound version's
+  effective review); it defers exact-version source/Winner eligibility to
   `app.localization.eligibility.validate_source_for_batch` (unchanged,
   reused) and Truth currency to `app.localization.truth.
   assess_truth_freshness` (unchanged, reused) -- never redeclaring either
@@ -46,6 +49,13 @@ Three functions, matching spec §2I verbatim:
   "Credential rotation is a negative control and must not stale Truth" --
   so it is a documented no-op, never silently matched against an unrelated
   dependency table.
+- `apply_asset_version_review()`: the user's exact-version review in the
+  Assets area drives the binding (localization contract §3 step 11, spec
+  §16.11, #128). `app.generation.review.create_review` calls it in the
+  transaction that writes the review row; every active binding whose
+  `bound_asset_version_id` is the reviewed version takes the version's
+  effective review head as its `review_state`. There is no separate
+  binding-approval command.
 
 Every mutation is CAS (`UPDATE ... WHERE revision = expected`, raising
 `app.localization.batch.StaleRevisionError` on conflict -- reused, not
@@ -91,6 +101,7 @@ from ..adapters.persistence.models import (
     MarketAssetBindingRecord,
     new_id,
 )
+from ..generation.review import project_effective_review
 from ..platform.tenancy import TenantContext
 from .batch import StaleRevisionError
 from .eligibility import validate_source_for_batch
@@ -115,6 +126,24 @@ _MARKET_POLICY_DEPENDENCY_KIND = "market_policy_version"
 # staled Truth (spec §16.12 negative control). Any other unrecognized
 # `change_kind` is a caller error, not silently treated as untracked.
 _UNTRACKED_DEPENDENCY_KINDS = frozenset({"credential_version"})
+
+# The bound AssetVersion's effective review value (spec §0.3,
+# `project_effective_review`) -> the binding's `review_state`. A `cleared`
+# head projects to None ("no effective review"), as does a version nobody
+# has reviewed; both leave the binding waiting for review. Any value outside
+# this map fails closed to `pending_review` as well.
+_REVIEW_STATE_BY_EFFECTIVE_REVIEW: Mapping[str | None, str] = {
+    "approved": "approved",
+    "rejected": "rejected",
+    "needs_changes": "needs_changes",
+    None: "pending_review",
+}
+
+# Event type appended when a review moves a binding's `review_state`.
+REVIEW_EVENT_TYPE = "review_state_changed"
+# Namespace of the per-review `dependency_change_id` (`uq_mabe_dependency_
+# change` then lets one review move one binding at most once).
+_REVIEW_CHANGE_KIND = "quality_review"
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +204,15 @@ class DependencyChangeResult:
     skipped_binding_ids: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ReviewApplicationResult:
+    asset_version_id: str
+    review_id: str
+    review_state: str
+    changed_binding_ids: tuple[str, ...]
+    unchanged_binding_ids: tuple[str, ...]
+
+
 # ---------------------------------------------------------------------------
 # Hashing / snapshot helpers
 # ---------------------------------------------------------------------------
@@ -211,6 +249,20 @@ def _snapshot(binding: MarketAssetBindingRecord) -> dict:
         "active": binding.active,
         "revision": binding.revision,
     }
+
+
+def _ready_for_experiment(review_state: str, truth_freshness: str) -> bool:
+    """The one readiness rule every write in this module applies (spec
+    §1.10 column comment): Approved exact version and current Truth."""
+    return review_state == "approved" and truth_freshness == "current"
+
+
+def _review_state_of(session: Session, ctx: TenantContext, asset_version_id: str) -> str:
+    """The `review_state` a binding of `asset_version_id` must carry: the
+    version's effective review head, mapped by
+    `_REVIEW_STATE_BY_EFFECTIVE_REVIEW`."""
+    effective = project_effective_review(session, ctx, asset_version_id)
+    return _REVIEW_STATE_BY_EFFECTIVE_REVIEW.get(effective, "pending_review")
 
 
 # ---------------------------------------------------------------------------
@@ -323,10 +375,13 @@ def publish_binding(
     source AssetVersion without creating a new one or cloning its review
     row (spec §16.11: "`source_reuse` references the exact existing
     reviewed source version and does not clone its review row"). Either
-    way the new binding starts `review_state='pending_review'`,
-    `truth_freshness='current'`, `ready_for_experiment=False` -- never
-    inherited from whatever it supersedes (spec §16.11: "binding starts
-    `pending_review` and is not experiment-ready").
+    way the new binding starts `truth_freshness='current'` with the bound
+    version's current effective review as its `review_state` -- never
+    inherited from whatever binding it supersedes. A localized child has
+    no review yet, so it starts `pending_review` and is not
+    experiment-ready (spec §16.11); a `source_reuse` binding of an Approved
+    source starts `approved` and experiment-ready, reading the source's
+    review rather than copying it.
 
     Idempotent per publication: a second call with the same
     (non-null) `publication_id` returns the already-published binding
@@ -409,6 +464,7 @@ def publish_binding(
         )
         superseded_binding_id = existing_active.id
 
+    review_state = _review_state_of(session, ctx, bound_asset_version_id)
     binding = MarketAssetBindingRecord(
         id=new_id("mab"),
         workspace_id=ctx.workspace_id,
@@ -418,9 +474,9 @@ def publish_binding(
         bound_asset_version_id=bound_asset_version_id,
         binding_kind=binding_kind,
         publication_id=publication_id,
-        review_state="pending_review",
+        review_state=review_state,
         truth_freshness="current",
-        ready_for_experiment=False,
+        ready_for_experiment=_ready_for_experiment(review_state, "current"),
         active=True,
         batch_id=batch_id,
         item_id=item_id,
@@ -647,4 +703,100 @@ def apply_dependency_change(
         change_kind=change_kind, changed_version_id=changed_version_id,
         dependency_change_id=dependency_change_id, tracked=True,
         staled_binding_ids=tuple(staled), skipped_binding_ids=tuple(skipped),
+    )
+
+
+# ---------------------------------------------------------------------------
+# apply_asset_version_review
+# ---------------------------------------------------------------------------
+
+
+def apply_asset_version_review(
+    session: Session,
+    ctx: TenantContext,
+    *,
+    asset_version_id: str,
+    review_id: str,
+    actor_id: str,
+    now: datetime | None = None,
+) -> ReviewApplicationResult:
+    """Move every active binding of `asset_version_id` to its effective review.
+
+    Localization contract §3 step 11: the user reviews the exact
+    AssetVersion in the Assets area, and an Approved review makes the
+    target-market binding `ready_for_experiment`. Spec §16.11: approval is
+    exact-version, and a later rejection removes readiness without deleting
+    history. `app.generation.review.create_review` calls this in the
+    transaction that writes review `review_id`, after the row is flushed,
+    so the effective head read here already includes it -- whether the
+    review is the version's first or supersedes an earlier one.
+
+    Only active bindings whose `bound_asset_version_id` is the reviewed
+    version move: a localized binding through its published child, a
+    `source_reuse` binding through the source version it references. A
+    superseded binding keeps the review state it ended with. Each binding
+    whose `review_state` or derived readiness changes is CAS-updated and
+    gets one `review_state_changed` event; `ready_for_experiment` is
+    re-derived with the module's one rule (Approved and current Truth), so
+    an approval never revives a binding whose Truth went stale. A binding
+    already in the target state is left alone, without an event.
+
+    The event carries a `dependency_change_id` derived from the review id,
+    so `uq_mabe_dependency_change` lets a review move a binding at most
+    once; the rows are locked first so a concurrent dependency change
+    serializes behind the review instead of failing its CAS.
+    """
+    now = now or datetime.now(timezone.utc)
+    review_state = _review_state_of(session, ctx, asset_version_id)
+    dependency_change_id = _dependency_change_id(_REVIEW_CHANGE_KIND, review_id)
+
+    bindings: Sequence[MarketAssetBindingRecord] = session.scalars(
+        select(MarketAssetBindingRecord)
+        .where(
+            MarketAssetBindingRecord.workspace_id == ctx.workspace_id,
+            MarketAssetBindingRecord.bound_asset_version_id == asset_version_id,
+            MarketAssetBindingRecord.active.is_(True),
+        )
+        .order_by(MarketAssetBindingRecord.id)
+        .with_for_update()
+    ).all()
+
+    changed: list[str] = []
+    unchanged: list[str] = []
+    for binding in bindings:
+        ready = _ready_for_experiment(review_state, binding.truth_freshness)
+        if binding.review_state == review_state and binding.ready_for_experiment == ready:
+            unchanged.append(binding.id)
+            continue
+
+        previous_state = _snapshot(binding)
+        result = session.execute(
+            update(MarketAssetBindingRecord)
+            .where(
+                MarketAssetBindingRecord.id == binding.id,
+                MarketAssetBindingRecord.workspace_id == ctx.workspace_id,
+                MarketAssetBindingRecord.revision == binding.revision,
+            )
+            .values(
+                review_state=review_state, ready_for_experiment=ready,
+                revision=binding.revision + 1, updated_at=now,
+            )
+        )
+        if result.rowcount != 1:
+            raise StaleRevisionError("market_asset_binding", binding.id, binding.revision)
+        session.flush()
+        session.refresh(binding)
+
+        _append_event(
+            session, ctx, binding=binding, event_type=REVIEW_EVENT_TYPE,
+            dependency_change_id=dependency_change_id, previous_state=previous_state,
+            new_state={**_snapshot(binding), "quality_review_id": review_id},
+            actor_id=actor_id, now=now,
+        )
+        changed.append(binding.id)
+
+    return ReviewApplicationResult(
+        asset_version_id=asset_version_id, review_id=review_id,
+        review_state=review_state, changed_binding_ids=tuple(changed),
+        unchanged_binding_ids=tuple(unchanged),
     )

@@ -26,30 +26,34 @@ Without `--project`, the `chromium`, `tablet-chromium` and `mobile-chromium`
 projects each run every spec, so a real-backend suite seeds three times. The
 runners pin `--project=chromium --workers=1`.
 
-## Golden path seeds that stand in for a product entry
+## Golden-path seed exceptions
 
-The golden path creates its business data through the interface and the API.
-Where no product entry exists yet, it seeds the data directly instead
-(`golden-path/fixtures.ts` and `golden-path/golden_path_seed.py`, see
-`_seed_scale_infrastructure`). Each item has an issue under #63; when it
-merges, the seed goes and its line is struck through here.
+The golden path goes through the product's own pages and APIs, except where
+no product entry exists yet. For those, `golden-path/fixtures.ts` and
+`golden-path/golden_path_seed.py` seed the data directly. This is the list of
+what they still seed ([#63](https://github.com/heart-cannot-beat/marketai/issues/63)).
+When a ticket ships the product entry, it removes the seed and crosses its
+item off here.
 
-- ~~The Workspace SpendGuardrail, inserted with high limits before the first
-  snapshot. Provisioning now creates it at the contract's Beta defaults, and
-  the Owner changes it in Settings (#126). Both specs deliver the signed
-  provisioning snapshots to the API's entitlement inbox, as the production
-  dispatcher does: `full-journey` through `dispatchCurrentSnapshot`,
-  `golden-path.spec.ts` when its provisioning completes.~~
-- The review approval of the Winner-market MarketAssetBinding that the
-  journey's Localization batch published: bindings start `pending_review` and
-  nothing moves them (#128).
-- The published ScalePolicyVersion: no production path publishes one (#127).
-- The curated-scenario Scale DeliveryTarget with its `delivery_configuration`
-  contract generation, activation evidence and contract set: no entry creates
-  a DeliveryTarget from an observed ad (#129).
-- The `landing_page` LibraryVersion keyed by the Winner's frozen
-  `landing_page_evidence_hash`: no Landing Page entity ships, and
-  `scale_delivery_targets` references `library_versions` (#129).
+- ~~The provisioned Workspace's SpendGuardrail (`fixtures.ts`)~~: removed by
+  [#126](https://github.com/heart-cannot-beat/marketai/issues/126).
+  Provisioning creates it with the contract defaults, and both journeys
+  deliver the signed provisioning snapshots to the API's entitlement inbox as
+  the production dispatcher does (`full-journey` through
+  `dispatchCurrentSnapshot`, `golden-path.spec.ts` when its provisioning
+  completes). The Owner changes the limits in Settings.
+- ~~Review approval of the Winner-market MarketAssetBinding~~: removed by
+  [#128](https://github.com/heart-cannot-beat/marketai/issues/128). The
+  journey approves the localized AssetVersion in the Assets area, and that
+  review moves the binding to `ready_for_experiment`.
+- The published ScalePolicyVersion
+  ([#127](https://github.com/heart-cannot-beat/marketai/issues/127)).
+- The curated-scenario DeliveryTarget, with its delivery_configuration
+  contract generation, activation evidence and contract set
+  ([#129](https://github.com/heart-cannot-beat/marketai/issues/129)).
+- The landing_page LibraryVersion keyed by the Winner's frozen
+  `landing_page_evidence_hash`
+  ([#129](https://github.com/heart-cannot-beat/marketai/issues/129)).
 
 ## Localization, Scale and Experiments on a local stack
 
