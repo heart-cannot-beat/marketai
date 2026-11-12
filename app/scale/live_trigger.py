@@ -20,9 +20,14 @@ In order:
    Episode as ``delivery_configuration_changed``. A different creative is
    not adopted: that evaluation rolls the Episode over (contract §4.3).
 2. **The day.** D must have ended in the account's time zone when the
-   batch finished, and must be the Episode's latest complete day: a
-   manifest for an earlier day than one already collected is backfill,
-   which is #113 (S7), not a live run (#101 Q9).
+   batch finished, and must be the Episode's latest complete day (#101
+   Q9). A manifest older than that -- an earlier day than one already
+   collected, or than the projection cursor -- gets a ``backfill`` run
+   instead (#113, #101 S7): sealed and evaluated like any run, but it
+   neither takes the Episode's phase nor moves its projection, streaks or
+   Advice, and it notifies no one (contract §18). It freezes the same
+   Policy and Target a live run would, and skips the stuck-run check below,
+   which is about the phase.
 3. **A stuck run** (#101 Q10). When the run holding the Episode's phase is
    unfinished and none of its Jobs can still run, it is enqueued again
    (``scale-eval:{run_id}:{algorithm_version}:redrive-{n}``), twice at
@@ -68,6 +73,7 @@ from app.scale.models import (
     ScaleTargetVersionRecord,
 )
 from app.scale.service import (
+    BACKFILL_TRIGGER_KIND,
     ScaleEvaluationRequest,
     enqueue_scale_evaluation,
     evaluation_job_key,
@@ -82,6 +88,7 @@ __all__ = [
     "LIVE_TRIGGER_KIND",
     "MAX_REDRIVES",
     "LiveTrigger",
+    "context_target",
     "eligible_live_policy",
     "trigger_live_evaluation",
 ]
@@ -95,7 +102,6 @@ _LIVE_JOB_STATES = ("queued", "retry_wait", "leased", "running")
 _RUN_RESOURCE = "scale_evaluation_run"
 
 DAY_NOT_ENDED = "day_not_ended"
-SUPERSEDED_BY_LATER_DAY = "superseded_by_later_day"
 PHASE_RUN_STUCK = "phase_run_stuck"
 NO_ELIGIBLE_POLICY = "no_eligible_policy"
 CREATIVE_DIFFERS = "creative_differs"
@@ -110,6 +116,8 @@ class LiveTrigger:
     skipped: str | None = None
     redriven_run_id: str | None = None
     baseline_adopted: bool = False
+    #: ``live``, or ``backfill`` for a manifest older than the Episode's latest.
+    trigger_kind: str | None = None
 
 
 def _as_utc(moment: datetime) -> datetime:
@@ -139,17 +147,11 @@ def trigger_live_evaluation(
     terminal_day = _as_utc(manifest.terminal_at).astimezone(ZoneInfo(episode.timezone_name)).date()
     if manifest.target_local_day >= terminal_day:
         return _skip(session, episode, manifest, DAY_NOT_ENDED, adopted)
-    later = session.scalar(
-        select(ScaleEvidenceSourceManifestRecord.id).where(
-            ScaleEvidenceSourceManifestRecord.workspace_id == context.workspace_id,
-            ScaleEvidenceSourceManifestRecord.meta_mode == context.meta_mode,
-            ScaleEvidenceSourceManifestRecord.episode_id == episode.id,
-            ScaleEvidenceSourceManifestRecord.state == "complete",
-            ScaleEvidenceSourceManifestRecord.target_local_day > manifest.target_local_day,
-        ).limit(1)
-    )
-    if later is not None:
-        return _skip(session, episode, manifest, SUPERSEDED_BY_LATER_DAY, adopted)
+    if _is_historical(session, context, episode, manifest):
+        return _request_backfill(
+            session, context, enrollment=enrollment, episode=episode, manifest=manifest,
+            triggering_sync_run_id=triggering_sync_run_id, adopted=adopted,
+        )
 
     redriven, stuck = _redrive_stuck_run(session, context, episode)
     if stuck:
@@ -158,11 +160,7 @@ def trigger_live_evaluation(
     policy = eligible_live_policy(session, context.meta_mode)
     if policy is None:
         return _skip(session, episode, manifest, NO_ELIGIBLE_POLICY, adopted, redriven)
-    targets = _active_targets(
-        session, context.workspace_id, episode.product_version_id, episode.offer_version_id,
-        episode.market_code, episode.currency,
-    )
-    target: ScaleTargetVersionRecord | None = targets[0] if targets else None
+    target = context_target(session, episode)
 
     run_id = request_scale_evaluation(session, context, ScaleEvaluationRequest(
         enrollment_id=enrollment.id,
@@ -199,7 +197,18 @@ def trigger_live_evaluation(
         },
     )
     session.flush()
-    return LiveTrigger(run_id=run_id, job_id=job.id, redriven_run_id=redriven, baseline_adopted=adopted)
+    return LiveTrigger(run_id=run_id, job_id=job.id, redriven_run_id=redriven, baseline_adopted=adopted,
+                       trigger_kind=LIVE_TRIGGER_KIND)
+
+
+def context_target(session: Session, episode: ScaleEpisodeRecord) -> ScaleTargetVersionRecord | None:
+    """The active Target of the Episode's exact context, or ``None``: the one
+    a run requested now freezes. A Target belongs to no mode."""
+    targets = _active_targets(
+        session, episode.workspace_id, episode.product_version_id, episode.offer_version_id,
+        episode.market_code, episode.currency,
+    )
+    return targets[0] if targets else None
 
 
 def eligible_live_policy(session: Session, meta_mode: str | None) -> ScalePolicyVersionRecord | None:
@@ -332,6 +341,91 @@ def _adopt_unverified_baseline(
         details=details,
     )
     return True
+
+
+# ---------------------------------------------------------------------------
+# 2. A day older than the Episode's latest: backfill (#113)
+# ---------------------------------------------------------------------------
+
+
+def _is_historical(
+    session: Session,
+    context: TenantContext,
+    episode: ScaleEpisodeRecord,
+    manifest: ScaleEvidenceSourceManifestRecord,
+) -> bool:
+    """Whether a later complete day was collected for the Episode, or its
+    projection cursor is already past this manifest."""
+    later = session.scalar(
+        select(ScaleEvidenceSourceManifestRecord.id).where(
+            ScaleEvidenceSourceManifestRecord.workspace_id == context.workspace_id,
+            ScaleEvidenceSourceManifestRecord.meta_mode == context.meta_mode,
+            ScaleEvidenceSourceManifestRecord.episode_id == episode.id,
+            ScaleEvidenceSourceManifestRecord.state == "complete",
+            ScaleEvidenceSourceManifestRecord.target_local_day > manifest.target_local_day,
+        ).limit(1)
+    )
+    if later is not None:
+        return True
+    return episode.projection_as_of_local_day is not None and (
+        (manifest.target_local_day, manifest.source_revision)
+        < (episode.projection_as_of_local_day, episode.projection_source_revision)
+    )
+
+
+def _request_backfill(
+    session: Session,
+    context: TenantContext,
+    *,
+    enrollment: ScaleEnrollmentRecord,
+    episode: ScaleEpisodeRecord,
+    manifest: ScaleEvidenceSourceManifestRecord,
+    triggering_sync_run_id: str | None,
+    adopted: bool,
+) -> LiveTrigger:
+    policy = eligible_live_policy(session, context.meta_mode)
+    if policy is None:
+        return _skip(session, episode, manifest, NO_ELIGIBLE_POLICY, adopted)
+    target = context_target(session, episode)
+    run_id = request_scale_evaluation(session, context, ScaleEvaluationRequest(
+        enrollment_id=enrollment.id,
+        episode_id=episode.id,
+        target_local_day=manifest.target_local_day,
+        trigger_kind=BACKFILL_TRIGGER_KIND,
+        source_manifest_id=manifest.id,
+        source_manifest_hash=manifest.canonical_hash,
+        source_revision=manifest.source_revision,
+        freshness_reference_at=manifest.terminal_at,
+        policy_version_id=policy.id,
+        algorithm_version=CURRENT_ALGORITHM_VERSION,
+        target_version_id=target.id if target is not None else None,
+        triggering_sync_run_id=triggering_sync_run_id,
+        original_initiator_id=enrollment.original_initiator_id,
+    ))
+    job = enqueue_scale_evaluation(session, context, run_id)
+    append_event(
+        session,
+        event_type="scale.backfill_evaluation.requested",
+        resource_type=_RUN_RESOURCE,
+        resource_id=run_id,
+        details={
+            "episode_id": episode.id,
+            "enrollment_id": enrollment.id,
+            "source_manifest_id": manifest.id,
+            "target_local_day": manifest.target_local_day.isoformat(),
+            "projection_as_of_local_day": (
+                episode.projection_as_of_local_day.isoformat()
+                if episode.projection_as_of_local_day is not None else None
+            ),
+            "policy_version_id": policy.id,
+            "target_version_id": target.id if target is not None else None,
+            "triggering_sync_run_id": triggering_sync_run_id,
+            "job_id": job.id,
+        },
+    )
+    session.flush()
+    return LiveTrigger(run_id=run_id, job_id=job.id, baseline_adopted=adopted,
+                       trigger_kind=BACKFILL_TRIGGER_KIND)
 
 
 # ---------------------------------------------------------------------------

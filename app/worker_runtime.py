@@ -356,6 +356,9 @@ class WorkerRuntime:
         if job.type == "scale_collect_sources":
             self._scale_collect_sources(job)
             return True
+        if job.type == "scale_target_change":
+            self._scale_target_change(job)
+            return True
         if job.type == "scale_export":
             self._scale_export(job)
             return True
@@ -1934,6 +1937,43 @@ class WorkerRuntime:
             )
 
     @runs_as(WORKER_ROLE)
+    def _scale_target_change(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_target_change`` job (#113, #101
+        S7). Like ``_scale_evaluate`` it only delegates to ``app.scale``:
+        the handler supersedes inapplicable Advice and requests
+        ``target_change`` runs, Episode by Episode, each in its own
+        transaction, and finds what it already did on a retry.
+        """
+        from app.scale.target_change import (
+            TargetChangeError,
+            TargetChangeFailed,
+            run_target_change,
+            target_change_job_input,
+        )
+
+        try:
+            target_event_id = target_change_job_input(job.payload)
+        except TargetChangeError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_target_change(job.context, target_event_id)
+            jobs.succeed(job.context, job.id, self.owner)
+        except TargetChangeError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+        except TargetChangeFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_target_change_failed", detail=str(exc), retryable=True,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_target_change_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
     def _scale_export(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_export`` job (#55).
 
@@ -2607,7 +2647,7 @@ def _warn_if_onboarding_delivery_unconfigured(base_url: str, service_token: str)
 
 
 # ADR 0017: this Worker runs Scale handlers (`scale_evaluate`,
-# `scale_advice_expire`, `scale_collect_sources`, `scale_export`), so the process must hold no Meta
+# `scale_advice_expire`, `scale_collect_sources`, `scale_target_change`, `scale_export`), so the process must hold no Meta
 # write capability. Every concrete Meta write
 # client in the codebase is listed here; each refuses construction without the
 # write configuration (`config.meta_write_ready()`, which needs a non-empty

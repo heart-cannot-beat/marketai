@@ -134,7 +134,10 @@ class TestRegistryCoversEveryJobType(unittest.TestCase):
 
         dispatched = _dispatched_types(ScaleWorkerRuntime)
         self.assertEqual(
-            dispatched, {"scale_evaluate", "scale_advice_expire", "scale_collect_sources", "scale_export"},
+            dispatched, {
+                "scale_evaluate", "scale_advice_expire", "scale_collect_sources", "scale_target_change",
+                "scale_export",
+            },
         )
         self.assertEqual(sorted(dispatched - set(JOB_POLICIES)), [])
 

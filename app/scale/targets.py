@@ -34,6 +34,12 @@ they are: the evaluator already takes the largest of the floor, the
 Target's minimum and 3x target CPA, and lists and contexts report the
 floor so the page can say which Targets fall below it.
 
+Publishing and withdrawing each enqueue one ``scale_target_change`` Job in
+the same transaction, keyed by the lifecycle event (#113): the Worker
+supersedes the Advice the change made inapplicable and re-evaluates
+Episodes whose evidence is still fresh (``app.scale.target_change``).
+A replayed command returns before it, so it enqueues nothing twice.
+
 Currency is not a column on ``ScaleEnrollmentRecord`` -- it lives on
 ``ScaleEpisodeRecord`` (one row per observation interval, spec §1.5).
 ``resolve_target_contexts`` therefore joins each distinct enrollment context
@@ -710,6 +716,8 @@ def publish_target(
         raise TargetLifecycleError(
             "preview_hash_mismatch", f"another publication of this context won over preview {preview_id}",
         )
+    # One Job for the publication and the withdrawals it implies (#113).
+    _enqueue_target_change(session, context, event)
     return target
 
 
@@ -900,7 +908,19 @@ def withdraw_target(
     )
     session.add(event)
     session.flush()
+    _enqueue_target_change(session, context, event)
     return target
+
+
+def _enqueue_target_change(
+    session: Session, context: TenantContext, event: ScaleTargetLifecycleEventRecord,
+) -> None:
+    """Re-evaluation after the change, in the command's transaction (#113)."""
+    # Imported here: ``app.scale.target_change`` imports ``live_trigger``,
+    # which imports this module.
+    from .target_change import enqueue_target_change
+
+    enqueue_target_change(session, context, event)
 
 
 def list_targets(

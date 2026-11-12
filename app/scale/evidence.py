@@ -67,7 +67,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -130,6 +130,7 @@ from app.scale.types import (
     MetricContractType,
     PriorStreakAbsenceReason,
     ScaleHealth,
+    TriggerKind,
     WindowRole,
 )
 from app.platform.runtime_role import WORKER_ROLE, runs_as
@@ -516,7 +517,11 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     ).scalar_one_or_none()
     if episode is None:
         raise SnapshotSealingError("episode_not_found", run.episode_id)
-    if episode.phase_run_id is not None and episode.phase_run_id != run.id:
+    # A historical backfill (#113) evaluates a day older than any the live
+    # runs still have to seal, so the predecessor it freezes cannot change
+    # under it; it neither waits for the phase nor takes it (spec §3.3 step 8).
+    historical = run.trigger_kind == TriggerKind.BACKFILL.value
+    if not historical and episode.phase_run_id is not None and episode.phase_run_id != run.id:
         # Another run holds the Episode until its Phase C releases it (spec
         # §3.4 step 8). Refused before anything is sealed (#110): a snapshot
         # sealed now would freeze the predecessor that run is about to
@@ -817,9 +822,10 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     run.updated_at = utcnow()
 
     # The Episode row is locked above, so the phase checked there is still free.
-    episode.phase = "evaluating"
-    episode.phase_run_id = run.id
-    episode.revision += 1
+    if not historical:
+        episode.phase = "evaluating"
+        episode.phase_run_id = run.id
+        episode.revision += 1
 
     session.flush()
     return snapshot_row.id
@@ -1217,6 +1223,23 @@ def _episode_day_counts(session: Session, episode_id: str, as_of: date) -> tuple
 def _select_predecessor(
     session: Session, context: TenantContext, episode_id: str, as_of: date,
 ) -> tuple[PriorStreakState | None, PriorStreakAbsenceReason | None]:
+    """The latest Evaluation of an earlier local day, and its streak state.
+
+    An Evaluation only historical backfill runs produced is never one
+    (spec §3.3 step 5: the predecessor is a projection-eligible Evaluation;
+    §18: a backfill may change the current streak only through forward
+    replay, which is deferred, #113). One no run names -- written by hand
+    in older tests -- still counts.
+    """
+    def _runs_of(*, backfill: bool):
+        kind = ScaleEvaluationRunRecord.trigger_kind
+        return select(ScaleEvaluationRunRecord.id).where(
+            ScaleEvaluationRunRecord.workspace_id == context.workspace_id,
+            ScaleEvaluationRunRecord.meta_mode == context.meta_mode,
+            ScaleEvaluationRunRecord.evaluation_id == ScaleEvaluationRecord.id,
+            kind == TriggerKind.BACKFILL.value if backfill else kind != TriggerKind.BACKFILL.value,
+        ).exists()
+
     row = session.execute(
         select(ScaleEvaluationRecord, ScaleEvidenceSnapshotRecord.as_of_local_day)
         .join(
@@ -1228,6 +1251,7 @@ def _select_predecessor(
             ScaleEvaluationRecord.meta_mode == context.meta_mode,
             ScaleEvaluationRecord.episode_id == episode_id,
             ScaleEvidenceSnapshotRecord.as_of_local_day < as_of,
+            or_(~_runs_of(backfill=True), _runs_of(backfill=False)),
         )
         .order_by(
             ScaleEvidenceSnapshotRecord.as_of_local_day.desc(),

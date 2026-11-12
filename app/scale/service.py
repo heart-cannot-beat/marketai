@@ -55,6 +55,18 @@ Known Task-12 scoping decisions (the full generality is later tasks' job):
   implemented: a ``forward_replay`` run never wins the projection CAS here.
   The run/Evaluation records still carry every field a later task needs to
   add that generality without a schema change.
+* A ``backfill`` run (#113: a complete manifest older than the Episode's
+  latest, ``app.scale.live_trigger``) is historical: it neither takes nor
+  needs the Episode's phase, never rolls the Episode over (a configuration
+  that differs cancels it), and its Evaluation is persisted without moving
+  the projection, the streaks, Advice or their expiry Jobs (spec §3.4 step
+  3). Only a projection-eligible run processes Advice, so a stale semantic
+  run that lost the cursor opens no thread either.
+* A ``target_change`` run (#113, ``app.scale.target_change``) re-evaluates
+  the latest complete manifest one semantic event later than every earlier
+  run of its Episode, so it wins the cursor over the live run of the same
+  manifest; its Advice pass supersedes what remains of the previous
+  Target's Advice, citing the Target event.
 * ``ck_sevr_snapshot_shape`` (a non-``requested`` run_state requires
   ``snapshot_id``) forces every early Phase-A rejection that has no sealed
   snapshot yet (a blocked source manifest, or any other
@@ -125,7 +137,7 @@ from app.scale.models import (
     ScaleEvidenceSnapshotRecord,
     ScaleManifestItemRecord,
 )
-from app.scale.types import RunOutcomeKind
+from app.scale.types import RunOutcomeKind, TriggerKind
 from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 __all__ = [
@@ -133,6 +145,8 @@ __all__ = [
     "ScaleRunOutcome",
     "ScaleOrchestrationError",
     "ScaleEvaluationDeferred",
+    "BACKFILL_TRIGGER_KIND",
+    "TARGET_CHANGE_TRIGGER_KIND",
     "EVALUATION_JOB_MAX_ATTEMPTS",
     "PHASE_CONFLICT_RETRY_SECONDS",
     "enqueue_scale_evaluation",
@@ -157,6 +171,15 @@ _RUN_STATE_BY_OUTCOME = {
     RunOutcomeKind.FAILED_INTEGRITY: "failed_integrity",
 }
 
+
+#: Trigger kinds of the runs #113 (#101 S7) requests: a complete manifest
+#: older than the Episode's latest, and a Target published or withdrawn.
+BACKFILL_TRIGGER_KIND = TriggerKind.BACKFILL.value
+TARGET_CHANGE_TRIGGER_KIND = TriggerKind.TARGET_CHANGE.value
+#: The trigger kinds whose Evaluation may move the Episode's projection.
+_PROJECTING_TRIGGER_KINDS = (
+    TriggerKind.LIVE.value, TriggerKind.POLICY_CHANGE.value, TARGET_CHANGE_TRIGGER_KIND,
+)
 
 #: How long a run waits before it tries an Episode another run holds again.
 PHASE_CONFLICT_RETRY_SECONDS = 60
@@ -615,7 +638,15 @@ def _phase_a(
     # is this module's job. Checked after sealing (see module docstring) so
     # the CHECK constraint on the terminal run_state is always satisfiable.
     if snapshot_row.delivery_comparability_hash != episode.delivery_comparability_hash:
-        outcome = _apply_episode_rollover(session, context, run, enrollment, episode)
+        if run.trigger_kind == BACKFILL_TRIGGER_KIND:
+            # An older day's read never closes the live Episode (#113):
+            # nothing comparable to evaluate, and nothing to roll over.
+            outcome = _terminalize(
+                session, context, run, episode,
+                kind=RunOutcomeKind.CANCELLED, detail="backfill_configuration_differs",
+            )
+        else:
+            outcome = _apply_episode_rollover(session, context, run, enrollment, episode)
         session.commit()
         return outcome
 
@@ -802,12 +833,16 @@ def _phase_c(
         session.commit()
         return outcome
 
+    # A historical backfill holds no phase and projects nothing, so it may
+    # persist against an Episode closed meanwhile (spec §3.4 Phase C).
+    historical = run.trigger_kind == BACKFILL_TRIGGER_KIND
+
     # A concurrent Episode closure raced this run during Phase B's DB-free
     # window (spec §3.4 Phase C: "A concurrent configuration rollover makes
     # a live run `episode_rolled_over`; pause, close, or another closure
     # makes it `cancelled`"). Distinguish by `closure_reason` rather than
     # collapsing every closure into `cancelled`.
-    if episode.phase == "closed":
+    if episode.phase == "closed" and not historical:
         if episode.closure_reason == "delivery_configuration_changed":
             outcome = _terminalize(
                 session, context, run, episode,
@@ -822,7 +857,7 @@ def _phase_c(
         session.commit()
         return outcome
 
-    if episode.phase_run_id != run.id:
+    if episode.phase_run_id != run.id and not historical:
         outcome = _terminalize(
             session, context, run, episode,
             kind=RunOutcomeKind.CANCELLED, detail="episode_phase_owner_changed",
@@ -852,22 +887,32 @@ def _phase_c(
             )
             no_delivery_closing = True
 
-    if not no_delivery_closing:
+    if projection_eligible and not no_delivery_closing:
         # Step 6: Advice lifecycle processing (spec §3.5) -- thread
         # resolution, occurrence creation, eligible-miss transitions, and
         # recurrence/semantic-change supersession. It flushes into this
         # transaction instead of committing its own (#111): the thread
         # changes commit with their expiry Jobs and the run's terminal state.
+        # A run that may not project -- a historical backfill or a stale
+        # semantic run -- cannot mutate Advice or notifications either
+        # (spec §3.4 step 3, #113).
         process_advice_candidates(
             session, context, episode.id, evaluation_row.id, evaluation.advice_candidates,
             trigger_kind=run.trigger_kind,
             evaluated_local_day=snapshot.as_of_local_day,
             projection_eligible=projection_eligible,
             commit=False,
+            semantic_event_id=(
+                run.triggering_semantic_event_id
+                if run.trigger_kind == TARGET_CHANGE_TRIGGER_KIND else None
+            ),
         )
 
     # Step 7: audit.
-    _append_run_audit(session, context, run, enrollment, episode, evaluation_row, evaluation, reused)
+    _append_run_audit(
+        session, context, run, enrollment, episode, evaluation_row, evaluation, reused,
+        projected=projection_eligible,
+    )
 
     # Step 8: unless closure already closed the Episode, CAS its phase back
     # to `collecting`.
@@ -888,8 +933,10 @@ def _phase_c(
     # §3.5, #111). After the flush above, so the deadline counts this run's
     # freshness reference the way the handler's recheck will; before the
     # commit below, so no thread is committed without the Job for its
-    # current deadline. A deadline this run did not move keeps its Job.
-    enqueue_episode_advice_expiries(session, context, episode.id)
+    # current deadline. A deadline this run did not move keeps its Job; a
+    # run that did not project moved none.
+    if projection_eligible:
+        enqueue_episode_advice_expiries(session, context, episode.id)
     session.commit()
 
     return ScaleRunOutcome(
@@ -1077,8 +1124,10 @@ def _decide_projection_eligibility(
     revision, semantic-event sequence, and replay lineage -- not insertion
     time or lexical Evaluation ID. Forward-replay lineage reconciliation
     (only a final head may project) is out of this task's scope: a
-    `forward_replay` run is simply never eligible here."""
-    if run.trigger_kind not in ("live", "policy_change", "target_change"):
+    `forward_replay` run is simply never eligible here, and neither is a
+    historical `backfill` (§18: it may not move the projection back,
+    #113)."""
+    if run.trigger_kind not in _PROJECTING_TRIGGER_KINDS:
         return False
     new_cursor = (
         snapshot.as_of_local_day,
@@ -1177,11 +1226,14 @@ def _append_run_audit(
     evaluation_row: ScaleEvaluationRecord,
     evaluation: ScaleEvaluation,
     reused: bool,
+    *,
+    projected: bool,
 ) -> None:
     """Spec §3.4 step 7: audit event carrying the system executor, original
     Enrollment creator/initiator, triggering lineage, run/snapshot/Evaluation
     IDs, and result hash. Reuses the platform's generic `AuditEventRecord`
-    (no Scale-specific audit table exists yet)."""
+    (no Scale-specific audit table exists yet). ``trigger_kind`` and
+    ``projected`` say whether the Evaluation moved the Episode (#113)."""
     session.add(
         AuditEventRecord(
             id=new_id("audit"),
@@ -1206,6 +1258,8 @@ def _append_run_audit(
                 "triggering_sync_run_id": run.triggering_sync_run_id,
                 "triggering_semantic_event_id": run.triggering_semantic_event_id,
                 "original_initiator_id": enrollment.original_initiator_id,
+                "trigger_kind": run.trigger_kind,
+                "projected": projected,
             },
         )
     )

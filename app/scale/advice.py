@@ -53,11 +53,18 @@ this deliberately rather than by surprise):
   ``expire_advice_thread`` once its freshness deadline passes (a `expired`
   event, which the CHECK does not constrain this way).
 * **Semantic-identity-change supersession** (Policy/Target/algorithm/
-  metric-contract change) is applied only when this same processing pass
-  also resolves a same-``advice_type`` successor thread under the new
-  semantics, for the same successor-requirement reason. Absent a
-  same-pass successor, the stale thread is left to resolve via ordinary
-  eligible-miss counting or freshness expiry.
+  metric-contract change) is applied when this same processing pass also
+  resolves a same-``advice_type`` successor thread under the new
+  semantics. A **Target** change needs no successor (#113): the Target
+  lifecycle event that made the thread inapplicable is its trigger
+  (``semantic_event_id``, which ``ck_sate_superseded_shape`` accepts in
+  place of a successor). :func:`supersede_for_target_change` applies it
+  when the Worker handles the event (``app.scale.target_change``), and a
+  ``target_change`` run's own pass applies it again to Advice an older
+  run opened under the previous Target in the meantime. A Policy,
+  algorithm or metric-contract change with no same-pass successor still
+  leaves the stale thread to eligible-miss counting or freshness expiry
+  (Policy-change reevaluation is deferred, #113).
 * **`convert_occurrence_to_draft` calls the real, already-existing**
   ``app.generation.draft.create_draft`` (an in-process Generation-owned
   interface, matching spec intent that Scale never constructs a
@@ -311,6 +318,7 @@ def process_advice_candidates(
     occurred_at: datetime | None = None,
     executor_id: str = _SYSTEM_EXECUTOR,
     commit: bool = True,
+    semantic_event_id: str | None = None,
 ) -> list[str]:
     """Resolve every candidate to a thread, append occurrences, apply
     eligible-miss resolution and semantic-change/recurrence supersession.
@@ -321,6 +329,11 @@ def process_advice_candidates(
     ``commit=False`` leaves the changes flushed in the caller's
     transaction. Phase C passes it so the thread changes, their expiry
     Jobs and the run's terminal state commit together (spec §3.4, #111).
+
+    ``semantic_event_id`` is the Target lifecycle event a ``target_change``
+    run re-evaluates for (#113): every remaining active thread formed under
+    another Target than this Evaluation's is superseded by it, successor
+    or not.
     """
     meta_mode = _require_meta_mode(context)
     occurred_at = _ensure_utc(occurred_at) or utcnow()
@@ -521,6 +534,18 @@ def process_advice_candidates(
         ))
         touched_thread_ids.append(thread.id)
 
+    # A Target change supersedes without a successor (#113): Advice an
+    # older run opened under the previous Target after the event's own
+    # pass (``supersede_for_target_change``) ran.
+    if semantic_event_id is not None:
+        touched_thread_ids.extend(_supersede_other_targets(
+            session, context, meta_mode,
+            [thread for key, thread in active_threads.items() if key not in touched],
+            target_key=evaluation_row.normalized_target_key,
+            semantic_event_id=semantic_event_id,
+            executor_id=executor_id,
+        ))
+
     # Eligible-miss counting for every remaining active thread this batch
     # did not touch or supersede.
     if is_live_eligible_day:
@@ -561,6 +586,101 @@ def process_advice_candidates(
             seen.add(thread_id)
             result.append(thread_id)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Target-change supersession -- contract §15.2, §18 (#113)
+# ---------------------------------------------------------------------------
+
+
+#: ``lifecycle_reason`` and thread-event ``reason`` of Advice a Target
+#: change made inapplicable.
+TARGET_CHANGED = "target_changed"
+
+
+@runs_as(WORKER_ROLE)
+def supersede_for_target_change(
+    session: Session,
+    context: TenantContext,
+    episode_id: str,
+    *,
+    target_key: str,
+    semantic_event_id: str,
+    executor_id: str = _SYSTEM_EXECUTOR,
+) -> list[str]:
+    """Supersede the Episode's active Advice formed under another Target
+    than ``target_key`` (a Target id, or ``NO_TARGET_MARKER``), citing the
+    Target lifecycle event ``semantic_event_id``.
+
+    Spec §3.8: "Policy/Target events first supersede incompatible active
+    Advice". A thread's Target is the one its latest occurrence's
+    Evaluation froze; every Advice identity includes it (its reason
+    signature), so none survives a change. Old Evaluations and occurrences
+    are not touched. Flushes into the caller's transaction, under the
+    thread locks; a thread that is no longer active is left alone, so a
+    replayed event supersedes nothing twice. Returns the superseded thread
+    ids in thread-id order.
+    """
+    meta_mode = _require_meta_mode(context)
+    threads = _load_active_threads(session, context, meta_mode, episode_id)
+    superseded = _supersede_other_targets(
+        session, context, meta_mode, sorted(threads.values(), key=lambda row: row.id),
+        target_key=target_key, semantic_event_id=semantic_event_id, executor_id=executor_id,
+    )
+    session.flush()
+    return superseded
+
+
+def _supersede_other_targets(
+    session: Session,
+    context: TenantContext,
+    meta_mode: str,
+    threads: Sequence[ScaleAdviceThreadRecord],
+    *,
+    target_key: str,
+    semantic_event_id: str,
+    executor_id: str,
+) -> list[str]:
+    superseded: list[str] = []
+    for thread in threads:
+        if thread.lifecycle != "active":
+            continue
+        formed_under = _thread_target_key(session, context, meta_mode, thread)
+        if formed_under is None or formed_under == target_key:
+            continue
+        thread.lifecycle = "superseded"
+        thread.lifecycle_reason = TARGET_CHANGED
+        thread.revision += 1
+        thread.updated_at = utcnow()
+        session.add(ScaleAdviceThreadEventRecord(
+            id=new_id("sate"), workspace_id=context.workspace_id, meta_mode=meta_mode,
+            episode_id=thread.episode_id, thread_id=thread.id, occurrence_id=None,
+            event_type="superseded", previous_lifecycle="active", current_lifecycle="superseded",
+            successor_thread_id=None, semantic_event_id=semantic_event_id, reason=TARGET_CHANGED,
+            deduplication_key=f"superseded:{thread.id}:{semantic_event_id}", executor_id=executor_id,
+        ))
+        superseded.append(thread.id)
+    return superseded
+
+
+def _thread_target_key(
+    session: Session, context: TenantContext, meta_mode: str, thread: ScaleAdviceThreadRecord,
+) -> str | None:
+    """The Target (or no-target marker) the thread's latest occurrence was
+    evaluated under."""
+    return session.execute(
+        select(ScaleEvaluationRecord.normalized_target_key)
+        .join(ScaleAdviceOccurrenceRecord, and_(
+            ScaleAdviceOccurrenceRecord.evaluation_id == ScaleEvaluationRecord.id,
+            ScaleAdviceOccurrenceRecord.workspace_id == ScaleEvaluationRecord.workspace_id,
+            ScaleAdviceOccurrenceRecord.meta_mode == ScaleEvaluationRecord.meta_mode,
+        ))
+        .where(
+            ScaleAdviceOccurrenceRecord.workspace_id == context.workspace_id,
+            ScaleAdviceOccurrenceRecord.meta_mode == meta_mode,
+            ScaleAdviceOccurrenceRecord.id == thread.latest_occurrence_id,
+        )
+    ).scalar_one_or_none()
 
 
 # ---------------------------------------------------------------------------
