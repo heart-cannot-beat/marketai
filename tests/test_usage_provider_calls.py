@@ -143,7 +143,7 @@ class UsageRecorderTests(unittest.TestCase):
             ("delta", "increase", "call", "sum"))
 
     def test_the_registry_refuses_unknown_metrics(self):
-        for metric_key in ("provider_call", "storage_bytes", "active_members", ""):
+        for metric_key in ("provider_call", "storage", "active_members", ""):
             with self.subTest(metric_key=metric_key):
                 self.refused("usage_metric_unknown", fact(metric_key=metric_key))
 
@@ -267,7 +267,7 @@ class UsageRecorderTests(unittest.TestCase):
             "byok": Decimal("2"), "sandbox": Decimal("1"), "mock": Decimal("2"), "not_applicable": Decimal("1")})
         self.assertEqual(summary.total, Decimal("4"))
 
-        other_metric = UsageQuery().summarize(self.session, CTX_A, metric_key="storage_bytes",
+        other_metric = UsageQuery().summarize(self.session, CTX_A, metric_key="operations",
                                               window_start=start, window_end=end)
         self.assertEqual(other_metric.total, Decimal("0"))
         self.assertEqual(set(other_metric.by_execution_mode.values()), {Decimal("0")})

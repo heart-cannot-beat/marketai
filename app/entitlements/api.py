@@ -585,8 +585,11 @@ async def get_usage(
     tenant: TenantContext = Depends(request_tenant_context),
 ) -> Response:
     # No docstring: FastAPI would publish it in the OpenAPI description.
-    # ``total`` sums the real buckets only; Mock (controlled Mock included)
-    # is reported in ``by_execution_mode["mock"]`` and never in ``total``.
+    # The metric's registered aggregation folds the window
+    # (``UsageQuery.summarize``): a delta metric's ``total`` sums the real
+    # buckets; a gauge's (``storage_bytes``) is its latest real event, and
+    # each bucket its latest event. Mock (controlled Mock included) is
+    # reported in ``by_execution_mode["mock"]`` and never in ``total``.
     from app.entitlements.usage import PROVIDER_CALLS, UsageQuery
 
     metric_key = request.query_params.get("metric_key", PROVIDER_CALLS.key)

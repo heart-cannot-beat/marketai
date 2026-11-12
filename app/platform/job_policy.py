@@ -109,6 +109,10 @@ JOB_POLICIES: dict[str, JobPolicy] = {
         "每个查询实例一个 run，按页断点续跑，"
         "终页、完成、发布、attestation 同一事务（#107、#108）"),
     "launch_recovery": _policy(_NONE_REQUEUE, "只读外部证据来解析不确定的写入，不重放"),
+    "usage.storage_bytes": _policy(
+        _NONE_REQUEUE,
+        "只读本 Workspace 的字节列，单事务写一条 usage_events；语义 key 按 UTC 日，"
+        "同一天重跑是计数的重复，不写第二行（#148）"),
     "marketing.resolve_call": _policy(_NONE_REQUEUE, "核对已有调用记录，不重发"),
     "marketing.export": _policy(_NONE_REQUEUE, "只写 BlobStore"),
     "scale_evaluate": _policy(

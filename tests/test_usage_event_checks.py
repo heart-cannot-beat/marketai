@@ -12,7 +12,7 @@ On a migrated SQLite database:
   word, so the model and the migration cannot drift apart unnoticed
   (``alembic check`` does not compare CHECK constraints);
 * rows written by every S1 and S2 writer before the checks exist, and every
-  registered metric in every execution mode, survive the upgrade's rebuild
+  registered metric in every execution mode it records, survive the upgrade's rebuild
   unchanged, then a downgrade and an upgrade again;
 * each check refuses the row that breaks it, through the statement
   ``record_many`` sends: ``ON CONFLICT DO NOTHING`` skips unique violations
@@ -49,7 +49,6 @@ from app.adapters.persistence.database import platform_session, tenant_session
 from app.adapters.persistence.models import WorkspaceRecord
 from app.entitlements.usage import (
     METRICS,
-    USAGE_EXECUTION_MODES,
     UsageFact,
     UsageRecorder,
     record_asset_version_generated,
@@ -63,6 +62,8 @@ from app.platform.tenancy import TenantContext
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION, DOWN_REVISION = "zzk145a1b2c3", "zzj113a1b2c3"
+#: The current head: zzl148a1b2c3 (#148) follows the checks and changes nothing on SQLite.
+HEAD = "zzl148a1b2c3"
 WORKSPACE = "ws_usage_checks"
 CTX = TenantContext(workspace_id=WORKSPACE, role="owner", initiator_id="owner_c",
                     request_id="req-checks", trace_id="trace-checks")
@@ -170,7 +171,7 @@ class UsageEventChecksMigrationTests(unittest.TestCase):
                           execution_mode=mode, occurred_at=now,
                           semantic_key_hash=usage_semantic_key(metric.key, "test", f"{mode}_{quantity}"))
                 for metric in METRICS.values()
-                for mode in USAGE_EXECUTION_MODES
+                for mode in metric.execution_modes
                 for quantity in ("0", "2.5")
             ]
             self.assertEqual(UsageRecorder().record_many(session, CTX, facts).written, len(facts))
@@ -181,7 +182,7 @@ class UsageEventChecksMigrationTests(unittest.TestCase):
                 transition_operation(session, operation_id, state, reason="checks test", actor="tester")
 
     def test_head_carries_exactly_the_checks_the_model_declares(self):
-        self.assertEqual(self._revision(), REVISION)
+        self.assertEqual(self._revision(), HEAD)
         self.assertEqual(self._checks(), model_checks())
         self.assertEqual(set(model_checks()), {
             "ck_usage_events_measurement_kind_valid", "ck_usage_events_direction_matches_kind",
@@ -193,8 +194,10 @@ class UsageEventChecksMigrationTests(unittest.TestCase):
         self.assertEqual(self._checks(), {})
         self._write_as_every_writer()
         before = self._rows()
-        self.assertEqual(len(before), 4 + 1 + 1 + len(METRICS) * len(USAGE_EXECUTION_MODES) * 2 + 2)
-        self.assertEqual({(kind, direction) for _, _, _, kind, direction, *_ in before}, {("delta", "increase")})
+        modes_per_metric = sum(len(metric.execution_modes) for metric in METRICS.values())
+        self.assertEqual(len(before), 4 + 1 + 1 + modes_per_metric * 2 + 2)
+        self.assertEqual({(kind, direction) for _, _, _, kind, direction, *_ in before},
+                         {("delta", "increase"), ("gauge", "set")})  # storage_bytes is a gauge (#148)
 
         self._alembic("upgrade", REVISION)
         self.assertEqual(self._checks(), model_checks())

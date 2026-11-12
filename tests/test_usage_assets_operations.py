@@ -103,7 +103,7 @@ class RegistryTests(LibraryFixtures):
         self.assertEqual(
             set(METRICS),
             {"provider_calls", "asset_versions_generated", "generation_items_failed",
-             "operations", "processing_seconds"},
+             "operations", "processing_seconds", "storage_bytes"},  # storage_bytes: #148
         )
         for metric, unit in ((ASSET_VERSIONS_GENERATED, "asset_version"), (GENERATION_ITEMS_FAILED, "run_item"),
                              (OPERATIONS, "operation"), (PROCESSING_SECONDS, "second")):

@@ -19,10 +19,12 @@
 | `generation_items_failed` | `run_item` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
 | `operations` | `operation` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
 | `processing_seconds` | `second` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
+| `storage_bytes` | `byte` | 待合并后补记 | [#148](https://github.com/heart-cannot-beat/marketai/issues/148)（S5） | 待合并后补记 | 待合并后补记 |
 
-- 五个 metric 都是 `delta` / `increase` / 求和。每条事实按执行模式分进 `byok`、`sandbox`、`mock`、`not_applicable` 四个桶；`mock` 不进 `total`。
+- 前五个 metric 都是 `delta` / `increase` / 求和。每条事实按执行模式分进 `byok`、`sandbox`、`mock`、`not_applicable` 四个桶；`mock` 不进 `total`。
+- `storage_bytes` 是 `gauge` / `set`，只记 `not_applicable`，每个 Workspace 每个 UTC 日一条；`GET /api/v1/usage` 对它返回窗口内最新的一条，不求和。见下文“存储字节数”。
 - 已知偏差：Meta 侧受控 Mock 的 Operation 记成 `not_applicable`，计入了 `total`（[#146](https://github.com/heart-cannot-beat/marketai/issues/146)）。
-- 契约 §9 的私有存储字节数、成员和预留邀请数还没有写入方，见 [#148](https://github.com/heart-cannot-beat/marketai/issues/148)–[#150](https://github.com/heart-cannot-beat/marketai/issues/150)。
+- 契约 §9 的私有存储字节数由 #148 记录（见下文）；成员和预留邀请数还没有写入方，见 [#149](https://github.com/heart-cannot-beat/marketai/issues/149)。
 
 ### 数据库约束（#145，迁移 `zzk145a1b2c3`）
 
@@ -42,6 +44,17 @@
 - **SQLite**：用 batch 重建表。重建前先数违反约束的行，有就拒绝升级，库不变。
 - **回滚**：downgrade 只删这四条约束，行不动。旧代码写出的行也满足约束，所以只回退代码时不需要降库。
 - **Release 结果**：本迁移在 PR 合并后由 Release 服务执行；执行结果待合并后补记。
+
+### 存储字节数（#148，迁移 `zzl148a1b2c3`）
+
+迁移 `zzl148a1b2c3`（`down_revision` 为 `zzk145a1b2c3`）只在 PostgreSQL 上加一个窄函数 `marketai_storage_usage_workspaces_v1(date, integer)`：SECURITY DEFINER、`search_path` 为空、只有 `marketai_domain_worker` 能执行，只返回当天还没有测量 Job 的 active、未暂停 Workspace 的 id 和当前 `authorization_epoch`。不改表、不改 RLS、不加表授权。
+
+- **怎么算**：只读数据库里的字节列（`asset_versions`、`reference_objects`、`external_creatives`、`localization_attempt_outputs`、`export_packages`），不列 BlobStore。同一 Workspace 里多行指向同一个对象 key 时只算一次，按其中最大的字节数。已清除的原件、被拒的外部素材上传、还没打包的导出不算。规则写在 `app/entitlements/storage_usage.py` 的模块说明里。
+- **什么时候写**：Worker 主通道启动后等一个间隔（5 分钟），之后每 5 分钟问一次窄函数，给还没有当天 Job 的 Workspace 各建一个 `usage.storage_bytes` Job。Job 在该 Workspace 的签名上下文里、RLS 下求和并写一条。同一 UTC 日再跑只记为重复，不写第二行；当天第一次测量为准。
+- **起算**：部署后约 5 分钟出现第一批行（Worker 启动后的第一个间隔，再加排队时间）。之后每个 UTC 日在 00:00 后约 5 分钟内测量。之前的日子不回填；Worker 停摆的日子没有行。
+- **回滚**：只回退代码时不需要降库，函数留着没人调用。downgrade 删除函数；如果新代码还在跑，它的调度每个间隔报一次失败（告警，不中断 Worker），已写的行不动。
+- **不执行上限**：10 GiB 上限由 [#147](https://github.com/heart-cannot-beat/marketai/issues/147) 执行。
+- **Release 结果**：本迁移在 PR 合并后由 Release 服务执行；起算日和执行结果待合并后补记。
 
 ## 竞品广告扫描上线（Epic #265）
 

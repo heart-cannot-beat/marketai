@@ -2394,6 +2394,7 @@
   "error-upload_type_not_allowed": "产品识别只接受 PNG、JPEG 或 WebP 图片。",
   "error-uploads_required": "请至少上传一张图片。",
   "error-url_parsing": "请填写有效的链接。",
+  "error-usage_storage_bytes_failed": "今天的存储用量没能统计，任务会自动重试。",
   "error-validity_expired": "排期超出了优惠的有效期。",
   "error-value_error": "这个值无效。",
   "error-variant_selection_required": "这个链接包含多个款式，请选择要建立的款式。",

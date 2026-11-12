@@ -614,6 +614,26 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_usage_pg -v
 
+      # Daily storage_bytes (#148): only the Worker may execute
+      # marketai_storage_usage_workspaces_v1 (SECURITY DEFINER, search_path='',
+      # ids and epochs only). The deployed WorkerRuntime lists the active
+      # Workspaces through it and enqueues one Job each in a signed context;
+      # each Job sums its own Workspace's byte columns under RLS (a blob two
+      # rows name counts once) and appends one gauge row a day. A second pass
+      # adds nothing; Workspace A's Job never sees B's rows, even under the
+      # same key; a Job rejected for a stale epoch is dispatched again under
+      # the new one; GET /api/v1/usage returns the latest value. Then the
+      # migration's downgrade and upgrade again. The tests cancel the Jobs
+      # their dispatch opened and remove their own usage rows.
+      - name: Daily storage_bytes Usage holds under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_usage_storage_bytes_pg -v
+
       # Spend guardrail previews (#386): a preview is a stored row the API
       # role confirms once, after a restart too; another Workspace can neither
       # confirm, see, consume nor forge it; racing confirms let one change

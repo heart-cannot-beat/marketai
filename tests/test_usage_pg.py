@@ -551,7 +551,7 @@ class UsagePostgresTests(unittest.TestCase):
         before = self._stored(ctx)
         self.assertEqual(len(before), len(ROLE_NAMES) * (4 + 1 + 1 + 2))
         self.assertEqual({row.execution_mode for row in before}, set(USAGE_EXECUTION_MODES))
-        self.assertEqual({row.metric_key for row in before}, set(METRICS))
+        self.assertEqual({row.metric_key for row in before}, set(METRICS) - {"storage_bytes"})  # S1 and S2
 
         self._alembic("upgrade", CHECKS_REVISION)  # NOT VALID, then VALIDATE over these rows
         self.assertEqual(self._checks(), dict.fromkeys(CHECK_NAMES, True))

@@ -857,6 +857,14 @@ BEGIN
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_dispatch_meta_observation_ticks_v1(integer) TO marketai_domain_worker';
   END IF;
 
+  -- Daily storage_bytes Usage (zzl148a1b2c3, #148): the active Workspaces
+  -- still owed today's usage.storage_bytes Job, ids and epochs only; the Job
+  -- is enqueued and run in a signed TenantContext under RLS.
+  IF to_regprocedure('public.marketai_storage_usage_workspaces_v1(date,integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_storage_usage_workspaces_v1(date, integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_storage_usage_workspaces_v1(date, integer) TO marketai_domain_worker';
+  END IF;
+
   -- Platform Meta API (zzc2f3a4b5c6, #91 and #94). The API keeps SELECT only
   -- on workspaces and only the non-secret columns of credential_versions:
   -- bootstrap creates the platform Workspace (is_platform_workspace = true,
