@@ -159,6 +159,12 @@ class WorkerRuntime:
         # Monotonic time of the next Meta observation dispatch (#107); None
         # means the first main-lane tick dispatches.
         self._next_observation_dispatch_at: float | None = None
+        # Monotonic time of the next storage_bytes dispatch (#148). The first
+        # one waits an interval: a Worker that just started drains its queue
+        # first, and the daily measurement is not urgent.
+        from .entitlements.storage_usage import DISPATCH_INTERVAL_SECONDS
+
+        self._next_storage_usage_dispatch_at: float = time.monotonic() + DISPATCH_INTERVAL_SECONDS
 
     def _begin_drain(self) -> None:
         if self.stopping:
@@ -255,8 +261,9 @@ class WorkerRuntime:
                 return True
         if job_types is None:
             # Busy or idle: a queue that never drains must not starve the
-            # schedules (#101 Q4).
+            # schedules (#101 Q4), nor the daily storage measurement (#148).
             await self._dispatch_observation_ticks_if_due()
+            await self._dispatch_storage_usage_if_due()
         job = await asyncio.to_thread(jobs.claim_next, self.owner,
             **({'job_types': job_types, 'exclude_types': exclude_types} if job_types is not None or exclude_types else {}))
         if job is None:
@@ -293,6 +300,9 @@ class WorkerRuntime:
             return True
         if job.type == "meta_observation_sync":
             self._meta_observation_sync(job)
+            return True
+        if job.type == "usage.storage_bytes":
+            self._usage_storage_bytes(job)
             return True
         if job.type == "verify_upload_intent":
             await self._verify_upload_intent(job)
@@ -2078,6 +2088,55 @@ class WorkerRuntime:
                 "Meta observation dispatch failed; retrying next interval",
                 details={"owner": self.owner, "error": type(exc).__name__},
             )
+
+    async def _dispatch_storage_usage_if_due(self) -> None:
+        """Enqueue today's ``storage_bytes`` Job for each Workspace still owed
+        one, at most once an interval per process (#148). A failure is
+        reported and retried on the next interval; it never stops this lane
+        from claiming Jobs."""
+        from .entitlements import storage_usage
+
+        now = time.monotonic()
+        if now < self._next_storage_usage_dispatch_at:
+            return
+        # Set before awaiting: the other main-lane tasks of this process see
+        # it and skip, so one process dispatches once per interval.
+        self._next_storage_usage_dispatch_at = now + storage_usage.DISPATCH_INTERVAL_SECONDS
+        try:
+            await asyncio.to_thread(storage_usage.dispatch_storage_usage_jobs)
+        except Exception as exc:  # noqa: BLE001 -- the next interval retries
+            from .platform.ops_alerts import AlertCategory, Severity, emit
+
+            emit(
+                Severity.WARNING,
+                AlertCategory.WORKER_LIFECYCLE,
+                "Storage usage dispatch failed; retrying next interval",
+                details={"owner": self.owner, "error": type(exc).__name__},
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _usage_storage_bytes(self, job: jobs.ClaimedJob) -> None:
+        """Record the claimed Workspace's ``storage_bytes`` for today (#148).
+
+        Sums the Workspace's byte columns and appends one Usage fact in the
+        claimed Job's signed TenantContext, under RLS, in one transaction. A
+        replay on the same UTC day writes a counted duplicate, never a second
+        row; a failure is retried, and a retry on a later day records that
+        day instead.
+        """
+        from .entitlements.storage_usage import record_storage_bytes
+
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            with tenant_session(job.context) as session:
+                record_storage_bytes(session, job.context)
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="usage_storage_bytes_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+            return
+        jobs.succeed(job.context, job.id, self.owner)
 
     @runs_as(WORKER_ROLE)
     def _meta_observation_tick(self, job: jobs.ClaimedJob) -> None:

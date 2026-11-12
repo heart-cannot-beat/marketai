@@ -321,6 +321,8 @@ const NOT_SHOWN: Record<string, string> = {
     'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
   usage_source_invalid:
     'a Usage fact for an AssetVersion Generation did not produce (`UsageFactError`, #8 S2): a programming error that rolls back the version it was written with, never sent to a page',
+  usage_execution_mode_mismatch:
+    'a Usage fact in a bucket its metric does not record (`UsageFactError`, #148): a programming error that rolls back the transaction it was written in, never sent to a page',
 };
 
 const codesIn = (

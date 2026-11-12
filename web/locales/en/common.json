@@ -2394,6 +2394,7 @@
   "error-upload_type_not_allowed": "Product recognition accepts PNG, JPEG or WebP images.",
   "error-uploads_required": "Upload at least one image.",
   "error-url_parsing": "Enter a valid link.",
+  "error-usage_storage_bytes_failed": "Today's storage usage could not be measured. The task will retry.",
   "error-validity_expired": "The schedule falls outside the offer's validity.",
   "error-value_error": "This value is invalid.",
   "error-variant_selection_required": "This link has several styles. Choose the one to set up.",
