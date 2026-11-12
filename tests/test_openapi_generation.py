@@ -124,6 +124,9 @@ def test_scale_openapi_has_no_meta_mutation_surface() -> None:
         "ObservedAdResponse",
         "ObservedAdUnavailableResponse",
         "ProblemDetails",
+        # #134: the publish flow's contexts, with each one's platform floor.
+        "TargetContextListResponse",
+        "TargetContextResponse",
         "TargetListResponse",
         "TargetPublicationPreviewRequest",
         "TargetPublicationPreviewResponse",

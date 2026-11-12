@@ -111,6 +111,7 @@ from .schemas import (
     MetricContractSetGenerationResponse,
     MetricContractSetResponse,
     ObservedAdListResponse,
+    TargetContextListResponse,
     TargetContextResponse,
     TargetCreateRequest,
     TargetListResponse,
@@ -123,6 +124,7 @@ from .schemas import (
     TargetWithdrawRequest,
 )
 from .targets import (
+    applicable_policy,
     create_publication_preview,
     create_withdrawal_preview,
     get_target,
@@ -647,7 +649,11 @@ def platform_convert_advice_occurrence(
 # ---------------------------------------------------------------------------
 
 
-@platform_scale_mode.get("/target-contexts/current", operation_id="platform_list_scale_target_contexts")
+@platform_scale_mode.get(
+    "/target-contexts/current",
+    operation_id="platform_list_scale_target_contexts",
+    response_model=TargetContextListResponse,
+)
 def platform_list_target_contexts(context: TenantContext = Depends(_platform_context)):
     with tenant_session(context) as session:
         contexts = resolve_target_contexts(session, context)
@@ -672,7 +678,8 @@ def platform_list_targets_route(
             offer_version_id=offer_version_id,
             market_code=market_code,
         )
-        items = [_target_dict(r, context) for r in rows]
+        policy = applicable_policy(session, context)
+        items = [_target_dict(r, context, policy) for r in rows]
     filters_key = f"targets:{lifecycle_state or ''}:{product_version_id or ''}"
     return _paginate(items, context=context, filters_key=filters_key, cursor=cursor, limit=limit)
 
@@ -686,7 +693,7 @@ def platform_get_target_route(
     with tenant_session(context) as session:
         target = get_target(session, context, target_id)
         set_etag(response, target.revision)
-        return _target_dict(target, context)
+        return _target_dict(target, context, applicable_policy(session, context))
 
 
 @platform_scale_mode.post(
@@ -750,7 +757,7 @@ def platform_create_target_route(
             preview_id=body.publication_preview_id,
             idempotency_key=idempotency_key,
         )
-        return _target_dict(target, context)
+        return _target_dict(target, context, applicable_policy(session, context))
 
 
 @platform_scale_mode.post(
@@ -803,7 +810,7 @@ def platform_withdraw_target_route(
             preview_id=body.withdrawal_preview_id,
             idempotency_key=idempotency_key,
         )
-        return _target_dict(target, context)
+        return _target_dict(target, context, applicable_policy(session, context))
 
 
 # ---------------------------------------------------------------------------

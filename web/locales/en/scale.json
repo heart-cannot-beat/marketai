@@ -370,11 +370,17 @@
     "loading": "Loading…",
     "load-more": "Load more",
     "withdraw": "Withdraw",
+    "below-platform-floor": {
+      "label": "Below the platform floor; evaluated at the platform floor",
+      "republish-owner": "Publish a new target with a minimum economic spend of at least {{floor}} {{currency}} to replace it.",
+      "republish-member": "The Workspace Owner can publish a replacement with a minimum economic spend of at least {{floor}} {{currency}}."
+    },
     "column": {
       "context": "Context",
       "currency": "Currency",
       "target-cpa": "Target CPA",
       "breakeven-roas": "Breakeven ROAS",
+      "minimum-economic-spend": "Minimum economic spend",
       "lifecycle": "Lifecycle",
       "actions": "Actions"
     },
@@ -393,6 +399,10 @@
       "context-placeholder": "Select a context…",
       "has-active-target": "already has an active target",
       "no-contexts": "No eligible contexts. A context needs at least one active or paused Enrollment with observed Episode currency.",
+      "platform-floor": "Platform floor: {{floor}} {{currency}} of spend in each 7-day window.",
+      "minimum-required-when-roas-only": "Minimum economic spend is required only when the target has a breakeven ROAS and no target CPA. If you fill it in, it can't be below the platform floor.",
+      "floor-no-eligible-policy": "No Scale Policy is in force in this mode, so there is no platform floor to check a minimum economic spend against. Only a target with a target CPA and no minimum economic spend can be published here.",
+      "floor-currency-unsupported": "The Scale Policy in force sets no platform floor for {{currency}}, so this context isn't evaluated economically. Only a target with a target CPA and no minimum economic spend can be published.",
       "affected-enrollments": "Affected enrollments",
       "policy-floor-check": "Policy floor check",
       "policy-floor-passed": "Passed",

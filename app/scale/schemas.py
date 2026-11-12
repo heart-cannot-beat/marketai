@@ -507,6 +507,17 @@ class TargetContextResponse(_Base):
     market_code: str
     currency: str
     has_active_target: bool
+    #: #134: the platform floor a Target published into this context is
+    #: checked against -- the minimum total spend of a 7-day window in
+    #: ``currency`` under the Policy in force for the request's mode -- or
+    #: ``None`` with ``platform_spend_floor_unavailable_reason``
+    #: (``no_eligible_policy`` or ``spend_floor_currency_unsupported``).
+    platform_spend_floor: str | None
+    platform_spend_floor_unavailable_reason: str | None
+
+
+class TargetContextListResponse(_Base):
+    items: list[TargetContextResponse]
 
 
 # A Target amount is a plain ASCII decimal ("20", "2.50"): no exponent,
@@ -625,6 +636,14 @@ class TargetResponse(_Base):
     withdrawn_at: datetime | None
     created_at: datetime
     allowed_actions: list[ActionEligibilityModel]
+    #: #134: the platform floor in the Target's currency under the Policy in
+    #: force for the request's mode (``None`` when there is none to read).
+    platform_spend_floor: str | None
+    #: #134: an active Target published before the floor check that misses
+    #: it -- only a ROAS and no minimum economic spend, or a minimum below
+    #: ``platform_spend_floor``. It stays in force; its evaluations hold it
+    #: to the platform floor instead.
+    below_platform_floor: bool
 
 
 class TargetListResponse(_Base):

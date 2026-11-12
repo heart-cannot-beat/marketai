@@ -370,11 +370,17 @@
     "loading": "正在加载…",
     "load-more": "加载更多",
     "withdraw": "撤回",
+    "below-platform-floor": {
+      "label": "低于平台底线，按平台底线计算",
+      "republish-owner": "请重新发布一个最低经济花费不低于 {{floor}} {{currency}} 的目标来替换它。",
+      "republish-member": "工作区 Owner 可以重新发布一个最低经济花费不低于 {{floor}} {{currency}} 的目标来替换它。"
+    },
     "column": {
       "context": "上下文",
       "currency": "币种",
       "target-cpa": "目标 CPA",
       "breakeven-roas": "盈亏平衡 ROAS",
+      "minimum-economic-spend": "最低经济花费",
       "lifecycle": "生命周期",
       "actions": "操作"
     },
@@ -393,6 +399,10 @@
       "context-placeholder": "选择上下文…",
       "has-active-target": "已有一个有效的目标",
       "no-contexts": "没有符合条件的上下文。上下文至少需要一个处于监控中或已暂停、且有已观察到的观察段币种的监控。",
+      "platform-floor": "平台底线：每个 7 日窗口花费 {{floor}} {{currency}}。",
+      "minimum-required-when-roas-only": "只有盈亏平衡 ROAS、没有目标 CPA 时，最低经济花费必填。填写时不能低于平台底线。",
+      "floor-no-eligible-policy": "这个模式下没有生效的策略，无法核对最低经济花费是否达到平台底线。这里只能发布填了目标 CPA、且不填最低经济花费的目标。",
+      "floor-currency-unsupported": "当前生效的策略没有为 {{currency}} 设平台底线，这个上下文不做经济评估。只能发布填了目标 CPA、且不填最低经济花费的目标。",
       "affected-enrollments": "受影响的监控",
       "policy-floor-check": "策略下限检查",
       "policy-floor-passed": "通过",

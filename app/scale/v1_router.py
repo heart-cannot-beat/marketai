@@ -173,6 +173,7 @@ from .models import (
     ScaleEpisodeProjectionRecord,
     ScaleEpisodeRecord,
     ScaleExportRecord,
+    ScalePolicyVersionRecord,
     ScaleSnapshotQualityIssueRecord,
     ScaleSourceQualityIssueRecord,
     ScaleTargetVersionRecord,
@@ -209,6 +210,7 @@ from .schemas import (
     ExportDownloadIntentResponse,
     ExportResponse,
     ObservedAdListResponse,
+    TargetContextListResponse,
     TargetContextResponse,
     TargetCreateRequest,
     TargetListResponse,
@@ -225,13 +227,16 @@ from .targets import (
     TargetNotFoundError,
     TargetPreviewConsumedError,
     TargetPreviewExpiredError,
+    applicable_policy,
     create_publication_preview,
     create_withdrawal_preview,
     get_target,
     list_targets,
+    platform_spend_floor,
     publish_target,
     resolve_target_contexts,
     target_actions,
+    target_below_platform_floor,
     withdraw_target,
 )
 from .types import AdviceType
@@ -1107,7 +1112,15 @@ def _preview_dict(preview) -> dict:
     }
 
 
-def _target_dict(target: ScaleTargetVersionRecord, context: TenantContext) -> dict:
+def _target_dict(
+    target: ScaleTargetVersionRecord,
+    context: TenantContext,
+    policy: ScalePolicyVersionRecord | None,
+) -> dict:
+    """``policy`` is the one in force for ``context``'s mode
+    (``app.scale.targets.applicable_policy``), read once per response: a
+    Target reports its floor and whether it falls below it (#134)."""
+    floor = platform_spend_floor(policy, target.currency)
     return {
         "id": target.id,
         "product_version_id": target.product_version_id,
@@ -1124,6 +1137,8 @@ def _target_dict(target: ScaleTargetVersionRecord, context: TenantContext) -> di
         "withdrawn_at": target.withdrawn_at,
         "created_at": target.created_at,
         "allowed_actions": target_actions(target, context),
+        "platform_spend_floor": floor.amount_text,
+        "below_platform_floor": target_below_platform_floor(target, floor),
     }
 
 
@@ -1155,7 +1170,11 @@ def create_activation_preview_route(
 # ---------------------------------------------------------------------------
 
 
-@mode_router.get("/target-contexts/current", operation_id="list_scale_target_contexts")
+@mode_router.get(
+    "/target-contexts/current",
+    operation_id="list_scale_target_contexts",
+    response_model=TargetContextListResponse,
+)
 def list_target_contexts(effective: TenantContext = Depends(_mode_effective_context)):
     with tenant_session(effective) as session:
         contexts = resolve_target_contexts(session, effective)
@@ -1180,7 +1199,8 @@ def list_targets_route(
             offer_version_id=offer_version_id,
             market_code=market_code,
         )
-        items = [_target_dict(r, effective) for r in rows]
+        policy = applicable_policy(session, effective)
+        items = [_target_dict(r, effective, policy) for r in rows]
     filters_key = f"targets:{lifecycle_state or ''}:{product_version_id or ''}"
     return _paginate(items, context=effective, filters_key=filters_key, cursor=cursor, limit=limit)
 
@@ -1194,7 +1214,7 @@ def get_target_route(
     with tenant_session(effective) as session:
         target = get_target(session, effective, target_id)
         set_etag(response, target.revision)
-        return _target_dict(target, effective)
+        return _target_dict(target, effective, applicable_policy(session, effective))
 
 
 @mode_router.post(
@@ -1258,7 +1278,7 @@ def create_target_route(
             preview_id=body.publication_preview_id,
             idempotency_key=idempotency_key,
         )
-        return _target_dict(target, effective)
+        return _target_dict(target, effective, applicable_policy(session, effective))
 
 
 @mode_router.post(
@@ -1311,7 +1331,7 @@ def withdraw_target_route(
             preview_id=body.withdrawal_preview_id,
             idempotency_key=idempotency_key,
         )
-        return _target_dict(target, effective)
+        return _target_dict(target, effective, applicable_policy(session, effective))
 
 
 # ---------------------------------------------------------------------------
@@ -1653,6 +1673,11 @@ _TARGET_ERROR_STATUS = {
     "invalid_lifecycle": 409,
     "no_controlled_mock_enrollment": 409,
     "idempotency_result_missing": 400,
+    # #134: the minimum economic spend against the platform floor.
+    "minimum_economic_spend_required": 422,
+    "minimum_economic_spend_below_platform_floor": 422,
+    "spend_floor_currency_unsupported": 422,
+    "no_eligible_policy": 409,
 }
 
 #: The DeliveryTarget entry's typed reasons (#129) and the contract-set and
@@ -1780,7 +1805,10 @@ def register_scale_v1_problem_handlers(app) -> None:
 
     @app.exception_handler(TargetLifecycleError)
     async def _target_lifecycle(request: Request, exc: TargetLifecycleError):
-        return _problem(request, _TARGET_ERROR_STATUS.get(exc.code, 400), exc.code, str(exc))
+        extra = {"params": exc.params} if exc.params else {}
+        return _request_problem(
+            request, _TARGET_ERROR_STATUS.get(exc.code, 400), exc.code, str(exc), **extra,
+        )
 
     @app.exception_handler(DeliveryTargetError)
     async def _delivery_target_error(request: Request, exc: DeliveryTargetError):

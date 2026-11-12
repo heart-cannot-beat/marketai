@@ -160,6 +160,7 @@ __all__ = [
     "SnapshotAssemblyError",
     "seal_snapshot",
     "assemble_snapshot",
+    "policy_spend_floor",
 ]
 
 
@@ -331,7 +332,7 @@ _SPEND_FLOOR_BY_CURRENCY_KEY = "economic_spend_floor_per_7d_window_by_currency"
 _BREAKDOWN_HITS_KEY = "consecutive_breakdown_hits_required"
 
 
-def _spend_floor(policy: ScalePolicyVersionRecord, currency: str) -> Decimal | None:
+def policy_spend_floor(policy: ScalePolicyVersionRecord, currency: str) -> Decimal | None:
     """The platform economic floor for one 7-day window in ``currency``.
 
     A Policy with a per-currency table (#132) yields the entry for the
@@ -339,6 +340,9 @@ def _spend_floor(policy: ScalePolicyVersionRecord, currency: str) -> Decimal | N
     when the table has no entry; the evaluator then skips economic
     evaluation. A Policy without the table keeps its single
     ``spend_floor_minimum_daily_spend``, which carries no currency (v1).
+
+    Target publication (#134) reads the floor here too, so a Target is
+    checked against exactly the floor its evaluations will freeze.
     """
     table = (policy.signal_thresholds or {}).get(_SPEND_FLOOR_BY_CURRENCY_KEY)
     if table is None:
@@ -362,7 +366,7 @@ def _policy_snapshot(policy: ScalePolicyVersionRecord, currency: str) -> ScalePo
         "impression_floor": policy.activity_floor_minimum_impressions,
         "click_floor": policy.sample_floor_minimum_clicks,
         "purchase_floor": policy.evidence_floor_minimum_conversions,
-        "spend_floor": _spend_floor(policy, currency),
+        "spend_floor": policy_spend_floor(policy, currency),
         "bootstrap_prng_version": policy.bootstrap_prng_algorithm,
         "bootstrap_draw_count": policy.bootstrap_draw_count,
         "bootstrap_min_valid_draw_ratio": policy.bootstrap_valid_draw_ratio,

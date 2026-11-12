@@ -29,21 +29,27 @@ from app.scale.models import (
     ScaleCommandJournalRecord,
     ScaleEnrollmentRecord,
     ScaleEpisodeRecord,
+    ScalePolicyVersionRecord,
     ScaleTargetLifecycleEventRecord,
+    ScaleTargetPublicationPreviewRecord,
     ScaleTargetVersionRecord,
 )
+from app.scale.platform_policy import PUBLISHED_POLICY_VERSIONS
 from app.scale.targets import (
     TargetLifecycleError,
     TargetNotFoundError,
     TargetPreviewConsumedError,
     TargetPreviewExpiredError,
+    applicable_policy,
     create_publication_preview,
     create_withdrawal_preview,
     get_target,
     list_targets,
+    platform_spend_floor,
     publish_target,
     resolve_target_contexts,
     target_actions,
+    target_below_platform_floor,
     withdraw_target,
 )
 
@@ -63,6 +69,16 @@ def session():
         sess.close()
         engine.dispose()
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@pytest.fixture(autouse=True)
+def platform_policies(session):
+    """The Policies the migrations publish (#127, #132): a Target's minimum
+    economic spend is checked against the floor of the one in force (#134).
+    ``create_all`` leaves the table empty."""
+    for version in PUBLISHED_POLICY_VERSIONS:
+        session.add(ScalePolicyVersionRecord(**version.row()))
+    session.flush()
 
 
 @pytest.fixture
@@ -229,6 +245,7 @@ class TestWithdrawTarget:
             market_code="US",
             currency="USD",
             breakeven_roas=Decimal("2.0"),
+            minimum_economic_spend=Decimal("100"),
             idempotency_key="wd-1",
         )
         target = publish_target(session, ctx, preview_id=preview.id, idempotency_key="wd-2")
@@ -464,6 +481,8 @@ class TestResolveTargetContexts:
             "market_code": "US",
             "currency": "USD",
             "has_active_target": False,
+            "platform_spend_floor": "100",
+            "platform_spend_floor_unavailable_reason": None,
         }]
 
     def test_reflects_has_active_target_once_published(self, session, ws_id):
@@ -525,7 +544,9 @@ class TestTargetActions:
         assert (withdraw["allowed"], withdraw["reason_code"]) == (True, None)
 
 
-def _publish(session, ctx, *, cpa: str, key: str, currency: str = "USD"):
+def _publish(
+    session, ctx, *, cpa: str, key: str, currency: str = "USD", minimum: str | None = "100.00",
+):
     preview = create_publication_preview(
         session, ctx,
         product_version_id="pv-1",
@@ -533,7 +554,7 @@ def _publish(session, ctx, *, cpa: str, key: str, currency: str = "USD"):
         market_code="US",
         currency=currency,
         target_cpa=Decimal(cpa),
-        minimum_economic_spend=Decimal("100.00"),
+        minimum_economic_spend=Decimal(minimum) if minimum is not None else None,
         idempotency_key=f"{key}-preview",
     )
     return publish_target(session, ctx, preview_id=preview.id, idempotency_key=f"{key}-publish")
@@ -728,7 +749,9 @@ def _journal(session, ws_id: str) -> dict[str, tuple[str, str]]:
 
 
 def _publish_and_withdraw(session, ctx) -> None:
-    target = _publish(session, ctx, cpa="20.00", key="scope")
+    # CPA only: no Policy permits controlled_mock, so a minimum economic
+    # spend has no floor to be checked against there (#134).
+    target = _publish(session, ctx, cpa="20.00", key="scope", minimum=None)
     preview = create_withdrawal_preview(
         session, ctx, target_id=target.id, reason="scope", idempotency_key="scope-withdrawal-preview",
     )
@@ -779,7 +802,7 @@ class TestTargetCommandScenarioScope:
                          created_at=now)
         ctx = _mode_owner(ws_id, "controlled_mock")
 
-        _publish(session, ctx, cpa="20.00", key="recent")
+        _publish(session, ctx, cpa="20.00", key="recent", minimum=None)
 
         assert _journal(session, ws_id) == {
             "create_target_publication_preview": ("controlled_mock", "scn-new"),
@@ -791,7 +814,7 @@ class TestTargetCommandScenarioScope:
         ctx = _mode_owner(ws_id, "controlled_mock")
 
         with pytest.raises(TargetLifecycleError) as refused:
-            _publish(session, ctx, cpa="20.00", key="no-enrollment")
+            _publish(session, ctx, cpa="20.00", key="no-enrollment", minimum=None)
 
         assert refused.value.code == "no_controlled_mock_enrollment"
         assert _journal(session, ws_id) == {}
@@ -811,3 +834,268 @@ class TestTargetCommandScenarioScope:
 
         assert _journal(session, ws_id)["withdraw_scale_target"] == ("controlled_mock", "scn-1")
         assert get_target(session, ctx, sandbox_target.id).lifecycle_state == "withdrawn"
+
+
+# ---------------------------------------------------------------------------
+# #134: the minimum economic spend against the platform floor (§9.2)
+# ---------------------------------------------------------------------------
+
+
+def _preview(session, ctx, *, key: str, currency: str = "USD", cpa: str | None = None,
+             roas: str | None = None, minimum: str | None = None):
+    return create_publication_preview(
+        session, ctx,
+        product_version_id="pv-1",
+        offer_version_id="ov-1",
+        market_code="US",
+        currency=currency,
+        target_cpa=Decimal(cpa) if cpa is not None else None,
+        breakeven_roas=Decimal(roas) if roas is not None else None,
+        minimum_economic_spend=Decimal(minimum) if minimum is not None else None,
+        idempotency_key=key,
+    )
+
+
+def _refused(session, ctx, **amounts) -> TargetLifecycleError:
+    with pytest.raises(TargetLifecycleError) as refused:
+        _preview(session, ctx, key=f"refused-{new_id('k')}", **amounts)
+    return refused.value
+
+
+def _publish_policy(session, *, floors: dict[str, str]) -> ScalePolicyVersionRecord:
+    """A Policy published after v2 with its own floor table, so the one in
+    force is no longer the code constant's."""
+    v2 = PUBLISHED_POLICY_VERSIONS[-1].row()
+    policy = ScalePolicyVersionRecord(**{
+        **v2,
+        "id": "spol_test_134_raised_floor",
+        "signal_thresholds": {
+            **v2["signal_thresholds"],
+            "economic_spend_floor_per_7d_window_by_currency": floors,
+        },
+        "created_at": v2["published_at"] + timedelta(days=1),
+        "published_at": v2["published_at"] + timedelta(days=1),
+    })
+    session.add(policy)
+    session.flush()
+    return policy
+
+
+def _legacy_target(session, ws_id: str, *, currency: str = "USD", cpa: str | None = None,
+                   roas: str | None = None, minimum: str | None = None,
+                   lifecycle_state: str = "active") -> ScaleTargetVersionRecord:
+    """A Target as published before #134, written directly (no check)."""
+    target = ScaleTargetVersionRecord(
+        id=new_id("stgt"), workspace_id=ws_id, product_version_id="pv-1", offer_version_id="ov-1",
+        market_code="US", currency=currency,
+        target_cpa=Decimal(cpa) if cpa is not None else None,
+        breakeven_roas=Decimal(roas) if roas is not None else None,
+        minimum_economic_spend=Decimal(minimum) if minimum is not None else None,
+        lifecycle_state=lifecycle_state, creator_id="user-owner", revision=1, published_at=utcnow(),
+    )
+    session.add(target)
+    session.flush()
+    return target
+
+
+class TestMinimumEconomicSpendFloor:
+    """#134: a ROAS-only Target fills a minimum economic spend, and a
+    filled minimum may not go below the floor the Policy in force sets for
+    the Target's currency (v2: USD 100, JPY 16000, ...)."""
+
+    def test_a_roas_only_target_without_a_minimum_is_refused(self, session, ws_id):
+        refused = _refused(session, _owner_context(ws_id), roas="2.0")
+
+        assert refused.code == "minimum_economic_spend_required"
+        assert refused.params == {"currency": "USD", "floor": "100"}
+        # The request's transaction also drops its journal claim
+        # (``tests/test_scale_router.py``).
+        assert session.query(ScaleTargetPublicationPreviewRecord).count() == 0
+
+    def test_a_zero_minimum_is_no_minimum(self, session, ws_id):
+        refused = _refused(session, _owner_context(ws_id), roas="2.0", minimum="0")
+
+        assert refused.code == "minimum_economic_spend_required"
+
+    @pytest.mark.parametrize("amounts", [
+        {"roas": "2.0", "minimum": "99.99"},
+        {"cpa": "20", "minimum": "50"},
+        {"cpa": "20", "roas": "2.0", "minimum": "99.999999999999"},
+    ])
+    def test_a_minimum_below_the_floor_is_refused(self, session, ws_id, amounts):
+        refused = _refused(session, _owner_context(ws_id), **amounts)
+
+        assert refused.code == "minimum_economic_spend_below_platform_floor"
+        assert refused.params == {"currency": "USD", "floor": "100"}
+
+    @pytest.mark.parametrize("amounts", [
+        {"roas": "2.0", "minimum": "100"},
+        {"roas": "2.0", "minimum": "100.000"},
+        {"cpa": "20", "minimum": "100"},
+        {"cpa": "20", "roas": "2.0", "minimum": "250"},
+    ])
+    def test_a_minimum_equal_to_or_above_the_floor_publishes(self, session, ws_id, amounts):
+        ctx = _owner_context(ws_id)
+        preview = _preview(session, ctx, key="at-floor", **amounts)
+        assert preview.policy_floor_check_passed is True
+
+        target = publish_target(session, ctx, preview_id=preview.id, idempotency_key="at-floor-publish")
+
+        assert target.lifecycle_state == "active"
+        assert target.minimum_economic_spend == Decimal(amounts["minimum"])
+
+    def test_a_cpa_target_without_a_minimum_needs_no_floor(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        for currency in ("USD", "BRL"):
+            preview = _preview(session, ctx, key=f"cpa-{currency}", currency=currency, cpa="20")
+            publish_target(session, ctx, preview_id=preview.id, idempotency_key=f"cpa-{currency}-publish")
+
+    def test_the_floor_is_the_targets_currency_entry(self, session, ws_id):
+        """v2 keeps 100 in its old single-floor columns; a JPY minimum is
+        held to the table's 16000, not to those."""
+        ctx = _owner_context(ws_id)
+        refused = _refused(session, ctx, currency="JPY", roas="2.0", minimum="150")
+        assert (refused.code, refused.params) == (
+            "minimum_economic_spend_below_platform_floor", {"currency": "JPY", "floor": "16000"},
+        )
+
+        _preview(session, ctx, key="jpy-at-floor", currency="JPY", roas="2.0", minimum="16000")
+        refused = _refused(session, ctx, currency="EUR", roas="2.0", minimum="89.99")
+        assert refused.params == {"currency": "EUR", "floor": "90"}
+
+    @pytest.mark.parametrize("amounts", [
+        {"roas": "2.0"},
+        {"roas": "2.0", "minimum": "1000"},
+        {"cpa": "20", "minimum": "1000"},
+    ])
+    def test_a_currency_outside_the_policy_table_is_refused_with_its_own_reason(
+        self, session, ws_id, amounts,
+    ):
+        refused = _refused(session, _owner_context(ws_id), currency="BRL", **amounts)
+
+        assert (refused.code, refused.params) == ("spend_floor_currency_unsupported", {"currency": "BRL"})
+
+    def test_a_mode_no_policy_permits_has_no_floor_to_check_against(self, session, ws_id):
+        """controlled_mock: no live run, so no Policy in force. A CPA alone
+        still publishes; anything that needs the floor is refused."""
+        _seed_enrollment(session, ws_id, meta_mode="controlled_mock", scenario="scn-1")
+        ctx = _mode_owner(ws_id, "controlled_mock")
+
+        refused = _refused(session, ctx, roas="2.0", minimum="100")
+        assert (refused.code, refused.params) == ("no_eligible_policy", {"currency": "USD"})
+        assert _publish(session, ctx, cpa="20.00", key="mock-cpa", minimum=None).lifecycle_state == "active"
+
+    def test_the_floor_comes_from_the_policy_in_force(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        _publish_policy(session, floors={"USD": "200"})
+
+        refused = _refused(session, ctx, roas="2.0", minimum="150")
+
+        assert refused.params == {"currency": "USD", "floor": "200"}
+
+    def test_publish_checks_again_under_the_policy_in_force_now(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        preview = _preview(session, ctx, key="before-raise", roas="2.0", minimum="150")
+        _publish_policy(session, floors={"USD": "200"})
+
+        with pytest.raises(TargetLifecycleError) as refused:
+            publish_target(session, ctx, preview_id=preview.id, idempotency_key="after-raise")
+
+        assert (refused.value.code, refused.value.params) == (
+            "minimum_economic_spend_below_platform_floor", {"currency": "USD", "floor": "200"},
+        )
+
+    def test_a_retried_preview_is_returned_whatever_the_policy_says_now(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        first = _preview(session, ctx, key="retry-134", roas="2.0", minimum="150")
+        _publish_policy(session, floors={"USD": "200"})
+
+        assert _preview(session, ctx, key="retry-134", roas="2.0", minimum="150").id == first.id
+
+    def test_a_member_is_refused_by_role_before_the_floor(self, session, ws_id):
+        refused = _refused(session, _member_context(ws_id), roas="2.0", minimum="1")
+
+        assert refused.code == "owner_required"
+
+    def test_a_member_cannot_publish_an_owners_valid_preview(self, session, ws_id):
+        preview = _preview(session, _owner_context(ws_id), key="owner-valid", roas="2.0", minimum="100")
+
+        with pytest.raises(TargetLifecycleError, match="owner_required"):
+            publish_target(session, _member_context(ws_id), preview_id=preview.id, idempotency_key="m")
+
+    def test_another_workspace_cannot_publish_a_preview_at_the_floor(self, session, ws_id):
+        preview = _preview(session, _owner_context(ws_id), key="ws-a", roas="2.0", minimum="100")
+        other = WorkspaceRecord(id=new_id("ws"), name="Other Workspace")
+        session.add(other)
+        session.flush()
+
+        with pytest.raises(TargetNotFoundError):
+            publish_target(session, _owner_context(other.id), preview_id=preview.id, idempotency_key="ws-b")
+
+
+class TestPlatformFloorOfPublishedTargets:
+    """#134: Targets published before the check stay in force; the server
+    says which of them fall below the floor in force."""
+
+    def _floor(self, session, ctx, currency: str = "USD"):
+        return platform_spend_floor(applicable_policy(session, ctx), currency)
+
+    def test_the_floor_in_force_per_currency(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+
+        usd, brl = self._floor(session, ctx), self._floor(session, ctx, "BRL")
+
+        assert (usd.amount, usd.policy_version_id, usd.unavailable_reason) == (
+            Decimal("100"), "spol_beta_default_v2", None,
+        )
+        assert (brl.amount, brl.unavailable_reason) == (None, "spend_floor_currency_unsupported")
+        mock = self._floor(session, _mode_owner(ws_id, "controlled_mock"))
+        assert (mock.amount, mock.policy_version_id, mock.unavailable_reason) == (
+            None, None, "no_eligible_policy",
+        )
+
+    @pytest.mark.parametrize(("amounts", "below"), [
+        ({"roas": "2.0"}, True),
+        ({"roas": "2.0", "minimum": "0"}, True),
+        ({"roas": "2.0", "minimum": "10"}, True),
+        ({"cpa": "20", "minimum": "50"}, True),
+        ({"roas": "2.0", "minimum": "100"}, False),
+        ({"cpa": "20"}, False),
+        ({"cpa": "20", "minimum": "0"}, False),
+    ])
+    def test_an_active_target_that_misses_the_check_is_below_the_floor(
+        self, session, ws_id, amounts, below,
+    ):
+        target = _legacy_target(session, ws_id, **amounts)
+
+        assert target_below_platform_floor(target, self._floor(session, _owner_context(ws_id))) is below
+
+    def test_a_target_not_in_force_or_without_a_floor_is_never_below_it(self, session, ws_id):
+        ctx = _owner_context(ws_id)
+        withdrawn = _legacy_target(session, ws_id, roas="2.0", minimum="10", lifecycle_state="withdrawn")
+        brl = _legacy_target(session, ws_id, currency="BRL", roas="2.0", minimum="10")
+
+        assert target_below_platform_floor(withdrawn, self._floor(session, ctx)) is False
+        assert target_below_platform_floor(brl, self._floor(session, ctx, "BRL")) is False
+
+    def test_a_published_target_below_the_floor_is_not_rewritten(self, session, ws_id):
+        """Nothing reads a Target to change it: the stored version stays."""
+        target = _legacy_target(session, ws_id, roas="2.0", minimum="10")
+        ctx = _owner_context(ws_id)
+
+        listed = list_targets(session, ctx, lifecycle_state="active")
+
+        assert [t.id for t in listed] == [target.id]
+        assert (listed[0].minimum_economic_spend, listed[0].revision) == (Decimal("10"), 1)
+
+    def test_contexts_report_the_floor_or_why_there_is_none(self, session, ws_id):
+        _seed_enrollment_with_episode(session, ws_id, currency="JPY")
+        floor = resolve_target_contexts(session, _owner_context(ws_id))[0]
+        assert (floor["platform_spend_floor"], floor["platform_spend_floor_unavailable_reason"]) == (
+            "16000", None,
+        )
+
+        mock = resolve_target_contexts(session, _mode_owner(ws_id, "controlled_mock"))[0]
+        assert (mock["platform_spend_floor"], mock["platform_spend_floor_unavailable_reason"]) == (
+            None, "no_eligible_policy",
+        )

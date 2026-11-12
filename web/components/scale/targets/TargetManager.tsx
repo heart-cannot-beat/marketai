@@ -8,6 +8,7 @@ import {
   useCreateScaleTargetWithdrawalPreview,
   useWithdrawScaleTarget,
   type ScaleTarget,
+  type ScaleTargetContext,
   type ScaleTargetPublicationPreview,
   type ScaleTargetWithdrawalPreview,
 } from '@/hooks/scale/useScaleTargets';
@@ -31,6 +32,48 @@ const MONEY_FIELDS = [
 type MoneyField = (typeof MONEY_FIELDS)[number];
 
 type MoneyForm = Record<MoneyField, string>;
+
+/** The refusals that are about the minimum economic spend against the
+ * platform floor (#134): the field shows them as its own. */
+const MINIMUM_SPEND_CODES = new Set([
+  'minimum_economic_spend_required',
+  'minimum_economic_spend_below_platform_floor',
+]);
+
+/** What the publish form says about the platform floor of the chosen
+ * context (#134): the floor and when the minimum is required, or why there
+ * is no floor to check against. The server decides; this only reads it. */
+function PlatformFloorHint({
+  context,
+  id,
+}: {
+  context: ScaleTargetContext;
+  id: string;
+}) {
+  const { t } = useTranslation('scale');
+  const params = { currency: context.currency };
+  if (context.platform_spend_floor !== null) {
+    return (
+      <div id={id} className="mt-3 text-xs text-base-content/70">
+        <p>
+          {t('targets.publish-dialog.platform-floor', {
+            ...params,
+            floor: context.platform_spend_floor,
+          })}
+        </p>
+        <p>{t('targets.publish-dialog.minimum-required-when-roas-only')}</p>
+      </div>
+    );
+  }
+  const reason = context.platform_spend_floor_unavailable_reason;
+  return (
+    <p id={id} className="mt-3 text-xs text-warning">
+      {reason === 'spend_floor_currency_unsupported'
+        ? t('targets.publish-dialog.floor-currency-unsupported', params)
+        : t('targets.publish-dialog.floor-no-eligible-policy', params)}
+    </p>
+  );
+}
 
 const EMPTY_MONEY_FORM: MoneyForm = MONEY_FIELDS.reduce(
   (acc, field) => ({ ...acc, [field]: '' }),
@@ -90,13 +133,27 @@ function PublishTargetDialog({
   const context = contextIndex !== null ? contexts[contextIndex] : undefined;
 
   /** The server's reasons for one amount (#381); the summary below the
-   * fields still reads the first of them. */
-  const fieldMessages = (field: MoneyField) =>
-    previewCmd.problem?.code === 'validation_error'
-      ? (previewCmd.problem.field_errors ?? [])
-          .filter((error) => fieldPath(error.field) === field)
-          .map((error) => fieldErrorMessage(t, error))
-      : [];
+   * fields still reads the first of them. A refusal of the minimum against
+   * the platform floor (#134) is that field's too. */
+  const fieldMessages = (field: MoneyField) => {
+    const problem = previewCmd.problem;
+    if (problem?.code === 'validation_error')
+      return (problem.field_errors ?? [])
+        .filter((error) => fieldPath(error.field) === field)
+        .map((error) => fieldErrorMessage(t, error));
+    if (
+      field === 'minimum_economic_spend' &&
+      problem?.code &&
+      MINIMUM_SPEND_CODES.has(problem.code)
+    )
+      return [errorMessage(t, problem)];
+    return [];
+  };
+
+  // #134: with a ROAS and no CPA, the minimum is required.
+  const roasOnly =
+    form.breakeven_roas.trim() !== '' && form.target_cpa.trim() === '';
+  const floorHintId = `${fieldId}-platform-floor`;
 
   const reset = () => {
     setContextIndex(null);
@@ -242,6 +299,13 @@ function PublishTargetDialog({
                   {MONEY_FIELDS.map((field) => {
                     const errors = fieldMessages(field);
                     const inputId = `${fieldId}-${field}`;
+                    const isMinimum = field === 'minimum_economic_spend';
+                    const describedBy = [
+                      isMinimum && context ? floorHintId : null,
+                      errors.length > 0 ? `${inputId}-errors` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
                     return (
                       <div key={field} className="form-control">
                         <label htmlFor={inputId} className="label-text text-xs">
@@ -255,9 +319,8 @@ function PublishTargetDialog({
                             errors.length > 0 ? ' input-error' : ''
                           }`}
                           aria-invalid={errors.length > 0 || undefined}
-                          aria-describedby={
-                            errors.length > 0 ? `${inputId}-errors` : undefined
-                          }
+                          aria-required={(isMinimum && roasOnly) || undefined}
+                          aria-describedby={describedBy || undefined}
                           value={form[field]}
                           onChange={(e) =>
                             setForm((prev) => ({
@@ -278,6 +341,10 @@ function PublishTargetDialog({
                     );
                   })}
                 </div>
+
+                {context && (
+                  <PlatformFloorHint context={context} id={floorHintId} />
+                )}
 
                 {previewCmd.problem && (
                   <p className="mt-2 text-sm text-error" role="alert">
@@ -604,6 +671,36 @@ function WithdrawTargetDialog({
   );
 }
 
+/** An active Target published before the floor check (#134) that misses
+ * it. It stays in force, and its evaluations use the platform floor; the
+ * Owner may publish a replacement at or above the floor. The server decides
+ * which Targets these are (`below_platform_floor`). */
+function BelowPlatformFloor({
+  target,
+  isOwner,
+}: {
+  target: ScaleTarget;
+  isOwner: boolean;
+}) {
+  const { t } = useTranslation('scale');
+  const params = {
+    floor: target.platform_spend_floor ?? '',
+    currency: target.currency,
+  };
+  return (
+    <div className="mt-1 max-w-xs" data-testid="below-platform-floor">
+      <span className="badge badge-warning badge-sm whitespace-normal">
+        {t('targets.below-platform-floor.label')}
+      </span>
+      <p className="mt-1 text-xs text-base-content/70">
+        {isOwner
+          ? t('targets.below-platform-floor.republish-owner', params)
+          : t('targets.below-platform-floor.republish-member', params)}
+      </p>
+    </div>
+  );
+}
+
 /**
  * Target management (spec §10, §21, Issue #87 Tasks 2/6/7). Every action is
  * server-gated: the "New target" trigger reads `list_scale_target_contexts`
@@ -682,6 +779,7 @@ export function TargetManager() {
                 <th>{t('targets.column.currency')}</th>
                 <th>{t('targets.column.target-cpa')}</th>
                 <th>{t('targets.column.breakeven-roas')}</th>
+                <th>{t('targets.column.minimum-economic-spend')}</th>
                 <th>{t('targets.column.lifecycle')}</th>
                 <th>{t('targets.column.actions')}</th>
               </tr>
@@ -702,6 +800,12 @@ export function TargetManager() {
                     <td>{target.currency}</td>
                     <td>{target.target_cpa ?? '—'}</td>
                     <td>{target.breakeven_roas ?? '—'}</td>
+                    <td>
+                      <div>{target.minimum_economic_spend ?? '—'}</div>
+                      {target.below_platform_floor && (
+                        <BelowPlatformFloor target={target} isOwner={isOwner} />
+                      )}
+                    </td>
                     <td>
                       <LifecycleBadge
                         scope="target"
