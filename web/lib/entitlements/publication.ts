@@ -318,9 +318,13 @@ export async function publishSnapshotInTx(
     })
   );
 
-  // Step 1 (resolve): base ∪ addons ∪ restrictions. A distinct
-  // platform-clamp input source doesn't exist yet in this task's scope;
-  // restrictions already model the "can only lower, never raise" clamp.
+  // Step 1 (resolve): base ∪ addons ∪ platform defaults ∪ restrictions
+  // (contract §4.2). Resolution runs again on every publication, lease
+  // renewals included, so a change to the resolution itself (such as the
+  // platform default layer) changes the semantic hash and is published as
+  // the next entitlementVersion, never as a lease-only renewal. A distinct
+  // platform-clamp input source doesn't exist yet; restrictions already
+  // model the "can only lower, never raise" clamp.
   const baseEntitlements = binding.planVersion
     .entitlements as PlanVersionEntitlements;
   const addOnEntitlements = addOnGrants.map(
