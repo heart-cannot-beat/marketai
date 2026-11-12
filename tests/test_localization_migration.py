@@ -120,8 +120,9 @@ class TestLocalizationMigration(unittest.TestCase):
             # zzg126a1b2c3 (provisioning creates the guardrail at the Beta defaults, #126) and
             # zzh129a1b2c3 (DeliveryTargets name the Landing Page by its frozen hash, #129) and
             # zzi132a1b2c3 (Beta default ScalePolicyVersion v2, #132 and #133) and
-            # zzj113a1b2c3 (Advice superseded by a Target event, #113).
-            self.assertIn("zzj113a1b2c3", revisions)
+            # zzj113a1b2c3 (Advice superseded by a Target event, #113) and
+            # zzk145a1b2c3 (CHECK constraints on usage_events, #145).
+            self.assertIn("zzk145a1b2c3", revisions)
 
     def test_downgrade_and_upgrade(self):
         up = self._alembic("upgrade", "head")
