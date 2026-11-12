@@ -33,6 +33,7 @@ Workspaces, and the migration -- is in ``tests/test_usage_storage_bytes_pg.py``.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import tempfile
 import unittest
@@ -88,6 +89,16 @@ from app.worker_runtime import WorkerRuntime
 DAY = datetime(2026, 11, 12, 9, 30, tzinfo=timezone.utc)
 A, B = "ws_storage_a", "ws_storage_b"
 SUSPENDED, PROVISIONING = "ws_storage_suspended", "ws_storage_provisioning"
+
+
+def observed(test: unittest.TestCase, name: str) -> str:
+    """``name``'s logger, switched back on for ``assertLogs``: an Alembic
+    migration earlier in the process runs ``fileConfig`` with
+    ``disable_existing_loggers`` (see ``tests.test_asset_thumbnails``)."""
+    logger = logging.getLogger(name)
+    test.addCleanup(setattr, logger, "disabled", logger.disabled)
+    logger.disabled = False
+    return name
 
 
 def owner(workspace_id: str) -> TenantContext:
@@ -463,7 +474,7 @@ class DispatchTests(StorageTestCase):
             return real(session, context, usage_date=usage_date)
 
         with patch.object(storage_usage, "enqueue_storage_usage_job", flaky), \
-             self.assertLogs("app.entitlements.storage_usage", "WARNING") as logs:
+             self.assertLogs(observed(self, "app.entitlements.storage_usage"), "WARNING") as logs:
             self.assertEqual(dispatch_storage_usage_jobs(now=DAY), 1)
         self.assertIn("usage_storage_dispatch_failed", logs.output[0])
         self.assertEqual([job.workspace_id for job in self.storage_jobs()], [B])
@@ -526,7 +537,7 @@ class WorkerPathTests(StorageTestCase):
             jobs.enqueue_in_session(session, context=context, job_type=JOB_TYPE,
                                     payload={"usage_date": "replay"}, idempotency_key="usage-storage-bytes:replay",
                                     resource_type="workspace", resource_id=A)
-        with self.assertLogs("app.entitlements.usage", "INFO") as logs:
+        with self.assertLogs(observed(self, "app.entitlements.usage"), "INFO") as logs:
             self.assertEqual(self.drain(), 1)
         self.assertTrue(any("usage_event_duplicate" in line for line in logs.output))
         self.assertEqual(len(self.rows(A)), 1)
