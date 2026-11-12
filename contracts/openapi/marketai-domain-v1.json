@@ -13382,7 +13382,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TargetContextListResponse"
+                }
               }
             }
           },
@@ -24833,8 +24835,7 @@
                 "exclusiveMinimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)"
+                "type": "string"
               }
             ]
           },
@@ -24887,8 +24888,7 @@
             ]
           },
           "threshold": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)"
+            "type": "string"
           },
           "business_goal": {
             "type": "string",
@@ -26801,8 +26801,7 @@
                 "minimum": 1.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "default": "20"
@@ -26815,8 +26814,7 @@
                 "minimum": 0.001
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "default": "0.05"
@@ -26843,8 +26841,7 @@
                 "minimum": 1.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                "type": "string"
               }
             ],
             "default": "2"
@@ -26891,12 +26888,10 @@
           },
           "min_spend": {
             "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "default": "20"
           },
           "alpha": {
             "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "default": "0.05"
           },
           "attribution_lag_days": {
@@ -26915,7 +26910,6 @@
           },
           "max_spend_ratio": {
             "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "default": "2"
           },
           "checkpoint": {
@@ -27306,6 +27300,127 @@
           "detail",
           "recovery_action"
         ]
+      },
+      "EvidenceReadinessResponse": {
+        "properties": {
+          "manifest_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "manifest_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_local_day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maturity": {
+            "type": "string"
+          },
+          "quality_state": {
+            "type": "string"
+          },
+          "last_complete_local_day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_reference_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocking_issue_count": {
+            "type": "integer"
+          },
+          "warning_issue_count": {
+            "type": "integer"
+          },
+          "recovery_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceQualityIssueResponse"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "manifest_id",
+          "manifest_state",
+          "source_revision",
+          "target_local_day",
+          "maturity",
+          "quality_state",
+          "last_complete_local_day",
+          "freshness_reference_at",
+          "blocking_issue_count",
+          "warning_issue_count",
+          "recovery_action",
+          "issues",
+          "revision",
+          "updated_at"
+        ],
+        "description": "The Episode's evidence readiness (contract §8, §18): the projection\nthe source collector moves with every terminal source manifest, ahead of\nany Evaluation. A ``blocked`` latest manifest reads maturity\n``insufficient``, quality ``blocked``, its typed issues and the recovery\naction; ``last_complete_local_day`` and ``freshness_reference_at`` stay\nwhere the last complete manifest put them (null before one)."
       },
       "EvidenceSignalResponse": {
         "properties": {
@@ -29827,12 +29942,10 @@
             "default": "USD"
           },
           "media_budget": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)"
+            "type": "string"
           },
           "small_round_budget": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)"
+            "type": "string"
           },
           "duration_days": {
             "type": "integer",
@@ -38565,8 +38678,7 @@
                 "minimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)"
+                "type": "string"
               }
             ]
           },
@@ -40497,6 +40609,71 @@
         },
         "type": "object"
       },
+      "TargetContextListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TargetContextResponse"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ]
+      },
+      "TargetContextResponse": {
+        "properties": {
+          "product_version_id": {
+            "type": "string"
+          },
+          "offer_version_id": {
+            "type": "string"
+          },
+          "market_code": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "has_active_target": {
+            "type": "boolean"
+          },
+          "platform_spend_floor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "platform_spend_floor_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_version_id",
+          "offer_version_id",
+          "market_code",
+          "currency",
+          "has_active_target",
+          "platform_spend_floor",
+          "platform_spend_floor_unavailable_reason"
+        ]
+      },
       "TargetListResponse": {
         "properties": {
           "items": {
@@ -40766,6 +40943,19 @@
               "$ref": "#/components/schemas/ActionEligibilityModel"
             },
             "type": "array"
+          },
+          "platform_spend_floor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "below_platform_floor": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -40785,7 +40975,9 @@
           "published_at",
           "withdrawn_at",
           "created_at",
-          "allowed_actions"
+          "allowed_actions",
+          "platform_spend_floor",
+          "below_platform_floor"
         ]
       },
       "TargetWithdrawRequest": {
@@ -41143,8 +41335,7 @@
                 "exclusiveMinimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)"
+                "type": "string"
               }
             ]
           },
@@ -41155,8 +41346,7 @@
                 "exclusiveMinimum": 0.0
               },
               {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)"
+                "type": "string"
               }
             ]
           },
@@ -43862,127 +44052,6 @@
           "kind",
           "execution_mode"
         ]
-      },
-      "EvidenceReadinessResponse": {
-        "properties": {
-          "manifest_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "manifest_state": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "source_revision": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "target_local_day": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "maturity": {
-            "type": "string"
-          },
-          "quality_state": {
-            "type": "string"
-          },
-          "last_complete_local_day": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "freshness_reference_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "blocking_issue_count": {
-            "type": "integer"
-          },
-          "warning_issue_count": {
-            "type": "integer"
-          },
-          "recovery_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/EvidenceQualityIssueResponse"
-            },
-            "type": "array"
-          },
-          "revision": {
-            "type": "integer"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "manifest_id",
-          "manifest_state",
-          "source_revision",
-          "target_local_day",
-          "maturity",
-          "quality_state",
-          "last_complete_local_day",
-          "freshness_reference_at",
-          "blocking_issue_count",
-          "warning_issue_count",
-          "recovery_action",
-          "issues",
-          "revision",
-          "updated_at"
-        ],
-        "description": "The Episode's evidence readiness (contract §8, §18): the projection\nthe source collector moves with every terminal source manifest, ahead of\nany Evaluation. A ``blocked`` latest manifest reads maturity\n``insufficient``, quality ``blocked``, its typed issues and the recovery\naction; ``last_complete_local_day`` and ``freshness_reference_at`` stay\nwhere the last complete manifest put them (null before one)."
       }
     }
   }

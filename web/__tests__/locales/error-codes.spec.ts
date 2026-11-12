@@ -556,6 +556,11 @@ const PARAMETERISED = [
   'error-mapped_column_missing: column',
   'error-market_data_price_operation_missing: operations',
   'error-market_data_provider_error: provider_code',
+  // #134: app.scale.targets sends the Target's currency, and the floor
+  // when it has one.
+  'error-minimum_economic_spend_required: currency,floor',
+  'error-minimum_economic_spend_below_platform_floor: currency,floor',
+  'error-spend_floor_currency_unsupported: currency',
   'error-competitor_name_too_long: limit',
   'error-competitor_resolution_expired: hours',
   'error-outside_round_dates: end,start',

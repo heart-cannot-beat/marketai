@@ -7211,6 +7211,31 @@ export interface components {
       detail: string | null;
       recovery_action: string | null;
     };
+    /**
+     * @description The Episode's evidence readiness (contract §8, §18): the projection
+     *     the source collector moves with every terminal source manifest, ahead of
+     *     any Evaluation. A ``blocked`` latest manifest reads maturity
+     *     ``insufficient``, quality ``blocked``, its typed issues and the recovery
+     *     action; ``last_complete_local_day`` and ``freshness_reference_at`` stay
+     *     where the last complete manifest put them (null before one).
+     */
+    EvidenceReadinessResponse: {
+      manifest_id: string | null;
+      manifest_state: string | null;
+      source_revision: number | null;
+      target_local_day: string | null;
+      maturity: string;
+      quality_state: string;
+      last_complete_local_day: string | null;
+      freshness_reference_at: string | null;
+      blocking_issue_count: number;
+      warning_issue_count: number;
+      recovery_action: string | null;
+      issues: components['schemas']['EvidenceQualityIssueResponse'][];
+      revision: number;
+      /** Format: date-time */
+      updated_at: string;
+    };
     EvidenceSignalResponse: {
       signal_id: string;
       state: string;
@@ -10608,6 +10633,18 @@ export interface components {
       /** @default 0.5 */
       preselect_confidence: number;
     };
+    TargetContextListResponse: {
+      items: components['schemas']['TargetContextResponse'][];
+    };
+    TargetContextResponse: {
+      product_version_id: string;
+      offer_version_id: string;
+      market_code: string;
+      currency: string;
+      has_active_target: boolean;
+      platform_spend_floor: string | null;
+      platform_spend_floor_unavailable_reason: string | null;
+    };
     TargetListResponse: {
       items: components['schemas']['TargetResponse'][];
       next_cursor?: string | null;
@@ -10658,6 +10695,8 @@ export interface components {
       /** Format: date-time */
       created_at: string;
       allowed_actions: components['schemas']['ActionEligibilityModel'][];
+      platform_spend_floor: string | null;
+      below_platform_floor: boolean;
     };
     TargetWithdrawRequest: {
       withdrawal_preview_id: string;
@@ -11423,31 +11462,6 @@ export interface components {
       execution_mode: 'byok' | 'mock';
       /** @default  */
       quote_hash: string;
-    };
-    /**
-     * @description The Episode's evidence readiness (contract §8, §18): the projection
-     *     the source collector moves with every terminal source manifest, ahead of
-     *     any Evaluation. A ``blocked`` latest manifest reads maturity
-     *     ``insufficient``, quality ``blocked``, its typed issues and the recovery
-     *     action; ``last_complete_local_day`` and ``freshness_reference_at`` stay
-     *     where the last complete manifest put them (null before one).
-     */
-    EvidenceReadinessResponse: {
-      manifest_id: string | null;
-      manifest_state: string | null;
-      source_revision: number | null;
-      target_local_day: string | null;
-      maturity: string;
-      quality_state: string;
-      last_complete_local_day: string | null;
-      freshness_reference_at: string | null;
-      blocking_issue_count: number;
-      warning_issue_count: number;
-      recovery_action: string | null;
-      issues: components['schemas']['EvidenceQualityIssueResponse'][];
-      revision: number;
-      /** Format: date-time */
-      updated_at: string;
     };
   };
   responses: never;
@@ -19194,7 +19208,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['TargetContextListResponse'];
         };
       };
       /** @description Validation Error */

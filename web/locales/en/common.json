@@ -2555,5 +2555,9 @@
   "error-overlaps_in_file": "Overlaps the dates of another row in the file.",
   "error-overlaps_existing": "Overlaps data already imported (the same image cannot be counted twice).",
   "error-meta_source_unknown": "The source of this Meta data cannot be confirmed (no Meta connection is bound).",
-  "error-unsupported_export_language": "The export package records a language MarketAI does not offer."
+  "error-unsupported_export_language": "The export package records a language MarketAI does not offer.",
+  "error-minimum_economic_spend_required": "A target with only a breakeven ROAS needs a minimum economic spend of at least {{floor}} {{currency}}.",
+  "error-minimum_economic_spend_below_platform_floor": "The minimum economic spend can't be below the platform floor of {{floor}} {{currency}}.",
+  "error-spend_floor_currency_unsupported": "The Scale Policy in force sets no platform floor for {{currency}}, so a minimum economic spend can't be checked.",
+  "error-no_eligible_policy": "No Scale Policy is in force in this mode, so there is no platform floor to check against."
 }

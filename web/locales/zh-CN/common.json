@@ -2555,5 +2555,9 @@
   "error-overlaps_in_file": "和文件里的另一行日期重叠。",
   "error-overlaps_existing": "和已导入的数据日期重叠（同一素材不能重复计数）。",
   "error-meta_source_unknown": "无法确认这条 Meta 数据的来源（未绑定 Meta 连接）。",
-  "error-unsupported_export_language": "导出包记录的语言不受支持。"
+  "error-unsupported_export_language": "导出包记录的语言不受支持。",
+  "error-minimum_economic_spend_required": "只有盈亏平衡 ROAS 的目标必须填写最低经济花费，且不低于 {{floor}} {{currency}}。",
+  "error-minimum_economic_spend_below_platform_floor": "最低经济花费不能低于平台底线 {{floor}} {{currency}}。",
+  "error-spend_floor_currency_unsupported": "当前生效的策略没有为 {{currency}} 设平台底线，无法核对最低经济花费。",
+  "error-no_eligible_policy": "这个模式下没有生效的策略，没有平台底线可以核对。"
 }

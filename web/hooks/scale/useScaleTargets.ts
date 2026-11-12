@@ -16,18 +16,9 @@ export type ScaleTargetPublicationPreview =
 export type ScaleTargetWithdrawalPreview =
   components['schemas']['TargetWithdrawalPreviewResponse'];
 
-/** `list_scale_target_contexts`' server response has no declared
- * `response_model` (`app.scale.v1_router.list_target_contexts`), so the
- * generated `DomainOperationMap` types its body as `unknown`; the actual
- * shape (`app.scale.targets.resolve_target_contexts`) is `{ items }` of
- * this. */
-export interface ScaleTargetContext {
-  product_version_id: string;
-  offer_version_id: string;
-  market_code: string;
-  currency: string;
-  has_active_target: boolean;
-}
+/** One context the publish flow offers, with the platform floor a Target
+ * published into it is checked against (#134). */
+export type ScaleTargetContext = components['schemas']['TargetContextResponse'];
 
 /**
  * Target lifecycle (spec §10, §21, Issue #87 Tasks 2/6/7): server-driven
@@ -69,8 +60,7 @@ export function useScaleTargetContexts(metaMode: ScaleMetaMode) {
   const query = useDomainQuery('list_scale_target_contexts', {
     meta_mode: metaMode,
   } as any);
-  const contexts =
-    (query.data as { items?: ScaleTargetContext[] } | undefined)?.items ?? [];
+  const contexts: ScaleTargetContext[] = query.data?.items ?? [];
   return { ...query, contexts };
 }
 

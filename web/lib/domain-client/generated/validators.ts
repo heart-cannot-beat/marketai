@@ -4235,14 +4235,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     properties: {
       business_metric: { type: 'string', enum: ['cpa', 'roas', 'ctr'] },
       threshold: {
-        anyOf: [
-          { type: 'number', exclusiveMinimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
       },
       business_goal: { type: 'string', maxLength: 2000, minLength: 1 },
       evidence_requirements: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -4265,11 +4258,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
   'DecisionRules-Output': {
     properties: {
       business_metric: { type: 'string', enum: ['cpa', 'roas', 'ctr'] },
-      threshold: {
-        type: 'string',
-        pattern:
-          '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)',
-      },
+      threshold: { type: 'string' },
       business_goal: { type: 'string', maxLength: 2000, minLength: 1 },
       evidence_requirements: { type: 'string', maxLength: 2000, minLength: 1 },
       evaluation_schedule: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -5172,14 +5161,14 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       min_spend: {
         anyOf: [
           { type: 'number', maximum: 10000000, minimum: 1 },
-          { type: 'string', pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$' },
+          { type: 'string' },
         ],
         default: '20',
       },
       alpha: {
         anyOf: [
           { type: 'number', maximum: 0.1, minimum: 0.001 },
-          { type: 'string', pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$' },
+          { type: 'string' },
         ],
         default: '0.05',
       },
@@ -5195,10 +5184,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         default: 'equal_budget',
       },
       max_spend_ratio: {
-        anyOf: [
-          { type: 'number', maximum: 4, minimum: 1 },
-          { type: 'string', pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$' },
-        ],
+        anyOf: [{ type: 'number', maximum: 4, minimum: 1 }, { type: 'string' }],
         default: '2',
       },
       checkpoint: {
@@ -5236,16 +5222,8 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         minimum: 5,
         default: 20,
       },
-      min_spend: {
-        type: 'string',
-        pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$',
-        default: '20',
-      },
-      alpha: {
-        type: 'string',
-        pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$',
-        default: '0.05',
-      },
+      min_spend: { type: 'string', default: '20' },
+      alpha: { type: 'string', default: '0.05' },
       attribution_lag_days: {
         type: 'integer',
         maximum: 30,
@@ -5257,11 +5235,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         enum: ['equal_budget', 'observational'],
         default: 'equal_budget',
       },
-      max_spend_ratio: {
-        type: 'string',
-        pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$',
-        default: '2',
-      },
+      max_spend_ratio: { type: 'string', default: '2' },
       checkpoint: {
         type: 'string',
         const: 'end_of_window',
@@ -6637,16 +6611,8 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         ],
         default: 'USD',
       },
-      media_budget: {
-        type: 'string',
-        pattern:
-          '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)',
-      },
-      small_round_budget: {
-        type: 'string',
-        pattern:
-          '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)',
-      },
+      media_budget: { type: 'string' },
+      small_round_budget: { type: 'string' },
       duration_days: { type: 'integer', maximum: 90, minimum: 1 },
       allocation: { type: 'string', maxLength: 2000, minLength: 1 },
       rules: { $ref: '#/components/schemas/DecisionRules-Output' },
@@ -10658,14 +10624,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     properties: {
       kind: { type: 'string', enum: ['planning', 'ai_qc'] },
       maximum_cost: {
-        anyOf: [
-          { type: 'number', minimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }],
       },
       acknowledge_estimated_cost: { type: 'boolean', const: true },
       note: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -11491,6 +11450,41 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     },
     type: 'object',
   },
+  TargetContextListResponse: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/TargetContextResponse' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items'],
+  },
+  TargetContextResponse: {
+    properties: {
+      product_version_id: { type: 'string' },
+      offer_version_id: { type: 'string' },
+      market_code: { type: 'string' },
+      currency: { type: 'string' },
+      has_active_target: { type: 'boolean' },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      platform_spend_floor_unavailable_reason: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'product_version_id',
+      'offer_version_id',
+      'market_code',
+      'currency',
+      'has_active_target',
+      'platform_spend_floor',
+      'platform_spend_floor_unavailable_reason',
+    ],
+  },
   TargetListResponse: {
     properties: {
       items: {
@@ -11588,6 +11582,8 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/ActionEligibilityModel' },
         type: 'array',
       },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      below_platform_floor: { type: 'boolean' },
     },
     additionalProperties: false,
     type: 'object',
@@ -11607,6 +11603,8 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'withdrawn_at',
       'created_at',
       'allowed_actions',
+      'platform_spend_floor',
+      'below_platform_floor',
     ],
   },
   TargetWithdrawRequest: {
@@ -11811,24 +11809,10 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         default: 'USD',
       },
       media_budget: {
-        anyOf: [
-          { type: 'number', exclusiveMinimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
       },
       small_round_budget: {
-        anyOf: [
-          { type: 'number', exclusiveMinimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
       },
       duration_days: { type: 'integer', maximum: 90, minimum: 1 },
       allocation: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -15830,6 +15814,8 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/ActionEligibilityModel' },
         type: 'array',
       },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      below_platform_floor: { type: 'boolean' },
     },
     additionalProperties: false,
     type: 'object',
@@ -15849,6 +15835,8 @@ const SCHEMAS: Record<string, object> = {
       'withdrawn_at',
       'created_at',
       'allowed_actions',
+      'platform_spend_floor',
+      'below_platform_floor',
     ],
   },
   create_scale_target_request: {
@@ -18553,6 +18541,8 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/ActionEligibilityModel' },
         type: 'array',
       },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      below_platform_floor: { type: 'boolean' },
     },
     additionalProperties: false,
     type: 'object',
@@ -18572,6 +18562,8 @@ const SCHEMAS: Record<string, object> = {
       'withdrawn_at',
       'created_at',
       'allowed_actions',
+      'platform_spend_floor',
+      'below_platform_floor',
     ],
   },
   get_spend_guardrail_200: {},
@@ -19063,7 +19055,17 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['items', 'unavailable'],
   },
-  list_scale_target_contexts_200: {},
+  list_scale_target_contexts_200: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/TargetContextResponse' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items'],
+  },
   list_scale_targets_200: {
     properties: {
       items: {
@@ -20146,14 +20148,7 @@ const SCHEMAS: Record<string, object> = {
     properties: {
       kind: { type: 'string', enum: ['planning', 'ai_qc'] },
       maximum_cost: {
-        anyOf: [
-          { type: 'number', minimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }],
       },
       acknowledge_estimated_cost: { type: 'boolean', const: true },
       note: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -21247,6 +21242,8 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/ActionEligibilityModel' },
         type: 'array',
       },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      below_platform_floor: { type: 'boolean' },
     },
     additionalProperties: false,
     type: 'object',
@@ -21266,6 +21263,8 @@ const SCHEMAS: Record<string, object> = {
       'withdrawn_at',
       'created_at',
       'allowed_actions',
+      'platform_spend_floor',
+      'below_platform_floor',
     ],
   },
   withdraw_scale_target_request: {

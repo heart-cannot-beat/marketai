@@ -1312,7 +1312,9 @@ export type DomainOperationMap = {
     pathParams: { meta_mode: string };
     queryParams: Record<string, never>;
     requestBody: never;
-    successResponses: { 200: null };
+    successResponses: {
+      200: components['schemas']['TargetContextListResponse'];
+    };
   };
   list_scale_targets: {
     pathParams: { meta_mode: string };
