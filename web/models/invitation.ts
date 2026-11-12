@@ -1,6 +1,7 @@
 import env from '@/lib/env';
 import { ApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { recordMembershipChangeInTx } from '@/lib/membershipAudit';
 import { reconcileProvisioningWorkspaceFromRuntime } from '@/lib/onboarding';
 import { prisma } from '@/lib/prisma';
 import { Invitation, Prisma, Role, TeamMember } from '@prisma/client';
@@ -330,6 +331,20 @@ async function consumeInvitationInTx(
       'Invitation was accepted concurrently. Retry safely.'
     );
   }
+
+  // Every join, Member or first Owner, records one `member.joined`. The
+  // first-Owner path below additionally records its onboarding event.
+  await recordMembershipChangeInTx(tx, {
+    teamId: invitation.teamId,
+    membershipId: member.id,
+    userId,
+    actor: { kind: 'USER', id: userId },
+    change: {
+      type: 'member.joined',
+      role: member.role,
+      invitationId: invitation.id,
+    },
+  });
 
   if (invitation.kind === 'FIRST_OWNER') {
     const now = new Date();

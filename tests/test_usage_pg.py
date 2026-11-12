@@ -37,6 +37,20 @@ runs the domain change:
   as both roles, and a repeat is a duplicate;
 * one Workspace's Operations never show in another's ``/usage``.
 
+Slice S3 (#145) adds the CHECK constraints of spec §2.12 (migration
+``zzk145a1b2c3``):
+
+* the four checks are there, validated, and named as ``UsageEventRecord``
+  names them;
+* as the API and as the Worker, each check refuses the row that breaks it,
+  through the statement ``record_many`` sends: ``ON CONFLICT DO NOTHING``
+  skips unique violations only, so a bad row is never a counted duplicate;
+* rows every S1 and S2 writer wrote, as both roles, before the checks
+  existed pass ``VALIDATE``, unchanged; the append-only trigger, its function
+  and the privilege matrix are the same afterwards;
+* a row that breaks a check fails ``VALIDATE``, and the whole revision rolls
+  back: no constraint is left behind ``NOT VALID``.
+
 Issue #146: an Operation that ran against Meta is settled, as the API and as
 the Worker, in a session bound to its Meta mode, which the settling path
 passes on. ``controlled_mock`` counts as ``mock``, out of ``total``;
@@ -70,7 +84,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import CheckConstraint, create_engine, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import sessionmaker
@@ -80,6 +94,8 @@ from app.adapters.persistence.database import platform_session, tenant_session
 from app.adapters.persistence.models import WorkspaceRecord
 from app.entitlements.operation_usage import record_operation_settled
 from app.entitlements.usage import (
+    METRICS,
+    USAGE_EXECUTION_MODES,
     UsageFact,
     UsageRecorder,
     record_asset_version_generated,
@@ -114,6 +130,17 @@ DML = ("SELECT", "INSERT", "UPDATE", "DELETE")
 OWNER, API, WORKER = 0, 1, 2
 ROLE_NAMES = {API: "api", WORKER: "worker"}
 METRIC = "provider_calls"
+#: The migration that adds the CHECK constraints (#145), and the head it follows.
+CHECKS_REVISION, CHECKS_DOWN_REVISION = "zzk145a1b2c3", "zzj113a1b2c3"
+CHECK_NAMES = {c.name for c in UsageEventRecord.__table__.constraints if isinstance(c, CheckConstraint)}
+#: (check it breaks, columns that break it). Each bad row breaks exactly one.
+BAD_ROWS = (
+    ("measurement_kind_valid", {"measurement_kind": "counter"}),
+    ("direction_matches_kind", {"direction": "set"}),
+    ("direction_matches_kind", {"measurement_kind": "gauge", "direction": "increase"}),
+    ("quantity_nonnegative", {"quantity": Decimal("-1")}),
+    ("execution_mode_valid", {"execution_mode": "controlled_mock"}),
+)
 
 
 def fact(source_id: str, mode: str = "byok", occurred_at: datetime | None = None) -> UsageFact:
@@ -444,6 +471,116 @@ class UsagePostgresTests(unittest.TestCase):
             self.assertEqual(session.query(UsageEventRecord).filter(
                 UsageEventRecord.source_resource_id == operation_id).count(), 0)
 
+    # -- Slice S3: CHECK constraints (#145) ------------------------------------
+
+    def _insert(self, ctx: TenantContext, **overrides):
+        """The statement ``record_many`` sends, for one row of the Workspace."""
+        now = datetime.now(timezone.utc)
+        values = dict(
+            id=f"ue_{uuid.uuid4().hex}", workspace_id=ctx.workspace_id, metric_key=METRIC,
+            measurement_kind="delta", direction="increase", quantity=Decimal("1"), unit="call",
+            execution_mode="byok", semantic_key_hash=uuid.uuid4().hex * 2, occurred_at=now, created_at=now,
+        )
+        values.update(overrides)
+        return postgresql.insert(UsageEventRecord.__table__).values(**values).on_conflict_do_nothing()
+
+    def _checks(self) -> dict[str, bool]:
+        """Every CHECK on usage_events -> whether it is validated."""
+        with self.owner.connect() as connection:
+            return dict(connection.execute(text(
+                "SELECT conname, convalidated FROM pg_constraint "
+                "WHERE conrelid = 'usage_events'::regclass AND contype = 'c'")).all())
+
+    def _append_only_trigger(self) -> list[tuple]:
+        with self.owner.connect() as connection:
+            return connection.execute(text(
+                "SELECT t.tgname, t.tgenabled, pg_get_triggerdef(t.oid), p.prosrc, p.proconfig::text "
+                "FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid "
+                "WHERE t.tgrelid = 'usage_events'::regclass AND NOT t.tgisinternal ORDER BY t.tgname")).all()
+
+    def _stored(self, ctx: TenantContext) -> list[tuple]:
+        """Every column of the Workspace's rows, as the owner reads them."""
+        with self.owner.connect() as connection:
+            return connection.execute(text("SELECT * FROM usage_events WHERE workspace_id = :ws ORDER BY id"),
+                                      {"ws": ctx.workspace_id}).all()
+
+    def test_the_four_checks_are_validated_and_named_as_the_model_names_them(self):
+        self.assertEqual(len(CHECK_NAMES), 4)
+        self.assertEqual(self._checks(), dict.fromkeys(CHECK_NAMES, True))
+        self.assertEqual([name for name, *_ in self._append_only_trigger()], ["trg_usage_events_immutable"])
+
+    def test_each_check_refuses_the_row_that_breaks_it_as_the_api_and_the_worker(self):
+        ctx = self._workspace("ws_usage_pg_check", ROLE_OWNER, "owner_k")
+        for index, role in ROLE_NAMES.items():
+            for name, overrides in BAD_ROWS:
+                with self.subTest(role=role, check=name, row=overrides):
+                    with self.assertRaises(DBAPIError) as caught:
+                        with self._as(index), tenant_session(ctx) as session:
+                            session.execute(self._insert(ctx, **overrides))
+                    self.assertIn(f'violates check constraint "ck_usage_events_{name}"', str(caught.exception))
+            with self.subTest(role=role, row="valid"):  # the same statement writes a good row
+                with self._as(index), tenant_session(ctx) as session:
+                    written = session.execute(self._insert(ctx), execution_options={"preserve_rowcount": True})
+                    self.assertEqual(written.rowcount, 1)
+        self.assertEqual(len(self._stored(ctx)), len(ROLE_NAMES))
+
+    def test_rows_every_writer_wrote_before_the_checks_pass_validate(self):
+        trigger, head = self._append_only_trigger(), self._alembic("current")
+        self.assertIn("(head)", head)
+        self.addCleanup(self._alembic, "upgrade", "head")  # never leave the cluster below head
+        self._alembic("downgrade", CHECKS_DOWN_REVISION)
+        self.assertEqual(self._checks(), {})
+
+        ctx = self._workspace("ws_usage_pg_validate", ROLE_OWNER, "owner_v")
+        now = datetime.now(timezone.utc)
+        for index, name in ROLE_NAMES.items():
+            with self._as(index), tenant_session(ctx) as session:
+                for mode in ("byok", "sandbox", "mock", "controlled_mock"):  # S1 (#69)
+                    attempt = SimpleNamespace(id=f"pca_{name}_{mode}", workspace_id=ctx.workspace_id,
+                                              execution_mode=mode)
+                    self.assertEqual(record_provider_call(session, ctx, attempt, occurred_at=now).written, 1)
+                version = SimpleNamespace(id=f"av_{name}", workspace_id=ctx.workspace_id,  # S2 (#87)
+                                          origin_kind="generation", execution_mode="byok", created_at=now)
+                self.assertEqual(record_asset_version_generated(session, ctx, version).written, 1)
+                self.assertEqual(record_generation_item_failed(
+                    session, ctx, run_item_id=f"ri_{name}", revision=1, execution_mode="controlled_mock",
+                    occurred_at=now).written, 1)
+            operation_id = self._operation(ctx)
+            for state in (OperationState.RUNNING, OperationState.SUCCEEDED):
+                self._move(index, ctx, operation_id, state)
+        before = self._stored(ctx)
+        self.assertEqual(len(before), len(ROLE_NAMES) * (4 + 1 + 1 + 2))
+        self.assertEqual({row.execution_mode for row in before}, set(USAGE_EXECUTION_MODES))
+        self.assertEqual({row.metric_key for row in before}, set(METRICS))
+
+        self._alembic("upgrade", CHECKS_REVISION)  # NOT VALID, then VALIDATE over these rows
+        self.assertEqual(self._checks(), dict.fromkeys(CHECK_NAMES, True))
+        self.assertEqual(self._stored(ctx), before)
+        self._alembic("upgrade", "head")
+        self.assertEqual(self._alembic("current"), head)
+        self.assertEqual(self._append_only_trigger(), trigger)
+        self.test_the_privilege_matrix_of_usage_events_holds()
+        with self.assertRaises(DBAPIError) as caught:
+            with self.owner.begin() as connection:
+                connection.execute(text("UPDATE usage_events SET quantity = 2 WHERE workspace_id = :ws"),
+                                   {"ws": ctx.workspace_id})
+        self.assertIn("usage_events is append-only", str(caught.exception))
+
+    def test_a_row_that_breaks_a_check_fails_validate_and_rolls_the_revision_back(self):
+        self.addCleanup(self._alembic, "upgrade", "head")
+        self._alembic("downgrade", CHECKS_DOWN_REVISION)
+        ctx = self._workspace("ws_usage_pg_broken", ROLE_OWNER, "owner_x")
+        self.addCleanup(self._remove_workspaces)  # runs before the upgrade above: the bad row goes first
+        with self.owner.begin() as connection:  # the owner bypasses RLS; no writer sends this row
+            connection.execute(self._insert(ctx, quantity=Decimal("-1")))
+
+        failed = self._alembic_run("upgrade", CHECKS_REVISION)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn('check constraint "ck_usage_events_quantity_nonnegative" of relation "usage_events" '
+                      "is violated by some row", failed.stderr)
+        self.assertIn(CHECKS_DOWN_REVISION, self._alembic("current"))
+        self.assertEqual(self._checks(), {}, "the NOT VALID constraints rolled back with the revision")
+
     def test_the_privilege_matrix_of_usage_events_holds(self):
         with self.owner.connect() as connection:
             forced = connection.execute(text(
@@ -456,11 +593,14 @@ class UsagePostgresTests(unittest.TestCase):
                                               {"r": role, "p": privilege}).scalar()
                     self.assertEqual(held, privilege in expected, f"{role} {privilege} usage_events")
 
-    def _alembic(self, *arguments: str) -> str:
-        completed = subprocess.run(
+    def _alembic_run(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
             [sys.executable, "-m", "alembic", *arguments], cwd=ROOT, capture_output=True, text=True,
             env={**os.environ, "MARKETAI_DATABASE_URL": URLS[0]}, check=False,
         )
+
+    def _alembic(self, *arguments: str) -> str:
+        completed = self._alembic_run(*arguments)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         return completed.stdout
 

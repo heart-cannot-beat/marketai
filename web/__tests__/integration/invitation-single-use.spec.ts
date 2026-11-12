@@ -54,7 +54,9 @@ describeIfConfigured('Invitation single-use (PostgreSQL)', () => {
 
   afterAll(async () => {
     if (!prisma) return;
-    await prisma.team.deleteMany({ where: { id: workspaceId } });
+    // The Workspace stays: each accepted invitation appended an immutable
+    // `member.joined` audit row that references it (#150). Deleting the users
+    // still cascades their memberships and invitations.
     await prisma.user.deleteMany({ where: { id: { in: created } } });
     await prisma.$disconnect();
   });

@@ -2,6 +2,47 @@
 
 日期：2026-10-17。生产入口：[MarketAI](https://marketai-web-production.up.railway.app)。
 
+## Usage 开始记录（#8）
+
+2026-11-12 整理。本节的编号都指本仓库 `heart-cannot-beat/marketai`；本文其余各节的裸编号指 `heart-cannot-beat/marketai-archive`。
+
+[#8](https://github.com/heart-cannot-beat/marketai/issues/8) 迁自 heart-cannot-beat/marketai-archive#351：`usage_events` 没有写入方，`GET /api/v1/usage` 只返回 0。写入方分两片上线，都在合并后随 main 自动部署。#8 已于 2026-11-12 关闭，余下工作拆成 [#145](https://github.com/heart-cannot-beat/marketai/issues/145)–[#151](https://github.com/heart-cannot-beat/marketai/issues/151)。
+
+### 起算日
+
+每个 metric 从它上线的部署日开始记录，之前的事实都不回填。起算日当天只有部署之后的事实，更早的时间窗口里这个 metric 为 0。契约 §3.2 的“连续 30 天真实 Usage”按各 metric 的起算日算。
+
+| metric | 单位 | 起算日（部署日） | PR | 合并提交 | 合并时间（UTC） |
+| --- | --- | --- | --- | --- | --- |
+| `provider_calls` | `call` | 2026-11-08 | [#69](https://github.com/heart-cannot-beat/marketai/pull/69)（S1） | `c0c7040a` | 11-08 15:39 |
+| `asset_versions_generated` | `asset_version` | 2026-11-09 | [#87](https://github.com/heart-cannot-beat/marketai/pull/87)（S2） | `aabd3f5b` | 11-09 14:02 |
+| `generation_items_failed` | `run_item` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
+| `operations` | `operation` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
+| `processing_seconds` | `second` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
+
+- 五个 metric 都是 `delta` / `increase` / 求和。每条事实按执行模式分进 `byok`、`sandbox`、`mock`、`not_applicable` 四个桶；`mock` 不进 `total`。
+- 已知偏差：Meta 侧受控 Mock 的 Operation 记成 `not_applicable`，计入了 `total`（[#146](https://github.com/heart-cannot-beat/marketai/issues/146)）。
+- 契约 §9 的私有存储字节数、成员和预留邀请数还没有写入方，见 [#148](https://github.com/heart-cannot-beat/marketai/issues/148)–[#150](https://github.com/heart-cannot-beat/marketai/issues/150)。
+
+### 数据库约束（#145，迁移 `zzk145a1b2c3`）
+
+迁移 `zzk145a1b2c3`（`down_revision` 为 `zzj113a1b2c3`）给 `usage_events` 加上规格 §2.12 的四条 CHECK：
+
+| 约束 | 条件 |
+| --- | --- |
+| `ck_usage_events_measurement_kind_valid` | `measurement_kind` 是 `delta` 或 `gauge` |
+| `ck_usage_events_direction_matches_kind` | `delta` 只配 `increase` 或 `decrease`，`gauge` 只配 `set` |
+| `ck_usage_events_quantity_nonnegative` | `quantity >= 0` |
+| `ck_usage_events_execution_mode_valid` | `execution_mode` 是 `byok`、`sandbox`、`mock` 或 `not_applicable` |
+
+- **单位与 metric**：每个 metric 的单位和 kind 仍由代码注册表（`app/entitlements/usage.py` 的 `METRICS`）校验，不进数据库。
+- **PostgreSQL**：每条约束先以 `NOT VALID` 加上，再在同一迁移里 `VALIDATE`。已有的行违反任何一条，Release 失败，整个迁移回滚，库停在 `zzj113a1b2c3`。按 S1、S2 的写法写出的行都满足四条：本机 `tests/test_usage_pg.py` 以 API 与 Worker 角色验证过；整理本节时没有读生产数据。
+- **锁**：Alembic 把一次 upgrade 放在一个事务里，`ADD CONSTRAINT` 的 `ACCESS EXCLUSIVE` 锁一直持有到提交，期间写 Usage 的结算事务要等。按起算日推算，表里只有几天的 Beta 数据，扫描很短。
+- **不变的部分**：append-only 触发器 `trg_usage_events_immutable`、RLS 和各角色授权都不改。
+- **SQLite**：用 batch 重建表。重建前先数违反约束的行，有就拒绝升级，库不变。
+- **回滚**：downgrade 只删这四条约束，行不动。旧代码写出的行也满足约束，所以只回退代码时不需要降库。
+- **Release 结果**：本迁移在 PR 合并后由 Release 服务执行；执行结果待合并后补记。
+
 ## 竞品广告扫描上线（Epic #265）
 
 2026-11-02。[Epic #265](https://github.com/heart-cannot-beat/marketai-archive/issues/265) 的切片已全部合并，并随 main 自动部署到生产：
@@ -177,7 +218,7 @@ Issue 验收的第一条是“线上空 Workspace：无凭据走 Mock 解析 + �
 
 **待分诊**：
 
-- **#351**（与竞品无关）：`usage_events` 没有写入方，`GET /api/v1/usage` 只返回 0。
+- **#351**（与竞品无关）：`usage_events` 没有写入方，`GET /api/v1/usage` 只返回 0。**2026-11-12 更正**：已不再待分诊。它迁到 `heart-cannot-beat/marketai` 成为 #8；写入方随该仓库的 PR #69（2026-11-08 部署）和 #87（2026-11-09 部署）上线，#8 已关闭。各 metric 的起算日见上文“Usage 开始记录”。
 
 **未覆盖的场景**：真实 402、素材过期补拉、差额为 1 与手动标记的对账、`competitor_crowded`、单 Key 状态、一家失败其余完成的 `partial`、换 Key 续跑、“北美”与无法映射的市场。逐条见验收记录的“未覆盖”。
 

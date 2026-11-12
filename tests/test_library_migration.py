@@ -134,8 +134,9 @@ class LibraryMigrationDowngradeTests(unittest.TestCase):
         # zzg126a1b2c3 (provisioning creates the guardrail at the Beta defaults, #126) and
         # zzh129a1b2c3 (DeliveryTargets name the Landing Page by its frozen hash, #129) and
         # zzi132a1b2c3 (Beta default ScalePolicyVersion v2, #132 and #133) and
-        # zzj113a1b2c3 (Advice superseded by a Target event, #113).
-        self.assertEqual(revision, "zzj113a1b2c3")
+        # zzj113a1b2c3 (Advice superseded by a Target event, #113) and
+        # zzk145a1b2c3 (CHECK constraints on usage_events, #145).
+        self.assertEqual(revision, "zzk145a1b2c3")
         self.assertEqual(event_type, "library.withdrawal.affects_market_asset_binding")
 
 
@@ -235,8 +236,9 @@ class LibraryTemplatesDatasourcesMigrationTests(unittest.TestCase):
         # zzg126a1b2c3 (provisioning creates the guardrail at the Beta defaults, #126) and
         # zzh129a1b2c3 (DeliveryTargets name the Landing Page by its frozen hash, #129) and
         # zzi132a1b2c3 (Beta default ScalePolicyVersion v2, #132 and #133) and
-        # zzj113a1b2c3 (Advice superseded by a Target event, #113).
-        self.assertEqual(revision, "zzj113a1b2c3")
+        # zzj113a1b2c3 (Advice superseded by a Target event, #113) and
+        # zzk145a1b2c3 (CHECK constraints on usage_events, #145).
+        self.assertEqual(revision, "zzk145a1b2c3")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as connection:

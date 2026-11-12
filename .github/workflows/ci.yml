@@ -600,9 +600,12 @@ jobs:
       # execution mode with Mock out of the total. UsageRecorder.record_many
       # writes as the Worker (INSERT only) and the API; a repeated key is a
       # counted duplicate, never an error. A row for another Workspace is
-      # refused by RLS; UPDATE and DELETE by the append-only trigger. Then the
-      # privilege matrix, and the migration's downgrade and upgrade again. The
-      # tests remove their own Workspaces and rows.
+      # refused by RLS; UPDATE and DELETE by the append-only trigger. The CHECK
+      # constraints (#145): each refuses its bad row as both roles; rows every
+      # writer wrote before them pass VALIDATE; a bad row fails VALIDATE and
+      # rolls the revision back. Then the privilege matrix, and the
+      # migrations' downgrade and upgrade again. The tests remove their own
+      # Workspaces and rows.
       - name: Usage writes and reads hold under the real roles
         env:
           MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
