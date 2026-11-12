@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import or_, select, text, update
+from sqlalchemy import and_, or_, select, text, update
 
 from .. import config
 from ..adapters.persistence.database import engine, platform_session, tenant_session
@@ -23,6 +23,7 @@ from .audit import append_event
 from .job_policy import resolve_safe_to_retry_after_crash
 from .operations import (
     AGGREGATED_ADMISSION_CONTRACT_VERSION,
+    JOB_TERMINAL_STATES,
     NON_TERMINAL_STATES,
     OperationRecord,
     OperationState,
@@ -374,7 +375,15 @@ def reconcile_admitted_operations(limit: int = 100) -> int:
 
 
 def _admitted_operation_candidates(session, limit: int) -> list[tuple[str, int, str]]:
-    """``(workspace_id, current authorization epoch, operation_id)`` to fold."""
+    """``(workspace_id, current authorization epoch, operation_id)`` to fold.
+
+    Both branches return the same set: open aggregated Operations with at
+    least one Job, all of them ended, except an uncertain Operation that an
+    uncertain Job already accounts for. An Operation still waiting on its
+    Jobs is never listed. The fold would leave it alone and its
+    ``updated_at`` with it, so it would hold its place at the front of the
+    oldest-first window on every pass (#136).
+    """
     if session.get_bind().dialect.name == "postgresql":
         rows = session.execute(
             text(
@@ -385,6 +394,18 @@ def _admitted_operation_candidates(session, limit: int) -> list[tuple[str, int, 
             {"candidate_limit": limit},
         ).all()
     else:
+        # The same conditions as marketai_admitted_operation_candidates_v1.
+        def sibling_jobs(*conditions):
+            return (
+                select(JobRecord.id)
+                .where(
+                    JobRecord.workspace_id == OperationRecord.workspace_id,
+                    JobRecord.operation_id == OperationRecord.id,
+                    *conditions,
+                )
+                .exists()
+            )
+
         rows = session.execute(
             select(
                 OperationRecord.workspace_id,
@@ -397,6 +418,12 @@ def _admitted_operation_candidates(session, limit: int) -> list[tuple[str, int, 
                 >= AGGREGATED_ADMISSION_CONTRACT_VERSION,
                 OperationRecord.state.in_(
                     tuple(state.value for state in NON_TERMINAL_STATES)
+                ),
+                sibling_jobs(),
+                ~sibling_jobs(JobRecord.state.not_in(tuple(JOB_TERMINAL_STATES))),
+                ~and_(
+                    OperationRecord.state == OperationState.UNCERTAIN.value,
+                    sibling_jobs(JobRecord.state == "uncertain"),
                 ),
             )
             .order_by(OperationRecord.updated_at, OperationRecord.id)
