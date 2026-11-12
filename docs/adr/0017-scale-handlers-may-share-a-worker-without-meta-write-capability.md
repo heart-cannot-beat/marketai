@@ -72,7 +72,7 @@ Scale 合同 §20 原来要求 Scale Worker 使用「不含写环境变量、Lau
 三条中只要有一条要被打破（最可能的情况是启用 Meta 写入），就要先按下面的顺序完成拆分：
 
 1. `ScaleWorkerRuntime.run_once` 现在调用 `jobs.claim_next(self.owner)` 时不带 lane 过滤，会领取任何类型的 Job，再把非 Scale 的 Job 以 `unsupported_job_type` 标为失败。和主 Worker 并排部署之前，它必须只领取 Scale 的 Job 类型（`claim_next` 已经支持 `job_types=`），主 Worker 必须排除这些类型（`exclude_types=`）。
-2. 主 Worker 去掉 `scale_evaluate`、`scale_advice_expire`（#97 补上的转发）、`scale_collect_sources`（#109 新增的来源收集）和 `scale_export` 的转发。`tests/test_job_policy.py` 里检查「部署的 Worker 能处理 app 入队的所有类型」的那条测试，要改成按两个 Worker 的并集检查。
+2. 主 Worker 去掉 `scale_evaluate`、`scale_advice_expire`（#97 补上的转发）、`scale_collect_sources`（#109 新增的来源收集）、`scale_target_change`（#113 新增的 Target 变更后重评）和 `scale_export` 的转发。`tests/test_job_policy.py` 里检查「部署的 Worker 能处理 app 入队的所有类型」的那条测试，要改成按两个 Worker 的并集检查。
 3. 补齐部署：新增 Railway 服务（`python -m app.scale.worker`）和它的环境合同（`DENIED META_WRITE_ACCESS_TOKEN`），并在 `validate-static.sh` 里加上对应条目。
 4. 如果要满足「写侧数据库权限」这一项，给 Scale 一个没有 Launch 表授权的数据库角色。
 5. 拆分完成后，主 Worker 不再注册 Scale handler，`assert_no_meta_write_capability` 和守护测试按本 ADR 退役。到时守护测试的前置检查会先失败，提醒做这一步。

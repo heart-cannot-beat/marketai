@@ -2579,8 +2579,11 @@ class ScaleAdviceThreadEventRecord(Base):
             f"current_lifecycle IN {ADVICE_LIFECYCLE_VALUES}",
             name="ck_sate_current_lifecycle",
         ),
+        # A superseded thread names the thread that succeeds it, or the
+        # Target event that made it inapplicable (#113), or both.
         CheckConstraint(
-            "(event_type != 'superseded') OR (successor_thread_id IS NOT NULL)",
+            "(event_type != 'superseded') OR (successor_thread_id IS NOT NULL) "
+            "OR (semantic_event_id IS NOT NULL)",
             name="ck_sate_superseded_shape",
         ),
     )
@@ -2600,6 +2603,10 @@ class ScaleAdviceThreadEventRecord(Base):
     current_lifecycle: Mapped[str] = mapped_column(String(20), nullable=False)
     # The new-generation thread this thread was superseded by.
     successor_thread_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The `ScaleTargetLifecycleEventRecord` (publish or withdraw) whose
+    # Target change made this thread inapplicable (#113); set only on a
+    # `superseded` event.
+    semantic_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
     deduplication_key: Mapped[str] = mapped_column(String(128), nullable=False)
     executor_id: Mapped[str] = mapped_column(String(100), nullable=False)

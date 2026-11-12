@@ -44,7 +44,9 @@ from tests.test_job_policy import _dispatched_types
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app"
-SCALE_JOB_TYPES = {"scale_evaluate", "scale_advice_expire", "scale_collect_sources", "scale_export"}
+SCALE_JOB_TYPES = {
+    "scale_evaluate", "scale_advice_expire", "scale_collect_sources", "scale_target_change", "scale_export",
+}
 SENTINEL_TOKEN = "ci-only-write-token-sentinel"
 #: Everything ``config.meta_write_ready()`` needs, with fictional values.
 FULL_WRITE_CONFIG = {

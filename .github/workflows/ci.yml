@@ -488,6 +488,23 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_scale_live_evaluation_pg -v
 
+      # #113 (#101 S7) on the same fixture: a complete manifest older than
+      # the Episode's latest gets a backfill run the Worker evaluates without
+      # taking the Episode's phase or moving the projection the API reads.
+      # A Member's Target command is refused and enqueues nothing; the
+      # Owner's publish and withdraw enqueue scale_target_change in the API's
+      # transaction, and the Worker supersedes the Advice formed under the
+      # previous Target (citing the event, no successor) and requests a
+      # target_change run that wins the projection. Replays add nothing, and
+      # Workspace B's Target reads nothing of A.
+      - name: Target-change re-evaluation and backfill hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_target_change_pg -v
+
       # SQLite cannot see a missing grant (#284): every competitor write
       # command runs here as the role that serves it in production.
       - name: Competitor API and Worker writes hold under the real roles

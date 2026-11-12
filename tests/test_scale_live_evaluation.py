@@ -17,9 +17,9 @@ in its own transaction -- and the evaluation.
   creative still does);
 * manifest, run and Job commit together; replaying the tick, batch,
   collection and evaluation Jobs adds nothing;
-* no run for a blocked manifest, a day that has not ended, a day older than
-  the Episode's latest complete one (#101 Q9), a paused Enrollment, or when
-  no Policy is eligible;
+* no run for a blocked manifest, a day that has not ended, a paused
+  Enrollment, or when no Policy is eligible; a day older than the Episode's
+  latest complete one gets a backfill run, not a live one (#101 Q9, #113);
 * adjacent days: the later run waits while the earlier one holds the
   Episode, and evaluates against it once it is done;
 * a stuck run is redriven twice, then alerted on, and the Episode gets no
@@ -427,7 +427,7 @@ class NoLiveRun(LiveEvaluationTestCase):
         [skipped] = self._events("scale.live_evaluation.skipped")
         self.assertEqual(skipped.details_json["reason"], "day_not_ended")
 
-    def test_an_earlier_day_collected_after_a_later_one_gets_no_live_run(self):
+    def test_an_earlier_day_collected_after_a_later_one_gets_a_backfill_run_not_a_live_one(self):
         earlier = _local_today() - timedelta(days=4)
         later = earlier + timedelta(days=1)
         connection_id, established, ad_ids = self._establish(ads=1)
@@ -438,10 +438,11 @@ class NoLiveRun(LiveEvaluationTestCase):
         self._collect(connection_id, earlier)  # e.g. a collection retried after the next day's
 
         self.assertEqual(self._manifest_for(episode_id, earlier).state, "complete")
-        self.assertEqual([run.target_local_day for run in self._runs_of(episode_id)], [later],
-                         "only the latest slot is live (#101 Q9); older days are backfill (S7)")
-        [skipped] = self._events("scale.live_evaluation.skipped")
-        self.assertEqual(skipped.details_json["reason"], "superseded_by_later_day")
+        self.assertEqual([(run.target_local_day, run.trigger_kind) for run in self._runs_of(episode_id)],
+                         [(earlier, "backfill"), (later, "live")],
+                         "only the latest slot is live (#101 Q9); older days are backfill (#113, "
+                         "tests/test_scale_target_change.py)")
+        self.assertEqual(self._events("scale.live_evaluation.skipped"), [])
 
 
 class Recovery(LiveEvaluationTestCase):

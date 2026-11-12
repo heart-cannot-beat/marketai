@@ -117,6 +117,10 @@ JOB_POLICIES: dict[str, JobPolicy] = {
         "同一事务建 run 并入队；Episode 被前一个 run 占着时可重试，不终结 run（#110）"),
     "scale_advice_expire": _policy(
         _NONE_REQUEUE, "在线程行锁下复查，非 active 即不写；Phase C 按截止时间延迟入队（#111）"),
+    "scale_target_change": _policy(
+        _NONE_REQUEUE,
+        "Target 发布或撤回的同一事务入队；每个 Episode 在行锁下单事务：supersede 不再适用的 Advice，"
+        "按 Episode 和 Target 事件找回已建的 target_change run，重放不重复建 run、不重复 supersede（#113）"),
     "scale_collect_sources": _policy(
         _NONE_REQUEUE,
         "只读已存的观察页，不调用适配器；每个 Episode 在行锁下单事务写 manifest，"

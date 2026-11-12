@@ -30,8 +30,9 @@ Scale never performs Meta writes: this Worker dispatches only
 ``scale_evaluate`` (spec §3.1/§3.4, ``app.scale.service.run_scale_evaluation``),
 ``scale_advice_expire`` (spec §3.5, ``app.scale.advice.expire_advice_thread``),
 ``scale_collect_sources`` (#109, ``app.scale.collector.run_source_collection``,
-which reads stored observation pages and resolves no adapter) and
-``scale_export`` (Issue #87 Task 5, ``app.scale.exports.run_scale_export``)
+which reads stored observation pages and resolves no adapter),
+``scale_target_change`` (#113, ``app.scale.target_change.run_target_change``)
+and ``scale_export`` (Issue #87 Task 5, ``app.scale.exports.run_scale_export``)
 jobs. None of these calls reach ``app.adapters.meta.write_client`` or
 ``app.launch`` at any depth.
 """
@@ -61,6 +62,12 @@ from app.scale.service import (
     ScaleOrchestrationError,
     evaluation_job_context,
     run_scale_evaluation,
+)
+from app.scale.target_change import (
+    TargetChangeError,
+    TargetChangeFailed,
+    run_target_change,
+    target_change_job_input,
 )
 
 _JOB_POLL_SECONDS = float(os.getenv("JOB_POLL_SECONDS", "0.5"))
@@ -99,6 +106,9 @@ class ScaleWorkerRuntime:
             return True
         if job.type == "scale_collect_sources":
             self._scale_collect_sources(job)
+            return True
+        if job.type == "scale_target_change":
+            self._scale_target_change(job)
             return True
         if job.type == "scale_export":
             self._scale_export(job)
@@ -251,6 +261,36 @@ class ScaleWorkerRuntime:
             jobs.fail(
                 job.context, job.id, self.owner,
                 code="scale_collect_sources_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _scale_target_change(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_target_change`` job (#113, #101
+        S7). Like ``_scale_evaluate`` it only delegates to ``app.scale``:
+        the handler supersedes inapplicable Advice and requests
+        ``target_change`` runs, Episode by Episode, each in its own
+        transaction, and finds what it already did on a retry.
+        """
+        try:
+            target_event_id = target_change_job_input(job.payload)
+        except TargetChangeError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_target_change(job.context, target_event_id)
+            jobs.succeed(job.context, job.id, self.owner)
+        except TargetChangeError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+        except TargetChangeFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_target_change_failed", detail=str(exc), retryable=True,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_target_change_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
             )
 
     @runs_as(WORKER_ROLE)
