@@ -34,6 +34,10 @@ class UsageEventRecord(Base):
     Records each metered usage event for billing and analytics.  Rows are
     never updated or deleted; append-only enforcement lives in the
     migration trigger, not the ORM.
+
+    The CHECKs (migration ``zzk145a1b2c3``) hold the shape every metric
+    shares; units and which metric uses which kind stay in the registry
+    (``app.entitlements.usage.METRICS``).
     """
 
     __tablename__ = "usage_events"
@@ -41,6 +45,20 @@ class UsageEventRecord(Base):
         UniqueConstraint(
             "workspace_id", "semantic_key_hash",
             name="uq_usage_events_workspace_semantic_key",
+        ),
+        CheckConstraint(
+            "measurement_kind IN ('delta', 'gauge')",
+            name="measurement_kind_valid",
+        ),
+        CheckConstraint(
+            "(measurement_kind <> 'delta' OR direction IN ('increase', 'decrease')) "
+            "AND (measurement_kind <> 'gauge' OR direction = 'set')",
+            name="direction_matches_kind",
+        ),
+        CheckConstraint("quantity >= 0", name="quantity_nonnegative"),
+        CheckConstraint(
+            "execution_mode IN ('byok', 'sandbox', 'mock', 'not_applicable')",
+            name="execution_mode_valid",
         ),
     )
 
