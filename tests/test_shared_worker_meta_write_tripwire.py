@@ -312,6 +312,47 @@ class TheStartupCheckCoversEveryWritePath(unittest.TestCase):
         }
         self.assertEqual(verbs, {"get"})
 
+    def test_the_internal_validation_reader_reaches_meta_only_through_the_get_gateway(self):
+        # #112: the real read adapter is not a third file addressing the Graph
+        # API. It imports no HTTP client, calls no HTTP verb, and its one
+        # network call is the client.py gateway's `get`.
+        source = (APP / "adapters/meta/http_read_adapter.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        imported = {
+            alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
+        } | {
+            (node.module or "").split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+        }
+        self.assertFalse(imported & {"httpx", "requests", "urllib", "urllib3", "aiohttp", "http", "socket"})
+        verbs = {
+            node.func.attr for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"post", "put", "patch", "delete", "request", "send", "stream"}
+        }
+        self.assertEqual(verbs, set())
+        gateway_calls = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get"
+            and isinstance(node.func.value, ast.Attribute) and node.func.value.attr == "_gateway"
+        ]
+        self.assertEqual(len(gateway_calls), 1)
+
+    def test_no_meta_reader_takes_a_credential_from_the_environment(self):
+        # #112: internal_validation decrypts the binding's CredentialVersions
+        # on every call; neither it nor its gateway reads a configured token.
+        # The legacy async gateway still reads META_ACCESS_TOKEN; nothing in
+        # these files may read META_WRITE_ACCESS_TOKEN.
+        forbidden = {"META_WRITE_ACCESS_TOKEN", "META_ACCESS_TOKEN", "META_APP_SECRET"}
+        reader = ast.parse((APP / "adapters/meta/http_read_adapter.py").read_text(encoding="utf-8"))
+        self.assertEqual({node.attr for node in ast.walk(reader) if isinstance(node, ast.Attribute)} & forbidden,
+                         set())
+        client = ast.parse((APP / "adapters/meta/client.py").read_text(encoding="utf-8"))
+        gateway = next(node for node in ast.walk(client)
+                       if isinstance(node, ast.ClassDef) and node.name == "HttpMetaReadGateway")
+        self.assertEqual({node.attr for node in ast.walk(gateway) if isinstance(node, ast.Attribute)} & forbidden,
+                         set())
+        self.assertNotIn("META_WRITE_ACCESS_TOKEN", (APP / "adapters/meta/client.py").read_text(encoding="utf-8"))
+
     def test_only_launch_canary_builds_the_write_client(self):
         # Provisioning and recovery resolve only the sandbox adapter; the one
         # construction of the real client is Launch's ``execute_operation``,

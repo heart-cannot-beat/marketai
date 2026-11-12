@@ -24,7 +24,8 @@ through ``TestClient`` and the Worker as ``marketai_domain_worker``:
   checkpoint; the next Worker resumes at page 2 and writes no page twice;
 * negatives: only the Worker may execute the function; Workspace B's context
   sees none of A's schedules or runs; an ``internal_validation`` generation
-  gets no schedule; a retired connection is not dispatched; a
+  gets its schedule in the platform Workspace only (#112); a retired
+  connection is not dispatched; a
   ``controlled_mock`` read fault fails the run with no attestation.
 
 Workspaces are opened as the schema owner, as the control plane would. The
@@ -545,21 +546,39 @@ class MetaObservationSyncPostgresTests(unittest.TestCase):
                                   EvidenceAttestationRecord, ObservationCoverageLedgerRecord):
                         self.assertEqual(len(session.scalars(select(model.id)).all()), expected, model.__name__)
 
-    def test_an_internal_validation_generation_gets_no_schedule(self):
-        platform = self._workspace("platform", is_platform_workspace=True)
-        context = replace(worker_context(platform.workspace_id, "internal_validation"), is_platform_workspace=True)
-        with self._as(API), tenant_session(context) as session:
-            connection = MetaConnectionRecord(id=f"mcon_{uuid.uuid4().hex[:12]}", workspace_id=platform.workspace_id,
-                                              meta_mode="internal_validation", ad_account_id=AD_ACCOUNT)
-            session.add(connection)
-            session.flush()
-            create_contract_generation(
-                session, workspace_id=platform.workspace_id, meta_mode="internal_validation",
-                connection_id=connection.id, contract_type="daily", ad_account_id=AD_ACCOUNT,
-                fields=DAILY_FIELDS, attribution_window={}, breakdowns=[], time_window={}, local_timezone=TIMEZONE,
-            )
-        self.assertEqual(len(self._rows(ObservationContractGenerationRecord, platform.workspace_id)), 1)
-        self.assertEqual(self._rows(MetaObservationSyncScheduleRecord, platform.workspace_id), [])
+    def test_an_internal_validation_generation_is_scheduled_in_the_platform_workspace_only(self):
+        # #112: the platform Workspace's generation gets its daily schedule. In
+        # a customer Workspace the database refuses the connection itself
+        # (deferred trigger), so no generation or schedule can follow it.
+        for prefix, platform in (("platform", True), ("customer", False)):
+            workspace = self._workspace(prefix, is_platform_workspace=platform)
+            context = replace(worker_context(workspace.workspace_id, "internal_validation"),
+                              is_platform_workspace=platform)
+
+            def create():
+                with self._as(API), tenant_session(context) as session:
+                    connection = MetaConnectionRecord(id=f"mcon_{uuid.uuid4().hex[:12]}",
+                                                      workspace_id=workspace.workspace_id,
+                                                      meta_mode="internal_validation", ad_account_id=AD_ACCOUNT)
+                    session.add(connection)
+                    session.flush()
+                    create_contract_generation(
+                        session, workspace_id=workspace.workspace_id, meta_mode="internal_validation",
+                        connection_id=connection.id, contract_type="daily", ad_account_id=AD_ACCOUNT,
+                        fields=DAILY_FIELDS, attribution_window={}, breakdowns=[], time_window={},
+                        local_timezone=TIMEZONE,
+                    )
+
+            with self.subTest(platform=platform):
+                if platform:
+                    create()
+                else:
+                    with self.assertRaisesRegex(Exception, "require a platform workspace"):
+                        create()
+                generations = self._rows(ObservationContractGenerationRecord, workspace.workspace_id)
+                schedules = self._rows(MetaObservationSyncScheduleRecord, workspace.workspace_id)
+                self.assertEqual((len(generations), [row.state for row in schedules]),
+                                 (1, ["active"]) if platform else (0, []))
 
     def test_a_retired_connection_is_not_dispatched(self):
         owner = self._workspace("retired")

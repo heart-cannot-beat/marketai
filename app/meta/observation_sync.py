@@ -51,6 +51,17 @@ attested evidence, each a durable Job the Worker runs:
    attempt is marked ``failed`` and gets no attestation; the other runs of
    the batch finish as usual.
 
+   ``internal_validation`` reads the real Graph API (#112): the adapter
+   decrypts the binding's credentials for every page and sends GET only.
+   Meta's rate limits -- a usage reading past the threshold after a page, or
+   a rate-limit error -- stop the batch with :class:`ObservationBatchDeferred`:
+   the Job waits out the back-off without spending an attempt
+   (``app.platform.jobs.defer``) and every run resumes from its checkpoint,
+   unless the wait would outlast the next day's slot, whose batch reads the
+   same 14 days. A refusal no retry changes -- an expired, revoked or
+   unpermitted credential, or a Workspace that is not the platform
+   Workspace -- fails the batch's runs at once, with no attestation.
+
 Every write runs in a TenantContext signed for the Job's Workspace and the
 payload's Meta mode, under the same RLS as any Worker transaction. The
 executor only ever reads through :class:`MetaObservationReadPort`; the
@@ -64,12 +75,13 @@ import hashlib
 import json
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Protocol, Sequence
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from ..adapters.meta.client import MetaReadError
 from ..adapters.persistence.database import platform_session, tenant_session
 from ..adapters.persistence.models import JobRecord, WorkspaceRecord, new_id, utcnow
 from ..platform.audit import append_event
@@ -105,6 +117,7 @@ from .models import (
 )
 from .observation import (
     ReadPlan,
+    fire_at_for_target_date,
     latest_fire_at_or_before,
     next_fire_after,
     observation_read_plan,
@@ -134,7 +147,9 @@ __all__ = [
     "LOOKBACK_DAYS",
     "ObservationSyncError",
     "ObservationBatchFailed",
+    "ObservationBatchDeferred",
     "ObservationLeaseLost",
+    "ObservationReadThrottled",
     "MetaObservationReadPort",
     "MetaInsightsReadPort",
     "TickResult",
@@ -181,13 +196,39 @@ class ObservationLeaseLost(RuntimeError):
 
 
 class ObservationBatchFailed(RuntimeError):
-    """Runs of a batch did not finish. ``final`` when they were marked failed."""
+    """Runs of a batch did not finish. ``final`` when they were marked failed:
+    on the Job's last attempt, or because Meta refused the connection's
+    credentials, which no retry changes (#112)."""
 
     def __init__(self, failures: dict[str, str], *, final: bool) -> None:
         self.failures = dict(failures)
         self.final = final
         detail = "; ".join(f"{run_id}: {reason}" for run_id, reason in sorted(failures.items()))
         super().__init__(f"{len(failures)} sync run(s) did not finish: {detail}")
+
+
+class ObservationReadThrottled(RuntimeError):
+    """Meta's usage reading says to stop reading for ``retry_after`` seconds:
+    the last read crossed the usage threshold, or Meta refused it for its
+    rate limits (#112). Whatever page was read is already recorded."""
+
+    def __init__(self, retry_after: float, reason: str) -> None:
+        super().__init__(reason)
+        self.retry_after = float(retry_after)
+        self.reason = reason
+
+
+class ObservationBatchDeferred(RuntimeError):
+    """The batch stopped for Meta's rate limits and resumes at ``not_before``.
+
+    Nothing failed: every run keeps its checkpoint, and the Job waits without
+    spending an attempt (``app.platform.jobs.defer``)."""
+
+    def __init__(self, retry_after: float, reason: str, *, not_before: datetime) -> None:
+        super().__init__(f"Meta rate limits: resume at {fire_at_text(not_before)} ({reason})")
+        self.retry_after = float(retry_after)
+        self.reason = reason
+        self.not_before = not_before
 
 
 class MetaObservationReadPort(Protocol):
@@ -701,25 +742,87 @@ def run_observation_sync(
     ones that did not finish, which resume from their last committed page.
     On the final attempt those runs are marked ``failed`` before
     :class:`ObservationBatchFailed` is raised.
+
+    Two outcomes do not wait for the final attempt (#112):
+
+    * Meta's rate limits stop the whole batch with
+      :class:`ObservationBatchDeferred`: nothing has failed, and every run
+      resumes from its checkpoint after the back-off. A back-off that would
+      end after the next day's slot -- whose batch reads the same 14 days --
+      is not waited out: the throttled run and the rest fail now.
+    * A refusal no retry can change -- the Workspace is not the platform
+      Workspace, the credentials are revoked, expired or lack permission --
+      fails the run at once, and the batch's remaining runs with it, without
+      reading: they would present the same credentials.
     """
     with tenant_session(context) as session:
         run_ids = _batch_run_ids(session, context, connection_id, target_date, run_generation)
     failures: dict[str, str] = {}
+    failed_now: set[str] = set()
+    refusal: str | None = None
     succeeded: list[str] = []
     for run_id in run_ids:
+        if refusal is not None:
+            if _fail_run(context, run_id, f"not read: {refusal}"):
+                failures[run_id] = f"not read: {refusal}"[:500]
+                failed_now.add(run_id)
+            continue
         try:
             if _execute_run(context, run_id, heartbeat=heartbeat) == "succeeded":
                 succeeded.append(run_id)
         except ObservationLeaseLost:
             raise
+        except ObservationReadThrottled as exc:
+            not_before = utcnow() + timedelta(seconds=exc.retry_after)
+            if not_before < _deferral_deadline(context, connection_id, target_date):
+                raise ObservationBatchDeferred(exc.retry_after, exc.reason, not_before=not_before) from None
+            refusal = f"rate limited past the next day's sync: {exc.reason}"[:500]
+            _fail_run(context, run_id, refusal)
+            failures[run_id] = refusal
+            failed_now.add(run_id)
         except Exception as exc:  # noqa: BLE001 -- one run must not stop the batch
-            failures[run_id] = f"{type(exc).__name__}: {exc}"[:500]
-    if failures:
-        if final_attempt:
-            for run_id, reason in failures.items():
+            reason = f"{type(exc).__name__}: {exc}"[:500]
+            failures[run_id] = reason
+            if getattr(exc, "permanent", False):
+                refusal = reason
                 _fail_run(context, run_id, reason)
-        raise ObservationBatchFailed(failures, final=final_attempt)
+                failed_now.add(run_id)
+    if failures:
+        unresolved = {run_id: reason for run_id, reason in failures.items() if run_id not in failed_now}
+        if final_attempt:
+            for run_id, reason in unresolved.items():
+                _fail_run(context, run_id, reason)
+        raise ObservationBatchFailed(failures, final=final_attempt or not unresolved)
     return BatchResult(run_ids=tuple(run_ids), succeeded=tuple(succeeded))
+
+
+def _deferral_deadline(context: TenantContext, connection_id: str, target_date: date) -> datetime:
+    """When the next day's batch starts: a deferred batch must resume before.
+
+    The connection's schedules share one cron and one time zone
+    (``_require_connection_slot``); without a schedule there is nothing to
+    wait for.
+    """
+    schedule = MetaObservationSyncScheduleRecord
+    generation = ObservationContractGenerationRecord
+    with tenant_session(context) as session:
+        row = session.execute(
+            select(schedule.cron_expression, generation.local_timezone)
+            .join(generation, (generation.workspace_id == schedule.workspace_id)
+                  & (generation.meta_mode == schedule.meta_mode)
+                  & (generation.id == schedule.contract_generation_id))
+            .where(
+                schedule.workspace_id == context.workspace_id,
+                schedule.meta_mode == context.meta_mode,
+                schedule.meta_connection_id == connection_id,
+            )
+            .order_by(schedule.created_at.desc(), schedule.id.desc())
+            .limit(1)
+        ).first()
+    if row is None:
+        return utcnow()
+    cron_expression, timezone_name = row
+    return fire_at_for_target_date(cron_expression, timezone_name, target_date + timedelta(days=1))
 
 
 def _batch_run_ids(
@@ -921,6 +1024,7 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         meta_mode=context.meta_mode,
         connection_id=generation.meta_connection_id,
         ad_account_id=generation.ad_account_id,
+        read_only=True,
     )
     read = _page_read(generation, plan, instance, target_date, input_cursor)
 
@@ -981,22 +1085,33 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         page, output_cursor = _read_page(port, generation, plan, instance, target_date, read)
     except Exception as exc:
         # Nothing of this page is kept but the evidence that the read failed.
+        # A Meta read error's message is already scrubbed of the credentials.
         session.rollback()
         session.begin()
         apply_to_session(session, context)
+        read_error = exc if isinstance(exc, MetaReadError) else None
+        attempted = network and (read_error.network_attempted if read_error is not None else True)
         session.add(MetaCallOutcomeRecord(
             id=new_id("mco"),
             workspace_id=context.workspace_id,
             meta_mode=context.meta_mode,
             intent_id=intent_id,
             operation_id=operation_id,
-            network_attempted=network,
-            error_category="adapter_read_failed",
+            network_attempted=attempted,
+            http_status=read_error.http_status if read_error is not None and attempted else None,
+            response_summary=(
+                {"error_code": read_error.code, "usage": read_error.usage.summary()}
+                if read_error is not None and read_error.usage is not None
+                else ({"error_code": read_error.code} if read_error is not None else None)
+            ),
+            error_category=read_error.error_category if read_error is not None else "adapter_read_failed",
             error_detail=f"{type(exc).__name__}: {exc}"[:2000],
             executor=READ_EXECUTOR,
         ))
         _close_attempt(session, attempt_id, "failed", f"{type(exc).__name__}: {exc}")
         commit_and_rebind(session)
+        if read_error is not None and read_error.kind == "throttled":
+            raise ObservationReadThrottled(read_error.retry_after or 0, str(read_error)) from None
         raise
 
     raw = json.dumps(page.payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
@@ -1008,9 +1123,13 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         intent_id=intent_id,
         operation_id=operation_id,
         network_attempted=network,
-        http_status=200 if network else None,
+        http_status=getattr(page, "http_status", 200) if network else None,
         response_evidence_hash=hashlib.sha256(raw).hexdigest(),
-        response_summary={"row_count": page.row_count, "has_next_page": page.next_cursor is not None},
+        response_summary={
+            "row_count": page.row_count,
+            "has_next_page": page.next_cursor is not None,
+            **(page.outcome_summary() if hasattr(page, "outcome_summary") else {}),
+        },
         executor=READ_EXECUTOR,
     )
     session.add(outcome)
@@ -1044,6 +1163,15 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         )
     session.flush()
     commit_and_rebind(session)
+    # Meta's usage reading on this page: past the threshold, no further read
+    # until it has decayed (#112). The page is already kept.
+    defer_seconds = getattr(page, "defer_seconds", None)
+    if defer_seconds:
+        usage = page.usage
+        raise ObservationReadThrottled(
+            defer_seconds,
+            f"meta_read_rate_limited: usage at {usage.max_utilisation_pct:g}% ({', '.join(usage.reported_by)})",
+        )
     return "succeeded" if is_terminal else "running"
 
 
@@ -1162,12 +1290,19 @@ def _move_operation(
         transition_operation(session, operation_id, to_state, reason, READ_EXECUTOR, result_ref=result_ref)
 
 
-def _fail_run(context: TenantContext, run_id: str, reason: str) -> None:
-    """The batch Job's last attempt gave up on this run (#107)."""
+def _fail_run(context: TenantContext, run_id: str, reason: str) -> bool:
+    """Give up on this run: the batch Job's last attempt (#107), or a refusal
+    no retry changes (#112). ``False`` when the run had already ended
+    otherwise."""
     with tenant_session(context) as session:
+        before = session.scalar(
+            select(MetaObservationSyncRunRecord.state).where(MetaObservationSyncRunRecord.id == run_id)
+        )
         run = fail_sync_run(session, sync_run_id=run_id)
         if run.state != "failed":
-            return
+            return False
+        if before == "failed":
+            return True  # failed earlier: its Operation and audit event exist
         _move_operation(session, run.operation_id, OperationState.FAILED, f"scheduled sync failed: {reason}"[:500])
         append_event(
             session,
@@ -1176,3 +1311,4 @@ def _fail_run(context: TenantContext, run_id: str, reason: str) -> None:
             resource_id=run.id,
             details={"contract_generation_id": run.contract_generation_id, "reason": reason[:500]},
         )
+    return True
