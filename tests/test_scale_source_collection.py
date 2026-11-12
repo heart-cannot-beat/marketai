@@ -588,7 +588,7 @@ class SealedDeliveryHistory(CollectionTestCase):
         with tenant_session(context) as session:
             snapshot = assemble_snapshot(session, context, snapshot_id)
             row = session.get(ScaleEvidenceSnapshotRecord, snapshot_id)
-            self.assertEqual(row.canonical_schema_version, "scale-snapshot-v3")
+            self.assertEqual(row.canonical_schema_version, "scale-snapshot-v4")
         history = snapshot.delivery_config.status_history
         self.assertIn(("ad", "PAUSED", paused), {(e.entity_level, e.status, e.observed_at.date()) for e in history})
         self.assertTrue(all(e.observed_at.utcoffset() == ZONE.utcoffset(e.observed_at.replace(tzinfo=None))

@@ -278,7 +278,7 @@ class TestEvaluateScaleContract(unittest.TestCase):
     def test_import(self):
         from app.scale.evaluator import evaluate_scale, CURRENT_ALGORITHM_VERSION
         self.assertIsNotNone(evaluate_scale)
-        self.assertEqual(CURRENT_ALGORITHM_VERSION, "beta-v1")
+        self.assertEqual(CURRENT_ALGORITHM_VERSION, "beta-v2")
 
     def test_pure_function_no_io(self):
         """Verify evaluator module has no forbidden imports."""

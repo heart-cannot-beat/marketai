@@ -206,8 +206,9 @@ def _seed_full_activation_evidence(session, ctx, *, delivery_target_id: str, met
 
 
 def _platform_policy_version_id(session) -> str:
-    """The Policy a live ``customer_sandbox`` run freezes: the Beta default
-    the migrations published (#127). ``advance-manifest`` evaluates under it
+    """The Policy a live ``customer_sandbox`` run freezes: the latest Beta
+    default the migrations published that runs the deployed algorithm (v2
+    since #132). ``advance-manifest`` evaluates under it
     explicitly in either mode -- explicit evaluation does not read
     ``mode_permissions``, which keep ``controlled_mock`` out of live runs."""
     from app.scale.live_trigger import eligible_live_policy
@@ -517,6 +518,7 @@ def advance_manifest(
         ScaleEvidenceSourceManifestRecord,
         ScaleManifestItemRecord,
     )
+    from app.scale.evaluator import CURRENT_ALGORITHM_VERSION
     from app.scale.service import request_scale_evaluation, run_scale_evaluation, ScaleEvaluationRequest
 
     ctx = _tenant_context(environment, meta_mode=meta_mode)
@@ -602,7 +604,8 @@ def advance_manifest(
             source_revision=day_index,
             freshness_reference_at=datetime.now(timezone.utc),
             policy_version_id=policy_version_id,
-            algorithm_version="beta-v1",
+            # The deployed algorithm, which the selected Policy runs (#132).
+            algorithm_version=CURRENT_ALGORITHM_VERSION,
             target_version_id=target_version_id,
             semantic_event_sequence=0,
             replay_generation=0,

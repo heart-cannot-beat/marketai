@@ -12,7 +12,10 @@ This module is the sole external evaluation seam for Scale (§2.1). It:
 - runs the fixed ten-phase pipeline described in spec §2.5, inside a local
   Decimal context frozen by the snapshot's Policy;
 - dispatches through a private registry keyed by
-  `snapshot.policy.algorithm_version`, never a caller-supplied label.
+  `snapshot.policy.algorithm_version`, never a caller-supplied label. New
+  runs freeze `CURRENT_ALGORITHM_VERSION` (`beta-v2`, #132/#133); `beta-v1`
+  stays registered so what froze it replays byte for byte (contract §11).
+  The two share one pipeline and differ only where `_Algorithm` says.
 
 Allowed imports are Python standard-library value/arithmetic modules plus
 Scale's own frozen contracts (`app.scale._contracts`, `app.scale._statistics`,
@@ -22,8 +25,9 @@ forbidden anywhere in this module (enforced by an AST-based test).
 
 Several places in the spec describe behavior in prose without a literal
 formula or a closed enumeration (Phase 5's exact reset granularity, Phase 6's
-"clear economic improvement" conflict test, Phase 7's consecutive-hit gate
-for `review_delivery_mix`, Advice severity assignment). Every such judgment
+"clear economic improvement" conflict test, Advice severity assignment;
+Phase 7's consecutive-hit gate for `review_delivery_mix` is the Policy's
+`consecutive_breakdown_hits_required` from beta-v2 on). Every such judgment
 call is called out at its point of use with a `# Judgment call:` comment and
 is additionally summarized in the Task 9 report.
 """
@@ -87,7 +91,31 @@ from app.scale.types import (
 # ---------------------------------------------------------------------------
 
 _REGISTRY: dict[str, Callable[[ScaleEvidenceSnapshot], ScaleEvaluation]] = {}
-CURRENT_ALGORITHM_VERSION = "beta-v1"
+#: The version every new run freezes (contract §11). `beta-v1` stays
+#: registered: snapshots and runs that froze it replay under it unchanged.
+CURRENT_ALGORITHM_VERSION = "beta-v2"
+
+
+@dataclass(frozen=True)
+class _Algorithm:
+    """Where the registered versions differ. Everything else is shared."""
+
+    version: str
+    # beta-v2 (contract §9.2, #132 X-A): cpa_worsening and roas_worsening
+    # are evaluated only at economics_ready, and a Policy floor of `None`
+    # (the snapshot currency is outside the Policy's table) withholds every
+    # economic evaluation, breakdown included. beta-v1 evaluates both
+    # signals at any maturity.
+    economics_gated: bool
+    # beta-v2 (contract §13, #133): a segment forms `review_delivery_mix`
+    # only once its streak reaches the Policy's
+    # `consecutive_breakdown_hits_required`. beta-v1's Policy has no such
+    # field; its gate is the current evaluation alone.
+    breakdown_streak_gate: bool
+
+
+_BETA_V1 = _Algorithm("beta-v1", economics_gated=False, breakdown_streak_gate=False)
+_BETA_V2 = _Algorithm("beta-v2", economics_gated=True, breakdown_streak_gate=True)
 
 
 def _register(version: str):
@@ -377,12 +405,26 @@ def _window_opens_before_episode(snapshot: ScaleEvidenceSnapshot) -> bool:
     return snapshot.baseline_7d.daily[0].evidence_state == DailyEvidenceState.BEFORE_EPISODE
 
 
-def _validate_snapshot(snapshot: ScaleEvidenceSnapshot) -> None:
+def _validate_policy(policy: ScalePolicySnapshot, algorithm: _Algorithm) -> None:
+    """The Policy fields this version reads. Only beta-v2 accepts a missing
+    spend floor (a currency outside the Policy's table, #132), and beta-v2
+    needs the consecutive breakdown hits (#133)."""
+    if policy.spend_floor is None and not algorithm.economics_gated:
+        raise InvalidScaleSnapshot("invalid_policy", "spend_floor")
+    if algorithm.breakdown_streak_gate and (
+        policy.consecutive_breakdown_hits_required is None
+        or policy.consecutive_breakdown_hits_required < 1
+    ):
+        raise InvalidScaleSnapshot("invalid_policy", "consecutive_breakdown_hits_required")
+
+
+def _validate_snapshot(snapshot: ScaleEvidenceSnapshot, algorithm: _Algorithm) -> None:
     """Phase 0 (spec §2.3, §2.5 Phase 0). The persistence assembler is the
     primary integrity gate; the evaluator nevertheless validates every
     assumption its own arithmetic depends on."""
-    if snapshot.policy.algorithm_version != CURRENT_ALGORITHM_VERSION:
+    if snapshot.policy.algorithm_version != algorithm.version:
         raise InvalidScaleSnapshot("algorithm_policy_mismatch", snapshot.policy.algorithm_version)
+    _validate_policy(snapshot.policy, algorithm)
 
     if snapshot.target is not None and snapshot.target.currency != snapshot.currency:
         raise InvalidScaleSnapshot("currency_mismatch")
@@ -466,6 +508,11 @@ def _maturity(
     if not monitorable:
         return EvidenceMaturity.WARMING
 
+    if policy.spend_floor is None:
+        # beta-v2 (#132): the Policy has no floor in the snapshot currency,
+        # so the evidence never becomes economics-ready.
+        return EvidenceMaturity.MONITORABLE
+
     spend_floor_candidates = [policy.spend_floor]
     if target is not None:
         spend_floor_candidates.append(target.minimum_economic_spend)
@@ -535,7 +582,11 @@ def _primitive_signals(
     snapshot: ScaleEvidenceSnapshot,
     current_totals: _Totals,
     baseline_totals: _Totals,
+    economics_withheld: bool = False,
 ) -> _PrimitiveSignals:
+    """With `economics_withheld` (beta-v2, §9.2), `cpa_worsening` and
+    `roas_worsening` are unavailable without a bootstrap; beta-v1 never
+    sets it."""
     policy = snapshot.policy
     target = snapshot.target
     results: dict[str, SignalResult] = {}
@@ -692,20 +743,39 @@ def _primitive_signals(
 
     # -- cpa_worsening (bootstrap-supported) --------------------------------
     cpa_threshold = eff(policy.cpa_worsening_threshold, "cpa_worsening_threshold_override")
-    results["cpa_worsening"] = _bootstrap_economic_signal(
-        snapshot, "cpa_worsening", current_totals, baseline_totals, cpa_threshold, metric="cpa",
-    )
+    if economics_withheld:
+        results["cpa_worsening"] = _withheld_economic_signal(snapshot, "cpa_worsening", cpa_threshold)
+    else:
+        results["cpa_worsening"] = _bootstrap_economic_signal(
+            snapshot, "cpa_worsening", current_totals, baseline_totals, cpa_threshold, metric="cpa",
+        )
 
     # -- roas_worsening (bootstrap-supported) --------------------------------
     roas_threshold = eff(policy.roas_worsening_threshold, "roas_worsening_threshold_override")
-    results["roas_worsening"] = _bootstrap_economic_signal(
-        snapshot, "roas_worsening", current_totals, baseline_totals, roas_threshold, metric="roas",
-    )
+    if economics_withheld:
+        results["roas_worsening"] = _withheld_economic_signal(snapshot, "roas_worsening", roas_threshold)
+    else:
+        results["roas_worsening"] = _bootstrap_economic_signal(
+            snapshot, "roas_worsening", current_totals, baseline_totals, roas_threshold, metric="roas",
+        )
 
     results["configuration_drift"] = _configuration_drift_signal(snapshot)
     results["no_delivery_complete_day"] = _no_delivery_complete_day_signal(snapshot)
 
     return _PrimitiveSignals(results=results, stable_ctr=stable_ctr, stable_cvr=stable_cvr)
+
+
+def _withheld_economic_signal(
+    snapshot: ScaleEvidenceSnapshot, signal_id: str, threshold: Decimal,
+) -> SignalResult:
+    """beta-v2 (§9.2): an economic signal that is not evaluated. A currency
+    outside the Policy's floor table (#132) is never evaluated; otherwise
+    the evidence is not economics-ready yet."""
+    unsupported = snapshot.policy.spend_floor is None
+    return _signal(
+        signal_id, SignalState.UNAVAILABLE, threshold=threshold,
+        reason_code="spend_floor_currency_unsupported" if unsupported else "economics_not_ready",
+    )
 
 
 def _configuration_drift_signal(snapshot: ScaleEvidenceSnapshot) -> SignalResult:
@@ -1180,13 +1250,13 @@ def _evaluate_breakdown_family(
     current_window_totals: _Totals,
 ) -> _BreakdownFamilyResult:
     """One `(snapshot, breakdown_type, economic_metric)` family (spec §2.4).
-    Judgment call: `review_delivery_mix`'s "consecutive-hit gate" is treated
-    as satisfied by a segment passing every other gate in the *current*
-    evaluation (the spec names the gate but does not specify a required
-    streak length distinct from the composite-fatigue count, and this task's
-    golden vectors do not exercise it); the per-segment `StreakCounter`
-    returned by `_reduce_streaks` still tracks the true history for a future
-    task to tighten this gate without a schema change."""
+    Returns the segments that pass every gate of *this* evaluation: spend
+    share, samples, effect, confidence and FDR. Each one is a hit of its
+    segment streak key. The consecutive-hit gate (contract §13) is applied
+    afterwards, by `_gate_breakdown_families`, from the streaks
+    `_reduce_streaks` keeps: beta-v2 requires the Policy's
+    `consecutive_breakdown_hits_required` (#133); a beta-v1 replay keeps the
+    current evaluation as its gate, because v1's Policy has no such field."""
     eligible: list[tuple[str, Decimal, tuple[DailyObservation, ...]]] = []
     for segment in snapshot.breakdowns:
         if segment.breakdown_type != breakdown_type:
@@ -1347,6 +1417,29 @@ def _breakdown_analysis(
                 families.append((breakdown_type, "roas", result.passing_segment_keys))
 
     return extra_signals, families, frozenset(all_hit_keys)
+
+
+def _gate_breakdown_families(
+    families: list[tuple[BreakdownType, str, tuple[str, ...]]],
+    streak_state: StreakState,
+    required: int,
+) -> list[tuple[BreakdownType, str, tuple[str, ...]]]:
+    """beta-v2 (contract §13, #133): keep only the segments whose streak,
+    after this evaluation's hit, reaches `required`. The streak key is the
+    one `_reduce_streaks` counts, `breakdown:{type}:{segment}:{metric}`; a
+    miss, an unavailable or ineligible segment, or a Policy, Target,
+    contract-set, configuration-baseline or continuity change resets it."""
+    streaks = {counter.signal_key: counter.consecutive_hits for counter in streak_state.counters}
+    gated: list[tuple[BreakdownType, str, tuple[str, ...]]] = []
+    for breakdown_type, metric, segment_keys in families:
+        kept = tuple(
+            key
+            for key in segment_keys
+            if streaks.get(f"breakdown:{breakdown_type.value}:{key}:{metric}", 0) >= required
+        )
+        if kept:
+            gated.append((breakdown_type, metric, kept))
+    return gated
 
 
 # ---------------------------------------------------------------------------
@@ -1611,6 +1704,7 @@ def _evaluate_episode_window_incomplete(
     snapshot: ScaleEvidenceSnapshot,
     quality_state: DataQualityState,
     current_compat: StreakCompatibility,
+    algorithm: _Algorithm,
 ) -> ScaleEvaluation:
     """The Episode is younger than the 14-day span (Issue #57, contract §8
     and §9.1): the days before its start are explained, not missing, so the
@@ -1653,12 +1747,12 @@ def _evaluate_episode_window_incomplete(
     )
     maturity = EvidenceMaturity.WARMING
     result_hash = _result_hash(
-        snapshot, CURRENT_ALGORITHM_VERSION, maturity, quality_state, health_result.health,
+        snapshot, algorithm.version, maturity, quality_state, health_result.health,
         health_result.health_reason, signals, (), streak_state,
     )
     return ScaleEvaluation(
         snapshot_canonical_hash=snapshot.canonical_hash,
-        algorithm_version=CURRENT_ALGORITHM_VERSION,
+        algorithm_version=algorithm.version,
         maturity=maturity,
         data_quality_state=quality_state,
         health=health_result.health,
@@ -1670,13 +1764,39 @@ def _evaluate_episode_window_incomplete(
     )
 
 
-@_register(CURRENT_ALGORITHM_VERSION)
+def _economics_withheld(
+    snapshot: ScaleEvidenceSnapshot, maturity: EvidenceMaturity, algorithm: _Algorithm,
+) -> bool:
+    """beta-v2 (contract §9.2): whether `cpa_worsening` and `roas_worsening`
+    go unevaluated. A currency outside the Policy's floor table gets no
+    economic evaluation at all; otherwise economic decline is judged only at
+    economics_ready. beta-v1 evaluates both at any maturity."""
+    if not algorithm.economics_gated:
+        return False
+    return snapshot.policy.spend_floor is None or maturity != EvidenceMaturity.ECONOMICS_READY
+
+
+@_register(_BETA_V1.version)
 def _evaluate_beta_v1(snapshot: ScaleEvidenceSnapshot) -> ScaleEvaluation:
+    """`spol_beta_default_v1` and everything else that froze beta-v1. New
+    runs no longer select it (§11); its records replay here unchanged."""
+    return _evaluate(snapshot, _BETA_V1)
+
+
+@_register(_BETA_V2.version)
+def _evaluate_beta_v2(snapshot: ScaleEvidenceSnapshot) -> ScaleEvaluation:
+    """`spol_beta_default_v2` (#132, #133): the economic floor per currency,
+    economic signals only at economics_ready, and consecutive breakdown
+    hits."""
+    return _evaluate(snapshot, _BETA_V2)
+
+
+def _evaluate(snapshot: ScaleEvidenceSnapshot, algorithm: _Algorithm) -> ScaleEvaluation:
     with localcontext() as ctx:
         ctx.prec = snapshot.policy.decimal_precision
         ctx.rounding = snapshot.policy.decimal_rounding_mode
 
-        _validate_snapshot(snapshot)
+        _validate_snapshot(snapshot, algorithm)
 
         quality_state = _data_quality_state(snapshot.data_quality_issues)
         current_compat = _build_compatibility(snapshot)
@@ -1692,12 +1812,12 @@ def _evaluate_beta_v1(snapshot: ScaleEvidenceSnapshot) -> ScaleEvaluation:
                 for key in (*_CORE_SIGNAL_KEYS, "configuration_drift")
             )
             result_hash = _result_hash(
-                snapshot, CURRENT_ALGORITHM_VERSION, EvidenceMaturity.INSUFFICIENT,
+                snapshot, algorithm.version, EvidenceMaturity.INSUFFICIENT,
                 quality_state, None, "quality_blocked", blocked_signals, (), streak_state,
             )
             return ScaleEvaluation(
                 snapshot_canonical_hash=snapshot.canonical_hash,
-                algorithm_version=CURRENT_ALGORITHM_VERSION,
+                algorithm_version=algorithm.version,
                 maturity=EvidenceMaturity.INSUFFICIENT,
                 data_quality_state=quality_state,
                 health=None,
@@ -1709,19 +1829,29 @@ def _evaluate_beta_v1(snapshot: ScaleEvidenceSnapshot) -> ScaleEvaluation:
             )
 
         if _window_opens_before_episode(snapshot):
-            return _evaluate_episode_window_incomplete(snapshot, quality_state, current_compat)
+            return _evaluate_episode_window_incomplete(snapshot, quality_state, current_compat, algorithm)
 
         current_totals = _totals(snapshot.current_7d.daily)
         baseline_totals = _totals(snapshot.baseline_7d.daily)
 
         not_delivering = _is_not_delivering(snapshot, current_totals)
         maturity = _maturity(snapshot, current_totals, baseline_totals)
-        primitive = _primitive_signals(snapshot, current_totals, baseline_totals)
+        economics_withheld = _economics_withheld(snapshot, maturity, algorithm)
+        primitive = _primitive_signals(snapshot, current_totals, baseline_totals, economics_withheld)
         signals_by_id = dict(primitive.results)
 
-        breakdown_signals, breakdown_families, breakdown_hit_keys = _breakdown_analysis(
-            snapshot, maturity, current_totals
-        )
+        if algorithm.economics_gated and snapshot.policy.spend_floor is None:
+            # beta-v2 (#132): no floor in the snapshot currency means no
+            # economic evaluation, and breakdown compares segments with the
+            # Target's CPA and ROAS. With a floor, breakdown still runs at
+            # monitorable, as spec Phase 7 says.
+            breakdown_signals: list[SignalResult] = []
+            breakdown_families: list[tuple[BreakdownType, str, tuple[str, ...]]] = []
+            breakdown_hit_keys: frozenset[str] = frozenset()
+        else:
+            breakdown_signals, breakdown_families, breakdown_hit_keys = _breakdown_analysis(
+                snapshot, maturity, current_totals
+            )
 
         # Resolve compatibility resets *before* reading any prior-streak
         # value for confirmation. Reading `snapshot.prior_streak.counters`
@@ -1763,6 +1893,11 @@ def _evaluate_beta_v1(snapshot: ScaleEvidenceSnapshot) -> ScaleEvaluation:
             hit_keys=frozenset(hit_keys), extra_known_keys=breakdown_hit_keys,
         )
 
+        if algorithm.breakdown_streak_gate:
+            required = snapshot.policy.consecutive_breakdown_hits_required
+            assert required is not None  # _validate_policy
+            breakdown_families = _gate_breakdown_families(breakdown_families, streak_state, required)
+
         scale_test_eligible = _scale_test_eligible(
             snapshot, maturity, health_result.health, streak_state.healthy_evaluations,
             quality_state, signals_by_id, current_totals, baseline_totals,
@@ -1778,13 +1913,13 @@ def _evaluate_beta_v1(snapshot: ScaleEvidenceSnapshot) -> ScaleEvaluation:
         ) + tuple(sorted(breakdown_signals, key=lambda s: s.signal_id))
 
         result_hash = _result_hash(
-            snapshot, CURRENT_ALGORITHM_VERSION, maturity, quality_state, health_result.health,
+            snapshot, algorithm.version, maturity, quality_state, health_result.health,
             health_result.health_reason, all_signals, advice, streak_state,
         )
 
         return ScaleEvaluation(
             snapshot_canonical_hash=snapshot.canonical_hash,
-            algorithm_version=CURRENT_ALGORITHM_VERSION,
+            algorithm_version=algorithm.version,
             maturity=maturity,
             data_quality_state=quality_state,
             health=health_result.health,

@@ -61,7 +61,7 @@ per Task 12):
 from __future__ import annotations
 
 import hmac
-from dataclasses import replace
+from dataclasses import fields as dataclass_fields, replace
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
@@ -143,9 +143,14 @@ from app.platform.runtime_role import WORKER_ROLE, runs_as
 # warning) when the run's freshness reference is more than the Policy's lag
 # past the manifest's last sync, and freezes each quality issue once. v1/v2
 # snapshots keep their rules (see `_has_delivery_history`).
-CANONICAL_SCHEMA_VERSION = "scale-snapshot-v3"
+# v4 (#132, #133): the frozen Policy carries
+# `consecutive_breakdown_hits_required`, and the hash payload covers it.
+# v1-v3 snapshots were hashed without it and keep that payload (see
+# `_policy_hash_value`), so their stored hashes still verify.
+CANONICAL_SCHEMA_VERSION = "scale-snapshot-v4"
 _SNAPSHOT_SCHEMA_V1 = "scale-snapshot-v1"
 _SNAPSHOT_SCHEMA_V2 = "scale-snapshot-v2"
+_SNAPSHOT_SCHEMA_V3 = "scale-snapshot-v3"
 SNAPSHOT_HASH_DOMAIN = "scale-evidence-snapshot-v1"
 CLAIM_HASH_DOMAIN = "scale-snapshot-claim-v1"
 CONTRACT_SET_HASH_DOMAIN = "scale-metric-contract-set-v1"
@@ -212,7 +217,7 @@ def _hash_payload(snapshot: ScaleEvidenceSnapshot) -> dict[str, Any]:
         "scenario_version_id": snapshot.scenario_version_id,
         "timezone_name": snapshot.timezone_name,
         "currency": snapshot.currency,
-        "policy": snapshot.policy,
+        "policy": _policy_hash_value(snapshot),
         "target": snapshot.target,
         "metric_contract_set_hash": snapshot.metric_contract_set_hash,
         "metric_contracts": snapshot.metric_contracts,
@@ -234,6 +239,41 @@ def _hash_payload(snapshot: ScaleEvidenceSnapshot) -> dict[str, Any]:
         "freshness_reference_at": snapshot.freshness_reference_at,
         "as_of_local_day": snapshot.as_of_local_day,
     }
+
+
+#: ``ScalePolicySnapshot`` fields that snapshot schema v4 added to the hash
+#: payload (#133).
+_POLICY_FIELDS_SINCE_V4 = ("consecutive_breakdown_hits_required",)
+
+
+def _freezes_policy_v4_fields(schema_version: str) -> bool:
+    """Whether snapshots of this schema hash the Policy fields v4 added."""
+    return schema_version not in (_SNAPSHOT_SCHEMA_V1, _SNAPSHOT_SCHEMA_V2, _SNAPSHOT_SCHEMA_V3)
+
+
+def _policy_hash_value(snapshot: ScaleEvidenceSnapshot) -> Any:
+    """The frozen Policy as the snapshot's schema hashes it.
+
+    The canonical encoder writes a frozen dataclass as an object keyed by
+    field name, so the mapping below encodes exactly as the v1-v3
+    ``ScalePolicySnapshot`` did, before the v4 fields existed.
+    """
+    policy = snapshot.policy
+    if _freezes_policy_v4_fields(snapshot.canonical_schema_version):
+        return policy
+    return {
+        field.name: getattr(policy, field.name)
+        for field in dataclass_fields(policy)
+        if field.name not in _POLICY_FIELDS_SINCE_V4
+    }
+
+
+def _pre_v4_compatible(policy: ScalePolicySnapshot) -> bool:
+    """Whether a v1-v3 snapshot can carry this Policy without losing what it
+    freezes: none of the v4 fields set, and a spend floor of its own."""
+    return policy.spend_floor is not None and all(
+        getattr(policy, name) is None for name in _POLICY_FIELDS_SINCE_V4
+    )
 
 
 def _snapshot_hash(snapshot: ScaleEvidenceSnapshot) -> str:
@@ -283,8 +323,34 @@ _POLICY_JSON_INT_FIELDS = (
 )
 
 
-def _policy_snapshot(policy: ScalePolicyVersionRecord) -> ScalePolicySnapshot:
+#: #132: a Policy that sets the economic floor per currency keeps it under
+#: this ``signal_thresholds`` key, as ISO 4217 code -> Decimal string, each
+#: the minimum total spend of one 7-day window.
+_SPEND_FLOOR_BY_CURRENCY_KEY = "economic_spend_floor_per_7d_window_by_currency"
+#: #133: consecutive hits a breakdown segment needs for review_delivery_mix.
+_BREAKDOWN_HITS_KEY = "consecutive_breakdown_hits_required"
+
+
+def _spend_floor(policy: ScalePolicyVersionRecord, currency: str) -> Decimal | None:
+    """The platform economic floor for one 7-day window in ``currency``.
+
+    A Policy with a per-currency table (#132) yields the entry for the
+    Episode's currency exactly as the ad account reports it, or ``None``
+    when the table has no entry; the evaluator then skips economic
+    evaluation. A Policy without the table keeps its single
+    ``spend_floor_minimum_daily_spend``, which carries no currency (v1).
+    """
+    table = (policy.signal_thresholds or {}).get(_SPEND_FLOOR_BY_CURRENCY_KEY)
+    if table is None:
+        return policy.spend_floor_minimum_daily_spend
+    entry = table.get(currency)
+    return None if entry is None else Decimal(str(entry))
+
+
+def _policy_snapshot(policy: ScalePolicyVersionRecord, currency: str) -> ScalePolicySnapshot:
+    """Freeze ``policy`` for a snapshot in ``currency`` (the Episode's)."""
     thresholds = policy.signal_thresholds or {}
+    breakdown_hits = thresholds.get(_BREAKDOWN_HITS_KEY)
     kwargs: dict[str, Any] = {
         "policy_version_id": policy.id,
         "algorithm_version": policy.algorithm_version,
@@ -296,7 +362,7 @@ def _policy_snapshot(policy: ScalePolicyVersionRecord) -> ScalePolicySnapshot:
         "impression_floor": policy.activity_floor_minimum_impressions,
         "click_floor": policy.sample_floor_minimum_clicks,
         "purchase_floor": policy.evidence_floor_minimum_conversions,
-        "spend_floor": policy.spend_floor_minimum_daily_spend,
+        "spend_floor": _spend_floor(policy, currency),
         "bootstrap_prng_version": policy.bootstrap_prng_algorithm,
         "bootstrap_draw_count": policy.bootstrap_draw_count,
         "bootstrap_min_valid_draw_ratio": policy.bootstrap_valid_draw_ratio,
@@ -309,6 +375,7 @@ def _policy_snapshot(policy: ScalePolicyVersionRecord) -> ScalePolicySnapshot:
             CanonicalKeyValue(key=k, value=v)
             for k, v in thresholds.get("advice_construction_parameters", ())
         ),
+        "consecutive_breakdown_hits_required": None if breakdown_hits is None else int(breakdown_hits),
     }
     for field in _POLICY_JSON_DECIMAL_FIELDS:
         kwargs[field] = Decimal(str(thresholds[field]))
@@ -564,7 +631,7 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
             session, context, episode.id, as_of,
         )
 
-        policy_snapshot = _policy_snapshot(policy)
+        policy_snapshot = _policy_snapshot(policy, episode.currency)
         target_snapshot = _target_snapshot(target) if target is not None else None
         normalized_target_key = target.id if target is not None else NO_TARGET_MARKER
 
@@ -1450,7 +1517,14 @@ def assemble_snapshot(
     policy = session.get(ScalePolicyVersionRecord, snapshot_row.policy_version_id)
     if policy is None:
         raise SnapshotAssemblyError("provenance_mismatch", "policy_not_found")
-    policy_snapshot = _policy_snapshot(policy)
+    policy_snapshot = _policy_snapshot(policy, snapshot_row.currency)
+    if not _freezes_policy_v4_fields(snapshot_row.canonical_schema_version) and not _pre_v4_compatible(
+        policy_snapshot
+    ):
+        # Only code that predates v4 could seal such a snapshot, and it
+        # could not have evaluated it: replaying it would drop what the
+        # Policy freezes.
+        raise SnapshotAssemblyError("provenance_mismatch", "policy_needs_snapshot_v4")
 
     target_snapshot = None
     if snapshot_row.target_version_id is not None:

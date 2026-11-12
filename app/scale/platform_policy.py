@@ -15,13 +15,15 @@ A live run picks the latest published version that permits its mode and runs
 the deployed algorithm (``app.scale.live_trigger.eligible_live_policy``,
 #101 Q8).
 
-Where each value comes from (the full table is on #127):
+Where each value comes from (the v1 table is on #127, v2's on #132):
 
 * "§n" is ``docs/product/scale-advice-semantics-contract.md``;
 * "spec §2.n" is
   ``docs/superpowers/specs/2026-09-08-scale-section-2-pure-function-evaluator.md``;
 * "P1".."P15" are the parameters the contract leaves open, confirmed by the
-  maintainer on #127 (2026-11-11).
+  maintainer on #127 (2026-11-11);
+* v2 (#132, #133) changes only what its constant names and keeps every
+  other v1 value; its parameters were confirmed on #132 (2026-11-11).
 
 The evaluator reads a Policy only through
 ``app.scale.evidence._policy_snapshot``: typed columns, plus flat keys of
@@ -33,7 +35,7 @@ This module is pure (standard library only), so a migration can import it.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from types import MappingProxyType
@@ -42,6 +44,7 @@ from typing import Any, Mapping
 __all__ = [
     "PlatformPolicyVersion",
     "BETA_DEFAULT_POLICY_V1",
+    "BETA_DEFAULT_POLICY_V2",
     "PUBLISHED_POLICY_VERSIONS",
 ]
 
@@ -241,5 +244,65 @@ BETA_DEFAULT_POLICY_V1 = PlatformPolicyVersion(
     published_at=_BETA_V1_PUBLISHED_AT,
 )
 
+#: v2 is published on the same date as v1, so it takes noon UTC to stay
+#: strictly later.
+_BETA_V2_PUBLISHED_AT = datetime(2026, 11, 11, 12, tzinfo=timezone.utc)
+
+#: #132: the platform economic floor per currency, as the minimum total spend
+#: of each 7-day window, keyed by ISO 4217 code exactly as the Episode
+#: (the ad account) reports it. Confirmed on #132 (2026-11-11, table A): v1's
+#: 100, read as USD, converted at the ECB euro reference rates of 2026-11-10
+#: (USD 1.1214, GBP 0.83545, JPY 177.38, AUD 1.6244, CAD 1.5852,
+#: KRW 1501.56) and rounded up to two significant figures, so no entry is
+#: below USD 100 at those rates (§9.2: the platform floor is a minimum). The
+#: currencies are USD and those of the nine v9 Beta markets
+#: (app.localization.platform._BETA_CATALOG). The table does not follow
+#: exchange rates; changing it means publishing a new version.
+_ECONOMIC_SPEND_FLOOR_PER_7D_WINDOW_BY_CURRENCY = {
+    "AUD": "150",
+    "CAD": "150",
+    "EUR": "90",
+    "GBP": "75",
+    "JPY": "16000",
+    "KRW": "140000",
+    "USD": "100",
+}
+
+BETA_DEFAULT_POLICY_V2 = replace(
+    BETA_DEFAULT_POLICY_V1,
+    # #132 and #133 together, so two versions are not published back to back.
+    id="spol_beta_default_v2",
+    # §11: v2 changes what the evaluator does, so it runs a new registered
+    # implementation; beta-v1 stays registered to replay what froze v1.
+    algorithm_version="beta-v2",
+    # #132: snapshots freeze consecutive_breakdown_hits_required, which
+    # changes the snapshot hash payload (app.scale.evidence). Not read.
+    canonical_schema_version="scale-snapshot-v4",
+    # #132 P-C A: beta-v2 reads neither old floor column; the floor comes
+    # from economic_spend_floor_per_7d_window_by_currency below. Both keep
+    # v1's 100 (the table's USD entry) only because they are NOT NULL, so a
+    # stray reader gets v1's floor rather than none. #134's publish check
+    # must read the table, not these columns.
+    evidence_floor_minimum_spend=Decimal("100"),
+    spend_floor_minimum_daily_spend=Decimal("100"),
+    signal_thresholds={
+        **_thawed(BETA_DEFAULT_POLICY_V1.signal_thresholds),
+        # #132: see _ECONOMIC_SPEND_FLOOR_PER_7D_WINDOW_BY_CURRENCY. A
+        # currency outside the table gets no economic evaluation:
+        # cpa_worsening and roas_worsening are unavailable with
+        # spend_floor_currency_unsupported, and maturity stops at
+        # monitorable.
+        "economic_spend_floor_per_7d_window_by_currency": _ECONOMIC_SPEND_FLOOR_PER_7D_WINDOW_BY_CURRENCY,
+        # #133, §13: a placement or country segment forms review_delivery_mix
+        # only on its second consecutive hit.
+        "consecutive_breakdown_hits_required": 2,
+    },
+    created_at=_BETA_V2_PUBLISHED_AT,
+    published_at=_BETA_V2_PUBLISHED_AT,
+)
+
 #: Every version the migrations publish, oldest first.
-PUBLISHED_POLICY_VERSIONS: tuple[PlatformPolicyVersion, ...] = (BETA_DEFAULT_POLICY_V1,)
+PUBLISHED_POLICY_VERSIONS: tuple[PlatformPolicyVersion, ...] = (
+    BETA_DEFAULT_POLICY_V1,
+    BETA_DEFAULT_POLICY_V2,
+)
