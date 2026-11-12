@@ -1762,7 +1762,6 @@
   "error-evaluation_not_found": "This evaluation no longer exists.",
   "error-evidence_missing": "The AI call finished but its answer was not recorded. It needs reconciling.",
   "error-evidence_mode_invalid": "Choose production, sandbox or mock data.",
-  "error-evidence_not_available": "No evaluation is available yet.",
   "error-evidence_observation_requires_internal_validation": "Observation evidence is only used in internal validation.",
   "error-evidence_projection_incomplete": "The evidence is incomplete. Try again later.",
   "error-execution_mode_invalid": "This generation mode is not supported.",

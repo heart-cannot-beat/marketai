@@ -13,7 +13,8 @@ No route touches ``app.scale.evidence``/``app.scale.service``/
 ``app.scale.evaluator``/``app.scale.worker`` directly -- sealing, assembling,
 and running an Evaluation is scheduler/Worker-driven (spec §3.8, Task 14),
 not an HTTP command; this router only reads what that pipeline has already
-projected (``ScaleEpisodeProjectionRecord``, via ``GET .../evidence``).
+projected (``ScaleEvidenceReadinessProjectionRecord`` and
+``ScaleEpisodeProjectionRecord``, via ``GET .../evidence``, #114).
 
 ``TenantContext`` and Workspace/actor identity come from
 ``request_tenant_context`` (verified BFF claims), matching every other
@@ -166,11 +167,14 @@ from .models import (
     ScaleEnrollmentRecord,
     ScaleEvaluationRecord,
     ScaleEvaluationSignalRecord,
+    ScaleEvidenceReadinessProjectionRecord,
     ScaleEvidenceSnapshotRecord,
+    ScaleEvidenceSourceManifestRecord,
     ScaleEpisodeProjectionRecord,
     ScaleEpisodeRecord,
     ScaleExportRecord,
     ScaleSnapshotQualityIssueRecord,
+    ScaleSourceQualityIssueRecord,
     ScaleTargetVersionRecord,
 )
 from .schemas import (
@@ -421,20 +425,7 @@ def _evidence_detail_dict(
             "start_local_day": snapshot.rolling_window_start_local_day,
             "end_local_day": snapshot.rolling_window_end_local_day,
         },
-        "quality_issues": [
-            {
-                "code": issue.code,
-                "severity": issue.severity,
-                "is_blocking": issue.is_blocking,
-                "contract_type": issue.contract_type,
-                "window_role": issue.window_role,
-                "local_day": issue.local_day,
-                "segment_key": issue.segment_key,
-                "detail": issue.detail,
-                "recovery_action": issue.recovery_action,
-            }
-            for issue in quality_issues
-        ],
+        "quality_issues": [_quality_issue_dict(issue) for issue in quality_issues],
         "signals": [
             {
                 "signal_id": signal.signal_id,
@@ -451,6 +442,189 @@ def _evidence_detail_dict(
             for signal in signals
         ],
     }
+
+
+def _quality_issue_dict(issue) -> dict:
+    """One typed quality issue: a snapshot's (``ScaleSnapshotQualityIssueRecord``)
+    or a source manifest's (``ScaleSourceQualityIssueRecord``) -- the two
+    share one value contract (spec §1.7)."""
+    return {
+        "code": issue.code,
+        "severity": issue.severity,
+        "is_blocking": issue.is_blocking,
+        "contract_type": issue.contract_type,
+        "window_role": issue.window_role,
+        "local_day": issue.local_day,
+        "segment_key": issue.segment_key,
+        "detail": issue.detail,
+        "recovery_action": issue.recovery_action,
+    }
+
+
+#: The accepted-Evaluation fields of ``EnrollmentEvidenceResponse``, all
+#: null until the Episode's first Evaluation projects (#114).
+_EVALUATION_FIELDS = (
+    "evaluation_id", "maturity", "health", "health_reason", "healthy_evaluations",
+    "streak_counters", "cursor_as_of_local_day", "cursor_source_revision",
+    "cursor_semantic_event_sequence", "cursor_lineage_generation", "revision", "updated_at",
+    "snapshot_id", "policy_version_id", "target_version_id", "algorithm_version",
+    "metric_semantic_contract_set_hash", "data_quality_state", "safe_watermark",
+    "last_complete_local_day", "last_sync_at", "freshness_reference_at",
+    "complete_local_days_in_episode", "active_delivery_days_in_episode", "current_window",
+    "baseline_window", "rolling_window", "quality_issues", "signals",
+)
+
+
+def _readiness(
+    session, context: TenantContext, episode_id: str,
+) -> tuple[dict | None, int | None]:
+    """The Episode's evidence-readiness projection (contract §8, §18) with
+    its latest source manifest's typed issues, and that manifest's source
+    revision; ``(None, None)`` before the collector wrote one. Every read
+    is scoped by the context's Workspace and Meta mode."""
+    projection = session.execute(
+        select(ScaleEvidenceReadinessProjectionRecord).filter_by(
+            workspace_id=context.workspace_id, meta_mode=context.meta_mode, episode_id=episode_id,
+        )
+    ).scalar_one_or_none()
+    if projection is None:
+        return None, None
+    manifest = None
+    issues: list = []
+    if projection.latest_manifest_id is not None:
+        manifest = session.execute(
+            select(ScaleEvidenceSourceManifestRecord).filter_by(
+                workspace_id=context.workspace_id, meta_mode=context.meta_mode,
+                id=projection.latest_manifest_id, episode_id=episode_id,
+            )
+        ).scalar_one_or_none()
+        issues = session.execute(
+            select(ScaleSourceQualityIssueRecord)
+            .filter_by(
+                workspace_id=context.workspace_id, meta_mode=context.meta_mode,
+                manifest_id=projection.latest_manifest_id,
+            )
+            .order_by(
+                ScaleSourceQualityIssueRecord.is_blocking.desc(),
+                ScaleSourceQualityIssueRecord.code.asc(),
+                ScaleSourceQualityIssueRecord.id.asc(),
+            )
+        ).scalars().all()
+    revision = manifest.source_revision if manifest is not None else None
+    return {
+        "manifest_id": projection.latest_manifest_id,
+        "manifest_state": manifest.state if manifest is not None else None,
+        "source_revision": revision,
+        "target_local_day": manifest.target_local_day if manifest is not None else None,
+        "maturity": projection.maturity,
+        "quality_state": projection.quality_state,
+        "last_complete_local_day": projection.last_complete_local_day,
+        "freshness_reference_at": projection.freshness_reference_at,
+        "blocking_issue_count": projection.blocking_issue_count,
+        "warning_issue_count": projection.warning_issue_count,
+        "recovery_action": projection.recovery_action,
+        "issues": [_quality_issue_dict(issue) for issue in issues],
+        "revision": projection.revision,
+        "updated_at": projection.updated_at,
+    }, revision
+
+
+def _enrollment_evidence(session, context: TenantContext, enrollment_id: str) -> dict:
+    """``GET .../evidence`` for both the delegated and the platform router.
+
+    404 ``enrollment_not_found`` for an Enrollment outside the context's
+    Workspace and Meta mode, 404 ``no_active_episode`` without a current
+    Episode. Otherwise 200 (#114): ``readiness`` from the Episode's
+    evidence-readiness projection (null before the first manifest), and the
+    accepted Evaluation's fields, all null before the first Evaluation
+    projects -- an activated Enrollment waiting for its first complete day
+    is a state, not a missing resource. ``evaluation_stale`` is true when
+    the latest manifest is a newer source revision than the one the
+    Evaluation was sealed from, so a blocked day over an older Evaluation
+    reads as stale/blocked rather than as current (contract §8, §22).
+    """
+    enrollment = session.execute(
+        select(ScaleEnrollmentRecord).filter_by(
+            workspace_id=context.workspace_id, meta_mode=context.meta_mode, id=enrollment_id,
+        )
+    ).scalar_one_or_none()
+    if enrollment is None:
+        raise HTTPException(404, {"code": "enrollment_not_found", "message": enrollment_id})
+    if enrollment.current_episode_id is None:
+        raise HTTPException(404, {"code": "no_active_episode", "message": enrollment_id})
+    episode_id = enrollment.current_episode_id
+    readiness, latest_revision = _readiness(session, context, episode_id)
+    body = {
+        "enrollment_id": enrollment.id,
+        "episode_id": episode_id,
+        "readiness": readiness,
+        "evaluation_stale": False,
+        **dict.fromkeys(_EVALUATION_FIELDS),
+    }
+    projection = session.execute(
+        select(ScaleEpisodeProjectionRecord).filter_by(
+            workspace_id=context.workspace_id, meta_mode=context.meta_mode, episode_id=episode_id,
+        )
+    ).scalar_one_or_none()
+    if projection is None:
+        return body
+    evaluation = session.execute(
+        select(ScaleEvaluationRecord).filter_by(
+            workspace_id=context.workspace_id,
+            meta_mode=context.meta_mode,
+            id=projection.evaluation_id,
+            episode_id=projection.episode_id,
+        )
+    ).scalar_one_or_none()
+    if evaluation is None:
+        raise HTTPException(
+            500,
+            {"code": "evidence_projection_incomplete", "message": "accepted Evaluation is unavailable"},
+        )
+    snapshot = session.execute(
+        select(ScaleEvidenceSnapshotRecord).filter_by(
+            workspace_id=context.workspace_id,
+            meta_mode=context.meta_mode,
+            id=evaluation.snapshot_id,
+            episode_id=projection.episode_id,
+        )
+    ).scalar_one_or_none()
+    if snapshot is None:
+        raise HTTPException(
+            500,
+            {"code": "evidence_projection_incomplete", "message": "accepted EvidenceSnapshot is unavailable"},
+        )
+    quality_issues = session.execute(
+        select(ScaleSnapshotQualityIssueRecord)
+        .filter_by(workspace_id=context.workspace_id, meta_mode=context.meta_mode, snapshot_id=snapshot.id)
+        .order_by(
+            ScaleSnapshotQualityIssueRecord.is_blocking.desc(),
+            ScaleSnapshotQualityIssueRecord.code.asc(),
+            ScaleSnapshotQualityIssueRecord.id.asc(),
+        )
+    ).scalars().all()
+    signals = session.execute(
+        select(ScaleEvaluationSignalRecord)
+        .filter_by(workspace_id=context.workspace_id, meta_mode=context.meta_mode, evaluation_id=evaluation.id)
+        .order_by(ScaleEvaluationSignalRecord.signal_id.asc())
+    ).scalars().all()
+    body.update({
+        "evaluation_stale": latest_revision is not None and latest_revision > snapshot.source_revision,
+        "evaluation_id": projection.evaluation_id,
+        "maturity": projection.maturity,
+        "health": projection.health,
+        "health_reason": projection.health_reason,
+        "healthy_evaluations": projection.healthy_evaluations,
+        "streak_counters": projection.streak_counters,
+        "cursor_as_of_local_day": projection.cursor_as_of_local_day,
+        "cursor_source_revision": projection.cursor_source_revision,
+        "cursor_semantic_event_sequence": projection.cursor_semantic_event_sequence,
+        "cursor_lineage_generation": projection.cursor_lineage_generation,
+        "revision": projection.revision,
+        "updated_at": projection.updated_at,
+        **_evidence_detail_dict(evaluation, snapshot, quality_issues, signals),
+    })
+    return body
 
 
 _THREAD_ACTION_CODES = ["acknowledge", "dismiss", "snooze", "convert"]
@@ -702,102 +876,14 @@ def get_enrollment_evidence(
     enrollment_id: str,
     effective: TenantContext = Depends(_mode_effective_context),
 ):
-    """Current evidence/readiness (spec §4.3) -- the accepted-Evaluation
-    projection Task 12's orchestration already CAS-maintains
-    (``ScaleEpisodeProjectionRecord``), not a fresh evaluation request:
-    sealing/evaluating is scheduler/Worker-driven (module docstring)."""
+    """Current evidence/readiness (spec §4.3, #114): the Episode's
+    evidence-readiness projection and the accepted-Evaluation projection
+    the pipeline already CAS-maintains -- not a fresh evaluation request:
+    collecting, sealing and evaluating are scheduler/Worker-driven (module
+    docstring)."""
+    # Shared with the platform mirror: ``_enrollment_evidence``.
     with tenant_session(effective) as session:
-        enrollment = session.execute(
-            select(ScaleEnrollmentRecord).filter_by(
-                workspace_id=effective.workspace_id, meta_mode=effective.meta_mode, id=enrollment_id,
-            )
-        ).scalar_one_or_none()
-        if enrollment is None:
-            raise HTTPException(404, {"code": "enrollment_not_found", "message": enrollment_id})
-        if enrollment.current_episode_id is None:
-            raise HTTPException(404, {"code": "no_active_episode", "message": enrollment_id})
-        projection = session.execute(
-            select(ScaleEpisodeProjectionRecord).filter_by(
-                workspace_id=effective.workspace_id, meta_mode=effective.meta_mode,
-                episode_id=enrollment.current_episode_id,
-            )
-        ).scalar_one_or_none()
-        if projection is None:
-            raise HTTPException(
-                404, {"code": "evidence_not_available", "message": "no Evaluation has projected yet"},
-            )
-        evaluation = session.execute(
-            select(ScaleEvaluationRecord).filter_by(
-                workspace_id=effective.workspace_id,
-                meta_mode=effective.meta_mode,
-                id=projection.evaluation_id,
-                episode_id=projection.episode_id,
-            )
-        ).scalar_one_or_none()
-        if evaluation is None:
-            raise HTTPException(
-                500,
-                {
-                    "code": "evidence_projection_incomplete",
-                    "message": "accepted Evaluation is unavailable",
-                },
-            )
-        snapshot = session.execute(
-            select(ScaleEvidenceSnapshotRecord).filter_by(
-                workspace_id=effective.workspace_id,
-                meta_mode=effective.meta_mode,
-                id=evaluation.snapshot_id,
-                episode_id=projection.episode_id,
-            )
-        ).scalar_one_or_none()
-        if snapshot is None:
-            raise HTTPException(
-                500,
-                {
-                    "code": "evidence_projection_incomplete",
-                    "message": "accepted EvidenceSnapshot is unavailable",
-                },
-            )
-        quality_issues = session.execute(
-            select(ScaleSnapshotQualityIssueRecord)
-            .filter_by(
-                workspace_id=effective.workspace_id,
-                meta_mode=effective.meta_mode,
-                snapshot_id=snapshot.id,
-            )
-            .order_by(
-                ScaleSnapshotQualityIssueRecord.is_blocking.desc(),
-                ScaleSnapshotQualityIssueRecord.code.asc(),
-                ScaleSnapshotQualityIssueRecord.id.asc(),
-            )
-        ).scalars().all()
-        signals = session.execute(
-            select(ScaleEvaluationSignalRecord)
-            .filter_by(
-                workspace_id=effective.workspace_id,
-                meta_mode=effective.meta_mode,
-                evaluation_id=evaluation.id,
-            )
-            .order_by(ScaleEvaluationSignalRecord.signal_id.asc())
-        ).scalars().all()
-
-        return {
-            "enrollment_id": enrollment.id,
-            "episode_id": projection.episode_id,
-            "evaluation_id": projection.evaluation_id,
-            "maturity": projection.maturity,
-            "health": projection.health,
-            "health_reason": projection.health_reason,
-            "healthy_evaluations": projection.healthy_evaluations,
-            "streak_counters": projection.streak_counters,
-            "cursor_as_of_local_day": projection.cursor_as_of_local_day,
-            "cursor_source_revision": projection.cursor_source_revision,
-            "cursor_semantic_event_sequence": projection.cursor_semantic_event_sequence,
-            "cursor_lineage_generation": projection.cursor_lineage_generation,
-            "revision": projection.revision,
-            "updated_at": projection.updated_at,
-            **_evidence_detail_dict(evaluation, snapshot, quality_issues, signals),
-        }
+        return _enrollment_evidence(session, effective, enrollment_id)
 
 
 @mode_router.get(

@@ -111,6 +111,9 @@ def test_scale_openapi_has_no_meta_mutation_surface() -> None:
         "EnrollmentResponse",
         "EnrollmentResumeRequest",
         "EvidenceQualityIssueResponse",
+        # #114: the Episode's evidence readiness, read from the projection
+        # the source collector writes; nothing in it is executable.
+        "EvidenceReadinessResponse",
         "EvidenceSignalResponse",
         "EvidenceWindowResponse",
         "EpisodeResponse",

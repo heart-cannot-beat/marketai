@@ -808,6 +808,249 @@ describe('BFF domain proxy catch-all — tracer integration (spec §8.1)', () =>
     });
   });
 
+  describe('Scale evidence readiness (#114)', () => {
+    /** What FastAPI's `get_scale_enrollment_evidence` answers for an
+     * activated Enrollment before its first Evaluation: the readiness of a
+     * blocked first manifest, every Evaluation field null. */
+    const EVALUATION_FIELDS = {
+      evaluation_id: null,
+      snapshot_id: null,
+      policy_version_id: null,
+      target_version_id: null,
+      algorithm_version: null,
+      metric_semantic_contract_set_hash: null,
+      maturity: null,
+      data_quality_state: null,
+      health: null,
+      health_reason: null,
+      healthy_evaluations: null,
+      streak_counters: null,
+      safe_watermark: null,
+      last_complete_local_day: null,
+      last_sync_at: null,
+      freshness_reference_at: null,
+      complete_local_days_in_episode: null,
+      active_delivery_days_in_episode: null,
+      current_window: null,
+      baseline_window: null,
+      rolling_window: null,
+      quality_issues: null,
+      signals: null,
+      cursor_as_of_local_day: null,
+      cursor_source_revision: null,
+      cursor_semantic_event_sequence: null,
+      cursor_lineage_generation: null,
+      revision: null,
+      updated_at: null,
+    };
+    const BLOCKED_READINESS = {
+      manifest_id: 'sesm_acme_4',
+      manifest_state: 'blocked',
+      source_revision: 4,
+      target_local_day: '2026-11-04',
+      maturity: 'insufficient',
+      quality_state: 'blocked',
+      last_complete_local_day: '2026-11-03',
+      freshness_reference_at: '2026-11-04T04:10:00Z',
+      blocking_issue_count: 1,
+      warning_issue_count: 0,
+      recovery_action: 'wait_for_next_sync',
+      issues: [
+        {
+          code: 'transport_exhausted',
+          severity: 'blocking',
+          is_blocking: true,
+          contract_type: null,
+          window_role: null,
+          local_day: null,
+          segment_key: null,
+          detail: 'sync run msr_acme is failed',
+          recovery_action: 'wait_for_next_sync',
+        },
+      ],
+      revision: 4,
+      updated_at: '2026-11-05T04:10:00Z',
+    };
+    const BEFORE_FIRST_EVALUATION = {
+      enrollment_id: 'senr_acme',
+      episode_id: 'sep_acme',
+      readiness: BLOCKED_READINESS,
+      evaluation_stale: false,
+      ...EVALUATION_FIELDS,
+    };
+    /** The same blocked day over the accepted Evaluation of the day before. */
+    const STALE_BLOCKED = {
+      ...BEFORE_FIRST_EVALUATION,
+      evaluation_stale: true,
+      evaluation_id: 'sev_acme_3',
+      snapshot_id: 'sesn_acme_3',
+      policy_version_id: 'spv_beta',
+      algorithm_version: 'beta-v1',
+      metric_semantic_contract_set_hash: 'contract-hash',
+      maturity: 'monitorable',
+      data_quality_state: 'pass',
+      health: 'healthy',
+      health_reason: '',
+      healthy_evaluations: 2,
+      streak_counters: [],
+      safe_watermark: '2026-11-03',
+      last_complete_local_day: '2026-11-03',
+      last_sync_at: '2026-11-04T04:10:00Z',
+      freshness_reference_at: '2026-11-04T04:10:00Z',
+      complete_local_days_in_episode: 14,
+      active_delivery_days_in_episode: 14,
+      current_window: {
+        role: 'current_7d',
+        start_local_day: '2026-10-28',
+        end_local_day: '2026-11-04',
+      },
+      baseline_window: {
+        role: 'baseline_7d',
+        start_local_day: '2026-10-21',
+        end_local_day: '2026-10-28',
+      },
+      rolling_window: {
+        role: 'rolling_14d',
+        start_local_day: '2026-10-21',
+        end_local_day: '2026-11-04',
+      },
+      quality_issues: [],
+      signals: [],
+      cursor_as_of_local_day: '2026-11-03',
+      cursor_source_revision: 3,
+      cursor_semantic_event_sequence: 0,
+      cursor_lineage_generation: 0,
+      revision: 3,
+      updated_at: '2026-11-04T04:12:00Z',
+    };
+
+    /** `body` without `keys`: a response that dropped them. */
+    function without(body: Record<string, unknown>, ...keys: string[]) {
+      return Object.fromEntries(
+        Object.entries(body).filter(([key]) => !keys.includes(key))
+      );
+    }
+
+    async function evidenceAnswering(
+      status: number,
+      contentType: string,
+      body: unknown
+    ) {
+      const received: string[] = [];
+      server = await startServer((req, res) => {
+        received.push(req.url ?? '');
+        res.writeHead(status, { 'content-type': contentType });
+        res.end(JSON.stringify(body));
+      });
+      wireDomainProxy(server.url);
+      (getTokenIssuer as jest.Mock).mockReturnValue(fakeTokenIssuer());
+      const { req, res } = mockGetRequest({
+        method: 'GET',
+        url: '/api/domain/v1/w/acme/scale/customer_sandbox/enrollments/senr_acme/evidence',
+        query: {
+          slug: 'acme',
+          path: [
+            'scale',
+            'customer_sandbox',
+            'enrollments',
+            'senr_acme',
+            'evidence',
+          ],
+        },
+        headers: { host: APP_HOST },
+      });
+      await handler(req, res);
+      return { res, received };
+    }
+
+    it('validates the declared readiness and null Evaluation fields', () => {
+      const validate = RESPONSE_VALIDATORS.get(
+        'get_scale_enrollment_evidence_200'
+      )!;
+      expect(validate(BEFORE_FIRST_EVALUATION)).toBe(true);
+      expect(validate(STALE_BLOCKED)).toBe(true);
+      expect(validate({ ...BEFORE_FIRST_EVALUATION, readiness: null })).toBe(
+        true
+      );
+    });
+
+    it('relays an Enrollment that has no Evaluation yet with its blocked readiness', async () => {
+      const { res, received } = await evidenceAnswering(
+        200,
+        'application/json',
+        BEFORE_FIRST_EVALUATION
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res._getJSONData()).toEqual(BEFORE_FIRST_EVALUATION);
+      expect(received).toEqual([
+        '/api/v1/scale/customer_sandbox/enrollments/senr_acme/evidence',
+      ]);
+    });
+
+    it('relays a blocked day over an older Evaluation as stale', async () => {
+      const { res } = await evidenceAnswering(
+        200,
+        'application/json',
+        STALE_BLOCKED
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res._getJSONData()).toMatchObject({
+        evaluation_stale: true,
+        evaluation_id: 'sev_acme_3',
+        readiness: { quality_state: 'blocked', source_revision: 4 },
+      });
+    });
+
+    it.each([
+      [
+        'without readiness (the shape before #114)',
+        without(STALE_BLOCKED, 'readiness', 'evaluation_stale'),
+      ],
+      [
+        'with an untyped readiness issue list',
+        {
+          ...BEFORE_FIRST_EVALUATION,
+          readiness: { ...BLOCKED_READINESS, issues: 'transport_exhausted' },
+        },
+      ],
+      [
+        'with a readiness missing its quality state',
+        {
+          ...BEFORE_FIRST_EVALUATION,
+          readiness: without(BLOCKED_READINESS, 'quality_state'),
+        },
+      ],
+    ])('refuses a 200 %s as 502', async (_name, body) => {
+      const { res } = await evidenceAnswering(200, 'application/json', body);
+
+      expect(res.statusCode).toBe(502);
+      expect(res._getJSONData().code).toBe('invalid_domain_response');
+    });
+
+    it('relays no_active_episode for an Enrollment without an Episode', async () => {
+      const { res } = await evidenceAnswering(404, 'application/problem+json', {
+        type: 'urn:marketai:error:no-active-episode',
+        title: 'no_active_episode',
+        status: 404,
+        detail: 'senr_acme',
+        instance:
+          '/api/v1/scale/customer_sandbox/enrollments/senr_acme/evidence',
+        code: 'no_active_episode',
+        trace_id: 'trace-114',
+        retryable: false,
+        field_errors: [],
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res._getJSONData()).toMatchObject({
+        code: 'no_active_episode',
+        trace_id: 'trace-114',
+      });
+    });
+  });
+
   describe('Usage (#8)', () => {
     /** What FastAPI's `get_usage` answers: provider calls per execution mode, Mock out of `total`. */
     const USAGE = {

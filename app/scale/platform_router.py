@@ -75,12 +75,7 @@ from .models import (
     ScaleAdviceThreadRecord,
     ScaleEnrollmentRecord,
     ScaleEpisodeRecord,
-    ScaleEvaluationRecord,
-    ScaleEvaluationSignalRecord,
-    ScaleEpisodeProjectionRecord,
-    ScaleEvidenceSnapshotRecord,
     ScaleExportRecord,
-    ScaleSnapshotQualityIssueRecord,
 )
 from .schemas import (
     ActivationPreviewCreateRequest,
@@ -137,8 +132,8 @@ from .v1_router import (
     _candidate_dict,
     _delivery_target_dict,
     _enrollment_dict,
+    _enrollment_evidence,
     _episode_dict,
-    _evidence_detail_dict,
     _limit_query,
     _observed_ads_dict,
     _paginate,
@@ -443,83 +438,7 @@ def platform_get_enrollment_evidence(
     context: TenantContext = Depends(_platform_context),
 ):
     with tenant_session(context) as session:
-        enrollment = session.execute(
-            select(ScaleEnrollmentRecord).filter_by(
-                workspace_id=context.workspace_id, meta_mode=context.meta_mode, id=enrollment_id,
-            )
-        ).scalar_one_or_none()
-        if enrollment is None:
-            raise HTTPException(404, {"code": "enrollment_not_found", "message": enrollment_id})
-        if enrollment.current_episode_id is None:
-            raise HTTPException(404, {"code": "no_active_episode", "message": enrollment_id})
-        projection = session.execute(
-            select(ScaleEpisodeProjectionRecord).filter_by(
-                workspace_id=context.workspace_id, meta_mode=context.meta_mode,
-                episode_id=enrollment.current_episode_id,
-            )
-        ).scalar_one_or_none()
-        if projection is None:
-            raise HTTPException(
-                404, {"code": "evidence_not_available", "message": "no Evaluation has projected yet"},
-            )
-        evaluation = session.execute(
-            select(ScaleEvaluationRecord).filter_by(
-                workspace_id=context.workspace_id,
-                meta_mode=context.meta_mode,
-                id=projection.evaluation_id,
-                episode_id=projection.episode_id,
-            )
-        ).scalar_one_or_none()
-        if evaluation is None:
-            raise HTTPException(
-                500,
-                {"code": "evidence_projection_incomplete", "message": "accepted Evaluation is unavailable"},
-            )
-        snapshot = session.execute(
-            select(ScaleEvidenceSnapshotRecord).filter_by(
-                workspace_id=context.workspace_id,
-                meta_mode=context.meta_mode,
-                id=evaluation.snapshot_id,
-                episode_id=projection.episode_id,
-            )
-        ).scalar_one_or_none()
-        if snapshot is None:
-            raise HTTPException(
-                500,
-                {"code": "evidence_projection_incomplete", "message": "accepted EvidenceSnapshot is unavailable"},
-            )
-        quality_issues = session.execute(
-            select(ScaleSnapshotQualityIssueRecord)
-            .filter_by(workspace_id=context.workspace_id, meta_mode=context.meta_mode, snapshot_id=snapshot.id)
-            .order_by(
-                ScaleSnapshotQualityIssueRecord.is_blocking.desc(),
-                ScaleSnapshotQualityIssueRecord.code.asc(),
-                ScaleSnapshotQualityIssueRecord.id.asc(),
-            )
-        ).scalars().all()
-        signals = session.execute(
-            select(ScaleEvaluationSignalRecord)
-            .filter_by(workspace_id=context.workspace_id, meta_mode=context.meta_mode, evaluation_id=evaluation.id)
-            .order_by(ScaleEvaluationSignalRecord.signal_id.asc())
-        ).scalars().all()
-
-        return {
-            "enrollment_id": enrollment.id,
-            "episode_id": projection.episode_id,
-            "evaluation_id": projection.evaluation_id,
-            "maturity": projection.maturity,
-            "health": projection.health,
-            "health_reason": projection.health_reason,
-            "healthy_evaluations": projection.healthy_evaluations,
-            "streak_counters": projection.streak_counters,
-            "cursor_as_of_local_day": projection.cursor_as_of_local_day,
-            "cursor_source_revision": projection.cursor_source_revision,
-            "cursor_semantic_event_sequence": projection.cursor_semantic_event_sequence,
-            "cursor_lineage_generation": projection.cursor_lineage_generation,
-            "revision": projection.revision,
-            "updated_at": projection.updated_at,
-            **_evidence_detail_dict(evaluation, snapshot, quality_issues, signals),
-        }
+        return _enrollment_evidence(session, context, enrollment_id)
 
 
 @platform_scale_mode.get(

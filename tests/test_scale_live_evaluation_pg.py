@@ -338,7 +338,9 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
         episode_id = made["enrollment"]["current_episode_id"]
         episode = self._api("GET", f"/enrollments/{enrollment_id}/episodes/{episode_id}")
         self.assertEqual((episode["phase"], episode["started_local_day"]), ("collecting", activation_day.isoformat()))
-        self._api("GET", f"/enrollments/{enrollment_id}/evidence", expect=404)  # nothing evaluated yet
+        evidence = self._api("GET", f"/enrollments/{enrollment_id}/evidence")  # nothing collected yet (#114)
+        self.assertEqual((evidence["episode_id"], evidence["readiness"], evidence["evaluation_id"],
+                          evidence["evaluation_stale"]), (episode_id, None, None, False))
 
         def day(k: int) -> date:
             return activation_day + timedelta(days=k - 1)
@@ -448,6 +450,13 @@ class LiveEvaluationEndToEndPostgresTests(unittest.TestCase):
                                     target_local_day=day(k)), [])
         [readiness] = self._rows(ScaleEvidenceReadinessProjectionRecord, workspace_id, episode_id=episode_id)
         self.assertEqual((readiness.maturity, readiness.quality_state), ("insufficient", "blocked"))
+        # The API role reads it (#114): the last Evaluation stays, stale.
+        evidence = self._api("GET", f"/enrollments/{enrollment_id}/evidence")
+        self.assertEqual((evidence["readiness"]["manifest_id"], evidence["readiness"]["quality_state"],
+                          evidence["readiness"]["recovery_action"], evidence["evaluation_stale"],
+                          evidence["cursor_as_of_local_day"]),
+                         (blocked.id, "blocked", readiness.recovery_action, True, day(k - 1).isoformat()))
+        self.assertTrue(evidence["readiness"]["issues"])
         k += 1
         self.assertEqual(self._day(workspace_id, day(k)), 4)
         self.assertEqual(self._run_for(workspace_id, episode_id, day(k)).outcome_kind, "evaluated")

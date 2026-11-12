@@ -255,6 +255,13 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     );
     expect(episode.found).toBe(true);
     expect(episode.phase).toBe('collecting');
+
+    // #114: before anything is collected the evidence page waits for the
+    // first complete day instead of answering 404.
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE, 'evidence'));
+    await expect(
+      page.getByText('Waiting for the first complete day')
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   test('04: advance one complete manifest -> collecting/warming, no health/advice yet', async ({
@@ -321,6 +328,21 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     await expect(page.getByText('No advice for this scope.')).toBeVisible({
       timeout: 15_000,
     });
+
+    // #114: the evidence page names the blocked day's reason and recovery
+    // action, and shows step 04's Evaluation as out of date.
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE, 'evidence'));
+    const blocked = page
+      .getByRole('alert')
+      .filter({ hasText: 'Evidence blocked' });
+    await expect(blocked).toBeVisible({ timeout: 15_000 });
+    await expect(
+      blocked.getByText('A Meta read failed, even after retries')
+    ).toBeVisible();
+    await expect(
+      blocked.getByText(/The next daily Meta sync collects the data again/)
+    ).toBeVisible();
+    await expect(blocked.getByText(/is out of date/)).toBeVisible();
   });
 
   test('06: clear the defect and advance to monitorable', async ({ page }) => {
@@ -339,6 +361,13 @@ test.describe.serial('Scale Controlled-Mock golden journey (spec §4.5)', () => 
     expect(['warming', 'monitorable', 'economics_ready']).toContain(
       result.maturity
     );
+
+    // A complete manifest moves the readiness past the blocked one (#114).
+    await page.goto(scaleEnrollmentUrl(enrollmentId, MODE, 'evidence'));
+    await expect(page.getByText('Policy version')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText('Evidence blocked')).toHaveCount(0);
 
     await page.goto(scaleEnrollmentUrl(enrollmentId, MODE));
     await expect(
