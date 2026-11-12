@@ -534,8 +534,28 @@ def _claim_operation(
     return operation
 
 
-def _settle_failed(session: Session, context: TenantContext, operation: OperationRecord, reason: str) -> None:
-    transition_operation(session, operation.id, OperationState.FAILED, reason=reason, actor=context.executor)
+def _settle_failed(
+    session: Session, context: TenantContext, operation: OperationRecord, reason: str,
+    *, meta_mode: str | None,
+) -> None:
+    transition_operation(
+        session, operation.id, OperationState.FAILED, reason=reason, actor=context.executor,
+        meta_mode=meta_mode,
+    )
+
+
+def _usage_meta_mode(job: JobRecord, operation: OperationRecord) -> str | None:
+    """The Meta mode a Meta Operation ran in, for its Usage bucket (#146).
+
+    Its Job's payload names it. ``scale_export`` folds without binding it
+    (its resolver reads no Meta row, and a Job enqueued before #55 carries
+    none), so this reads the payload rather than the fold's context.
+    """
+    from .entitlements.operation_usage import META_OPERATION_COMMAND_TYPES
+
+    if operation.command_type not in META_OPERATION_COMMAND_TYPES:
+        return None
+    return _payload_text(job, "meta_mode") or None
 
 
 def _settle_uncertain(session: Session, context: TenantContext, operation: OperationRecord, reason: str) -> None:
@@ -606,7 +626,7 @@ def _fold_in_session(session: Session, base: TenantContext, job_id: str) -> str 
             if outcome is OperationState.FAILED:
                 if correlation.fail is not None:
                     correlation.fail(job.error_code)
-                _settle_failed(session, context, operation, reason)
+                _settle_failed(session, context, operation, reason, meta_mode=_usage_meta_mode(job, operation))
             else:
                 if correlation.uncertain is not None:
                     correlation.uncertain()

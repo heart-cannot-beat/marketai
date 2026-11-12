@@ -51,6 +51,11 @@ Slice S3 (#145) adds the CHECK constraints of spec §2.12 (migration
 * a row that breaks a check fails ``VALIDATE``, and the whole revision rolls
   back: no constraint is left behind ``NOT VALID``.
 
+Issue #146: an Operation that ran against Meta is settled, as the API and as
+the Worker, in a session bound to its Meta mode, which the settling path
+passes on. ``controlled_mock`` counts as ``mock``, out of ``total``;
+``customer_sandbox`` and ``internal_validation`` stay ``not_applicable``.
+
 Then the privilege matrix of ``usage_events`` (the API reads and appends, the
 Worker only appends, Readonly only reads, nobody updates or deletes) and the
 migration's upgrade, downgrade and upgrade again.
@@ -71,6 +76,7 @@ import subprocess
 import sys
 import unittest
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -386,6 +392,37 @@ class UsagePostgresTests(unittest.TestCase):
                                                      settled_at=datetime.now(timezone.utc))
                 self.assertEqual((again.written, again.duplicates), (0, 2))
                 self.assertEqual(len(self._metrics(ctx, operation_id)), 2)
+
+    def test_a_meta_operation_counts_in_the_bucket_of_its_meta_mode_as_the_worker_and_the_api(self):
+        """#146: the Meta mode the settling path passes decides the bucket; Mock stays out of ``total``."""
+        ctx = self._workspace("ws_usage_pg_meta", ROLE_OWNER, "owner_m")
+        buckets = {"controlled_mock": "mock", "customer_sandbox": "not_applicable",
+                   "internal_validation": "not_applicable"}
+        for index, name in ROLE_NAMES.items():
+            for meta_mode, bucket in buckets.items():
+                with self.subTest(role=name, meta_mode=meta_mode):
+                    bound = replace(ctx, meta_mode=meta_mode)  # the binding a Meta handler holds
+                    with self._as(API), tenant_session(bound) as session:
+                        operation_id = create_operation(session, command_type="scale_export", context=bound).id
+                    with self._as(index), tenant_session(bound) as session:
+                        transition_operation(session, operation_id, OperationState.RUNNING,
+                                             reason="pg test", actor=name)
+                        transition_operation(session, operation_id, OperationState.SUCCEEDED,
+                                             reason="pg test", actor=name, meta_mode=meta_mode)
+                    self.assertEqual(self._metrics(ctx, operation_id), [
+                        ("operations", bucket, "operation"),
+                        ("processing_seconds", bucket, "second"),
+                    ])
+        member = self._as_role(ctx, ROLE_MEMBER, "member_m")
+        for metric in ("operations", "processing_seconds"):
+            with self.subTest(metric=metric):
+                body = self._usage(member, {"metric_key": metric})
+                if metric == "operations":
+                    self.assertEqual((Decimal(body["by_execution_mode"]["mock"]),
+                                      Decimal(body["by_execution_mode"]["not_applicable"])),
+                                     (Decimal("2"), Decimal("4")))
+                self.assertEqual(Decimal(body["total"]), Decimal(body["by_execution_mode"]["not_applicable"]),
+                                 "Mock is never real use")
 
     def test_an_uncertain_operation_is_counted_once_when_the_worker_settles_it(self):
         ctx = self._workspace("ws_usage_pg_unc", ROLE_OWNER, "owner_u")

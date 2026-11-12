@@ -30,6 +30,7 @@ from app.adapters.persistence.models import (
     WorkspaceRecord,
     utcnow,
 )
+from app.entitlements.usage_models import UsageEventRecord
 from app.platform import jobs
 from app.platform.operations import OperationState
 
@@ -48,6 +49,9 @@ def _fold_fixtures():
         fold.TestLaunchProvisioningFold, fold.TestLaunchRecoveryFold,
         fold.TestPlanningCallFold, fold.TestResolveCallFold, fold.TestAIQCCallFold,
         fold.TestImageEditFold, fold.TestHandoffFold,
+        # #146: under controlled_mock the fold counts the Meta Operation as Mock.
+        fold.TestControlledMockScaleExportFold, fold.TestControlledMockLaunchProvisioningFold,
+        fold.TestControlledMockLaunchRecoveryFold,
     )
 
 
@@ -176,6 +180,18 @@ class LegacyOperationFoldOnPostgresTests(unittest.TestCase):
                         )
                     ).all()
                 self.assertEqual(audits, ["system:worker"])
+                # Usage (#8 S2, #146): counted once, as the Worker, in the
+                # bucket of the command's mode.
+                with self.sessions[0]() as session:
+                    usage = sorted(session.execute(
+                        select(UsageEventRecord.metric_key, UsageEventRecord.execution_mode).where(
+                            UsageEventRecord.source_resource_type == "operation",
+                            UsageEventRecord.source_resource_id == fixture.operation_id,
+                        )
+                    ).all())
+                self.assertEqual([tuple(row) for row in usage], [
+                    ("operations", fixture.USAGE_MODE), ("processing_seconds", fixture.USAGE_MODE),
+                ])
 
     def test_a_generation_run_is_settled_by_its_projection_as_the_worker(self):
         from tests import test_legacy_operations as fold

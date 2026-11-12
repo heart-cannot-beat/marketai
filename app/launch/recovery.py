@@ -254,6 +254,7 @@ def execute_recovery(
                 session, reconciliation.original_operation_id,
                 OperationState.PARTIALLY_SUCCEEDED,
                 reason="resolved partially by operation recovery", actor=context.executor,
+                meta_mode=reconciliation.meta_mode,
             )
         else:
             to_state = (
@@ -262,11 +263,13 @@ def execute_recovery(
             transition_operation(
                 session, reconciliation.original_operation_id, to_state,
                 reason="resolved by operation recovery", actor=context.executor,
+                meta_mode=reconciliation.meta_mode,
             )
 
         transition_operation(
             session, reconciliation.recovery_operation_id, OperationState.SUCCEEDED,
             reason="recovery inspection complete", actor=context.executor,
+            meta_mode=reconciliation.meta_mode,
         )
 
         reconciliation.state = "resolved"

@@ -27,6 +27,7 @@ from app.adapters.persistence.models import (
     utcnow,
 )
 from app.entitlements.credentials import CredentialVersionRecord
+from app.entitlements.usage_models import UsageEventRecord
 from app.launch.models import (
     LaunchCandidateRecord,
     LaunchParityCheckRecord,
@@ -108,27 +109,27 @@ def db_session():
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _connection_env(session):
+def _connection_env(session, meta_mode: str = "customer_sandbox"):
     """Workspace + active Meta connection/binding/default scenario."""
     ws = WorkspaceRecord(id=new_id("ws"), name="T")
     session.add(ws)
     session.flush()
     conn = MetaConnectionRecord(
         id=new_id("mcon"), workspace_id=ws.id,
-        meta_mode="customer_sandbox", ad_account_id="act_1",
+        meta_mode=meta_mode, ad_account_id="act_1",
     )
     session.add(conn)
     session.flush()
     binding = MetaDataSourceBindingRecord(
         id=new_id("mbind"), workspace_id=ws.id,
-        meta_mode="customer_sandbox", meta_connection_id=conn.id,
+        meta_mode=meta_mode, meta_connection_id=conn.id,
         ad_account_id="act_1",
     )
     session.add(binding)
     session.flush()
     scen = ScenarioVersionRecord(
         id=new_id("scen"), workspace_id=ws.id,
-        meta_mode="customer_sandbox", meta_connection_id=conn.id,
+        meta_mode=meta_mode, meta_connection_id=conn.id,
         scenario_config={}, scenario_hash="h", is_default=True,
     )
     session.add(scen)
@@ -258,7 +259,7 @@ def test_create_recovery_operation_rejects_non_uncertain(db_session):
 # execute_recovery: reads back adapter state, never re-executes writes
 # ---------------------------------------------------------------------------
 
-def _uncertain_campaign_env(session):
+def _uncertain_campaign_env(session, meta_mode: str = "customer_sandbox"):
     """A create_campaign saga step dispatched to Meta with no recorded outcome.
 
     Mirrors the first half of ``app.launch.saga._execute_step`` (intent
@@ -266,10 +267,10 @@ def _uncertain_campaign_env(session):
     between "request sent" and "outcome recorded" would leave, which is what
     makes the resulting intent 'uncertain'.
     """
-    ws, conn, binding, scen = _connection_env(session)
+    ws, conn, binding, scen = _connection_env(session, meta_mode)
     preview = MetaLaunchPreviewRecord(
         id=new_id("lprev"), workspace_id=ws.id,
-        meta_mode="customer_sandbox",
+        meta_mode=meta_mode,
         meta_connection_id=conn.id, meta_binding_id=binding.id,
         experiment_id="exp_1", experiment_version_id="expv_1",
         candidate_count=1, campaign_config={"objective": "OUTCOME_TRAFFIC"},
@@ -281,7 +282,7 @@ def _uncertain_campaign_env(session):
     session.flush()
     cand = LaunchCandidateRecord(
         id=new_id("lcand"), workspace_id=ws.id,
-        meta_mode="customer_sandbox", preview_id=preview.id,
+        meta_mode=meta_mode, preview_id=preview.id,
         candidate_index=0, experiment_version_candidate_id="evc_1",
         asset_version_id="av_1", creative_config={"headline": "Test"},
         adset_idempotency_key="ik_adset_0", ad_idempotency_key="ik_ad_0",
@@ -303,7 +304,7 @@ def _uncertain_campaign_env(session):
     session.flush()
     prov = LaunchProvisioningRecord(
         id=new_id("lprov"), workspace_id=ws.id,
-        meta_mode="customer_sandbox", meta_connection_id=conn.id,
+        meta_mode=meta_mode, meta_connection_id=conn.id,
         preview_id=preview.id, confirmation_id=conf.id,
         operation_id=op.id, campaign_idempotency_key="cik_1",
         provisioning_state="provisioning",
@@ -312,7 +313,7 @@ def _uncertain_campaign_env(session):
     session.flush()
 
     intent = create_call_intent(
-        session, workspace_id=ws.id, meta_mode="customer_sandbox",
+        session, workspace_id=ws.id, meta_mode=meta_mode,
         connection=conn, binding=binding, operation_id=op.id,
         meta_api_method="POST", meta_api_endpoint="/campaigns",
         request_parameters={"daily_budget_minor": 500, "status": "PAUSED"},
@@ -322,7 +323,7 @@ def _uncertain_campaign_env(session):
     intent.network_dispatched_at = utcnow()
     session.flush()
     attempt = LaunchSagaStepAttemptRecord(
-        id=new_id("lssa"), workspace_id=ws.id, meta_mode="customer_sandbox",
+        id=new_id("lssa"), workspace_id=ws.id, meta_mode=meta_mode,
         provisioning_id=prov.id, intent_id=intent.id, candidate_id=None,
         step_type="create_campaign", attempt_number=1,
         fencing_token=prov.fencing_token, state="intent_committed",
@@ -332,6 +333,16 @@ def _uncertain_campaign_env(session):
     session.flush()
 
     return ws, conn, binding, scen, prov, op, intent
+
+
+def _operation_usage(session, operation_id: str) -> list[tuple[str, str]]:
+    return sorted(
+        (row.metric_key, row.execution_mode)
+        for row in session.scalars(select(UsageEventRecord).where(
+            UsageEventRecord.source_resource_type == "operation",
+            UsageEventRecord.source_resource_id == operation_id,
+        ))
+    )
 
 
 def _fake_object_count(session) -> int:
@@ -424,6 +435,30 @@ def test_execute_recovery_confirms_failed_write(db_session):
         )
     ).scalar_one()
     assert mcr.resolution == "confirmed_failed"
+
+
+@pytest.mark.parametrize(
+    ("meta_mode", "bucket"),
+    [("controlled_mock", "mock"), ("customer_sandbox", "not_applicable")],
+)
+def test_execute_recovery_counts_both_operations_in_the_bucket_of_their_meta_mode(db_session, meta_mode, bucket):
+    """Recovery settles the original Launch and its own Operation; both are
+    counted in the bucket of the Launch's Meta mode (#146): Mock under
+    controlled_mock, kept out of ``total``; not_applicable otherwise."""
+    ws, conn, binding, scen, prov, op, intent = _uncertain_campaign_env(db_session, meta_mode)
+    ctx = TenantContext(
+        workspace_id=ws.id, role="system", executor="system:worker", meta_mode=meta_mode,
+    )
+    recon = create_recovery_operation(db_session, context=ctx, original_operation_id=op.id)
+    assert _operation_usage(db_session, op.id) == [], "uncertain is not terminal"
+
+    result = execute_recovery(db_session, ctx, recon.id)
+
+    assert (result.resolution, op.state) == ("failed", "failed")
+    for operation_id in (op.id, recon.recovery_operation_id):
+        assert _operation_usage(db_session, operation_id) == [
+            ("operations", bucket), ("processing_seconds", bucket),
+        ]
 
 
 def test_execute_recovery_without_open_intents_never_guesses_global_success(db_session):

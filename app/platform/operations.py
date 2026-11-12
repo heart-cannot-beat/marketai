@@ -270,6 +270,7 @@ def transition_operation(
     actor: str,
     *,
     result_ref: OperationResultRef | None = None,
+    meta_mode: str | None = None,
 ) -> OperationRecord:
     """Validate and apply one state transition, appending its history event.
 
@@ -283,6 +284,11 @@ def transition_operation(
     caller -- v1 aggregation, legacy commands and the idle-time folds --
     settles an Operation through here, so this is the one place it is
     counted.
+
+    ``meta_mode`` is passed by the paths that settle an Operation that ran
+    against Meta (Launch, Launch recovery, Scale export, the Meta
+    observation sync): the Meta mode it ran in decides its Usage bucket
+    (Issue #146). Every other caller leaves it ``None``.
     """
     operation = get_operation(session, operation_id)
     from_state = OperationState(operation.state)
@@ -313,7 +319,9 @@ def transition_operation(
         # Imported here: the entitlements package imports this module.
         from ..entitlements.operation_usage import record_operation_settled
 
-        record_operation_settled(session, current_context(session), operation, settled_at=now)
+        record_operation_settled(
+            session, current_context(session), operation, settled_at=now, meta_mode=meta_mode,
+        )
     return operation
 
 

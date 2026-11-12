@@ -427,19 +427,19 @@ def _launch_env(ctx: TenantContext) -> tuple[str, str]:
     """A confirmed preview on an active connection; returns (connection, confirmation)."""
     with tenant_session(ctx) as session:
         connection = MetaConnectionRecord(
-            id=new_id("mcon"), workspace_id=ctx.workspace_id, meta_mode=META_MODE,
+            id=new_id("mcon"), workspace_id=ctx.workspace_id, meta_mode=ctx.meta_mode,
             ad_account_id="act_ci_only",
         )
         session.add(connection)
         session.flush()
         binding = MetaDataSourceBindingRecord(
-            id=new_id("mbind"), workspace_id=ctx.workspace_id, meta_mode=META_MODE,
+            id=new_id("mbind"), workspace_id=ctx.workspace_id, meta_mode=ctx.meta_mode,
             meta_connection_id=connection.id, ad_account_id="act_ci_only",
         )
         session.add(binding)
         session.flush()
         preview = MetaLaunchPreviewRecord(
-            id=new_id("lprev"), workspace_id=ctx.workspace_id, meta_mode=META_MODE,
+            id=new_id("lprev"), workspace_id=ctx.workspace_id, meta_mode=ctx.meta_mode,
             meta_connection_id=connection.id, meta_binding_id=binding.id,
             experiment_id="exp_ci_only", experiment_version_id="expv_ci_only",
             candidate_count=1, campaign_config={}, daily_budget_minor=500, currency="USD",
@@ -448,7 +448,7 @@ def _launch_env(ctx: TenantContext) -> tuple[str, str]:
         session.add(preview)
         session.flush()
         confirmation = MetaLaunchConfirmationRecord(
-            id=new_id("lconf"), workspace_id=ctx.workspace_id, meta_mode=META_MODE,
+            id=new_id("lconf"), workspace_id=ctx.workspace_id, meta_mode=ctx.meta_mode,
             preview_id=preview.id, preview_hash=preview.preview_hash, context_hash="c" * 64,
             token_hash=new_id("th"), actor_id=ctx.initiator_id or "owner_a",
             expires_at=utcnow() + timedelta(minutes=5), consumed_at=utcnow(),
@@ -459,12 +459,14 @@ def _launch_env(ctx: TenantContext) -> tuple[str, str]:
 
 
 class LaunchFixture(LibraryFixtures):
+    META_MODE = META_MODE
+
     def setUp(self):
         workspace_id = f"ws_fold_launch_{uuid.uuid4().hex}"
         self.provision_workspace(workspace_id)
         self.ctx = TenantContext(
             workspace_id=workspace_id, role=ROLE_OWNER, initiator_id="owner_a",
-            request_id="test-req", trace_id="trace-test", meta_mode=META_MODE,
+            request_id="test-req", trace_id="trace-test", meta_mode=self.META_MODE,
         )
         self.addCleanup(cancel_workspace_jobs, workspace_id)
 
@@ -481,7 +483,7 @@ class LaunchFixture(LibraryFixtures):
                 actor=self.ctx.executor,
             )
             provisioning = LaunchProvisioningRecord(
-                id=new_id("lprov"), workspace_id=self.ctx.workspace_id, meta_mode=META_MODE,
+                id=new_id("lprov"), workspace_id=self.ctx.workspace_id, meta_mode=self.META_MODE,
                 meta_connection_id=connection_id, preview_id=preview_id,
                 confirmation_id=confirmation_id, operation_id=operation.id,
                 campaign_idempotency_key=f"campaign:{preview_id}", provisioning_state="pending",
@@ -491,7 +493,7 @@ class LaunchFixture(LibraryFixtures):
             job = jobs.enqueue_in_session(
                 session, context=self.ctx, job_type="launch_provisioning",
                 payload={"operation_id": operation.id, "provisioning_id": provisioning.id,
-                         "meta_mode": META_MODE},
+                         "meta_mode": self.META_MODE},
                 idempotency_key=f"launch-provisioning:{operation.id}",
                 resource_type="launch_provisioning", resource_id=provisioning.id,
                 safe_to_retry_after_crash=False, max_attempts=1,
@@ -564,7 +566,7 @@ class TestLaunchRecoveryFold(LaunchFixture, LegacyFoldCases):
             )
             job = jobs.enqueue_in_session(
                 session, context=self.ctx, job_type="launch_recovery",
-                payload={"reconciliation_id": reconciliation.id, "meta_mode": META_MODE},
+                payload={"reconciliation_id": reconciliation.id, "meta_mode": self.META_MODE},
                 idempotency_key=f"launch-recovery:{recovery_operation.id}",
                 resource_type="launch_reconciliation", resource_id=reconciliation.id,
                 safe_to_retry_after_crash=True, max_attempts=3,
@@ -577,6 +579,28 @@ class TestLaunchRecoveryFold(LaunchFixture, LegacyFoldCases):
     def resource(self):
         with tenant_session(self.ctx) as session:
             return session.get(LaunchReconciliationRecord, self.reconciliation_id).state
+
+
+# ---------------------------------------------------------------------------
+# The same Meta commands under controlled_mock: Mock Usage (#146)
+# ---------------------------------------------------------------------------
+# A Meta Operation records its mode only in Meta-mode tables; the fold passes
+# the Meta mode its Job's payload names, and controlled_mock is a Mock
+# execution, kept out of Usage's ``total``.
+
+
+class TestControlledMockScaleExportFold(crash.ControlledMockScaleExportFixture, TestScaleExportFold):
+    USAGE_MODE = "mock"
+
+
+class TestControlledMockLaunchProvisioningFold(TestLaunchProvisioningFold):
+    META_MODE = "controlled_mock"
+    USAGE_MODE = "mock"
+
+
+class TestControlledMockLaunchRecoveryFold(TestLaunchRecoveryFold):
+    META_MODE = "controlled_mock"
+    USAGE_MODE = "mock"
 
 
 # ---------------------------------------------------------------------------

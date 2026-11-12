@@ -2288,6 +2288,7 @@ class WorkerRuntime:
                         reason="all PAUSED objects provisioned and verified",
                         actor=context.executor,
                         result_ref=OperationResultRef("launch_provisioning", provisioning_id),
+                        meta_mode=context.meta_mode,
                     )
             jobs.succeed(job.context, job.id, self.owner)
         except ProvisioningUncertain as exc:
@@ -2342,6 +2343,7 @@ class WorkerRuntime:
                     transition_operation(
                         session, operation_id, OperationState.FAILED,
                         reason=detail[:500], actor=context.executor,
+                        meta_mode=context.meta_mode,
                     )
         finally:
             jobs.fail(

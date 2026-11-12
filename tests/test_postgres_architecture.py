@@ -620,6 +620,19 @@ class PostgresArchitectureTests(unittest.TestCase):
         self.assertEqual(b.observe(), b_before, "B's export and Operation are untouched")
         self.assertEqual(b.job_row().state, 'queued')
 
+    def test_a_controlled_mock_scale_export_is_counted_as_mock_usage_by_the_worker(self):
+        """#146: the deployed Worker settles a controlled_mock export as the Worker role, passing the export's Meta mode, so its Operation is Mock Usage (kept out of ``total``)."""
+        from tests.test_job_crash_recovery import ControlledMockScaleExportFixture
+        fixture = self._crash_fixture(ControlledMockScaleExportFixture)
+        with self._as_worker():
+            self.assertEqual(fixture.drain(), 1)
+        fixture.assert_settled_once(fixture.observe())
+        with self.owner.connect() as connection:
+            usage = connection.execute(text(
+                "SELECT metric_key, execution_mode FROM usage_events WHERE source_resource_type = 'operation' "
+                "AND source_resource_id = :id ORDER BY metric_key"), {'id': fixture.operation_id}).all()
+        self.assertEqual([tuple(row) for row in usage], [('operations', 'mock'), ('processing_seconds', 'mock')])
+
     def test_a_crashed_paid_job_is_still_left_uncertain_by_the_claim(self):
         from tests.test_job_crash_recovery import PaidJobFixture
         fixture = PaidJobFixture()
