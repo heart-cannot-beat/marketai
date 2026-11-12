@@ -32,6 +32,17 @@ Operation is therefore the ``mock`` bucket of ``operations``, kept out of
 Every table read here is readable by both the API and the Worker role; the
 Meta and Scale tables are not read at all, because their rows are scoped by
 a Meta-mode context the Operation's session does not bind.
+
+An Operation that ran against Meta (:data:`META_OPERATION_COMMAND_TYPES`:
+Launch, Launch recovery, Scale export and the Meta observation sync) records
+no provider execution mode at all; its mode is the Meta mode it ran in. The
+path that settles it knows that mode -- it is how it read the Meta rows --
+and passes it to ``transition_operation`` (Issue #146). Only
+``controlled_mock`` is a Mock execution and adds ``mock``;
+``customer_sandbox`` and ``internal_validation`` are Meta environments, not
+provider execution modes, and add nothing. A Meta Operation settled without
+its mode is logged (``usage_operation_meta_mode_missing``) and counted from
+its evidence alone: a missing mode never selects Mock (spec §5.6).
 """
 from __future__ import annotations
 
@@ -55,7 +66,7 @@ from app.entitlements.usage import (
     as_utc,
     usage_semantic_key,
 )
-from app.platform.tenancy import TenantContext
+from app.platform.tenancy import VALID_META_MODES, TenantContext
 
 if TYPE_CHECKING:
     from app.adapters.persistence.models import OperationRecord
@@ -73,6 +84,21 @@ _EVIDENCE_MODES = {
 
 #: The order in which a mode found on an Operation's rows wins.
 _PRECEDENCE = ("byok", "sandbox", "mock")
+
+#: The Meta mode that is a Mock execution. The other two Meta modes are
+#: environments -- the customer's sandbox ad account, the platform's own --
+#: and add no mode (Issue #146).
+_MOCK_META_MODE = "controlled_mock"
+
+#: The Operations that run against Meta and record their mode only in
+#: Meta-mode tables, which the settling transaction cannot read. Each path
+#: that settles one passes its Meta mode to ``transition_operation``.
+META_OPERATION_COMMAND_TYPES = frozenset({
+    "launch_provisioning",
+    "launch_recovery",
+    "scale_export",
+    "meta.observation_sync",
+})
 
 _MILLISECOND = Decimal("0.001")
 
@@ -119,16 +145,19 @@ MODE_EVIDENCE: tuple[ModeEvidence, ...] = (
 )
 
 #: Tables that carry an Operation id and a mode column that is deliberately
-#: not read, and why.
+#: not read, and why. The Meta tables sit behind Meta-mode RLS; the Meta mode
+#: of the Operations they belong to reaches Usage from the path that settles
+#: them instead (``META_OPERATION_COMMAND_TYPES``, #146).
+_META_TABLE = "Meta-mode RLS; the settling path passes the Meta mode instead (#146)"
 NOT_MODE_EVIDENCE: dict[str, str] = {
     "provider_cost_ledger": "BYOK-only and the Worker cannot read it; the attempt it settles is read instead",
-    "scale_exports": "meta_mode is a Meta environment, not a provider execution mode; Meta-mode RLS",
-    "launch_provisioning_records": "meta_mode is a Meta environment, not a provider execution mode; Meta-mode RLS",
-    "launch_reconciliation_records": "meta_mode is a Meta environment, not a provider execution mode; Meta-mode RLS",
-    "meta_call_intent_records": "meta_mode is a Meta environment, not a provider execution mode; Meta-mode RLS",
-    "meta_call_outcome_records": "meta_mode is a Meta environment, not a provider execution mode; Meta-mode RLS",
-    "meta_sync_run_records": "meta_mode is a Meta environment, not a provider execution mode; Meta-mode RLS",
-    "evidence_publication_records": "meta_mode is a Meta environment, not a provider execution mode; Meta-mode RLS",
+    "scale_exports": _META_TABLE,
+    "launch_provisioning_records": _META_TABLE,
+    "launch_reconciliation_records": _META_TABLE,
+    "meta_call_intent_records": _META_TABLE,
+    "meta_call_outcome_records": _META_TABLE,
+    "meta_sync_run_records": _META_TABLE,
+    "evidence_publication_records": _META_TABLE,
 }
 
 
@@ -170,14 +199,26 @@ def _evidence_statement(evidence: ModeEvidence, workspace_id: str, operation_id:
     )
 
 
-def operation_usage_mode(session: Session, workspace_id: str, operation_id: str) -> str:
+def operation_usage_mode(
+    session: Session, workspace_id: str, operation_id: str, *, meta_mode: str | None = None,
+) -> str:
     """The Usage bucket of one Operation, from the rows that record its mode.
 
     One ``UNION`` statement over :data:`MODE_EVIDENCE`, in the caller's
-    transaction and under its RLS context.
+    transaction and under its RLS context. ``meta_mode`` is the Meta mode
+    the Operation ran in, from the path that settles it: ``controlled_mock``
+    adds ``mock``, the other Meta modes add nothing.
     """
     statement = union(*(_evidence_statement(e, workspace_id, operation_id) for e in MODE_EVIDENCE))
-    modes = session.execute(statement).scalars().all()
+    modes = list(session.execute(statement).scalars().all())
+    if meta_mode is not None:
+        if meta_mode not in VALID_META_MODES:
+            logger.warning(
+                "usage_operation_meta_mode_unrecognized",
+                extra={"workspace_id": workspace_id, "operation_id": operation_id, "meta_mode": meta_mode},
+            )
+        elif meta_mode == _MOCK_META_MODE:
+            modes.append(meta_mode)
     return strongest_mode(modes, workspace_id=workspace_id, operation_id=operation_id)
 
 
@@ -211,12 +252,14 @@ def record_operation_settled(
     operation: OperationRecord,
     *,
     settled_at: datetime,
+    meta_mode: str | None = None,
 ) -> UsageWriteResult:
     """Count ``operations`` and ``processing_seconds`` for an Operation just settled.
 
     Called by ``transition_operation`` in the transaction of the terminal
-    transition, with that transition's timestamp. Both keys are the
-    Operation id, so writing them again counts nothing new.
+    transition, with that transition's timestamp and, for an Operation that
+    ran against Meta, the Meta mode it ran in. Both keys are the Operation
+    id, so writing them again counts nothing new.
     """
     if operation.workspace_id != ctx.workspace_id:
         raise UsageFactError(
@@ -233,7 +276,15 @@ def record_operation_settled(
             extra={"workspace_id": ctx.workspace_id, "operation_id": operation.id, "seconds": str(elapsed)},
         )
         elapsed = Decimal("0")
-    mode = operation_usage_mode(session, ctx.workspace_id, operation.id)
+    if meta_mode is None and operation.command_type in META_OPERATION_COMMAND_TYPES:
+        # A settling path that forgot its Meta mode: counted from the
+        # evidence alone (not_applicable), never guessed as Mock.
+        logger.warning(
+            "usage_operation_meta_mode_missing",
+            extra={"workspace_id": ctx.workspace_id, "operation_id": operation.id,
+                   "command_type": operation.command_type},
+        )
+    mode = operation_usage_mode(session, ctx.workspace_id, operation.id, meta_mode=meta_mode)
     facts = [
         UsageFact(
             metric_key=OPERATIONS.key,

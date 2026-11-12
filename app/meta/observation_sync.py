@@ -641,6 +641,7 @@ def _close_abandoned_runs(
         _move_operation(
             session, run.operation_id, OperationState.FAILED,
             f"scheduled sync abandoned: its batch Job ended {ending}"[:500],
+            meta_mode=run.meta_mode,
         )
         append_event(
             session,
@@ -1065,7 +1066,9 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
     session.add(attempt)
     if run.state == "queued":
         run.state = "running"
-        _move_operation(session, run.operation_id, OperationState.RUNNING, "scheduled sync started")
+        _move_operation(
+            session, run.operation_id, OperationState.RUNNING, "scheduled sync started", meta_mode=run.meta_mode,
+        )
     # The sandbox adapter reads this database: no network dispatch to mark.
     network = not getattr(resolved.adapter, "is_test_adapter", False)
     if network:
@@ -1159,7 +1162,7 @@ def _sync_next_page(session: Session, context: TenantContext, run_id: str) -> st
         _publish(session, run, generation, plan, instance, target_date)
         _move_operation(
             session, run.operation_id, OperationState.SUCCEEDED, "scheduled sync published",
-            result_ref=OperationResultRef("meta_sync_run", run.id),
+            meta_mode=run.meta_mode, result_ref=OperationResultRef("meta_sync_run", run.id),
         )
     session.flush()
     commit_and_rebind(session)
@@ -1273,9 +1276,14 @@ def _move_operation(
     to_state: OperationState,
     reason: str,
     *,
+    meta_mode: str,
     result_ref: OperationResultRef | None = None,
 ) -> None:
-    """Advance the run's Operation, under its row lock, if it is not there yet."""
+    """Advance the run's Operation, under its row lock, if it is not there yet.
+
+    ``meta_mode`` is the run's: it is the Usage bucket of the settled
+    Operation (#146).
+    """
     operation = session.scalar(
         select(OperationRecord)
         .where(OperationRecord.id == operation_id)
@@ -1287,7 +1295,9 @@ def _move_operation(
     if to_state is OperationState.SUCCEEDED and operation.state == OperationState.QUEUED.value:
         transition_operation(session, operation_id, OperationState.RUNNING, reason, READ_EXECUTOR)
     if operation.state in (OperationState.QUEUED.value, OperationState.RUNNING.value):
-        transition_operation(session, operation_id, to_state, reason, READ_EXECUTOR, result_ref=result_ref)
+        transition_operation(
+            session, operation_id, to_state, reason, READ_EXECUTOR, result_ref=result_ref, meta_mode=meta_mode,
+        )
 
 
 def _fail_run(context: TenantContext, run_id: str, reason: str) -> bool:
@@ -1303,7 +1313,10 @@ def _fail_run(context: TenantContext, run_id: str, reason: str) -> bool:
             return False
         if before == "failed":
             return True  # failed earlier: its Operation and audit event exist
-        _move_operation(session, run.operation_id, OperationState.FAILED, f"scheduled sync failed: {reason}"[:500])
+        _move_operation(
+            session, run.operation_id, OperationState.FAILED, f"scheduled sync failed: {reason}"[:500],
+            meta_mode=run.meta_mode,
+        )
         append_event(
             session,
             event_type="meta.sync_run.failed",

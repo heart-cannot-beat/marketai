@@ -352,6 +352,7 @@ def run_scale_export(
                 OperationState.FAILED,
                 reason=str(exc)[:200],
                 actor=context.executor,
+                meta_mode=export.meta_mode,
             )
         raise
 
@@ -367,4 +368,6 @@ def run_scale_export(
         reason="export completed",
         actor=context.executor,
         result_ref=OperationResultRef(resource_type="scale_export", resource_id=export.id),
+        # The export's Meta mode is its Usage bucket (#146).
+        meta_mode=export.meta_mode,
     )
