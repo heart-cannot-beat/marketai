@@ -53,9 +53,9 @@ def plan(stage, question, angles, combinations, groups, executions=None):
         "groups": [{"id": g, "name": n, "combination_ids": cs} for g, n, cs in groups]}
 
 
-def execution(vid, cid, at, *, parent=None, quality=None, ai=None, paired=None, sha=None, photos=()):
+def execution(vid, cid, at, *, parent=None, quality=None, ready=False, ai=None, paired=None, sha=None, photos=()):
     return {"asset_version_id": vid, "combination_id": cid, "parent_version_id": parent, "content_sha256": sha or f"sha-{vid}",
-        "created_at": f"2026-10-24T00:00:{at:02d}", "reused": False, "quality": quality, "ready": False,
+        "created_at": f"2026-10-24T00:00:{at:02d}", "reused": False, "quality": quality, "ready": ready,
         "references_current": True, "blocking": False, "ai_qc": ai, "paired_ai_qc": paired,
         **({"product_appearance": {"status": "reference_backed", "reason": None, "reference_version_ids": list(photos)}} if photos else {})}
 
@@ -105,7 +105,30 @@ def scenarios():
         [execution("w_route_1", "m_route", 1), execution("w_route_2", "m_route", 2), execution("w_live_1", "m_live", 3),
          execution("w_story_1", "m_story", 4), execution("w_cert_1", "m_cert", 5), execution("w_test_1", "m_test", 6)],
         round_state="reviewing", generating={"m_story"})
-    return {"product_name": "CCS to NACS adapter", "screen": screen, "match": match}
+    return {"product_name": "CCS to NACS adapter", "screen": screen, "match": match, "revision": revision_boards()}
+
+
+REVISIONS = {
+    "pending": dict(ai=check("aiqc_live_1r"), paired=check("aiqc_live_1r_pair")),
+    "approved": dict(quality="approved", ready=True),
+    "changes_requested": dict(quality="needs_changes"),
+}
+
+
+def revision_boards():
+    """#161: changes were requested on Live connection demo ①, the other image is approved, and its revision ①v2 is
+    awaiting review, approved or sent back for changes in turn."""
+    rounds = {}
+    for state, revision in REVISIONS.items():
+        rounds[state] = project(plan("screen_angles", "Which buying proposition is worth exploring further?",
+                [("a_option", OPTION, [LIVE]), ("a_safe", SAFE, [CERT])],
+                [("r_live", "a_option", "x_live", "Plug in and charge"), ("r_cert", "a_safe", "x_cert", "Certified for high power")],
+                [("g_a", "Group A", ["r_live"]), ("g_b", "Group B", ["r_cert"])]),
+            [execution("u_live_1", "r_live", 1, quality="needs_changes"),
+             execution("u_cert_1", "r_cert", 2, quality="approved", ready=True),
+             execution("u_live_1r", "r_live", 3, parent="u_live_1", **revision)],
+            round_state="reviewing")
+    return rounds
 
 
 def rounds():
@@ -124,8 +147,8 @@ class TestWebBoardFixtures(unittest.TestCase):
 
     def test_scenario_fixture_is_the_server_board(self):
         stored = json.loads((FIXTURES / SCENARIOS).read_text())
-        for key in ("screen", "match"):
-            MarketingBoard.model_validate(stored[key])
+        for board in (stored["screen"], stored["match"], *stored["revision"].values()):
+            MarketingBoard.model_validate(board)
         self.assertEqual(stored, scenarios())
 
     def test_scenarios_cover_the_board_states_the_ui_distinguishes(self):
@@ -140,6 +163,13 @@ class TestWebBoardFixtures(unittest.TestCase):
         self.assertEqual(result["screen"]["product_appearance"]["status"], "partial")
         self.assertEqual(result["match"]["primary_comparison"]["angle_id"], "a_option")
         self.assertNotEqual(result["match"]["tree"]["angles"][0]["angle_id"], "a_option")
+        revisions = {state: {n["asset_version_id"]: (n["stage"], n["next_action"]) for a in board["tree"]["angles"]
+                             for e in a["expressions"] for c in e["combinations"] for n in c["executions"]}
+                     for state, board in result["revision"].items()}
+        self.assertEqual(revisions, {
+            "pending": {"u_live_1": ("blocked", "revise"), "u_live_1r": ("paired_qc_done", "review"), "u_cert_1": ("ready", "none")},
+            "approved": {"u_live_1": ("blocked", "none"), "u_live_1r": ("ready", "export"), "u_cert_1": ("ready", "export")},
+            "changes_requested": {"u_live_1": ("blocked", "revise"), "u_live_1r": ("blocked", "revise"), "u_cert_1": ("ready", "none")}})
 
 
 def write():
