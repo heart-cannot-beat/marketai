@@ -162,7 +162,6 @@ class TestMarketingFollowup(MarketingWorkflowFixtures):
         import httpx
         from app.marketing.planner import text_completion, system_prompt
         import json
-        original = httpx.AsyncClient
         def handle(request):
             payload = json.loads(request.content)
             self.assertEqual(payload["service_tier"], "default")
@@ -172,8 +171,8 @@ class TestMarketingFollowup(MarketingWorkflowFixtures):
             self.assertEqual(payload["response_format"]["type"], "json_schema")
             self.assertTrue(payload["response_format"]["json_schema"]["strict"])
             return httpx.Response(200, json={"choices": [{"message": {"content": '{"focuses": []}'}}]})
-        with patch('app.marketing.planner.httpx.AsyncClient', side_effect=lambda **kw: original(transport=httpx.MockTransport(handle), **kw)):
-            result = asyncio.run(text_completion('openai', 'gpt-4.1-mini-2025-04-14', b'controlled-key', system_prompt('explanation'), 'evidence'))
+        result = asyncio.run(text_completion('openai', 'gpt-4.1-mini-2025-04-14', b'controlled-key', system_prompt('explanation'), 'evidence',
+                                             transport=httpx.MockTransport(handle)))
         self.assertEqual(result, '{"focuses": []}')
 
     def test_single_failed_execution_does_not_reject_or_blacklist_an_angle(self):
