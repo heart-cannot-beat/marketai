@@ -739,6 +739,71 @@ class PerWorkspaceSyncer:
         return True
 
 
+class LateRowReader(FakeAdmissionReader):
+    """Reports the Workspace missing for its first `misses` reads and present
+    afterwards, the way a row committed by another request's sync or by the
+    control plane's push appears between two reads of one request.
+    """
+
+    def __init__(self, misses: int):
+        super().__init__()
+        self.reads = 0
+        self._misses = misses
+
+    async def read(self, workspace_id: str) -> WorkspaceAdmission:
+        self.reads += 1
+        if self.reads <= self._misses:
+            raise WorkspaceNotFoundError(workspace_id)
+        return admitted(workspace_id=workspace_id)
+
+
+class MissingRowRateLimitedRereadTests(unittest.TestCase):
+    """A request refused by the limiter re-reads the projection before it
+    answers 503: the row may have been created since its first read (#9).
+    """
+
+    def setUp(self) -> None:
+        self.private_key, self.jwk = generate_keypair()
+        self.jwks_store = FakeJwksStore({"dsk_test": self.jwk})
+
+    def _request(self, client: TestClient):
+        token = sign(self.private_key, base_claims())
+        return client.get("/api/v1/echo", headers={"Authorization": f"Bearer {token}"})
+
+    def test_a_rate_limited_request_passes_when_the_reread_finds_the_row(self) -> None:
+        # The first request's sync fails and takes the limiter window. The row
+        # lands after the second request's first read and before its re-read.
+        reader = LateRowReader(misses=2)
+        syncer = FakeProjectionSyncer(outcome="unavailable")
+        client = build_client(jwks_store=self.jwks_store, admission_reader=reader, projection_syncer=syncer)
+        with client:
+            first = self._request(client)
+            second = self._request(client)
+
+        self.assertEqual(first.status_code, 503)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["workspace_id"], "ws_1")
+        self.assertEqual(syncer.calls, ["ws_1"])
+        self.assertEqual(reader.reads, 3)
+
+    def test_a_rate_limited_request_still_returns_503_when_the_reread_misses(self) -> None:
+        reader = LateRowReader(misses=10)
+        syncer = FakeProjectionSyncer(outcome="unavailable")
+        client = build_client(jwks_store=self.jwks_store, admission_reader=reader, projection_syncer=syncer)
+        with client:
+            self._request(client)
+            second = self._request(client)
+
+        self.assertEqual(second.status_code, 503)
+        self.assertEqual(second.headers["retry-after"], "5")
+        body = second.json()
+        self.assertEqual(body["code"], "projection_sync_unavailable")
+        self.assertEqual(body["title"], "Cannot verify workspace existence — upstream unavailable")
+        self.assertEqual(syncer.calls, ["ws_1"])
+        # One read for the first request; a read and a re-read for the second.
+        self.assertEqual(reader.reads, 3)
+
+
 def log_fields(message: str) -> dict[str, str]:
     """The `key=value` pairs after the `projection_sync` event name."""
     event, *pairs = message.split(" ")

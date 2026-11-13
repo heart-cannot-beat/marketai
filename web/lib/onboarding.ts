@@ -4,6 +4,7 @@ import { Prisma as PrismaRuntime } from '@prisma/client';
 
 import { ApiError } from './errors';
 import env from './env';
+import { dispatchWorkspaceOutboxNow } from './entitlements/immediate-dispatch';
 import { publishSnapshotInTx } from './entitlements/publication';
 import type { VerifiedOperatorIdentity } from './operator-identity';
 
@@ -31,7 +32,7 @@ export async function provisionFirstOwnerWorkspace(
   params: ProvisionParams
 ) {
   const email = params.ownerEmail.trim().toLowerCase();
-  return db.$transaction(
+  const provisioned = await db.$transaction(
     async (tx) => {
       const plan = await tx.planVersion.findUnique({
         where: { id: params.betaPlanVersionId },
@@ -206,6 +207,11 @@ export async function provisionFirstOwnerWorkspace(
     },
     { isolationLevel: PrismaRuntime.TransactionIsolationLevel.Serializable }
   );
+  // Activation waits for this provisioning Snapshot to be delivered, so an
+  // Owner who accepts and enrolls MFA within minutes is not held up by the
+  // scheduled dispatcher.
+  await dispatchWorkspaceOutboxNow(db, provisioned.team.id);
+  return provisioned;
 }
 
 async function requestOperatorActionCase(
@@ -567,7 +573,7 @@ export async function activateWorkspaceAndPublish(
     signingKey: Buffer;
   }
 ): Promise<ActivateWorkspaceResult> {
-  return db.$transaction(
+  const activated = await db.$transaction(
     async (tx) => {
       const locked = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT "id" FROM "Team" WHERE "id" = ${params.teamId} FOR UPDATE
@@ -630,9 +636,25 @@ export async function activateWorkspaceAndPublish(
     },
     { isolationLevel: PrismaRuntime.TransactionIsolationLevel.Serializable }
   );
+  // Until this Snapshot arrives the domain has no active row for the
+  // Workspace, and its pages fail (#9).
+  await dispatchWorkspaceOutboxNow(db, params.teamId);
+  return activated;
 }
 
 export async function reconcileProvisioningWorkspace(
+  db: PrismaClient,
+  params: { teamId: string; signingKeyId: string; signingKey: Buffer }
+): Promise<'waiting' | 'activated' | 'already_active'> {
+  const outcome = await activateProvisioningWorkspaceIfReady(db, params);
+  if (outcome === 'activated') {
+    // Same as `activateWorkspaceAndPublish`: deliver the active Snapshot now.
+    await dispatchWorkspaceOutboxNow(db, params.teamId);
+  }
+  return outcome;
+}
+
+async function activateProvisioningWorkspaceIfReady(
   db: PrismaClient,
   params: { teamId: string; signingKeyId: string; signingKey: Buffer }
 ): Promise<'waiting' | 'activated' | 'already_active'> {
