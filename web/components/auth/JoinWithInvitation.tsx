@@ -16,6 +16,7 @@ import { useRouter } from 'next/router';
 import { Button } from 'react-daisyui';
 import toast from 'react-hot-toast';
 import type { ApiResponse } from 'types';
+import { apiErrorMessage } from '@/lib/i18n/domain-errors';
 import * as Yup from 'yup';
 import TogglePasswordVisibility from '../shared/TogglePasswordVisibility';
 import { useState } from 'react';
@@ -67,7 +68,7 @@ const JoinWithInvitation = ({ inviteToken }: JoinWithInvitationProps) => {
       const json = (await response.json()) as ApiResponse;
 
       if (!response.ok) {
-        toast.error(json.error.message);
+        toast.error(apiErrorMessage(t, json.error));
         return;
       }
 

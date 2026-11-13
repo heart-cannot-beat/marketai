@@ -1,16 +1,11 @@
-jest.mock('@/lib/env', () => ({
-  __esModule: true,
-  default: { appUrl: 'http://localhost:4002' },
-}));
-jest.mock('@/lib/logger', () => ({ logger: { warn: jest.fn() } }));
-jest.mock('@/lib/onboarding', () => ({
-  reconcileProvisioningWorkspaceFromRuntime: jest.fn(),
-}));
-jest.mock('@/lib/prisma', () => ({ prisma: {} }));
+import { retrySerializableTransaction } from '../../lib/serializable-retry';
 
-import { retryInvitationSerializableTransaction } from '../../models/invitation';
-
-describe('invitation SERIALIZABLE transaction retries', () => {
+/**
+ * Invitation acceptance and creation, and role changes, retry an aborted
+ * SERIALIZABLE transaction from its outer edge (#157 moved the helper out of
+ * `models/invitation.ts` so role changes share it).
+ */
+describe('SERIALIZABLE transaction retries', () => {
   it('retries the whole operation for Prisma P2034 and PostgreSQL 40001', async () => {
     const operation = jest
       .fn<Promise<string>, []>()
@@ -27,9 +22,9 @@ describe('invitation SERIALIZABLE transaction retries', () => {
       )
       .mockResolvedValue('same-membership');
 
-    await expect(
-      retryInvitationSerializableTransaction(operation)
-    ).resolves.toBe('same-membership');
+    await expect(retrySerializableTransaction(operation)).resolves.toBe(
+      'same-membership'
+    );
     expect(operation).toHaveBeenCalledTimes(3);
   });
 
@@ -37,9 +32,7 @@ describe('invitation SERIALIZABLE transaction retries', () => {
     const failure = new Error('validation failed');
     const operation = jest.fn<Promise<never>, []>().mockRejectedValue(failure);
 
-    await expect(
-      retryInvitationSerializableTransaction(operation)
-    ).rejects.toBe(failure);
+    await expect(retrySerializableTransaction(operation)).rejects.toBe(failure);
     expect(operation).toHaveBeenCalledTimes(1);
   });
 
@@ -49,9 +42,7 @@ describe('invitation SERIALIZABLE transaction retries', () => {
     });
     const operation = jest.fn<Promise<never>, []>().mockRejectedValue(failure);
 
-    await expect(
-      retryInvitationSerializableTransaction(operation)
-    ).rejects.toBe(failure);
+    await expect(retrySerializableTransaction(operation)).rejects.toBe(failure);
     expect(operation).toHaveBeenCalledTimes(5);
   });
 });

@@ -80,6 +80,43 @@
 - **回滚**：只回退代码即可。回退后的下一次续租不再带这三个 key，又会发出一个新的 `entitlement_version`。#157、#158 上线后，它们在缺 key 时失败关闭，所以要先回退它们。
 - **Release 结果**：随 PR 合并后的自动部署生效；核对结果待合并后补记。
 
+## Workspace 席位上限（#157）
+
+2026-11-13 整理。本节的编号都指本仓库。
+
+[#157](https://github.com/heart-cannot-beat/marketai/issues/157) 在控制面执行契约 §8 的席位上限：Owner、Member 和有效的待接受邀请（未接受、未撤销、未过期）合计不超过 `members.max`。只改控制面代码：控制面和领域侧都没有迁移，不发布新 PlanVersion，也不改 Snapshot。
+
+- **检查点**：上限读自 Workspace 当前 Snapshot 的 `resolvedEntitlements`，和计数放在同一个 SERIALIZABLE 事务里，冲突时整笔重试。
+  - 发出邀请：已占席位 + 1 超过上限时拒绝，409 `seat_limit_reached`。
+  - 接受邀请（已登录账户接受、新账户注册时接受）和把 Member 提升为 Owner：只在已经超限时拒绝，409 `seat_limit_exceeded`。这只会在降级之后出现。
+- **不检查**：移除成员、成员退出、撤销邀请、把 Owner 降为 Member，以及首个 Owner 的开通邀请（`FIRST_OWNER`）。超限的 Workspace 不会自动移除任何人。
+- **失败关闭**：Workspace 没有当前 Snapshot、Snapshot 里没有 `members.max`，或者值不是非负整数时，上面三种操作都返回 503 `seat_limit_unavailable`。
+- **页面**：这三个路由的错误体多了 `code` 和 `params`，页面按 `error-<code>` 显示中英文案；其他错误仍只有 `message`。
+- **日志**：拒绝时记 `control_plane.seat_limit_refused`（`workspace_id`、`claim`、`limit`、`occupied`）；失败关闭时记 `control_plane.seat_limit_unavailable`（`workspace_id`、`reason`）。
+- **上线前核对（只读；整理本节时没有连生产）**：
+  1. 上一节 #156 的核对查询结果应为 0，否则那些 Workspace 上线后会失败关闭。
+  2. 下面的查询列出已经占满或超限的 ACTIVE Workspace。`occupied >= seat_limit` 的不能再发邀请；`occupied > seat_limit` 的也不能接受邀请或提升角色。现有成员都不受影响。
+
+  ```sql
+  SELECT *
+  FROM (
+    SELECT t."id",
+           (s."resolvedEntitlements" ->> 'members.max')::int AS seat_limit,
+           (SELECT count(*) FROM "TeamMember" m WHERE m."teamId" = t."id")
+         + (SELECT count(*) FROM "Invitation" i
+            WHERE i."teamId" = t."id" AND i."consumedAt" IS NULL
+              AND i."revokedAt" IS NULL AND i."expires" >= now()) AS occupied
+    FROM "Team" t
+    JOIN "CommercialAccessProjection" p ON p."teamId" = t."id"
+    JOIN "EntitlementSnapshot" s ON s."id" = p."currentSnapshotId"
+    WHERE t."lifecycle" = 'ACTIVE'
+  ) seats
+  WHERE occupied >= seat_limit;
+  ```
+
+- **回滚**：只回退代码即可，没有数据要处理。要回退 #156 时，先回退本节的改动。
+- **Release 结果**：随 PR 合并后的自动部署生效；核对结果待合并后补记。
+
 ## 竞品广告扫描上线（Epic #265）
 
 2026-11-02。[Epic #265](https://github.com/heart-cannot-beat/marketai-archive/issues/265) 的切片已全部合并，并随 main 自动部署到生产：

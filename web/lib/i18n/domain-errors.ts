@@ -131,6 +131,25 @@ export function errorMessageOf(t: Translate, error: unknown): string {
   return t('error-unknown', { ns: 'common' });
 }
 
+/**
+ * A control-plane route's refusal (`{ message, code?, params? }`): its code's
+ * copy when it carries one (#157), else the route's own message.
+ */
+export function apiErrorMessage(
+  t: Translate,
+  error:
+    | {
+        message?: string;
+        code?: string;
+        params?: Record<string, unknown>;
+      }
+    | null
+    | undefined
+): string {
+  if (error?.code) return errorCodeMessage(t, error.code, error.params);
+  return error?.message || t('error-unknown', { ns: 'common' });
+}
+
 /** `body.understanding.audience` -> `understanding.audience`. */
 export function fieldPath(path: string) {
   return path.replace(/^body\./, '');
