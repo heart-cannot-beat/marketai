@@ -49,6 +49,16 @@ type Workflow = components['schemas']['WorkflowEnvelope'];
 type Reporting = components['schemas']['PlannerCapabilities'];
 type Attribution = components['schemas']['FreezeRound']['attribution_window'];
 type Translate = ReturnType<typeof useTranslation>['t'];
+type HandoffEntry = components['schemas']['HandoffEntry'];
+/**
+ * An exported entry's name as the package's ads.csv writes it
+ * (`export_text.ads_rows`): the display name, with its execution number and
+ * version ("… · Execution 1 v2") in the package language, else the ad name,
+ * whose `#1v2` suffix says the same. Angle and expression alone cannot tell
+ * two executions, or a revision, of one combination apart (#162).
+ */
+const exportedName = (entry: HandoffEntry) =>
+  entry.display_name || entry.ad_name;
 /** `common:marketing-attribution-window-<window>` (`state-codes.spec.ts`). */
 const attributionLabel = (t: Translate, window: string) =>
   t(`marketing-attribution-window-${window}`);
@@ -1050,8 +1060,11 @@ export function MarketingExecution({
                     <div className="divide-y border-y border-gray-200">
                       {row.handoff.entries.map((entry) => (
                         <div key={entry.entry_id} className="space-y-1 py-3">
-                          <p className="font-medium">
-                            {entry.proposition} · {entry.expression_name}
+                          <p
+                            className="font-medium"
+                            data-testid="marketing-export-entry-name"
+                          >
+                            {exportedName(entry)}
                           </p>
                           <p className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
                             {t('marketing-ad-name-for-meta')}
@@ -1441,7 +1454,7 @@ function BindingForm({
         >
           {row.handoff?.entries.map((item) => (
             <option key={item.entry_id} value={item.entry_id}>
-              {item.proposition} · {item.expression_name} · {item.headline}
+              {exportedName(item)}
             </option>
           ))}
         </select>
