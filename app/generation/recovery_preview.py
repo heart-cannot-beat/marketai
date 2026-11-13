@@ -42,6 +42,7 @@ from app.generation.models import (
     RunItemRecord,
 )
 from app.generation.run_queries import get_run
+from app.entitlements.storage_quota import admit_generation
 from app.generation.spend import SpendReservationError, is_charged, reserve_run_item_spend
 from app.platform.idempotency import create_or_replay_intent, create_or_replay_operation
 from app.platform.jobs import enqueue_in_session
@@ -408,6 +409,10 @@ def consume_recovery_preview(
     )
     if operation.result_resource_id is not None:
         return {"operation_id": operation.id, "run_id": operation.result_resource_id}
+
+    # Contract §11 step 3, after a replay was answered: no new generation
+    # once the Workspace stores its storage.bytes.max (#158).
+    admit_generation(session, ctx)
 
     # Validate preview identity, purpose, ownership, freshness, and that it
     # has not already been consumed.

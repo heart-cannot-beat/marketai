@@ -560,12 +560,12 @@ class CandidateTestBase(unittest.TestCase):
                 s.add(ProductRecord(id=PROD_ID, workspace_id=CTX.workspace_id, name="P Candidate"))
                 s.flush()
             if s.get(EntitlementProjectionRecord, CTX.workspace_id) is None:
-                s.add(EntitlementProjectionRecord(
+                s.merge(EntitlementProjectionRecord(
                     workspace_id=CTX.workspace_id, entitlement_version=1, lease_sequence=1,
                     projection_version=1, schema_version=2, semantic_hash="h" * 8,
                     valid_until=now + timedelta(days=30), issued_at=now - timedelta(days=1),
                     period_start=now - timedelta(days=1), period_end=now + timedelta(days=29),
-                    resolved_entitlements_json={},
+                    resolved_entitlements_json={"storage.bytes.max": 10 * 1024 ** 3},
                 ))
             if s.get(SpendGuardrailRecord, CTX.workspace_id) is None:
                 s.add(SpendGuardrailRecord(

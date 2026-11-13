@@ -80,12 +80,12 @@ class TestLocalizationRoutes(LibraryFixtures):
         with tenant_session(ctx) as s:
             _ensure_workspace(s, ctx.workspace_id)
             if s.get(EntitlementProjectionRecord, ctx.workspace_id) is None:
-                s.add(EntitlementProjectionRecord(
+                s.merge(EntitlementProjectionRecord(
                     workspace_id=ctx.workspace_id, entitlement_version=1, lease_sequence=1,
                     projection_version=1, schema_version=2, semantic_hash="h" * 8,
                     valid_until=now + timedelta(days=30), issued_at=now - timedelta(days=1),
                     period_start=now - timedelta(days=1), period_end=now + timedelta(days=29),
-                    resolved_entitlements_json={},
+                    resolved_entitlements_json={"storage.bytes.max": 10 * 1024 ** 3},
                 ))
             if s.get(SpendGuardrailRecord, ctx.workspace_id) is None:
                 s.add(SpendGuardrailRecord(

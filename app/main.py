@@ -40,6 +40,7 @@ from .library.api import register_problem_handlers
 from .generation.api import register_problem_handlers as register_generation_problem_handlers
 from .entitlements.api import internal_router as entitlement_internal_router
 from .entitlements.api import v1_entitlement_router
+from .entitlements.storage_quota import StorageAdmissionError, admit_upload
 from .adapters.persistence.database import (
     SessionLocal,
     assert_local_identity_boundary,
@@ -589,6 +590,10 @@ async def create_upload_intent_endpoint(
     )
 
     def _create(session):
+        # Contract §11 step 3, after the idempotency key is resolved (a
+        # replay never re-checks): the declared bytes must fit next to what
+        # the Workspace stores and its other open uploads (#158).
+        admit_upload(session, tenant, body.content_length_max)
         intent_id = new_id("ui")
         staging_key = build_staging_key(tenant.workspace_id, body.purpose)
         record = create_upload_intent_record(
@@ -627,6 +632,16 @@ async def create_upload_intent_endpoint(
             "Idempotency-Key was already used for a different request",
             tenant,
             retryable=False,
+        )
+    except StorageAdmissionError as exc:
+        return _problem(
+            exc.status,
+            exc.code,
+            "Storage admission refused",
+            tenant,
+            retryable=exc.retryable,
+            detail=exc.detail,
+            params=exc.params,
         )
 
     now = utcnow()

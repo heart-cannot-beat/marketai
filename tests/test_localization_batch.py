@@ -37,7 +37,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import select, text
 
-from app.adapters.persistence.database import engine, tenant_session
+from app.adapters.persistence.database import engine, platform_session, tenant_session
 from app.adapters.persistence.models import (
     AdDailyMetricRecord,
     AssetRecord,
@@ -81,11 +81,11 @@ from app.entitlements.models import EntitlementProjectionRecord
 from app.entitlements.policy import (
     LeaseExpiredError,
     NoEntitlementProjectionError,
-    WorkspaceLifecycleError,
 )
 from app.entitlements.policy import EntitlementPolicy
 from app.entitlements.quote_engine import CostQuoteEngine
 from app.entitlements.reservation_book import ReservationBook
+from app.entitlements.storage_quota import StorageLimitReachedError, StorageLimitUnavailableError
 from app.entitlements.usage_models import UsageEventRecord  # noqa: F401
 from app.experiments.service import (
     add_entry_v2,
@@ -123,6 +123,7 @@ from app.localization.truth import (
     TruthResolutionCommand,
 )
 from app.platform.tenancy import TenantContext
+from tests.support.storage_limit import grant_storage_limit, set_storage_headroom
 from tests.experiment_governance_fixtures import (
     govern_asset_versions,
     govern_product_offer_versions,
@@ -478,12 +479,12 @@ class TestBatchCommandSequence(unittest.TestCase):
         now = datetime.now(timezone.utc)
         with tenant_session(CTX) as s:
             _ensure_workspace(s, WS_ID)
-            s.add(EntitlementProjectionRecord(
+            s.merge(EntitlementProjectionRecord(
                 workspace_id=WS_ID, entitlement_version=1, lease_sequence=1,
                 projection_version=1, schema_version=2, semantic_hash="h" * 8,
                 valid_until=now + timedelta(days=30), issued_at=now - timedelta(days=1),
                 period_start=now - timedelta(days=1), period_end=now + timedelta(days=29),
-                resolved_entitlements_json={},
+                resolved_entitlements_json={"storage.bytes.max": 10 * 1024 ** 3},
             ))
             s.add(SpendGuardrailRecord(
                 workspace_id=WS_ID, revision=1, budget_currency="USD",
@@ -1626,7 +1627,9 @@ class TestBatchCommandSequence(unittest.TestCase):
 
         # confirm() always admits (edit Job) -- with no EntitlementProjection
         # for this Workspace, admission must fail before anything commits.
-        with self.assertRaises(WorkspaceLifecycleError):
+        # The storage check (#158) is the first to read the projection, and
+        # fails closed on its absence as entitlement_unavailable.
+        with self.assertRaises(StorageLimitUnavailableError):
             with tenant_session(CTX_NOENT) as s:
                 confirm(
                     s, CTX_NOENT, batch_id=batch_id, expected_revision=expected_revision,
@@ -1822,6 +1825,50 @@ class TestBatchCommandSequence(unittest.TestCase):
             ).all()
             self.assertEqual([a.attempt_number for a in attempts], [1, 2])
             self.assertEqual(attempts[1].state, "authorized")
+
+    def test_storage_at_the_limit_refuses_confirm_and_retry_but_not_replays(self) -> None:
+        """#158: localized outputs are new stored bytes, so confirm and a
+        retry are refused once the Workspace stores its limit; one byte
+        below they run, and a replayed confirm is never re-checked."""
+        self.addCleanup(self._restore_storage_limit)
+        ready = self._build_ready_batch("storage01")
+
+        set_storage_headroom(CTX, 0)
+        with self.assertRaises(StorageLimitReachedError):
+            self._confirm(ready["batch_id"])
+        with tenant_session(CTX) as s:
+            self.assertIsNone(s.get(LocalizationBatchRecord, ready["batch_id"]).frozen_at)
+
+        set_storage_headroom(CTX, 1)
+        first = self._confirm(ready["batch_id"])
+        set_storage_headroom(CTX, 0)
+        self.assertTrue(self._confirm(ready["batch_id"]).replayed)
+
+        item_id = first.item_ids[0]
+        with tenant_session(CTX) as s:
+            item = s.get(LocalizationItemRecord, item_id)
+            item.state = "retry_wait"
+            item.reason_code = "qc_failed"
+        item_revision = self._item_revision(item_id)
+
+        def retry():
+            with tenant_session(CTX) as s:
+                return retry_item(
+                    s, CTX, batch_id=ready["batch_id"], item_id=item_id,
+                    expected_item_revision=item_revision,
+                    actor_id="user_1", role="owner", admission=self.admission,
+                )
+
+        with self.assertRaises(StorageLimitReachedError):
+            retry()
+        self.assertEqual(self._item_revision(item_id), item_revision)
+        set_storage_headroom(CTX, 1)
+        self.assertEqual(retry().attempt_number, 2)
+
+    @staticmethod
+    def _restore_storage_limit() -> None:
+        with platform_session() as session:
+            grant_storage_limit(session, WS_ID)
 
     def test_retry_item_stale_revision_rejected(self) -> None:
         """Spec §3F: "all Item transitions use CAS and a losing writer

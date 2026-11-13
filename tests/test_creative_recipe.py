@@ -582,10 +582,10 @@ class RecipeChainTests(LibraryFixtures):
     def setUp(self) -> None:
         self.ctx = self.owner_ctx(self._make_context(role="owner", actor="owner_a"))
         with tenant_session(self.ctx) as s:
-            s.add(EntitlementProjectionRecord(
+            s.merge(EntitlementProjectionRecord(
                 workspace_id=self.ctx.workspace_id,
                 entitlement_version=1, lease_sequence=1, projection_version=1,
-                semantic_hash="hash_recipe", resolved_entitlements_json={"features": ["generation"]},
+                semantic_hash="hash_recipe", resolved_entitlements_json={"features": ["generation"], "storage.bytes.max": 10 * 1024 ** 3},
             ))
         self.blob_store = _MemoryBlobStore()
         self.coordinator = ExternalCallCoordinator(session_factory=tenant_session)

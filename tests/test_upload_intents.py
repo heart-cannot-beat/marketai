@@ -59,6 +59,7 @@ from app.platform.upload_intents import (  # noqa: E402
     verify_upload_intent,
 )
 from app.platform.workspace_admission import WorkspaceAdmission, WorkspaceNotFoundError  # noqa: E402
+from tests.support.storage_limit import grant_storage_limit  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +183,9 @@ def _ensure_workspace(workspace_id: str) -> None:
     with platform_session() as session:
         if session.get(WorkspaceRecord, workspace_id) is None:
             session.add(WorkspaceRecord(id=workspace_id, name=workspace_id, created_at=utcnow()))
+            session.flush()
+        # Upload admission reads the Workspace's storage limit (#158).
+        grant_storage_limit(session, workspace_id)
 
 
 def _checksum_b64(data: bytes) -> str:

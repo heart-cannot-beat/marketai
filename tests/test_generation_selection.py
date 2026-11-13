@@ -53,9 +53,9 @@ class TestGenerationSelection(LibraryFixtures):
             admin = CredentialAdmin(CredentialProtector.local_only())
             meta = admin.create(session, owner, credential_key="image-key", provider="openai", plaintext=b"test-secret")
             admin.bind(session, owner, binding_scope=scope, provider="openai", credential_version_id=meta.credential_version_id)
-            session.add(EntitlementProjectionRecord(workspace_id=ctx.workspace_id, entitlement_version=1,
+            session.merge(EntitlementProjectionRecord(workspace_id=ctx.workspace_id, entitlement_version=1,
                         lease_sequence=1, semantic_hash="test", issued_at=utcnow(), valid_until=utcnow() + timedelta(days=1),
-                        resolved_entitlements_json={"controlled_mock": True}))
+                        resolved_entitlements_json={"controlled_mock": True, "storage.bytes.max": 10 * 1024 ** 3}))
             session.add(SpendGuardrailRecord(workspace_id=ctx.workspace_id, budget_currency="USD",
                         per_operation_limit=Decimal(limit), rolling_24h_limit=Decimal(limit), period_limit=Decimal(limit),
                         outstanding_exposure_limit=Decimal(limit), created_at=utcnow(), updated_at=utcnow(), updated_by="owner"))

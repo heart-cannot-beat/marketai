@@ -35,6 +35,7 @@ from app.generation.preview import (
 )
 from app.generation.onboarding_facts import emit_onboarding_fact
 from app.generation.snapshot import insert_or_reuse_snapshot
+from app.entitlements.storage_quota import admit_generation
 from app.generation.spend import (
     SpendReservationError,
     is_charged,
@@ -97,6 +98,10 @@ def submit_generation(
             "operation_id": operation.id,
             "generation_run_id": operation.result_resource_id,
         }
+
+    # Contract §11 step 3, after a replay was answered: no new generation
+    # once the Workspace stores its storage.bytes.max (#158).
+    admit_generation(session, ctx)
 
     try:
         preview = check_preview_valid(session, ctx, preview_id, preview_hash)

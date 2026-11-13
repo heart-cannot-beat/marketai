@@ -577,6 +577,10 @@ const PARAMETERISED = [
   'error-seat_limit_reached: limit',
   'error-too_many_rows: limit',
   'error-content_length_exceeds_policy: limit_mb',
+  // #158: app.entitlements.storage_quota sends the limit in GiB with every
+  // refusal (tests/test_storage_quota.py).
+  'error-storage_limit_exceeded: limit_gib',
+  'error-storage_limit_reached: limit_gib',
   'error-file_too_large: limit_mb',
   'error-learnings_text_too_long: limit',
   'error-library_rights_scope_too_long: limit',
