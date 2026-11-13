@@ -56,6 +56,30 @@
 - **不执行上限**：10 GiB 上限由 [#147](https://github.com/heart-cannot-beat/marketai/issues/147) 执行。
 - **Release 结果**：本迁移在 PR 合并后由 Release 服务执行；起算日和执行结果待合并后补记。
 
+## Beta 上限的平台默认值（#156）
+
+2026-11-12 整理。本节的编号都指本仓库。
+
+[#156](https://github.com/heart-cannot-beat/marketai/issues/156) 让控制面解析权益时，给 `members.max`、`provider_calls.concurrent.max`、`storage.bytes.max` 补上契约 §8 的 Beta 值（5、2、10 GiB），规则写在契约 §4.2。只改控制面代码：没有迁移，不发布新 PlanVersion，不重新绑定。
+
+- **已有 Workspace 怎么拿到**：不需要手动步骤。Dispatcher cron 每 5 分钟运行一次，先给最新 Snapshot 已超过 6 小时的 ACTIVE、SUSPENDED Workspace 续租。续租走同一个发布模块，每次都重新解析；解析结果多了三个 key，semantic hash 随之改变，所以发出的是下一个 `entitlement_version`，不是只延长租约的续租。部署后约 6 小时再加一个 cron 间隔内，这些 Workspace 都会拿到新版本，之后的续租保持这个版本和值。领域侧按“下一个版本”正常应用。
+- **其他 Workspace**：PROVISIONING 的在激活时的发布里带上；DELETION_PENDING、DELETED 不续租，也不需要。
+- **不变的部分**：PlanVersion 或附加来源给了值的 key 保持原值；三个 key 都已给出的 Workspace 续租时版本不变。
+- **还不执行上限**：席位由 [#157](https://github.com/heart-cannot-beat/marketai/issues/157)、存储由 [#158](https://github.com/heart-cannot-beat/marketai/issues/158) 执行，并发见 [#159](https://github.com/heart-cannot-beat/marketai/issues/159)。领域侧只原样保存这三个数值。
+- **核对（只读；整理本节时没有连生产）**：部署 6 小时后，在控制面库执行下面的查询，结果应为 0。不为 0 时看 Dispatcher 输出里的 `renewal_failed`。
+
+  ```sql
+  SELECT count(*)
+  FROM "Team" t
+  JOIN "CommercialAccessProjection" p ON p."teamId" = t."id"
+  JOIN "EntitlementSnapshot" s ON s."id" = p."currentSnapshotId"
+  WHERE t."lifecycle" IN ('ACTIVE', 'SUSPENDED')
+    AND NOT (s."resolvedEntitlements" ? 'members.max');
+  ```
+
+- **回滚**：只回退代码即可。回退后的下一次续租不再带这三个 key，又会发出一个新的 `entitlement_version`。#157、#158 上线后，它们在缺 key 时失败关闭，所以要先回退它们。
+- **Release 结果**：随 PR 合并后的自动部署生效；核对结果待合并后补记。
+
 ## 竞品广告扫描上线（Epic #265）
 
 2026-11-02。[Epic #265](https://github.com/heart-cannot-beat/marketai-archive/issues/265) 的切片已全部合并，并随 main 自动部署到生产：

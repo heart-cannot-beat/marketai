@@ -7,22 +7,38 @@ import type {
 } from './types';
 
 /**
- * Combines a base PlanVersion's entitlements with zero or more add-on
- * grants' entitlements, then applies operator restrictions. Per spec §1.8,
- * the combination rule is typed and deterministic — boolean keys OR
- * (any active source enabling a feature enables it), numeric keys MAX (the
- * highest cap from any active source wins) — and always runs *before*
- * restrictions, which are the final clamp (spec §1.7 step 1: "base ∪ addons
- * ∪ restrictions ∪ platform clamp").
+ * Platform default layer (contract §4.2), holding the Beta limits of
+ * contract §8: 5 Owners + Members, 2 concurrent real Provider calls and
+ * 10 GiB of private storage. It fills a key only when no source sets it.
+ */
+export const PLATFORM_ENTITLEMENT_DEFAULTS: Readonly<PlanVersionEntitlements> =
+  Object.freeze({
+    'members.max': 5,
+    'provider_calls.concurrent.max': 2,
+    'storage.bytes.max': 10 * 1024 * 1024 * 1024,
+  });
+
+/**
+ * Resolves a Workspace's entitlements in the contract §4.2 order: base
+ * PlanVersion, add-on grants, platform defaults, then restrictions.
  *
- * A key present only in an add-on and absent from `base` is carried through
+ * Per spec §1.8 the combination of sources is typed and deterministic —
+ * boolean keys OR (any active source enabling a feature enables it),
+ * numeric keys MAX (the highest cap from any active source wins). A key
+ * present only in an add-on and absent from `base` is carried through
  * as-is: the add-on is still an active source for that key even though the
  * base plan says nothing about it.
+ *
+ * `platformDefaults` then fills only the keys no source set; a key any
+ * source set keeps the source's value, and a default never joins the MAX.
+ * Restrictions run last and are the final clamp, so a REDUCE_CAP can take a
+ * defaulted key below its default.
  */
 export function resolveEntitlements(
   base: PlanVersionEntitlements,
   addOns: PlanVersionEntitlements[],
-  restrictions: RestrictionInput[]
+  restrictions: RestrictionInput[],
+  platformDefaults: Readonly<PlanVersionEntitlements> = PLATFORM_ENTITLEMENT_DEFAULTS
 ): ResolvedEntitlements {
   const combined: Record<string, boolean | number> = { ...base };
 
@@ -40,6 +56,12 @@ export function resolveEntitlements(
       // value for the same key is a registry-configuration error the
       // resolver cannot safely arbitrate; the existing value is kept
       // unchanged rather than guessing.
+    }
+  }
+
+  for (const [key, value] of Object.entries(platformDefaults)) {
+    if (combined[key] === undefined) {
+      combined[key] = value;
     }
   }
 

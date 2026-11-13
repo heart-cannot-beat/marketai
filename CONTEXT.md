@@ -327,7 +327,7 @@ _Avoid_: 套餐名称、Stripe Price、可变配置行
 _Avoid_: 免费订阅、试用期、注册码
 
 **Entitlement**:
-Workspace 由 PlanVersion、附加 Access Grant 和 Restriction 解析出的功能或容量许可；它不等于成员角色、产品 Usage 或 Provider 成本上限。
+Workspace 由 PlanVersion、附加 Access Grant、平台默认值和 Restriction 解析出的功能或容量许可；它不等于成员角色、产品 Usage 或 Provider 成本上限。
 _Avoid_: 权限角色、额度余额、功能开关参数
 
 **Restriction**:
