@@ -73,8 +73,21 @@ function mockTxClient(t: Tables) {
         t.members.splice(t.members.indexOf(member), 1);
         return { ...member };
       },
+      // The seat check (#157) counts a Workspace's members.
+      count: async ({ where }) =>
+        t.members.filter((m) => m.teamId === where.teamId).length,
     },
     invitation: {
+      // ...and its valid pending invitations, less the one being accepted.
+      count: async ({ where }) =>
+        t.invitations.filter(
+          (i) =>
+            i.teamId === where.teamId &&
+            i.consumedAt === null &&
+            i.revokedAt === null &&
+            i.expires >= where.expires.gte &&
+            i.id !== where.id?.not
+        ).length,
       findUnique: async ({ where }) => {
         const invitation = t.invitations.find((i) => i.token === where.token);
         return invitation
@@ -96,6 +109,13 @@ function mockTxClient(t: Tables) {
         Object.assign(invitation, data);
         return { count: 1 };
       },
+    },
+    // Every Workspace here has the Beta seat limit; the limit itself is
+    // covered by `tests/entitlements/seats.test.ts`.
+    commercialAccessProjection: {
+      findUnique: async () => ({
+        currentSnapshot: { resolvedEntitlements: { 'members.max': 5 } },
+      }),
     },
     controlPlaneAuditEvent: {
       create: async ({ data }) => {

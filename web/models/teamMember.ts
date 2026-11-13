@@ -1,9 +1,11 @@
 import { prisma } from '@/lib/prisma';
-import type { Prisma, Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
+import { assertSeatAvailableInTx } from '@/lib/entitlements/seats';
 import {
   recordMembershipChangeInTx,
   type MembershipActor,
 } from '@/lib/membershipAudit';
+import { retrySerializableTransaction } from '@/lib/serializable-retry';
 
 export const countTeamMembers = async ({ where }) => {
   return await prisma.teamMember.count({
@@ -16,6 +18,10 @@ export const countTeamMembers = async ({ where }) => {
  * the caller's transaction. The row is locked first so two concurrent changes
  * each record the role they actually replaced. Setting the role a member
  * already holds changes nothing and records nothing.
+ *
+ * Promotion to Owner is refused while the Workspace is over its seat limit
+ * (contract §8); demotion never is. Run it in a SERIALIZABLE transaction so the
+ * seat check and the change see the same limit.
  */
 export const updateTeamMemberRoleInTx = async (
   tx: Prisma.TransactionClient,
@@ -38,6 +44,9 @@ export const updateTeamMemberRoleInTx = async (
   });
   if (current.role === role) {
     return current;
+  }
+  if (role === Role.OWNER) {
+    await assertSeatAvailableInTx(tx, teamId, { kind: 'promote' });
   }
 
   const updated = await tx.teamMember.update({
@@ -66,7 +75,9 @@ export const updateTeamMember = async (params: {
   role: Role;
   actor: MembershipActor;
 }) => {
-  return await prisma.$transaction((tx) =>
-    updateTeamMemberRoleInTx(tx, params)
+  return await retrySerializableTransaction(() =>
+    prisma.$transaction((tx) => updateTeamMemberRoleInTx(tx, params), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    })
   );
 };

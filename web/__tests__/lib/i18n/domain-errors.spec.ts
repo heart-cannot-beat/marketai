@@ -2,6 +2,7 @@ import { getI18n } from 'react-i18next';
 import en from '../../../locales/en/common.json';
 import zhCN from '../../../locales/zh-CN/common.json';
 import {
+  apiErrorMessage,
   DomainProblemError,
   errorCodeMessage,
   errorMessage,
@@ -153,5 +154,36 @@ describe('fieldErrorMessage', () => {
     expect(fieldErrorMessage(tIn('en'), { field: 'body.name' })).toBe(
       en['error-validation_error']
     );
+  });
+});
+
+describe('apiErrorMessage', () => {
+  it('renders a coded control-plane refusal in each language with its limit', () => {
+    const refusal = {
+      message: 'All seats in this Workspace are taken.',
+      code: 'seat_limit_reached',
+      params: { limit: 5 },
+    };
+    expect(apiErrorMessage(tIn('en'), refusal)).toBe(
+      'All 5 seats in this Workspace are taken. Owners, Members and pending invitations each hold a seat; revoke an invitation or remove a member to free one.'
+    );
+    expect(apiErrorMessage(tIn('zh-CN'), refusal)).toBe(
+      '这个工作区的 5 个席位已全部占用。Owner、Member 和待接受的邀请各占一个席位；撤销一张邀请或移除一名成员后再试。'
+    );
+    expect(
+      apiErrorMessage(tIn('zh-CN'), {
+        message: 'This Workspace is over its seat limit.',
+        code: 'seat_limit_exceeded',
+        params: { limit: 3 },
+      })
+    ).toContain('3 个席位');
+    expect(missing).toEqual([]);
+  });
+
+  it("keeps an uncoded refusal's own message", () => {
+    expect(
+      apiErrorMessage(tIn('zh-CN'), { message: 'Invitation not found.' })
+    ).toBe('Invitation not found.');
+    expect(apiErrorMessage(tIn('en'), undefined)).toBe(en['error-unknown']);
   });
 });

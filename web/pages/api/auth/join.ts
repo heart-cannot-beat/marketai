@@ -2,7 +2,7 @@ import { hashPassword } from '@/lib/auth';
 import { sendVerificationEmail } from '@/lib/email/sendVerificationEmail';
 import { isEmailAllowed } from '@/lib/email/utils';
 import env from '@/lib/env';
-import { ApiError } from '@/lib/errors';
+import { ApiError, apiErrorBody } from '@/lib/errors';
 import { getUser } from 'models/user';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { recordMetric } from '@/lib/metrics';
@@ -32,10 +32,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         });
     }
   } catch (error: any) {
-    const message = error.message || 'Something went wrong';
     const status = error.status || 500;
 
-    res.status(status).json({ error: { message } });
+    res.status(status).json({ error: apiErrorBody(error) });
   }
 }
 

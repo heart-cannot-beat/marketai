@@ -23,6 +23,7 @@ describeIfConfigured('Invitation single-use (PostgreSQL)', () => {
   let consumeInvitation: any;
   let createInvitation: any;
   let randomUUID: () => string;
+  let bindBetaPlan: any;
 
   let workspaceId: string;
   let inviterId: string;
@@ -37,6 +38,7 @@ describeIfConfigured('Invitation single-use (PostgreSQL)', () => {
       consumeInvitation,
       createInvitation,
     } = require('../../models/invitation'));
+    ({ bindBetaPlan } = require('../helpers/workspace-entitlements'));
 
     const suffix = randomUUID().slice(0, 8);
 
@@ -50,6 +52,8 @@ describeIfConfigured('Invitation single-use (PostgreSQL)', () => {
       data: { name: `WS ${suffix}`, slug: `ws-${suffix}`, lifecycle: 'ACTIVE' },
     });
     workspaceId = workspace.id;
+    // Invitations hold seats, read from the Workspace's snapshot (#157).
+    await bindBetaPlan(prisma, workspaceId, { grantedBy: inviterId });
   });
 
   afterAll(async () => {

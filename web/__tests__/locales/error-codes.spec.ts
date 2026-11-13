@@ -30,7 +30,9 @@ import { CJK, placeholdersOf } from './locale-files';
  * exception (#363), so a new one is read without a name to add here; one
  * raised only inside the Worker is listed in `NOT_SHOWN_CLASSES`.
  *
- * Also read: the BFF's own refusals (`(res, 502, '<code>'`, `code: '<code>'`);
+ * Also read: the BFF's own refusals (`(res, 502, '<code>'`, `code: '<code>'`),
+ * and the control plane's coded refusals (`code: '<code>'` in
+ * `lib/entitlements`: the seat limit, #157);
  * the keys of the code tables -- CSV preflight issues (`ISSUE_PARAMS`) and
  * results-import refusals (`REASONS`), which the services refuse to send
  * unless declared there (#255), and outside images' failures
@@ -182,6 +184,7 @@ const WEB_DIRECTORIES = [
   'pages/api/domain',
   'lib/domain-client',
   'lib/delegated-identity',
+  'lib/entitlements',
   'hooks/domain',
 ];
 
@@ -569,6 +572,9 @@ const PARAMETERISED = [
   'error-reporting_context_mismatch: attribution_window,currency,timezone',
   'error-row_attribution_mismatch: expected,found',
   'error-row_currency_mismatch: expected,found',
+  // #157: lib/entitlements/seats.ts sends the Workspace's seat limit.
+  'error-seat_limit_exceeded: limit',
+  'error-seat_limit_reached: limit',
   'error-too_many_rows: limit',
   'error-content_length_exceeds_policy: limit_mb',
   // #158: app.entitlements.storage_quota sends the limit in GiB with every
