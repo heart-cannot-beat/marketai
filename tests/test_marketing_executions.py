@@ -1,9 +1,12 @@
 """Several executions of one expression (#225): planned per combination, numbered stably, exported per combination."""
 import asyncio
+import csv
+import io
 import itertools
 import json
 import random
 import unittest
+import zipfile
 from copy import deepcopy
 from unittest.mock import AsyncMock
 
@@ -16,11 +19,15 @@ from app.adapters.persistence.database import platform_session, tenant_session
 from app.adapters.persistence.models import JobRecord, WorkspaceRecord, new_id
 from app.generation.models import GenerationDraftRecord, RunItemRecord
 from app.generation.paid_execution import execute_run_item
-from app.marketing import executions, plan_review
+from app.marketing import executions, export_text, plan_review
 from app.marketing.contracts import CreativeCombination, FrozenTestPlan, TestPlan as MarketingTestPlan
 from app.marketing.evaluation import combination_key
+from app.marketing.handoff_worker import execute_export
+from app.marketing.image_editing import execute_edit
 from app.marketing.models import MarketingProjectRecord
 from app.marketing.planner import example_result, system_prompt
+from app.marketing.workflow_models import MarketingHandoffRecord
+from app.platform.blob_store import CommittedBlobRef
 from app.providers.adapter import ProviderCallResult
 from tests.support.library_fixtures import png_bytes
 from tests.test_marketing_board import SCREEN, board, by_version, execution, executions_of, expression, plan
@@ -69,6 +76,17 @@ class TestPlannedExecutions(unittest.TestCase):
         self.assertEqual(nodes["copy"]["duplicate_of"], "r1")
         self.assertNotIn(None, [vid for vid, _, _ in slots(board(planned(SCREEN), assets))["c1"]],
                          "revisions and copies fill no new slot, yet two distinct executions satisfy the plan")
+
+    def test_a_revision_is_named_the_same_in_the_ad_name_and_both_languages_display_names(self):
+        # #162: the UI shows `display_name`, Meta keeps `ad_name`; both carry the execution and its version.
+        combo = {"angle_id": "a1", "expression_id": "x1", "image_brief": {"proposition": "One more charging option",
+            "expression": "Route choice diagram"}}
+        for number, suffix, en, zh in (({"index": 1, "version": 1}, "#1", "Execution 1", "执行 1"),
+                                       ({"index": 2, "version": 1}, "#2", "Execution 2", "执行 2"),
+                                       ({"index": 1, "version": 2}, "#1v2", "Execution 1 v2", "执行 1 v2")):
+            self.assertTrue(export_text.ad_name("0123456789abcdef", combo, number).endswith(" " + suffix))
+            self.assertEqual(export_text.display_name("Charge anywhere", "Route map", number, "en"), f"Charge anywhere / Route map · {en}")
+            self.assertEqual(export_text.display_name("随处充电", "路线图", number, "zh-CN"), f"随处充电 / 路线图 · {zh}")
 
     def test_legacy_plan_without_the_field_shows_execution_one(self):
         self.assertNotIn("executions_per_combination", SCREEN)
@@ -244,6 +262,47 @@ class TestExecutionsHttp(MarketingWorkflowFixtures):
         board = self.round(row)["board"]
         unexported = [x for x in executions_of(board) if x["asset_version_id"] not in names]
         self.assertEqual({(x["gap"], x["next_action"]) for x in unexported}, {("none", "none")})
+
+    def test_export_responses_name_each_execution_and_revision_as_the_ad_list_does(self):
+        # #162: two executions of one expression, and a revision of the first, look alike by angle, expression and
+        # headline. The round and workflow reads the web makes carry the ads.csv display name that tells them apart.
+        project = self.confirm(self.drafted())
+        self.generate_distinct(project)
+        row = self.start_round(project)
+        data = self.round(row)
+        numbers = {x["asset_version_id"]: x["execution_index"] for x in executions_of(data["board"])}
+        first = [a for a in data["assets"] if numbers[a["asset_version_id"]] == 1]
+        source = next(a for a in first if a["combination_id"] == "c1_1")
+        second = next(a for a in data["assets"] if a["combination_id"] == "c1_1" and numbers[a["asset_version_id"]] == 2)
+        row = self.command(row, "image-edits", {"asset_version_id": source["asset_version_id"],
+            "crop": {"x": 0, "y": 0, "width": .5, "height": 1}}, 202)
+        asyncio.run(execute_edit(self.context, row["image_edits"][0]["id"], self.blobs))
+        data = self.round(row, "?include_image_edits=true")
+        revision = next(a for a in data["assets"] if a.get("parent_version_id") == source["asset_version_id"])
+        exported = [*first, second, revision]
+        for asset in exported:
+            row = self.command(row, "reviews", {"asset_version_id": asset["asset_version_id"], "quality": "approved",
+                "checks": {k: "pass" for k in asset["required_checks"]}, "note": "Checked product, proposition, copy and comparison"}, 201)
+        row = self.command(row, "handoff", {"asset_version_ids": [a["asset_version_id"] for a in exported]}, 202)
+        asyncio.run(execute_export(self.context, row["handoff"]["id"], self.blobs))
+
+        reads = (self.round(row, "?include_text_language=true")["handoff"],
+                 self.client.get(f"/api/v1/marketing/projects/{project['id']}/workflow",
+                                 params={"include_text_language": "true"}).json()["current"]["handoff"])
+        with tenant_session(self.context) as session:
+            ref = CommittedBlobRef(**session.get(MarketingHandoffRecord, row["handoff"]["id"]).blob_json)
+        with zipfile.ZipFile(io.BytesIO(asyncio.run(self.blobs.read_committed(ref, 10_000_000)))) as archive:
+            _, *ads = csv.reader(io.StringIO(archive.read("ads.csv").decode("utf-8-sig")))
+        listed = {r[0]: r[2] for r in ads}
+        expected = {source["asset_version_id"]: ("#1", "Execution 1"), second["asset_version_id"]: ("#2", "Execution 2"),
+                    revision["asset_version_id"]: ("#1v2", "Execution 1 v2")}
+        for handoff in reads:
+            self.assertEqual(handoff["state"], "ready")
+            self.assertEqual({e["entry_id"]: e["display_name"] for e in handoff["entries"]}, listed, "the same names as ads.csv")
+            alike = [e for e in handoff["entries"] if e["combination_id"] == "c1_1"]
+            self.assertEqual(len({(e["proposition"], e["expression_name"], e["headline"]) for e in alike}), 1)
+            self.assertEqual({e["asset_version_id"]: (e["ad_name"].rsplit(" ", 1)[1], e["display_name"].rsplit(" · ", 1)[1])
+                              for e in alike}, expected)
 
     def test_legacy_round_without_the_field_shows_execution_one_and_still_opens(self):
         project = self.confirmed()
