@@ -7,6 +7,7 @@ import { Button, Input } from 'react-daisyui';
 import { useTranslation } from 'next-i18next';
 
 import type { ApiResponse } from 'types';
+import { apiErrorMessage } from '@/lib/i18n/domain-errors';
 import { defaultHeaders, maxLengthPolicies } from '@/lib/common';
 import { availableRoles } from '@/lib/permissions';
 import type { Team } from '@prisma/client';
@@ -49,7 +50,7 @@ const InviteViaEmail = ({ setVisible, team }: InviteViaEmailProps) => {
 
       if (!response.ok) {
         const result = (await response.json()) as ApiResponse;
-        toast.error(result.error.message);
+        toast.error(apiErrorMessage(t, result.error));
         return;
       }
 

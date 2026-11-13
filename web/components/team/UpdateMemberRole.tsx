@@ -4,6 +4,7 @@ import { Team, TeamMember } from '@prisma/client';
 import { useTranslation } from 'next-i18next';
 import toast from 'react-hot-toast';
 import type { ApiResponse } from 'types';
+import { apiErrorMessage } from '@/lib/i18n/domain-errors';
 
 interface UpdateMemberRoleProps {
   team: Team;
@@ -13,7 +14,11 @@ interface UpdateMemberRoleProps {
 const UpdateMemberRole = ({ team, member }: UpdateMemberRoleProps) => {
   const { t } = useTranslation('common');
 
-  const updateRole = async (member: TeamMember, role: string) => {
+  const updateRole = async (
+    member: TeamMember,
+    role: string,
+    select: HTMLSelectElement
+  ) => {
     const confirmation =
       role === 'OWNER'
         ? window.prompt(
@@ -42,7 +47,10 @@ const UpdateMemberRole = ({ team, member }: UpdateMemberRoleProps) => {
     const json = (await response.json()) as ApiResponse;
 
     if (!response.ok) {
-      toast.error(json.error.message);
+      // A refused change (a promotion over the seat limit, say) left the
+      // role as it was; the dropdown goes back to it.
+      select.value = member.role;
+      toast.error(apiErrorMessage(t, json.error));
       return;
     }
 
@@ -53,7 +61,7 @@ const UpdateMemberRole = ({ team, member }: UpdateMemberRoleProps) => {
     <select
       className="select select-bordered select-sm rounded"
       defaultValue={member.role}
-      onChange={(e) => updateRole(member, e.target.value)}
+      onChange={(e) => updateRole(member, e.target.value, e.target)}
     >
       {availableRoles.map((role) => (
         <option value={role.id} key={role.id}>

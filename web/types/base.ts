@@ -1,9 +1,10 @@
 import type { Prisma } from '@prisma/client';
 
 type ApiError = {
-  code: number;
   message: string;
-  values: { [key: string]: string };
+  /** A refusal the page shows as its `error-<code>` copy (#157). */
+  code?: string;
+  params?: Record<string, unknown>;
 };
 
 export type ApiResponse<T = unknown> =

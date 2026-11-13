@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 
 import type { ApiResponse } from 'types';
+import { apiErrorMessage } from '@/lib/i18n/domain-errors';
 import { defaultHeaders } from '@/lib/common';
 import { Invitation, Team } from '@prisma/client';
 
@@ -27,7 +28,7 @@ const AcceptInvitation = ({ invitation }: AcceptInvitationProps) => {
 
     if (!response.ok) {
       const result = (await response.json()) as ApiResponse;
-      toast.error(result.error.message);
+      toast.error(apiErrorMessage(t, result.error));
       return;
     }
 
