@@ -4,8 +4,8 @@
 
 ## 使用与配置
 
-- [HTML 图文教程](tutorials/marketai-tutorial.html)：34 个步骤、72 张逐步截图，覆盖工作区、三家 Key、产品理解、动态方案、实物参考、生成、QC 修订、裁剪旋转、放大/去背景/画笔擦除、版本分叉与对比、重新确认、导出、回传/更正和下一轮；[文字速查](user-guide.md)保留相同步骤。
-- [HTML 支持工作台参考](tutorials/advanced-reference.html)：26 张逐步截图，讲解独立生成、版本、费用、恢复、下载和下游证据边界。
+- [HTML 图文教程](tutorials/marketai-tutorial.html)：54 个步骤、68 张逐步截图，覆盖工作区、三家 Key、产品理解、动态方案、实物参考、生成、QC 修订、裁剪旋转、放大/去背景/画笔擦除、版本分叉与对比、重新确认、导出、回传/更正和下一轮；[文字速查](user-guide.md)保留相同步骤。
+- [HTML 支持工作台参考](tutorials/advanced-reference.html)：27 张逐步截图，讲解独立生成、版本、费用、恢复、下载和下游证据边界。
 - [供应商与生成配置](product/generation-provider-selection.md)：模型、输出设置、报价、成本预留和不确定任务。
 - [AI 策划配置](product/ai-marketing-planning-slice.md)、[AI 营销 QC](product/ai-marketing-ai-qc.md)：文本理解/策划/解读与视觉检查的独立配置。
 - [Meta 交接、CSV 与评估](product/ai-marketing-delivery-loop.md)：文件格式、冻结口径、更正、停止和结论边界。
@@ -14,7 +14,7 @@
 
 - [改版规格及 12 个场景](product/ai-marketing-testing-spec.md)、[实施计划](product/ai-marketing-testing-implementation-plan.md)。
 - [首轮分层验收](product/ai-marketing-testing-acceptance.md)、[最新规格复核](product/ai-marketing-final-reaudit.md)。
-- [生产上线记录](product/ai-marketing-production-release.md)、[故障修复上线及 Safari 复验](product/marketing-fault-release-verification.md)、[看板与出图质量版本上线（2026-10-27）](operations/board-image-quality-release-2026-10-27.md)。
+- [生产上线记录](product/ai-marketing-production-release.md)、[故障修复上线及 Safari 复验](product/marketing-fault-release-verification.md)、[看板与出图质量版本上线（2026-10-27）](operations/board-image-quality-release-2026-10-27.md)、[架构修复发布（2026-10-19）](operations/architecture-fixes-release-2026-10-19.md)。
 - [Key 自助入口验收](product/provider-credentials-self-service-acceptance.md)、[供应商/尺寸/故障验收](product/provider-device-fault-acceptance.md)、[隔离故障补验](product/marketing-isolated-fault-acceptance.md)。
 
 验收记录按日期保留当时范围；早期未覆盖的项目以较新记录为准。12 个场景的受控检查、真实 OpenAI 路径、桌面 Safari 与真实 Meta 业务效果是不同证据。Gemini/Seedream 真实附图等 Key，真实业务效果等报表；其余实机、多产品和运行故障仍按各自范围验收。
