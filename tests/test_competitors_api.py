@@ -103,10 +103,10 @@ class CompetitorFixtures(PlanFixtures):
     def _bind_market_data(self) -> None:
         owner = self.owner_ctx(self.ctx)
         with tenant_session(owner) as session:
-            session.add(EntitlementProjectionRecord(
+            session.merge(EntitlementProjectionRecord(
                 workspace_id=self.ctx.workspace_id,
                 entitlement_version=1, lease_sequence=1, projection_version=1,
-                semantic_hash="hash_competitors", resolved_entitlements_json={"features": ["generation"]},
+                semantic_hash="hash_competitors", resolved_entitlements_json={"features": ["generation"], "storage.bytes.max": 10 * 1024 ** 3},
             ))
         admin = CredentialAdmin(PROTECTOR)
         with tenant_session(owner) as session:

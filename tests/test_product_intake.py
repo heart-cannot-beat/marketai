@@ -683,10 +683,10 @@ class TestByok(IntakeFixtures):
     def setUp(self) -> None:
         super().setUp()
         with tenant_session(self.ctx) as session:
-            session.add(EntitlementProjectionRecord(
+            session.merge(EntitlementProjectionRecord(
                 workspace_id=self.ctx.workspace_id,
                 entitlement_version=1, lease_sequence=1, projection_version=1,
-                semantic_hash="hash_intake", resolved_entitlements_json={"features": ["generation"]},
+                semantic_hash="hash_intake", resolved_entitlements_json={"features": ["generation"], "storage.bytes.max": 10 * 1024 ** 3},
             ))
         owner = self.owner_ctx(self.ctx)
         admin = CredentialAdmin(PROTECTOR)

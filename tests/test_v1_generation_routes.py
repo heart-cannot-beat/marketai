@@ -37,6 +37,7 @@ from app.adapters.persistence.models import AssetVersionRecord, new_id
 from app.generation.models import AssetQCAttemptRecord
 from app.main import app
 from app.platform.http_identity import request_tenant_context
+from tests.support.storage_limit import set_storage_headroom
 
 
 class TestGenerationV1Routes(LibraryFixtures):
@@ -374,6 +375,67 @@ class TestGenerationV1Routes(LibraryFixtures):
             for item in items:
                 if item.id in target_ids:
                     self.assertEqual(item.state, "queued")
+
+    def test_storage_at_the_limit_refuses_a_run_but_not_its_replay(self):
+        """#158: a Workspace that stores its storage.bytes.max admits no new
+        Run; one byte below it does, and a replay is never re-checked."""
+        draft = self._create_draft()
+        preview = self._create_preview(draft)
+        body = {"preview_id": preview["id"], "preview_hash": preview["preview_hash"]}
+        headers = {**self._ik("submit-full"), "If-Match": f'"{draft["revision"]}"'}
+
+        set_storage_headroom(self.ctx, 0)
+        refused = self.client.post("/api/v1/generation/runs", json=body, headers=headers)
+        self.assertEqual(refused.status_code, 409, refused.text)
+        self.assertEqual(refused.json()["code"], "storage_limit_reached")
+        self.assertEqual(refused.json()["params"]["limit_bytes"], refused.json()["params"]["stored_bytes"])
+        self.assertIn("limit_gib", refused.json()["params"])
+        self.assertEqual(self.client.get("/api/v1/generation/runs").json()["items"], [])
+
+        with self._as_other_workspace() as other:  # its own limit, not this one's
+            other_draft = self._create_draft(product_id=self._product_id(other))
+            self._submit_run(other_draft, self._create_preview(other_draft))
+
+        set_storage_headroom(self.ctx, 1)
+        admitted = self.client.post("/api/v1/generation/runs", json=body, headers=headers)
+        self.assertEqual(admitted.status_code, 202, admitted.text)
+
+        set_storage_headroom(self.ctx, 0)
+        replay = self.client.post("/api/v1/generation/runs", json=body, headers=headers)
+        self.assertEqual(replay.status_code, 202, replay.text)
+        self.assertEqual(replay.json()["operation_id"], admitted.json()["operation_id"])
+
+    def test_storage_at_the_limit_refuses_a_retry_of_failed_items(self):
+        draft = self._create_draft()
+        run_id = self._submit_run(draft, self._create_preview(draft))["generation_run_id"]
+        from app.generation.models import RunItemRecord
+        from sqlalchemy import update
+        with tenant_session(self.ctx) as s:
+            item = s.query(RunItemRecord).filter_by(generation_run_id=run_id).first()
+            s.execute(update(RunItemRecord).where(RunItemRecord.id == item.id)
+                      .values(state="failed", error_summary="test", revision=item.revision + 1))
+        revision = self.client.get(f"/api/v1/generation/runs/{run_id}").json()["revision"]
+        rp = self.client.post(
+            f"/api/v1/generation/runs/{run_id}/recovery-previews",
+            json={"command": "retry_failed_items", "selection": {"kind": "all_eligible_failed"}},
+            headers={**self._ik("full-rp"), "If-Match": f'"{revision}"'},
+        ).json()
+        revision = self.client.get(f"/api/v1/generation/runs/{run_id}").json()["revision"]
+        retry = {"preview_id": rp["id"], "preview_hash": rp["preview_hash"]}
+        headers = {**self._ik("full-retry"), "If-Match": f'"{revision}"'}
+
+        set_storage_headroom(self.ctx, 0)
+        refused = self.client.post(f"/api/v1/generation/runs/{run_id}/retry-failed-items", json=retry, headers=headers)
+        self.assertEqual(refused.status_code, 409, refused.text)
+        self.assertEqual(refused.json()["code"], "storage_limit_reached")
+        with tenant_session(self.ctx) as s:
+            self.assertEqual(s.get(RunItemRecord, item.id).state, "failed")
+
+        set_storage_headroom(self.ctx, 1)
+        admitted = self.client.post(f"/api/v1/generation/runs/{run_id}/retry-failed-items", json=retry, headers=headers)
+        self.assertEqual(admitted.status_code, 200, admitted.text)
+        with tenant_session(self.ctx) as s:
+            self.assertEqual(s.get(RunItemRecord, item.id).state, "queued")
 
     # ------------------------------------------------------------------
     # Assets / AssetVersions / Reviews / Regeneration

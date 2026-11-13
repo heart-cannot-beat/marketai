@@ -634,6 +634,23 @@ jobs:
           DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
         run: python -m unittest tests.test_usage_storage_bytes_pg -v
 
+      # Storage admission (#158): the API role reads storage.bytes.max, sums
+      # the stored bytes and the open upload intents under RLS with no new
+      # grant, and decides through the route (exactly the remaining room is
+      # admitted, one byte more refused). Workspace B is invisible in A's
+      # context, even under the same key. A second upload admission waits on
+      # the first one's advisory lock and counts its intent (or finds the room
+      # free when it rolls back); racing admissions never jointly exceed the
+      # limit; another Workspace never waits. Generation is refused at the
+      # limit and admitted below it.
+      - name: Storage admission holds under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_storage_quota_pg -v
+
       # Spend guardrail previews (#386): a preview is a stored row the API
       # role confirms once, after a restart too; another Workspace can neither
       # confirm, see, consume nor forge it; racing confirms let one change

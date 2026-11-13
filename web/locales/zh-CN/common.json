@@ -2318,6 +2318,8 @@
   "error-stale_truth": "这张图依据的事实在生成后发生了变化。",
   "error-stale_truth_package": "市场事实已变化，请先刷新再翻译。",
   "error-stale_truth_unevaluable": "无法确认这张图依据的事实是否仍然有效。",
+  "error-storage_limit_exceeded": "这次上传会超出工作区 {{limit_gib}} GiB 的存储上限，尚未完成的上传也计算在内。",
+  "error-storage_limit_reached": "工作区已用满 {{limit_gib}} GiB 存储，暂时不能生成新内容。已存储的内容都会保留。",
   "error-storage_unavailable": "图片没能保存，请稍后重试。",
   "error-string_pattern_mismatch": "格式不符合要求。",
   "error-string_too_long": "最多填写 {{max_length}} 个字符。",

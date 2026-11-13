@@ -166,6 +166,12 @@ Beta PlanVersion 初始值：
 
 有效待接受邀请预留一个席位；邀请过期或撤销后释放。降级造成成员超限时不自动移除现有成员，但禁止新邀请、接受邀请和角色提升。API 请求速率、异常流量和平台总负载保护属于安全策略，不包装为套餐卖点。
 
+私有素材存储按 `storage.bytes.max` 在领域准入事务里执行（§11 第 3 步）。现有用量按 §9 `storage_bytes` 的同一规则在事务里实时求和，不读每日 Usage 行；读不到上限时失败关闭（`entitlement_unavailable`）。
+
+- **上传**：现有用量，加上未完成上传意图（`pending`、`verifying` 且未过期）声明的最大字节数，再加本次声明的最大字节数，超过上限时拒绝（`storage_limit_exceeded`）；恰好等于上限时放行。同一 Workspace 的上传准入在同一把数据库锁上排队。
+- **生成**：现有用量已达到或超过上限时，拒绝新的生成、重试、图片修改和本地化（`storage_limit_reached`）。低于上限时放行，一次生成可以把用量推过上限。幂等重放不重新检查。
+- **超限**：不删除任何对象；查看、下载和导出保持可用（§5）。
+
 ## 9. Usage
 
 UsageEvent 是追加式事实，至少包含 Workspace、稳定 metric key、数量/单位、发生时间、来源资源、execution mode 和幂等 key。首批 metric key 覆盖：

@@ -2318,6 +2318,8 @@
   "error-stale_truth": "A fact this image relies on has changed since it was made.",
   "error-stale_truth_package": "The market facts changed. Refresh them before translating.",
   "error-stale_truth_unevaluable": "Whether this image's facts are current cannot be checked.",
+  "error-storage_limit_exceeded": "This upload would take the Workspace over its {{limit_gib}} GiB storage limit. Uploads still in progress count toward it.",
+  "error-storage_limit_reached": "The Workspace has used its {{limit_gib}} GiB of storage, so nothing new can be generated. Everything already stored is kept.",
   "error-storage_unavailable": "The image could not be stored. Try again shortly.",
   "error-string_pattern_mismatch": "This value is not in the expected format.",
   "error-string_too_long": "Use at most {{max_length}} characters.",

@@ -45,6 +45,7 @@ from tests import test_marketing_workflow as workflow_tests
 from tests import test_upload_intents as upload_tests
 from tests.support.library_fixtures import LibraryFixtures
 from tests.support.queue_hygiene import cancel_workspace_jobs, quarantine_foreign_jobs
+from tests.support.storage_limit import grant_storage_limit
 
 from app import legacy_operations
 from app.adapters.persistence.database import platform_session, tenant_session
@@ -383,6 +384,8 @@ class TestFinalizeUploadFold(LibraryFixtures, LegacyFoldCases):
         return self.ctx.workspace_id
 
     def seed(self) -> None:
+        with platform_session() as session:  # upload admission reads the limit (#158)
+            grant_storage_limit(session, self.ctx.workspace_id)
         headers = {"Idempotency-Key": f"ci-only-{uuid.uuid4().hex}"}
         created = self.client.post("/api/v1/upload-intents", json=upload_tests._upload_body(), headers=headers)
         self.assertEqual(created.status_code, 201, created.text)

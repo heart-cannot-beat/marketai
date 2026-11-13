@@ -56,6 +56,8 @@ from app.library.contracts import (  # noqa: E402
 )
 from datetime import date, timedelta
 
+from tests.support.storage_limit import grant_storage_limit
+
 FUTURE = (date.today() + timedelta(days=365)).isoformat()
 PAST = (date.today() - timedelta(days=1)).isoformat()
 
@@ -97,10 +99,17 @@ class LibraryFixtures(unittest.TestCase):
 
     @staticmethod
     def provision_workspace(workspace_id: str) -> None:
-        """模拟控制面开好一个 Workspace。领域服务自己绝不会建租户。"""
+        """模拟控制面开好一个 Workspace。领域服务自己绝不会建租户。
+
+        Since #156 the control plane's projection always carries
+        ``storage.bytes.max``, which upload and generation admission read
+        (#158); a test that publishes its own projection merges over it.
+        """
         with platform_session() as session:
             if session.get(WorkspaceRecord, workspace_id) is None:
                 session.add(WorkspaceRecord(id=workspace_id, name=workspace_id))
+                session.flush()
+                grant_storage_limit(session, workspace_id)
 
     def ctx(
         self,

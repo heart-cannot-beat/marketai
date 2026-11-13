@@ -496,10 +496,10 @@ class GovernedLlmChatTests(LibraryFixtures):
 
     def _entitle(self, ctx) -> None:
         with tenant_session(ctx) as s:
-            s.add(EntitlementProjectionRecord(
+            s.merge(EntitlementProjectionRecord(
                 workspace_id=ctx.workspace_id,
                 entitlement_version=1, lease_sequence=1, projection_version=1,
-                semantic_hash="hash_llm", resolved_entitlements_json={"features": ["generation"]},
+                semantic_hash="hash_llm", resolved_entitlements_json={"features": ["generation"], "storage.bytes.max": 10 * 1024 ** 3},
             ))
 
     def _bind_openai_key(self, ctx=None, plaintext: bytes = b"sk-ws-own-key") -> str:

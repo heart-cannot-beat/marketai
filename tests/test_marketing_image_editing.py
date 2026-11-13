@@ -16,6 +16,7 @@ from app.marketing.blob_read import read_committed
 from app.marketing.workflow_models import MarketingImageEditRecord
 from app.providers.adapter import ProviderCallResult
 from tests.support.library_fixtures import png_bytes
+from tests.support.storage_limit import set_storage_headroom
 from tests.test_marketing_workflow import MarketingWorkflowFixtures
 
 
@@ -103,6 +104,40 @@ class TestMarketingImageEditing(MarketingWorkflowFixtures):
         _, other = self.setup_images()
         error = self.command(row, "image-edits", {"asset_version_id": other["assets"][0]["asset_version_id"]}, 404)
         self.assertEqual(error["code"], "asset_not_in_round")
+
+    def test_storage_at_the_limit_refuses_a_new_edit_but_not_a_replay(self):
+        # #158: an image edit stores a new version, so it is a generation.
+        _, row = self.setup_images()
+        source = row["assets"][0]["asset_version_id"]
+        body = {"asset_version_id": source, "rotation": 90}
+        admitted = self.command(row, "image-edits", body, 202, key="rotate-before-full")
+        self.assertGreater(set_storage_headroom(self.context, 1), 0)  # one byte below: still admitted
+        admitted = self.command(admitted, "image-edits", {"asset_version_id": source, "rotation": 180}, 202)
+
+        set_storage_headroom(self.context, 0)
+        refused = self.command(admitted, "image-edits", {"asset_version_id": source, "rotation": 270}, 409)
+        self.assertEqual(refused["code"], "storage_limit_reached")
+        self.assertIn("limit_gib", refused["params"])
+        replay = self.command(row, "image-edits", body, 202, key="rotate-before-full")
+        self.assertEqual(len(replay["image_edits"]), 2)  # the replay, and nothing new
+        self.assertEqual(len(self.refresh(row)["image_edits"]), 2)
+
+    def test_storage_at_the_limit_refuses_a_marketing_generation_run(self):
+        # The marketing drafts submit through the selected-recipe submission.
+        project = self.confirmed()
+        drafts = self.generate(project, count=0)
+        set_storage_headroom(self.context, 0)
+        draft = self.client.get(f"/api/v1/generation/drafts/{drafts[0]}").json()
+        preview = self.client.post(f"/api/v1/generation/drafts/{drafts[0]}/previews",
+                                   headers=self.headers(draft["revision"])).json()
+        body = {"preview_id": preview["id"], "preview_hash": preview["preview_hash"]}
+        refused = self.client.post("/api/v1/generation/runs", headers=self.headers(draft["revision"]), json=body)
+        self.assertEqual(refused.status_code, 409, refused.text)
+        self.assertEqual(refused.json()["code"], "storage_limit_reached")
+
+        set_storage_headroom(self.context, 1)
+        admitted = self.client.post("/api/v1/generation/runs", headers=self.headers(draft["revision"]), json=body)
+        self.assertEqual(admitted.status_code, 202, admitted.text)
 
     def test_worker_refuses_edit_after_handoff_freezes_round(self):
         _, row = self.setup_images()

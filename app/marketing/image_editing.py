@@ -12,6 +12,7 @@ from sqlalchemy import select, null
 
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import AssetRecord, AssetVersionRecord, new_id
+from app.entitlements.storage_quota import admit_generation
 from app.generation.image_inputs import source_image, check_source, read_source
 from app.platform.jobs import enqueue_in_session
 from app.platform.operations import create_operation, transition_operation, OperationState, OperationResultRef
@@ -66,6 +67,9 @@ def prepare(session, ctx, row, body):
         return previous[0]
     if previous:
         raise MarketingError("image_edit_failed", "该修改未完成，请查看错误后重新调整。", 409)
+    # Contract §11 step 3, after the same edit was answered: no new edited
+    # version once the Workspace stores its storage.bytes.max (#158).
+    admit_generation(session, ctx)
     op = create_operation(session, command_type="marketing.image_edit")
     edit = Edit(id=new_id("mied"), workspace_id=ctx.workspace_id, round_id=row.id,
         source_asset_version_id=version.id, operation_id=op.id, input_hash=hashed, input_json=inputs, state="queued")

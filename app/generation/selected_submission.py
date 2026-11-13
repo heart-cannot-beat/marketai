@@ -27,6 +27,7 @@ from app.generation.models import (
     ResolutionPreviewConfirmationRecord,
     RunItemRecord,
 )
+from app.entitlements.storage_quota import admit_generation
 from app.generation.preview import PreviewError, check_preview_valid
 from app.generation.draft import get_draft
 from app.generation.selection import check_frozen_selection
@@ -75,6 +76,10 @@ def submit_generation(
             "operation_id": operation.id,
             "generation_run_id": operation.result_resource_id,
         }
+
+    # Contract §11 step 3, after a replay was answered: no new generation
+    # once the Workspace stores its storage.bytes.max (#158).
+    admit_generation(session, ctx)
 
     try:
         preview = check_preview_valid(session, ctx, preview_id, preview_hash)

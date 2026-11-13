@@ -197,9 +197,9 @@ class CompetitorPlanFixtures(SnapshotFixtures):
                                       plaintext=b"tenant-planner-secret")
             admin.bind(session, owner, binding_scope="generation", provider="openai",
                        credential_version_id=credential.credential_version_id)
-            session.add(EntitlementProjectionRecord(workspace_id=self.ctx.workspace_id, entitlement_version=1,
+            session.merge(EntitlementProjectionRecord(workspace_id=self.ctx.workspace_id, entitlement_version=1,
                 lease_sequence=1, semantic_hash="planning-test", issued_at=utcnow(), valid_until=utcnow() + timedelta(days=1),
-                resolved_entitlements_json={"controlled_mock": True}))
+                resolved_entitlements_json={"controlled_mock": True, "storage.bytes.max": 10 * 1024 ** 3}))
             session.add(SpendGuardrailRecord(workspace_id=self.ctx.workspace_id, budget_currency="USD",
                 per_operation_limit=Decimal("1"), rolling_24h_limit=Decimal("5"), period_limit=Decimal("5"),
                 outstanding_exposure_limit=Decimal("5"), created_at=utcnow(), updated_at=utcnow(), updated_by="owner"))

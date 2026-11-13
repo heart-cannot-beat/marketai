@@ -65,6 +65,7 @@ from pydantic import BaseModel, Field
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import QualityReviewRecord, ResolutionPreviewRecord
 from app.generation.models import AssetQCAttemptRecord, GenerationDraftRecord
+from app.entitlements.storage_quota import StorageAdmissionError
 from app.platform.blob_store import DownloadSpec, extension_for_mime
 from app.platform.blob_store_factory import build_blob_store
 from app.platform.download_intents import (
@@ -1307,6 +1308,12 @@ def register_v1_problem_handlers(app) -> None:
     @app.exception_handler(GenerationResourceNotFoundError)
     async def _resource_not_found_handler(request: Request, exc: GenerationResourceNotFoundError):
         return _problem(request, 404, exc.code, str(exc))
+
+    # App-wide: every generation admission (v9 and marketing submissions,
+    # recovery, image edits, localization) refuses through this one (#158).
+    @app.exception_handler(StorageAdmissionError)
+    async def _storage_admission_handler(request: Request, exc: StorageAdmissionError):
+        return _problem(request, exc.status, exc.code, exc.detail, params=exc.params)
 
     @app.exception_handler(RunCommandError)
     async def _run_command_error_handler(request: Request, exc: RunCommandError):

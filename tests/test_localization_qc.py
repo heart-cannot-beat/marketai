@@ -401,12 +401,12 @@ class TestDeterministicQC(unittest.TestCase):
         now = datetime.now(timezone.utc)
         with tenant_session(CTX) as s:
             _ensure_workspace(s, WS_ID)
-            s.add(EntitlementProjectionRecord(
+            s.merge(EntitlementProjectionRecord(
                 workspace_id=WS_ID, entitlement_version=1, lease_sequence=1,
                 projection_version=1, schema_version=2, semantic_hash="h" * 8,
                 valid_until=now + timedelta(days=30), issued_at=now - timedelta(days=1),
                 period_start=now - timedelta(days=1), period_end=now + timedelta(days=29),
-                resolved_entitlements_json={},
+                resolved_entitlements_json={"storage.bytes.max": 10 * 1024 ** 3},
             ))
             s.add(SpendGuardrailRecord(
                 workspace_id=WS_ID, revision=1, budget_currency="USD",

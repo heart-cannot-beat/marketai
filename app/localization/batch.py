@@ -79,6 +79,7 @@ from ..adapters.persistence.models import (
     new_id,
 )
 from ..entitlements.admission import PaidOperationAdmission
+from ..entitlements.storage_quota import admit_generation
 from ..entitlements.types import (
     AdmissionResult,
     AdmissionRequest,
@@ -2229,6 +2230,9 @@ def confirm(
         )
     if batch.frozen_at is not None:
         raise FrozenBatchError(f"batch {batch_id} is already frozen")
+    # Contract §11 step 3, after a replay was answered: no new localized
+    # outputs once the Workspace stores its storage.bytes.max (#158).
+    admit_generation(session, ctx)
 
     jobs: list[_JobPlan] = []
     for creation in item_creations:
@@ -2408,6 +2412,8 @@ def retry_item(
             item_id=item_id, attempt_number=attempt_number,
             operation_id=existing.operation_id, replayed=True,
         )
+    # Contract §11 step 3, after a replay was answered (#158).
+    admit_generation(session, ctx)
 
     edit_provider = frozen_recipe.get("edit_provider", "unknown")
     edit_model = frozen_recipe.get("edit_model", "unknown")

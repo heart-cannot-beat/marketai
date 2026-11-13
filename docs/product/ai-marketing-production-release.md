@@ -80,6 +80,30 @@
 - **回滚**：只回退代码即可。回退后的下一次续租不再带这三个 key，又会发出一个新的 `entitlement_version`。#157、#158 上线后，它们在缺 key 时失败关闭，所以要先回退它们。
 - **Release 结果**：随 PR 合并后的自动部署生效；核对结果待合并后补记。
 
+## 存储上限（#158）
+
+2026-11-13 整理。本节的编号都指本仓库。
+
+[#158](https://github.com/heart-cannot-beat/marketai/issues/158) 在领域准入时执行 `storage.bytes.max`（Beta 10 GiB），规则见契约 §8。没有迁移，不加授权，不改 OpenAPI。
+
+- **上传**：`POST /api/v1/upload-intents` 在现有用量、未完成上传意图声明的字节数与本次声明的字节数之和超过上限时，返回 409 `storage_limit_exceeded`。同一 Workspace 的上传准入在一把事务级 advisory lock 上排队。
+- **生成**：v9 与营销生成提交、失败重试与暂停恢复、图片修改、本地化确认与单项重试，在现有用量已达到上限时返回 409 `storage_limit_reached`。导出和上传后的入库命令不拦。
+- **失败关闭**：Workspace 的 Entitlement Projection 没有 `storage.bytes.max` 时，上传和上述生成都返回 403 `entitlement_unavailable`。
+- **合并前核对（只读；整理本节时没有连生产）**：先按上一节核对控制面结果为 0，再以领域库 owner 执行下面的查询，结果也应为 0。不为 0 时先不要合并，等续租补上。
+
+  ```sql
+  SELECT count(*)
+  FROM workspaces w
+  LEFT JOIN entitlement_projections p ON p.workspace_id = w.id
+  WHERE w.lifecycle = 'active' AND NOT w.suspended
+    AND (p.workspace_id IS NULL
+         OR NOT (p.resolved_entitlements_json::jsonb ? 'storage.bytes.max'));
+  ```
+
+- **观测**：每次拒绝写一条 INFO 日志 `storage_admission_refused`，带 `workspace_id`、`admission`（`upload` 或 `generation`）、上限、现有用量、未完成上传和本次字节数。
+- **回滚**：只回退代码即可，数据不需要处理。回退 #156 之前先回退本项。
+- **Release 结果**：随 PR 合并后的自动部署生效；核对结果待合并后补记。
+
 ## 竞品广告扫描上线（Epic #265）
 
 2026-11-02。[Epic #265](https://github.com/heart-cannot-beat/marketai-archive/issues/265) 的切片已全部合并，并随 main 自动部署到生产：

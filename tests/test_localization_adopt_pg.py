@@ -198,7 +198,8 @@ class LocalizationPostgresFixture:
                     projection_version=1, schema_version=2, semantic_hash="h" * 8,
                     valid_until=now + timedelta(days=30), issued_at=now - timedelta(days=1),
                     period_start=now - timedelta(days=1), period_end=now + timedelta(days=29),
-                    resolved_entitlements_json={},
+                    # Localization confirm reads the storage limit (#158).
+                    resolved_entitlements_json={"storage.bytes.max": 10 * 1024 ** 3},
                 ))
                 session.add(SpendGuardrailRecord(
                     workspace_id=owner.workspace_id, revision=1, budget_currency="USD",
