@@ -99,7 +99,7 @@ OfferVersion 保存一次不可变销售语义：ProductVersion、商品/Variant
 
 MarketSourceMappingVersion 把 OfferVersion 映射到一个 DataSourceVersion 可识别的外部商品、Variant、Price List、配送规则或其他对象。更换店铺、Adapter 或外部对象创建新 Mapping；ProductVersion 不被污染。
 
-Clone Product 默认只复制描述、must-match、维度和参考 Binding。Offer、价格、DataSource Mapping 和 Landing Page 必须由用户逐项明确选择，默认不复制。
+Clone Product 只复制描述、must-match、维度和参考 Binding。Offer、价格、DataSource Mapping 和 Landing Page 不复制，用户也不能选择复制；新产品需要时由用户另行创建（[ADR 0016](../adr/0016-clone-product-never-copies-offers-prices-mappings-or-landing-pages.md)）。
 
 ## 6. Must-match 与产品保真
 
@@ -218,7 +218,7 @@ Owner 查看逐行 ValidationReport 后发布。任意 JSON、展示字符串、
 - Bind：在同一 Workspace 内继续引用一个稳定人物或 Reference 身份；
 - Fork：复制某个 Published Version 为新的 LibraryEntry Draft，之后独立演进；
 - Apply：把 DimensionTemplateVersion 深拷贝进产品 DimensionSchema Draft；
-- Clone Product：创建新 ProductProfile Draft，并按安全默认复制低风险内容。
+- Clone Product：创建新 ProductProfile Draft，只复制低风险内容；永不复制 Offer、价格、DataSource Mapping 和 Landing Page（§5.2、ADR 0016）。
 
 每次操作保存 actor、source version、目标 Entry、时间和选择项。不能用“duplicate”一个动作隐式覆盖上述四种不同语义。
 
@@ -250,6 +250,8 @@ DependencyIndex 记录 LibraryVersion 到 Generation Draft/Run、AssetVersion、
 - 连接临时失败：只影响新取数和 ConnectionHealth；
 - Credential 轮换：不触发内容失效；
 - Offer、Mapping 或商业事实变化：只 supersede 真正依赖的 TruthPackage，并按本地化契约传播 `stale_truth`。
+
+按条目引用的依赖按条目判断影响。这类内容写的是条目 ID，发布时解析到该条目的当前版本，例如 TruthResolutionPolicy 的 `source_priority`、ManualFactSet 的 `data_source_entry_id` 和事实行的 `offer_entry_id`、DimensionSchema 的 `product_entry_id`、WorkspacePromptPolicy 的 `allowed_template_entry_ids`。它们的依赖边仍指向发布时的版本，不迁移，也不改写。Withdraw 和 Archive 的影响分析遇到条目的当前 effective 版本时，把它归到条目，列出引用该条目任一版本的依赖对象，因为这些依赖对象都解析到它。遇到已被取代的旧版本时，只列出依赖边指向该版本的依赖对象：撤回旧版本不改变条目解析到哪个版本，不要求引用条目的依赖对象重新发布。Withdraw 按同一结果把依赖对象投影为 blocked。其余依赖仍按所引用的准确版本判断。
 
 发布、撤销和归档前 UI 展示影响分析。已发出的不可分割 Provider 调用允许返回并保存证据，结果是否可采用取决于当前资格；系统不自动删除素材、不改历史实验，也不自动暂停或修改真实广告。
 
@@ -302,7 +304,7 @@ execution mode 进入 DataSourceVersion、Reference 检查证据、ResolutionPre
 15. Worker 崩溃恢复后继续使用同一 GenerationRecipeSnapshot，不重新解析 current version 或重复成本。
 16. Supersede、Archive、Withdraw、连接失败和凭据撤销产生各自正确的影响，不用一个状态覆盖。
 17. DimensionConceptKey 只在显式映射和可比上下文下聚合，标签相同不会自动跨产品学习。
-18. Bind、Fork、Apply、Clone 保存不同谱系；Clone 默认不复制 Offer、Mapping、价格或 Landing Page。
+18. Bind、Fork、Apply、Clone 保存不同谱系；Clone 永不复制 Offer、Mapping、价格或 Landing Page，请求带上它们时被拒绝（ADR 0016）。
 19. 导入不覆盖、不自动发布；导出与 Manifest 不含凭据、签名 URL 和跨租户标识。
 20. Mock 和真实路径不能混用、转换或静默回退；页面与产物均显示 provenance。
 21. Playwright 从空 Workspace 完成产品、人物、参考图、模板、Prompt Policy、人工数据源、发布、预览与 Mock GenerationRun，并验证刷新和重启后状态一致。

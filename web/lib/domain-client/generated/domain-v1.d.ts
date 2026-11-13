@@ -3414,6 +3414,28 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/scale/{meta_mode}/delivery-targets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create Delivery Target Route
+     * @description Create a Winner's DeliveryTarget from one observed ad (#129). Owners
+     *     and Members alike; the server resolves the slot from recorded evidence
+     *     and returns a typed reason when the ad does not match the Winner.
+     */
+    post: operations['create_scale_delivery_target'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/scale/{meta_mode}/enrollment-candidates': {
     parameters: {
       query?: never;
@@ -3568,10 +3590,11 @@ export interface paths {
     };
     /**
      * Get Enrollment Evidence
-     * @description Current evidence/readiness (spec §4.3) -- the accepted-Evaluation
-     *     projection Task 12's orchestration already CAS-maintains
-     *     (``ScaleEpisodeProjectionRecord``), not a fresh evaluation request:
-     *     sealing/evaluating is scheduler/Worker-driven (module docstring).
+     * @description Current evidence/readiness (spec §4.3, #114): the Episode's
+     *     evidence-readiness projection and the accepted-Evaluation projection
+     *     the pipeline already CAS-maintains -- not a fresh evaluation request:
+     *     collecting, sealing and evaluating are scheduler/Worker-driven (module
+     *     docstring).
      */
     get: operations['get_scale_enrollment_evidence'];
     put?: never;
@@ -3644,6 +3667,27 @@ export interface paths {
     put?: never;
     /** Create Export Download Intent Route */
     post: operations['create_scale_export_download_intent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/scale/{meta_mode}/observed-ads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Observed Ads Route
+     * @description The ads the Workspace's active connections in this mode have
+     *     observed, for picking a Winner's DeliveryTarget. Reads only.
+     */
+    get: operations['list_scale_observed_ads'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -6622,6 +6666,40 @@ export interface components {
       offer: string;
       landing_page: string;
     };
+    /**
+     * @description Pick one observed ad as a Winner's DeliveryTarget (#129). Only the
+     *     ad is named: the server resolves the hierarchy, creative, Offer, Landing
+     *     Page, market, placement and attribution from recorded evidence.
+     */
+    DeliveryTargetCreateRequest: {
+      winner_decision_id: string;
+      meta_connection_id: string;
+      ad_remote_id: string;
+    };
+    DeliveryTargetResponse: {
+      id: string;
+      meta_mode: string;
+      meta_connection_id: string;
+      ad_account_id: string;
+      campaign_remote_id: string;
+      adset_remote_id: string;
+      ad_remote_id: string;
+      ad_creative_id: string;
+      creative_asset_version_id: string;
+      market_code: string;
+      placement: string;
+      offer_version_id: string;
+      landing_page_evidence_hash: string;
+      attribution_setting: string;
+      contract_generation_id: string;
+      source_type: string;
+      /** Format: date-time */
+      observed_at: string;
+      /** Format: date-time */
+      expires_at: string;
+      /** Format: date-time */
+      created_at: string;
+    };
     /** @description The user's own idea; omitted factors take each factor's first value. */
     DirectionAdd: {
       title: string;
@@ -6859,51 +6937,58 @@ export interface components {
       enrollment_candidate_id: string;
     };
     /**
-     * @description Current evidence/readiness for an Enrollment's active Episode --
-     *     the accepted-Evaluation projection (spec §3.4 step 3/4), not a raw
-     *     evidence snapshot. Reflects only a projection-eligible result that has
-     *     already won the structured cursor CAS.
+     * @description Current evidence/readiness for an Enrollment's active Episode (#114).
+     *
+     *     ``readiness`` is the Episode's evidence-readiness projection, null until
+     *     the first source manifest is collected. Every other field but the two
+     *     ids belongs to the accepted-Evaluation projection (spec §3.4 step 3/4),
+     *     which reflects only a projection-eligible result that has already won
+     *     the structured cursor CAS; all of them are null until the first
+     *     Evaluation projects. ``evaluation_stale`` says the accepted Evaluation
+     *     was sealed from an older source revision than the latest manifest: a
+     *     newer day is collected (its evaluation pending) or blocked, so the
+     *     Evaluation is history, not the current state (contract §8).
      */
     EnrollmentEvidenceResponse: {
       enrollment_id: string;
       episode_id: string;
-      evaluation_id: string;
-      snapshot_id: string;
-      policy_version_id: string;
+      readiness: components['schemas']['EvidenceReadinessResponse'] | null;
+      evaluation_stale: boolean;
+      evaluation_id: string | null;
+      snapshot_id: string | null;
+      policy_version_id: string | null;
       target_version_id: string | null;
-      algorithm_version: string;
-      metric_semantic_contract_set_hash: string;
-      maturity: string;
-      data_quality_state: string;
+      algorithm_version: string | null;
+      metric_semantic_contract_set_hash: string | null;
+      maturity: string | null;
+      data_quality_state: string | null;
       health: string | null;
-      health_reason: string;
-      healthy_evaluations: number;
-      streak_counters: {
-        [key: string]: unknown;
-      }[];
-      /** Format: date */
-      safe_watermark: string;
-      /** Format: date */
-      last_complete_local_day: string;
-      /** Format: date-time */
-      last_sync_at: string;
-      /** Format: date-time */
-      freshness_reference_at: string;
-      complete_local_days_in_episode: number;
-      active_delivery_days_in_episode: number;
-      current_window: components['schemas']['EvidenceWindowResponse'];
-      baseline_window: components['schemas']['EvidenceWindowResponse'];
-      rolling_window: components['schemas']['EvidenceWindowResponse'];
-      quality_issues: components['schemas']['EvidenceQualityIssueResponse'][];
-      signals: components['schemas']['EvidenceSignalResponse'][];
-      /** Format: date */
-      cursor_as_of_local_day: string;
-      cursor_source_revision: number;
-      cursor_semantic_event_sequence: number;
-      cursor_lineage_generation: number;
-      revision: number;
-      /** Format: date-time */
-      updated_at: string;
+      health_reason: string | null;
+      healthy_evaluations: number | null;
+      streak_counters:
+        | {
+            [key: string]: unknown;
+          }[]
+        | null;
+      safe_watermark: string | null;
+      last_complete_local_day: string | null;
+      last_sync_at: string | null;
+      freshness_reference_at: string | null;
+      complete_local_days_in_episode: number | null;
+      active_delivery_days_in_episode: number | null;
+      current_window: components['schemas']['EvidenceWindowResponse'] | null;
+      baseline_window: components['schemas']['EvidenceWindowResponse'] | null;
+      rolling_window: components['schemas']['EvidenceWindowResponse'] | null;
+      quality_issues:
+        | components['schemas']['EvidenceQualityIssueResponse'][]
+        | null;
+      signals: components['schemas']['EvidenceSignalResponse'][] | null;
+      cursor_as_of_local_day: string | null;
+      cursor_source_revision: number | null;
+      cursor_semantic_event_sequence: number | null;
+      cursor_lineage_generation: number | null;
+      revision: number | null;
+      updated_at: string | null;
     };
     EnrollmentListResponse: {
       items: components['schemas']['EnrollmentResponse'][];
@@ -7125,6 +7210,31 @@ export interface components {
       segment_key: string | null;
       detail: string | null;
       recovery_action: string | null;
+    };
+    /**
+     * @description The Episode's evidence readiness (contract §8, §18): the projection
+     *     the source collector moves with every terminal source manifest, ahead of
+     *     any Evaluation. A ``blocked`` latest manifest reads maturity
+     *     ``insufficient``, quality ``blocked``, its typed issues and the recovery
+     *     action; ``last_complete_local_day`` and ``freshness_reference_at`` stay
+     *     where the last complete manifest put them (null before one).
+     */
+    EvidenceReadinessResponse: {
+      manifest_id: string | null;
+      manifest_state: string | null;
+      source_revision: number | null;
+      target_local_day: string | null;
+      maturity: string;
+      quality_state: string;
+      last_complete_local_day: string | null;
+      freshness_reference_at: string | null;
+      blocking_issue_count: number;
+      warning_issue_count: number;
+      recovery_action: string | null;
+      issues: components['schemas']['EvidenceQualityIssueResponse'][];
+      revision: number;
+      /** Format: date-time */
+      updated_at: string;
     };
     EvidenceSignalResponse: {
       signal_id: string;
@@ -8876,6 +8986,8 @@ export interface components {
       upload_intent_id: string;
       /** @default library_manual_fact_import */
       purpose: string;
+      /** @description Offer entry given to every row that names no offer_entry_id (#54). A row that names its own Offer keeps it. */
+      default_offer_entry_id?: string | null;
     };
     /**
      * @description One ad's results over a date range. Identify the image by its asset
@@ -9225,6 +9337,28 @@ export interface components {
       severity?: string | null;
       proposed_by?: string | null;
       confirmed?: boolean | null;
+    };
+    ObservedAdListResponse: {
+      items: components['schemas']['ObservedAdResponse'][];
+      unavailable: components['schemas']['ObservedAdUnavailableResponse'][];
+    };
+    /**
+     * @description One ad a connection has observed (#129): the sandbox scenario's ads,
+     *     or the ads of the connection's published delivery-configuration read.
+     */
+    ObservedAdResponse: {
+      meta_connection_id: string;
+      ad_account_id: string;
+      campaign_remote_id: string;
+      adset_remote_id: string;
+      ad_remote_id: string;
+      ad_creative_id: string;
+      source_type: string;
+      asset_version_ids: string[];
+    };
+    ObservedAdUnavailableResponse: {
+      meta_connection_id: string;
+      reason: string;
     };
     /** @description 202 Accepted envelope for async domain commands (connection-checks, manual-fact-imports, reference-gate). */
     OperationAccepted: {
@@ -10499,6 +10633,18 @@ export interface components {
       /** @default 0.5 */
       preselect_confidence: number;
     };
+    TargetContextListResponse: {
+      items: components['schemas']['TargetContextResponse'][];
+    };
+    TargetContextResponse: {
+      product_version_id: string;
+      offer_version_id: string;
+      market_code: string;
+      currency: string;
+      has_active_target: boolean;
+      platform_spend_floor: string | null;
+      platform_spend_floor_unavailable_reason: string | null;
+    };
     TargetListResponse: {
       items: components['schemas']['TargetResponse'][];
       next_cursor?: string | null;
@@ -10549,6 +10695,8 @@ export interface components {
       /** Format: date-time */
       created_at: string;
       allowed_actions: components['schemas']['ActionEligibilityModel'][];
+      platform_spend_floor: string | null;
+      below_platform_floor: boolean;
     };
     TargetWithdrawRequest: {
       withdrawal_preview_id: string;
@@ -18418,6 +18566,44 @@ export interface operations {
       };
     };
   };
+  create_scale_delivery_target: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        /** @description Meta evidence mode (URL path segment). */
+        meta_mode: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DeliveryTargetCreateRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeliveryTargetResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   list_scale_enrollment_candidates: {
     parameters: {
       query?: never;
@@ -18970,6 +19156,40 @@ export interface operations {
       };
     };
   };
+  list_scale_observed_ads: {
+    parameters: {
+      query?: {
+        meta_connection_id?: string | null;
+      };
+      header?: never;
+      path: {
+        /** @description Meta evidence mode (URL path segment). */
+        meta_mode: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ObservedAdListResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   list_scale_target_contexts: {
     parameters: {
       query?: never;
@@ -18988,7 +19208,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': unknown;
+          'application/json': components['schemas']['TargetContextListResponse'];
         };
       };
       /** @description Validation Error */

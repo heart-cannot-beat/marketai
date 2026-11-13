@@ -3,12 +3,16 @@
 
 This script seeds ONLY platform/test infrastructure — controlled-Mock
 scenarios, sandbox connections, metric clocks, and published platform
-policies.  It MUST NOT create Products, Assets, reviews, Winners,
+market policies.  It MUST NOT create Products, Assets, reviews, Winners,
 batches, enrollments, advice, drafts, or any other domain business
-objects.  The two exceptions are stand-ins for product surfaces that do
-not exist yet, documented on _seed_scale_infrastructure: the review
-approval of the Winner-market MarketAssetBinding and the landing_page
-LibraryVersion behind the Winner's frozen landing page evidence.
+objects.  The exception is a stand-in for a read that has not run yet,
+documented on _seed_scale_activation_evidence: the attestation of the
+Scale delivery-configuration generation activation needs.  The
+Winner-market MarketAssetBinding is no longer approved here: the journey
+approves the localized AssetVersion in the Assets area (#128).  The Scale
+DeliveryTarget and the landing_page LibraryVersion are no longer seeded
+either: the journey picks the Winner's observed ad in New Enrollment and
+the Landing Page is compared by its frozen evidence hash (#129).
 
 Subcommands:
 
@@ -24,10 +28,17 @@ Subcommands:
     source version, and claim inventory.
 
   seed-scale-infrastructure
-    Given a workspace_id and a decision_id (confirmed Winner), approves
-    the Winner-market MarketAssetBinding the journey's Localization batch
-    published and creates the Scale DeliveryTarget, activation evidence,
-    metric-semantic contract set, and policy version.
+    Given a workspace_id and a decision_id (confirmed Winner), checks
+    that the journey approved the Winner-market MarketAssetBinding its
+    Localization batch published, and returns the sandbox ad the Launch
+    created for the Winner (winnerAdId) and the Beta default
+    ScalePolicyVersion the migrations published (#127) as policyVersionId.
+    Seeds nothing.
+
+  seed-scale-activation-evidence
+    Given the DeliveryTarget the journey made by picking that ad (#129),
+    seeds the attestation of its delivery-configuration generation that
+    activation needs, on the contract set the product made.
 
   seed-experiment-metrics
     Drives experiment metrics through the real sync/projection
@@ -47,7 +58,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -125,8 +136,14 @@ def _tenant_context(env: dict[str, str], *, meta_mode: str | None = None):
 # seed-platform-infrastructure
 # ---------------------------------------------------------------------------
 
-def _ensure_admission_infrastructure(session, workspace_id: str, actor_id: str) -> None:
-    """Create the durable rows required by paid domain command admission."""
+def _ensure_admission_infrastructure(session, workspace_id: str) -> None:
+    """Create the durable rows required by paid domain command admission.
+
+    The SpendGuardrail is not one of them: provisioning creates it at the
+    contract's Beta defaults when the journey dispatches the first snapshot
+    (#126), before this seed runs. Its absence is a provisioning failure the
+    journey must surface, never one to paper over with a row of our own.
+    """
     from app.adapters.persistence.models import utcnow
     from app.entitlements.cost_models import SpendGuardrailRecord
     from app.entitlements.models import EntitlementProjectionRecord
@@ -150,22 +167,11 @@ def _ensure_admission_infrastructure(session, workspace_id: str, actor_id: str) 
                 applied_at=now,
             )
         )
-    guardrail = session.get(SpendGuardrailRecord, workspace_id)
-    if guardrail is None:
-        session.add(
-            SpendGuardrailRecord(
-                workspace_id=workspace_id,
-                revision=1,
-                budget_currency="USD",
-                per_operation_limit=Decimal("100"),
-                rolling_24h_limit=Decimal("500"),
-                period_limit=Decimal("5000"),
-                outstanding_exposure_limit=Decimal("1000"),
-                platform_policy_version=1,
-                created_at=now,
-                updated_at=now,
-                updated_by=actor_id,
-            )
+    if session.get(SpendGuardrailRecord, workspace_id) is None:
+        raise RuntimeError(
+            f"Workspace {workspace_id} has no SpendGuardrail: provisioning "
+            "(marketai_apply_workspace_projection_v2) should have created it "
+            "when the first snapshot was applied"
         )
 
 def _seed_platform_infrastructure(env: dict[str, str], args: argparse.Namespace) -> dict:
@@ -181,9 +187,7 @@ def _seed_platform_infrastructure(env: dict[str, str], args: argparse.Namespace)
     sandbox_meta_mode = "customer_sandbox"
 
     with tenant_session(ctx) as session:
-        _ensure_admission_infrastructure(
-            session, workspace_id, env["E2E_OWNER_USER_ID"]
-        )
+        _ensure_admission_infrastructure(session, workspace_id)
 
         mock_connection = MetaConnectionRecord(
             id=f"mcon_{tag}_mock",
@@ -333,9 +337,7 @@ def _seed_localization_infrastructure(env: dict[str, str], args: argparse.Namesp
     tag = f"gploc{uuid4().hex[:6]}"
 
     with tenant_session(ctx) as session:
-        _ensure_admission_infrastructure(
-            session, workspace_id, env["E2E_OWNER_USER_ID"]
-        )
+        _ensure_admission_infrastructure(session, workspace_id)
         market_specs = (
             ("GB", "ready", "complete_with_discount", False),
             ("CA", "degraded", "standard_9_market", True),
@@ -444,29 +446,24 @@ def _scale_suite_seed_module():
 
 
 def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) -> dict:
-    """Seed Scale infrastructure for the journey's own confirmed Winner.
+    """Check the journey's Winner is ready for Scale and name its sandbox ad.
 
-    Enrollment re-runs the complete lineage gate
-    (app/scale/enrollment_lineage.py): all eleven Winner eligibility checks
-    plus a field-for-field match between the Winner's frozen
-    ExperimentVersion and the DeliveryTarget -- AssetVersion, market,
-    placement, Offer, landing page and attribution semantics.  Mirroring
-    tests/support/scale_candidate_fixtures.py::build_ready_winner_and_target,
-    this seeds only what no product surface creates yet:
+    Seeds nothing. The journey creates the DeliveryTarget itself in Step 8.1
+    by picking the Winner's observed ad in New Enrollment (#129); the server
+    resolves that ad's slot from the sandbox Launch that created it and
+    builds the connection's Scale metric contract set. This command only:
 
-      * review approval of the Winner-market MarketAssetBinding that the
-        journey's Localization batch published -- bindings always start
-        pending_review and no binding review command exists;
-      * a landing_page LibraryVersion keyed by the frozen
-        landing_page_evidence_hash -- no Landing Page entity ships, the
-        lineage gate uses that hash as landing_page_version_id and
-        scale_delivery_targets references library_versions;
-      * the curated-scenario DeliveryTarget with its delivery_configuration
-        contract generation, activation evidence and contract set;
-      * a published ScalePolicyVersion.
+      * refuses to continue when the Winner-market MarketAssetBinding the
+        journey's Localization batch published is not approved and
+        ready_for_experiment -- the journey approves its localized
+        AssetVersion in the Assets area (#128), and without that the pick
+        answers ``winner_ineligible``;
+      * returns ``winnerAdId``, the sandbox ad the PAUSED Launch of Step 5.2
+        created for the Winner's candidate, which is the ad the journey
+        picks, read from the Launch's applied ``create_ad`` step;
+      * returns the Beta default ScalePolicyVersion the migrations published
+        (#127), the one the journey evaluates under.
     """
-    import hashlib
-
     from sqlalchemy import select
 
     from app.adapters.persistence.database import tenant_session
@@ -474,30 +471,14 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
         ExperimentDecisionRecord,
         ExperimentVersionCandidateRecord,
         ExperimentVersionRecord,
-        LibraryEntryRecord,
-        LibraryVersionRecord,
         MarketAssetBindingRecord,
-        new_id,
     )
-    from app.experiments.winner_eligibility import _versioned_hash
-    from app.localization.binding import _append_event, _snapshot
-    from app.meta.models import (
-        MetaConnectionRecord,
-        ObservationContractGenerationRecord,
-        ScenarioVersionRecord,
-    )
-    from app.meta.observation import create_contract_generation
-    from app.scale.delivery_targets import DeliveryTargetRequest, create_delivery_target
-    from app.scale.models import ScalePolicyVersionRecord
-    from tests.support.scale_candidate_fixtures import seed_activation_evidence_prereqs
+    from app.launch.models import LaunchCandidateRecord, LaunchSagaStepAttemptRecord
 
     ctx = _tenant_context(env)
-    owner_user_id = env["E2E_OWNER_USER_ID"]
     sandbox_mode = "customer_sandbox"
     target_ctx = _tenant_context(env, meta_mode=sandbox_mode)
     decision_id = args.decision_id
-    tag = f"gpsc{uuid4().hex[:6]}"
-    now = datetime.now(timezone.utc)
 
     with tenant_session(ctx) as session:
         decision = session.scalar(
@@ -514,28 +495,15 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
             ExperimentVersionCandidateRecord, decision.experiment_version_candidate_id
         )
         version = session.get(ExperimentVersionRecord, decision.experiment_version_id)
-
-        # The Winner's frozen delivery slot, resolved exactly as
-        # validate_winner_eligibility() check 8 resolves it.
         asset_version_id = candidate.asset_version_id
         market_code = version.market
-        placement = version.placement
-        offer_version_id = version.offer_version_id
-        landing_page_version_id = version.landing_page_evidence_hash
-        attribution_window = {
-            "click_window_days": version.attribution_click_window_days,
-            "view_window_days": version.attribution_view_window_days,
-        }
-        attribution_semantics_hash = _versioned_hash(
-            "attribution-semantics-v1", attribution_window,
-        )
 
         binding = session.scalar(
             select(MarketAssetBindingRecord).where(
                 MarketAssetBindingRecord.workspace_id == ctx.workspace_id,
                 MarketAssetBindingRecord.source_asset_version_id == asset_version_id,
                 MarketAssetBindingRecord.target_market == market_code,
-                MarketAssetBindingRecord.offer_version_id == offer_version_id,
+                MarketAssetBindingRecord.offer_version_id == version.offer_version_id,
                 MarketAssetBindingRecord.active.is_(True),
             )
         )
@@ -550,217 +518,100 @@ def _seed_scale_infrastructure(env: dict[str, str], args: argparse.Namespace) ->
                 f"MarketAssetBinding {binding.id} Truth is {binding.truth_freshness!r}"
             )
         if binding.review_state != "approved" or not binding.ready_for_experiment:
-            previous_state = _snapshot(binding)
-            binding.review_state = "approved"
-            # binding.py derives readiness as review_state == 'approved'
-            # AND truth_freshness == 'current'.
-            binding.ready_for_experiment = True
-            binding.revision += 1
-            binding.updated_at = now
-            session.flush()
-            _append_event(
-                session, ctx, binding=binding, event_type="review_approved",
-                dependency_change_id=None, previous_state=previous_state,
-                new_state=_snapshot(binding), actor_id=owner_user_id, now=now,
+            raise RuntimeError(
+                f"MarketAssetBinding {binding.id} is {binding.review_state!r} "
+                f"(ready_for_experiment={binding.ready_for_experiment}): the "
+                "journey must approve the localized AssetVersion "
+                f"{binding.bound_asset_version_id!r} in the Assets area first"
             )
-
-        if session.get(LibraryVersionRecord, landing_page_version_id) is None:
-            landing_entry = LibraryEntryRecord(
-                id=new_id("le"),
-                workspace_id=ctx.workspace_id,
-                entry_type="landing_page",
-                display_name=f"Landing page {landing_page_version_id[:12]}",
-            )
-            session.add(landing_entry)
-            session.flush()
-            session.add(LibraryVersionRecord(
-                id=landing_page_version_id,
-                workspace_id=ctx.workspace_id,
-                entry_id=landing_entry.id,
-                entry_type="landing_page",
-                version_no=1,
-                content_json={
-                    "source": "experiment_landing_page_evidence",
-                    "landing_page_evidence_hash": landing_page_version_id,
-                    "offer_version_id": offer_version_id,
-                },
-                content_hash=landing_page_version_id,
-                published_by="golden-path-setup",
-            ))
-            session.flush()
         binding_id = binding.id
+        version_candidate_id = candidate.id
 
     with tenant_session(target_ctx) as session:
-        connection = session.scalar(
-            select(MetaConnectionRecord)
+        winner_ads = sorted(set(session.scalars(
+            select(LaunchSagaStepAttemptRecord.remote_object_id)
+            .join(
+                LaunchCandidateRecord,
+                (LaunchCandidateRecord.workspace_id == LaunchSagaStepAttemptRecord.workspace_id)
+                & (LaunchCandidateRecord.meta_mode == LaunchSagaStepAttemptRecord.meta_mode)
+                & (LaunchCandidateRecord.id == LaunchSagaStepAttemptRecord.candidate_id),
+            )
             .where(
-                MetaConnectionRecord.workspace_id == ctx.workspace_id,
-                MetaConnectionRecord.meta_mode == sandbox_mode,
-                MetaConnectionRecord.state == "active",
+                LaunchSagaStepAttemptRecord.workspace_id == ctx.workspace_id,
+                LaunchSagaStepAttemptRecord.meta_mode == sandbox_mode,
+                LaunchSagaStepAttemptRecord.step_type == "create_ad",
+                LaunchSagaStepAttemptRecord.state == "applied",
+                LaunchCandidateRecord.experiment_version_candidate_id == version_candidate_id,
             )
-            .order_by(MetaConnectionRecord.id)
-        )
-        if connection is None:
-            raise RuntimeError(f"No active {sandbox_mode} MetaConnection found")
-        scenario = session.scalar(
-            select(ScenarioVersionRecord).where(
-                ScenarioVersionRecord.workspace_id == ctx.workspace_id,
-                ScenarioVersionRecord.meta_mode == sandbox_mode,
-                ScenarioVersionRecord.meta_connection_id == connection.id,
-                ScenarioVersionRecord.is_default.is_(True),
+        )))
+        if len(winner_ads) != 1:
+            raise RuntimeError(
+                f"The PAUSED sandbox Launch created {len(winner_ads)} ads for the "
+                f"Winner's candidate {version_candidate_id!r}, expected exactly one"
             )
-        )
-        if scenario is None:
-            raise RuntimeError(f"No default ScenarioVersion found for {sandbox_mode}")
-
-        generation = session.scalar(
-            select(ObservationContractGenerationRecord).where(
-                ObservationContractGenerationRecord.workspace_id == ctx.workspace_id,
-                ObservationContractGenerationRecord.meta_mode == sandbox_mode,
-                ObservationContractGenerationRecord.meta_connection_id == connection.id,
-                ObservationContractGenerationRecord.contract_type == "delivery_configuration",
-                ObservationContractGenerationRecord.state == "active",
-            )
-        )
-        if generation is None:
-            generation = create_contract_generation(
-                session,
-                workspace_id=ctx.workspace_id,
-                meta_mode=sandbox_mode,
-                connection_id=connection.id,
-                contract_type="delivery_configuration",
-                ad_account_id=connection.ad_account_id,
-                fields=[
-                    "effective_status", "daily_budget", "optimization_goal",
-                    "bid_strategy", "attribution_setting",
-                ],
-                attribution_window=attribution_window,
-                breakdowns=[],
-                time_window={"kind": "daily"},
-                local_timezone="UTC",
-            )
-
-        target = create_delivery_target(
-            session,
-            target_ctx,
-            DeliveryTargetRequest(
-                meta_connection_id=connection.id,
-                ad_account_id=connection.ad_account_id,
-                # Only controlled_mock targets are scenario-scoped
-                # (ck_sdt_scenario_biconditional).
-                scenario_scope_key="__no_scenario__",
-                campaign_remote_id=f"gp_scale_campaign_{tag}",
-                adset_remote_id=f"gp_scale_adset_{tag}",
-                ad_remote_id=f"gp_scale_ad_{tag}",
-                ad_creative_id=f"gp_scale_creative_{tag}",
-                creative_asset_version_id=asset_version_id,
-                creative_binding_evidence_hash=hashlib.sha256(
-                    f"{binding_id}:{asset_version_id}".encode()
-                ).hexdigest(),
-                market_code=market_code,
-                placement=placement,
-                attribution_setting=attribution_semantics_hash,
-                contract_generation_id=generation.id,
-                offer_version_id=offer_version_id,
-                landing_page_version_id=landing_page_version_id,
-                source_type="curated_scenario",
-                source_manifest={
-                    "schema_version": 1,
-                    "source_type": "curated_scenario",
-                    "scenario_version_id": scenario.id,
-                    "winner_decision_id": decision_id,
-                },
-                observed_at=now,
-                expires_at=now + timedelta(days=90),
-                scenario_version_id=scenario.id,
-            ),
-        )
-        delivery_target_id = target.id
-        contract_generation_id = generation.id
-
-    # Attestation plus the delivery_configuration contract-set member that
-    # activation resolves, then the daily/exact_window members advance-manifest
-    # needs -- all keyed to the target's own contract generation.
-    seed_activation_evidence_prereqs(
-        target_ctx, delivery_target_id=delivery_target_id, meta_mode=sandbox_mode, tag=tag,
-    )
-    scale_suite = _scale_suite_seed_module()
-    with tenant_session(target_ctx) as session:
-        contract_set_id = scale_suite._seed_full_activation_evidence(
-            session, target_ctx, delivery_target_id=delivery_target_id,
-            meta_mode=sandbox_mode, tag=tag,
-        )
-
-    with tenant_session(target_ctx) as session:
-        policy = ScalePolicyVersionRecord(
-            id=f"spol_{tag}",
-            algorithm_version="beta-v1",
-            canonical_schema_version="scale-snapshot-v1",
-            decimal_precision=28,
-            decimal_rounding="round_half_even",
-            z_value=Decimal("1.96"),
-            evidence_floor_minimum_spend=Decimal("50"),
-            evidence_floor_minimum_days=14,
-            evidence_floor_minimum_conversions=1,
-            activity_floor_minimum_impressions=500,
-            sample_floor_minimum_clicks=5,
-            spend_floor_minimum_daily_spend=Decimal("5"),
-            freshness_floor_maximum_lag_hours=48,
-            signal_thresholds={
-                "confidence_level": "0.95",
-                "confidence_z": "1.96",
-                "frequency_level_threshold": "3",
-                "frequency_growth_threshold": "0.2",
-                "ctr_decline_threshold": "0.2",
-                "ctr_stability_tolerance": "0.05",
-                "cvr_decline_threshold": "0.2",
-                "cvr_stability_tolerance": "0.05",
-                "cpm_increase_threshold": "0.2",
-                "delivery_decline_threshold": "0.2",
-                "cpa_worsening_threshold": "0.2",
-                "roas_worsening_threshold": "0.2",
-                "bootstrap_lower_percentile": "0.025",
-                "bootstrap_upper_percentile": "0.975",
-                "breakdown_min_spend_share": "0.05",
-                "active_day_floor": 3,
-                "consecutive_composite_fatigue_hits_required": 2,
-                "consecutive_healthy_evaluations_required": 2,
-                "breakdown_min_sample_impressions": 500,
-                "breakdown_min_sample_clicks": 10,
-                "breakdown_min_sample_purchases": 2,
-                "quality_warning_permitted_codes": ["freshness_slo_exceeded"],
-                "streak_reset_reason_codes": ["policy_version_changed"],
-                "advice_construction_parameters": [],
-            },
-            streak_rules={},
-            bootstrap_prng_algorithm="bootstrap-prng-v1",
-            bootstrap_draw_count=200,
-            bootstrap_valid_draw_ratio=Decimal("0.80"),
-            bootstrap_percentile_method="nearest_rank",
-            bootstrap_draw_order="sequential",
-            breakdown_families={"age_gender": {"breakdowns": ["age", "gender"]}},
-            breakdown_sample_gate_minimum=100,
-            breakdown_share_gate_minimum_ratio=Decimal("0.05"),
-            bh_fdr_alpha=Decimal("0.05"),
-            advice_severity_thresholds={"fatigue": "warning", "quality_gate": "critical"},
-            notification_cooldown_hours=24,
-            conversion_safe_values={"currency": "USD"},
-            mode_permissions={"customer_sandbox": True, "controlled_mock": False},
-            is_published=True,
-            published_at=now,
-            created_by=owner_user_id,
-        )
-        session.add(policy)
-        session.flush()
-        policy_version_id = policy.id
+        policy_version_id = _scale_suite_seed_module()._platform_policy_version_id(session)
 
     return {
-        "deliveryTargetId": delivery_target_id,
+        "winnerAdId": winner_ads[0],
         "policyVersionId": policy_version_id,
-        "contractGenerationId": contract_generation_id,
-        "contractSetId": contract_set_id,
         "marketAssetBindingId": binding_id,
         "marketCode": market_code,
+    }
+
+
+def _seed_scale_activation_evidence(env: dict[str, str], args: argparse.Namespace) -> dict:
+    """Seed the attestation activation needs for the target the journey made.
+
+    The journey's pick (Step 8.1) created the DeliveryTarget on the sandbox
+    connection's real Scale metric contract set (#129). Activation resolves
+    that set from the target's delivery-configuration generation and needs a
+    valid attestation for it. The sandbox's scheduled read would publish one
+    only at the connection's next daily slot, so this seeds it now -- a
+    stand-in listed in web/e2e/README.md. It adds no contract set or member:
+    the contract set is the one the product made.
+    """
+    from sqlalchemy import select
+
+    from app.adapters.persistence.database import tenant_session
+    from app.scale.models import (
+        ScaleDeliveryTargetRecord,
+        ScaleMetricSemanticContractSetMemberRecord,
+    )
+    from tests.support.scale_candidate_fixtures import seed_activation_attestation
+
+    sandbox_mode = "customer_sandbox"
+    target_ctx = _tenant_context(env, meta_mode=sandbox_mode)
+    with tenant_session(target_ctx) as session:
+        target = session.scalar(
+            select(ScaleDeliveryTargetRecord).where(
+                ScaleDeliveryTargetRecord.workspace_id == target_ctx.workspace_id,
+                ScaleDeliveryTargetRecord.meta_mode == sandbox_mode,
+                ScaleDeliveryTargetRecord.id == args.delivery_target_id,
+            )
+        )
+        if target is None:
+            raise RuntimeError(f"DeliveryTarget {args.delivery_target_id!r} not found")
+        contract_generation_id = target.contract_generation_id
+        contract_set_ids = sorted(set(session.scalars(
+            select(ScaleMetricSemanticContractSetMemberRecord.contract_set_id).where(
+                ScaleMetricSemanticContractSetMemberRecord.contract_type == "delivery_configuration",
+                ScaleMetricSemanticContractSetMemberRecord.observation_contract_generation
+                == contract_generation_id,
+            )
+        )))
+        if len(contract_set_ids) != 1:
+            raise RuntimeError(
+                f"{len(contract_set_ids)} contract sets wrap generation {contract_generation_id!r}; "
+                "the pick should have made exactly one"
+            )
+
+    attestation_id = seed_activation_attestation(
+        target_ctx, delivery_target_id=args.delivery_target_id, meta_mode=sandbox_mode,
+    )
+    return {
+        "attestationId": attestation_id,
+        "contractGenerationId": contract_generation_id,
+        "contractSetId": contract_set_ids[0],
     }
 
 
@@ -1137,6 +988,10 @@ def main(argv: list[str] | None = None) -> None:
     scale.add_argument("--workspace-id", required=True)
     scale.add_argument("--decision-id", required=True)
 
+    activation = commands.add_parser("seed-scale-activation-evidence")
+    activation.add_argument("--workspace-id", required=True)
+    activation.add_argument("--delivery-target-id", required=True)
+
     metrics = commands.add_parser("seed-experiment-metrics")
     metrics.add_argument("--workspace-id", required=True)
     metrics.add_argument("--experiment-id", required=True)
@@ -1152,6 +1007,8 @@ def main(argv: list[str] | None = None) -> None:
         result = _seed_localization_infrastructure(env, args)
     elif args.command == "seed-scale-infrastructure":
         result = _seed_scale_infrastructure(env, args)
+    elif args.command == "seed-scale-activation-evidence":
+        result = _seed_scale_activation_evidence(env, args)
     elif args.command == "seed-experiment-metrics":
         result = _seed_experiment_metrics(env, args)
     else:

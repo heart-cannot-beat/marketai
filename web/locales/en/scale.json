@@ -108,7 +108,18 @@
     "marketing-boundary": "This combination is supported only under the recorded conditions and user-supplied delivery evidence. Choose a currently compatible observed delivery target. This prepares monitoring and never creates, activates or changes an ad.",
     "match-delivery": "Matching observed delivery",
     "choose-delivery": "Choose the matching Meta ad",
-    "delivery-not-ready": "Complete current source-market truth and asset readiness, then sync the matching actual delivery through an authorized read-only connection. No compatible observed target is ready yet; monitoring cannot be created."
+    "delivery-not-ready": "Complete current source-market truth and asset readiness, then sync the matching actual delivery through an authorized read-only connection. No compatible observed target is ready yet; monitoring cannot be created.",
+    "observed-ads-title": "Pick the ad this Winner runs in",
+    "observed-ads-description": "These are the ads your connections in this mode have observed. MarketAI makes the delivery target from what it recorded about the ad and only reads; it never creates or changes an ad.",
+    "observed-ads-empty": "No connection in this mode has observed an ad yet.",
+    "observed-ad-label": "Meta ad {{ad}} · ad set {{adset}}",
+    "observed-ad-assets": "Creative version: {{ids}}",
+    "observed-ad-unmapped": "No creative version recorded for this ad",
+    "use-observed-ad": "Use Meta ad {{ad}}",
+    "use-observed-ad-short": "Use this ad",
+    "observed-ad-picking": "Checking…",
+    "observed-ad-picked": "Delivery target ready: {{market}} · {{placement}} · Meta ad {{ad}}",
+    "observed-ad-option": "{{market}} · {{placement}} · Meta ad {{ad}} (just picked)"
   },
   "detail": {
     "not-found": "Enrollment not found",
@@ -184,11 +195,24 @@
   },
   "evidence": {
     "heading": "Evidence",
-    "no-evidence-yet": "No evidence yet for this episode",
+    "no-active-episode": "This enrollment has no active episode, so there is no evidence to show.",
     "unavailable": "Evidence unavailable",
     "as-of": "As of {{day}}",
     "refresh": "Refresh",
     "refresh-stale": "Refresh stale evidence",
+    "state": {
+      "waiting-title": "Waiting for the first complete day",
+      "waiting-body": "Monitoring has started. Evidence is built from complete days in the ad account's time zone, so the first evaluation runs once the first full day has been read from Meta.",
+      "collected-title": "First complete day collected",
+      "collected-body": "Data through {{day}} is in. Its first evaluation is running.",
+      "blocked-title": "Evidence blocked",
+      "blocked-body": "The latest Meta data, for {{day}}, can't be used, so this ad isn't evaluated and no health is shown.",
+      "stale-body": "The evaluation below is from {{day}} and is out of date.",
+      "last-complete-day": "Last complete day: {{day}}",
+      "what-to-do": "What to do:",
+      "pending-title": "New data collected",
+      "pending-body": "Data through {{day}} is in and being evaluated. The evaluation below is from {{evaluated}}."
+    },
     "quality": {
       "pass": "Data quality passed",
       "warning": "Data quality warning",
@@ -198,6 +222,7 @@
     "cursor-revision": "Cursor revision",
     "watermark": "Safe watermark",
     "updated-at": "Updated",
+    "last-evaluation": "Last accepted evaluation, from {{day}}",
     "windows-heading": "Exact evidence windows",
     "window": {
       "current_7d": "Current 7 days",
@@ -234,6 +259,22 @@
     },
     "technical-details": "Technical details",
     "recovery-action": "Recovery: {{action}}",
+    "source-issue": {
+      "connection_ineligible": "The Meta connection is not active",
+      "source_provenance_mismatch": "The Meta data doesn't match this ad's account, time zone, currency or ad",
+      "contract_instance_failed": "A required Meta read is missing or doesn't match the metric contract",
+      "reconciliation_unresolved": "The result of a Meta read is unconfirmed",
+      "incomplete_pagination": "Meta returned only some pages of a read",
+      "transport_exhausted": "A Meta read failed, even after retries",
+      "freshness_slo_exceeded": "Some of the data is older than the freshness limit",
+      "exact_window_value_unavailable": "Reach and frequency are unavailable for a window without delivery"
+    },
+    "recovery": {
+      "repair_connection": "Reconnect or repair the Meta connection in Settings. Collection resumes with the next daily sync.",
+      "wait_for_next_sync": "Nothing to do now. The next daily Meta sync collects the data again.",
+      "reconcile_meta_sync": "An operator has to confirm the unresolved Meta read. The next daily sync also collects the data again.",
+      "retry_meta_sync": "The next daily Meta sync collects the data again. If this keeps happening, check the Meta connection in Settings."
+    },
     "signals-heading": "Deterministic signals and intervals",
     "signal": "Signal",
     "signal-state": "State",
@@ -260,7 +301,9 @@
       "explained_by_pause": "Explained by a delivery pause; not counted as a hit",
       "bootstrap_unavailable": "Too few valid samples for an interval",
       "data_quality_blocked": "Not computed: data quality is blocked",
-      "episode_window_incomplete": "Not computed: the Episode is younger than the 14-day window"
+      "episode_window_incomplete": "Not computed: the Episode is younger than the 14-day window",
+      "economics_not_ready": "Not computed: the evidence is not economics-ready yet",
+      "spend_floor_currency_unsupported": "Not computed: the platform has no minimum spend for this ad account's currency"
     },
     "streak-counters": "Streak counters",
     "unknown-signal": "Unknown signal"
@@ -327,11 +370,17 @@
     "loading": "Loading…",
     "load-more": "Load more",
     "withdraw": "Withdraw",
+    "below-platform-floor": {
+      "label": "Below the platform floor; evaluated at the platform floor",
+      "republish-owner": "Publish a new target with a minimum economic spend of at least {{floor}} {{currency}} to replace it.",
+      "republish-member": "The Workspace Owner can publish a replacement with a minimum economic spend of at least {{floor}} {{currency}}."
+    },
     "column": {
       "context": "Context",
       "currency": "Currency",
       "target-cpa": "Target CPA",
       "breakeven-roas": "Breakeven ROAS",
+      "minimum-economic-spend": "Minimum economic spend",
       "lifecycle": "Lifecycle",
       "actions": "Actions"
     },
@@ -350,6 +399,10 @@
       "context-placeholder": "Select a context…",
       "has-active-target": "already has an active target",
       "no-contexts": "No eligible contexts. A context needs at least one active or paused Enrollment with observed Episode currency.",
+      "platform-floor": "Platform floor: {{floor}} {{currency}} of spend in each 7-day window.",
+      "minimum-required-when-roas-only": "Minimum economic spend is required only when the target has a breakeven ROAS and no target CPA. If you fill it in, it can't be below the platform floor.",
+      "floor-no-eligible-policy": "No Scale Policy is in force in this mode, so there is no platform floor to check a minimum economic spend against. Only a target with a target CPA and no minimum economic spend can be published here.",
+      "floor-currency-unsupported": "The Scale Policy in force sets no platform floor for {{currency}}, so this context isn't evaluated economically. Only a target with a target CPA and no minimum economic spend can be published.",
       "affected-enrollments": "Affected enrollments",
       "policy-floor-check": "Policy floor check",
       "policy-floor-passed": "Passed",

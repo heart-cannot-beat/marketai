@@ -43,6 +43,7 @@ from .models import (
     MetaLaunchConfirmationRecord,
     MetaLaunchPreviewRecord,
 )
+from ..platform.runtime_role import WORKER_ROLE, runs_as
 
 
 REMOTE_STEPS = ("campaign_created", "adset_created", "image_uploaded", "creative_created", "ad_created")
@@ -804,6 +805,7 @@ def _step_request(step: str, preview: dict, ids: dict[str, str]) -> dict:
     raise ValueError(step)
 
 
+@runs_as(WORKER_ROLE)
 async def execute_operation(
     context: TenantContext, operation_id: str, adapter: MetaWritePort | None = None
 ) -> None:
@@ -931,6 +933,7 @@ async def execute_operation(
         _audit(session, "launch_completed", {"remote_ids": ids, "verification": verification}, operation_id)
 
 
+@runs_as(WORKER_ROLE)
 def record_failure(
     context: TenantContext, operation_id: str, code: str, detail: str, terminal: bool
 ) -> None:

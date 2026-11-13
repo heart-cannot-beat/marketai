@@ -55,6 +55,7 @@ from .models import (
     LaunchSagaStepAttemptRecord,
     MetaLaunchPreviewRecord,
 )
+from ..platform.runtime_role import WORKER_ROLE, runs_as
 
 __all__ = [
     "RecoveryError",
@@ -175,6 +176,7 @@ def create_recovery_operation(
 # Recovery execution: read back adapter state, never re-execute writes
 # ---------------------------------------------------------------------------
 
+@runs_as(WORKER_ROLE)
 def execute_recovery(
     session: Session,
     context: TenantContext,
@@ -252,6 +254,7 @@ def execute_recovery(
                 session, reconciliation.original_operation_id,
                 OperationState.PARTIALLY_SUCCEEDED,
                 reason="resolved partially by operation recovery", actor=context.executor,
+                meta_mode=reconciliation.meta_mode,
             )
         else:
             to_state = (
@@ -260,11 +263,13 @@ def execute_recovery(
             transition_operation(
                 session, reconciliation.original_operation_id, to_state,
                 reason="resolved by operation recovery", actor=context.executor,
+                meta_mode=reconciliation.meta_mode,
             )
 
         transition_operation(
             session, reconciliation.recovery_operation_id, OperationState.SUCCEEDED,
             reason="recovery inspection complete", actor=context.executor,
+            meta_mode=reconciliation.meta_mode,
         )
 
         reconciliation.state = "resolved"

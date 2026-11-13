@@ -1529,6 +1529,14 @@ export interface DomainGateway {
     metaMode: string;
   }): Promise<DomainResultFor<'list_scale_enrollment_candidates'>>;
 
+  /** The ads the Workspace's active connections in this mode have observed
+   * (#129), for picking a Winner's DeliveryTarget. */
+  listScaleObservedAds(params: {
+    workspaceSlug: string;
+    metaMode: string;
+    metaConnectionId?: string;
+  }): Promise<DomainResultFor<'list_scale_observed_ads'>>;
+
   // ---- Scale commands ----
 
   createScaleEnrollment(params: {
@@ -1552,6 +1560,18 @@ export interface DomainGateway {
   }): Promise<
     | DomainResultFor<'create_scale_enrollment_candidate'>
     | ReconciliationRequired
+  >;
+
+  /** Makes a Winner's DeliveryTarget from one observed ad (#129). The server
+   * resolves the delivery slot from recorded evidence and answers a typed
+   * reason when the ad does not match the Winner. */
+  createScaleDeliveryTarget(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    metaMode: string;
+    body: DomainOperationMap['create_scale_delivery_target']['requestBody'];
+  }): Promise<
+    DomainResultFor<'create_scale_delivery_target'> | ReconciliationRequired
   >;
 
   /** Pre-activation evidence snapshot + lineage-guard preview (spec §4.5,
@@ -1767,6 +1787,31 @@ export interface DomainGateway {
     credentialVersionId: string;
     body: DomainOperationMap['revoke_credential']['requestBody'];
   }): Promise<DomainResultFor<'revoke_credential'> | ReconciliationRequired>;
+
+  // ---- Spend guardrail (subscription-entitlement contract §11, §12; #126) ----
+
+  /** The Workspace's spending limits. Every member reads them. */
+  getSpendGuardrail(params: {
+    workspaceSlug: string;
+  }): Promise<DomainResultFor<'get_spend_guardrail'>>;
+
+  /** Stores a proposed change and returns its `preview_token`. Owner only. */
+  previewSpendGuardrail(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['preview_spend_guardrail']['requestBody'];
+  }): Promise<
+    DomainResultFor<'preview_spend_guardrail'> | ReconciliationRequired
+  >;
+
+  /** Applies a stored preview once, at the revision it was made at. Owner only. */
+  confirmSpendGuardrail(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['confirm_spend_guardrail']['requestBody'];
+  }): Promise<
+    DomainResultFor<'confirm_spend_guardrail'> | ReconciliationRequired
+  >;
 
   // ---- Competitors (docs/product/competitor-scan-spec.md §4, §5) ----
 
@@ -5614,6 +5659,19 @@ export class DefaultDomainGateway implements DomainGateway {
     return this.sendSafe<'list_scale_enrollment_candidates'>(path);
   }
 
+  async listScaleObservedAds(params: {
+    workspaceSlug: string;
+    metaMode: string;
+    metaConnectionId?: string;
+  }): Promise<DomainResultFor<'list_scale_observed_ads'>> {
+    const path =
+      buildBffPath('list_scale_observed_ads', {
+        slug: params.workspaceSlug,
+        meta_mode: params.metaMode,
+      }) + this.buildQuery({ meta_connection_id: params.metaConnectionId });
+    return this.sendSafe<'list_scale_observed_ads'>(path);
+  }
+
   // ==== Scale commands ====
 
   async createScaleEnrollment(params: {
@@ -5630,6 +5688,29 @@ export class DefaultDomainGateway implements DomainGateway {
     });
     return this.runCommand(
       'create_scale_enrollment',
+      params.actionInstanceId,
+      path,
+      'POST',
+      params.body,
+      201,
+      'created'
+    );
+  }
+
+  async createScaleDeliveryTarget(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    metaMode: string;
+    body: DomainOperationMap['create_scale_delivery_target']['requestBody'];
+  }): Promise<
+    DomainResultFor<'create_scale_delivery_target'> | ReconciliationRequired
+  > {
+    const path = buildBffPath('create_scale_delivery_target', {
+      slug: params.workspaceSlug,
+      meta_mode: params.metaMode,
+    });
+    return this.runCommand(
+      'create_scale_delivery_target',
       params.actionInstanceId,
       path,
       'POST',
@@ -6335,6 +6416,57 @@ export class DefaultDomainGateway implements DomainGateway {
     });
     return this.runCommand(
       'revoke_credential',
+      params.actionInstanceId,
+      path,
+      'POST',
+      params.body,
+      200,
+      'ok'
+    );
+  }
+
+  async getSpendGuardrail(params: {
+    workspaceSlug: string;
+  }): Promise<DomainResultFor<'get_spend_guardrail'>> {
+    const path = buildBffPath('get_spend_guardrail', {
+      slug: params.workspaceSlug,
+    });
+    return this.sendSafe<'get_spend_guardrail'>(path);
+  }
+
+  async previewSpendGuardrail(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['preview_spend_guardrail']['requestBody'];
+  }): Promise<
+    DomainResultFor<'preview_spend_guardrail'> | ReconciliationRequired
+  > {
+    const path = buildBffPath('preview_spend_guardrail', {
+      slug: params.workspaceSlug,
+    });
+    return this.runCommand(
+      'preview_spend_guardrail',
+      params.actionInstanceId,
+      path,
+      'POST',
+      params.body,
+      200,
+      'ok'
+    );
+  }
+
+  async confirmSpendGuardrail(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['confirm_spend_guardrail']['requestBody'];
+  }): Promise<
+    DomainResultFor<'confirm_spend_guardrail'> | ReconciliationRequired
+  > {
+    const path = buildBffPath('confirm_spend_guardrail', {
+      slug: params.workspaceSlug,
+    });
+    return this.runCommand(
+      'confirm_spend_guardrail',
       params.actionInstanceId,
       path,
       'POST',

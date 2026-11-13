@@ -98,6 +98,10 @@ def test_scale_openapi_has_no_meta_mutation_surface() -> None:
         "CommandOutcomeResponse",
         "ConversionRequest",
         "ConversionResponse",
+        # #129: a DeliveryTarget is a Scale record made from an ad Meta has
+        # already reported; picking it reads evidence and writes nothing to Meta.
+        "DeliveryTargetCreateRequest",
+        "DeliveryTargetResponse",
         "EnrollmentActivateRequest",
         "EnrollmentCloseRequest",
         "EnrollmentCreateRequest",
@@ -107,13 +111,22 @@ def test_scale_openapi_has_no_meta_mutation_surface() -> None:
         "EnrollmentResponse",
         "EnrollmentResumeRequest",
         "EvidenceQualityIssueResponse",
+        # #114: the Episode's evidence readiness, read from the projection
+        # the source collector writes; nothing in it is executable.
+        "EvidenceReadinessResponse",
         "EvidenceSignalResponse",
         "EvidenceWindowResponse",
         "EpisodeResponse",
         "ExportCreateRequest",
         "ExportDownloadIntentResponse",
         "ExportResponse",
+        "ObservedAdListResponse",
+        "ObservedAdResponse",
+        "ObservedAdUnavailableResponse",
         "ProblemDetails",
+        # #134: the publish flow's contexts, with each one's platform floor.
+        "TargetContextListResponse",
+        "TargetContextResponse",
         "TargetListResponse",
         "TargetPublicationPreviewRequest",
         "TargetPublicationPreviewResponse",

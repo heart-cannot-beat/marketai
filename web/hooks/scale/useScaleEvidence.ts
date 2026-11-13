@@ -13,14 +13,16 @@ export type BreakdownSegment =
 export type BreakdownType = 'placement' | 'country' | 'age_gender';
 
 /**
- * Current accepted-Evaluation projection for an Enrollment's active Episode
- * (spec §3.4 step 3/4, §4.4 "Evidence condition" axis) -- `maturity` and
- * `health` here, not a fresh evaluation: sealing/evaluating an Evaluation is
+ * Current evidence for an Enrollment's active Episode (spec §3.4 step 3/4,
+ * §4.4 "Evidence condition" axis, #114): the evidence-readiness projection
+ * (`readiness`, null before the first manifest) and the accepted Evaluation
+ * (`maturity`, `health` and the rest, all null before the first Evaluation)
+ * -- not a fresh evaluation: collecting, sealing and evaluating are
  * scheduler/Worker-driven, never a browser-initiated read.
  *
- * 404 (`no_active_episode`/`evidence_not_available`) is a normal, displayable
- * state -- not every draft/newly-activated Enrollment has evidence yet -- so
- * callers read `problem` rather than treating it as a hard failure.
+ * 404 `no_active_episode` (a draft or closed Enrollment) is a normal,
+ * displayable state, so callers read `problem` rather than treating it as a
+ * hard failure. `lib/scale/evidence-view` names the state the rest is in.
  */
 export function useScaleEnrollmentEvidence(
   enrollmentId: string | undefined,

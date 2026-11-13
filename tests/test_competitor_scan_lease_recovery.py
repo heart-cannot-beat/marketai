@@ -15,6 +15,7 @@ recovery.
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from datetime import timedelta
 
@@ -25,6 +26,7 @@ from tests.test_competitor_scans_api import HALCYON, Killed, ScanFixtures, expir
 from tests.test_competitors_api import BRIGHTVOLT, ACME, CompetitorFixtures
 from tests.test_test_plans_api import PROTECTOR
 
+from app import config
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import AuditEventRecord, JobRecord, utcnow
 from app.competitors.sources.base import PriceOperation
@@ -49,6 +51,22 @@ def kill_after_fence(page_id: str):
     return wrap
 
 
+def hold_lease(ctx, job_id: str) -> None:
+    """The killed Worker's lease still has time, however slow the runner (#124).
+
+    Tests lease Jobs for one second (``JOB_LEASE_SECONDS`` in
+    ``tests/conftest.py``); a deployed Worker's lease lasts minutes. A scenario
+    that drives other Workers while the dead one's lease lasts holds it here,
+    as ``expire_lease`` ends it explicitly; otherwise any claim more than a
+    second after the kill recovers the Job, and the scenario depends on how
+    fast the runner is.
+    """
+    with tenant_session(ctx) as session:
+        job = session.get(JobRecord, job_id)
+        assert job.state == "running", job.state
+        job.lease_expires_at = utcnow() + timedelta(hours=1)
+
+
 def _job(ctx, job_id: str) -> JobRecord:
     with tenant_session(ctx) as session:
         job = session.get(JobRecord, job_id)
@@ -70,7 +88,9 @@ class ScanLeaseRecoveryTests(ScanFixtures):
         self._bind_both()
 
     def _killed(self, competitor_ids: list[str]) -> dict:
-        """Admit a scan and kill its Worker with Acme Charge's page 2 past the fence."""
+        """Admit a scan and kill its Worker with Acme Charge's page 2 past the fence.
+
+        The dead Worker's lease is held until the test calls ``expire_lease``."""
         self.wrap = kill_after_fence(ACME)
         accepted = self._start(self._body(competitor_ids, keywords=[]))
         runtime = self._runtime()
@@ -78,6 +98,7 @@ class ScanLeaseRecoveryTests(ScanFixtures):
             for _ in range(5):
                 asyncio.run(runtime.run_once())
         self.wrap = None
+        hold_lease(self.ctx, accepted["job_id"])
         return accepted
 
     def _resent(self, since: int) -> list:
@@ -141,9 +162,11 @@ class ScanLeaseRecoveryTests(ScanFixtures):
         second = self._start(self._body([self._confirmed(BRIGHTVOLT)], keywords=[]))
         self._drain()
         # While the dead Worker's lease lasts, its scan still holds the key's turn.
+        self.assertEqual(_job(self.ctx, first["job_id"]).state, "running",
+                         "the dead Worker's lease ran out before the other scan was claimed")
         waiting = self._record(second["scan_id"])
-        self.assertEqual((waiting.status, waiting.evidence_json["waits"][0]["holder_job_id"]),
-                         ("queued", first["job_id"]))
+        self.assertEqual((waiting.status, [wait["holder_job_id"] for wait in waiting.evidence_json["waits"]][:1]),
+                         ("queued", [first["job_id"]]))
 
         expire_lease(self.ctx, first["job_id"])
         with tenant_session(self.ctx) as session:
@@ -164,6 +187,21 @@ class ScanLeaseRecoveryTests(ScanFixtures):
         [entry] = done["reconciliation"]
         self.assertEqual((done["status"], entry["status"], entry["balance_check"]["known_charges"],
                           entry["balance_check"]["difference"]), ("completed", "not_charged", charged, 0))
+
+    def test_a_slow_runner_does_not_end_the_dead_workers_lease(self):
+        """#124: tests lease Jobs for one second (``JOB_LEASE_SECONDS`` in ``tests/conftest.py``).
+        When more than that passes between the kill and the next claim -- a loaded CI runner --
+        the queue recovers the dead Worker's Job first, and the other scan never waits on it.
+        The scenarios above hold the lease explicitly, so they do not depend on the runner."""
+        first = self._killed([self._confirmed(ACME)])
+        time.sleep(config.JOB_LEASE_SECONDS + 0.2)
+        second = self._start(self._body([self._confirmed(BRIGHTVOLT)], keywords=[]))
+        self._drain()
+        self.assertEqual(_job(self.ctx, first["job_id"]).state, "running",
+                         "the dead Worker's lease ran out before the other scan was claimed")
+        waiting = self._record(second["scan_id"])
+        self.assertEqual((waiting.status, [wait["holder_job_id"] for wait in waiting.evidence_json["waits"]][:1]),
+                         ("queued", [first["job_id"]]))
 
     def test_the_recovered_scan_is_hidden_from_others_and_only_the_owner_marks_it(self):
         acme = self._confirmed(ACME)

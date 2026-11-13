@@ -5,6 +5,8 @@ import type { Page } from '@playwright/test';
 import {
   readJson,
   runPython,
+  assetsUrl,
+  generationBff,
   localizationBff,
   type MetaMode,
 } from './fixtures';
@@ -90,13 +92,22 @@ export function seedLocalizationInfrastructure(
   return JSON.parse(raw.trim()) as LocalizationInfraResult;
 }
 
+/** The Winner's readiness for Scale (#129): the journey picks
+ * `winnerAdId`, the sandbox ad its PAUSED Launch created, to make the
+ * DeliveryTarget itself; nothing here is seeded. */
 export interface ScaleInfraResult {
-  deliveryTargetId: string;
+  winnerAdId: string;
   policyVersionId: string;
-  contractGenerationId: string;
-  contractSetId: string;
   marketAssetBindingId: string;
   marketCode: string;
+}
+
+/** The attestation activation needs, seeded for the DeliveryTarget the
+ * journey made, on the contract set the product made (#129). */
+export interface ScaleActivationEvidenceResult {
+  attestationId: string;
+  contractGenerationId: string;
+  contractSetId: string;
 }
 
 export function seedScaleInfrastructure(
@@ -120,6 +131,29 @@ export function seedScaleInfrastructure(
     }
   );
   return JSON.parse(raw.trim()) as ScaleInfraResult;
+}
+
+export function seedScaleActivationEvidence(
+  workspaceId: string,
+  deliveryTargetId: string,
+  ownerUserId: string
+): ScaleActivationEvidenceResult {
+  const raw = runPython(
+    'golden_path_seed.py',
+    [
+      'seed-scale-activation-evidence',
+      '--workspace-id',
+      workspaceId,
+      '--delivery-target-id',
+      deliveryTargetId,
+    ],
+    {
+      E2E_GOLDEN_PATH_WORKSPACE_ID: workspaceId,
+      E2E_OWNER_USER_ID: ownerUserId,
+      E2E_GOLDEN_PATH_ALLOW_MUTATIONS: '1',
+    }
+  );
+  return JSON.parse(raw.trim()) as ScaleActivationEvidenceResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -661,4 +695,78 @@ export async function confirmLocalizationBatchThroughUi(
     operation_id: string;
     item_ids: string[];
   }>(confirmResponse);
+}
+
+interface LocalizationItemBinding {
+  id: string;
+  kind: string;
+  bound_asset_version_id: string;
+  review_state: string;
+  truth_freshness: string;
+  ready_for_experiment: boolean;
+}
+
+/**
+ * Approve a market's localized AssetVersion in the Assets area (#128).
+ *
+ * The binding a Localization item publishes starts `pending_review`. The
+ * exact-version review a user records in Asset Detail is what moves it to
+ * `approved` and `ready_for_experiment` -- there is no binding-approval
+ * command, and no seed approves it -- and the Scale lineage gate requires it
+ * for the Winner's own market. Returns the reviewed version and its binding.
+ */
+export async function approveLocalizedAssetVersionThroughAssets(
+  page: Page,
+  slug: string,
+  batchId: string,
+  market: string
+): Promise<{ localizedAssetVersionId: string; bindingId: string }> {
+  const batch = await readJson<{
+    items?: Array<{ id: string; target_market: string }>;
+  }>(await page.request.get(`${localizationBff(slug)}/batches/${batchId}`));
+  const item = batch.items?.find(
+    (candidate) => candidate.target_market === market
+  );
+  expect(item, `a Localization item for market ${market}`).toBeTruthy();
+  const itemUrl = `${localizationBff(slug)}/batches/${batchId}/items/${item!.id}`;
+  const readBinding = async () =>
+    (
+      await readJson<{ binding: LocalizationItemBinding | null }>(
+        await page.request.get(itemUrl)
+      )
+    ).binding;
+
+  const published = await readBinding();
+  expect(published, `the ${market} item published a binding`).toBeTruthy();
+  expect(published!.kind).toBe('localized');
+  expect(published!.review_state).toBe('pending_review');
+  expect(published!.ready_for_experiment).toBe(false);
+
+  const versionId = published!.bound_asset_version_id;
+  await page.goto(`${assetsUrl(slug)}?overlay=${versionId}`);
+  const approve = page.getByTestId('review-approve');
+  await expect(approve).toBeEnabled({ timeout: 15_000 });
+  const [reviewResponse] = await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname ===
+          `${generationBff(slug)}/asset-versions/${versionId}/reviews`
+    ),
+    approve.click(),
+  ]);
+  expect(reviewResponse.status()).toBe(201);
+
+  await expect
+    .poll(
+      async () => {
+        const binding = await readBinding();
+        return binding
+          ? `${binding.id}:${binding.review_state}:${binding.ready_for_experiment}`
+          : 'missing';
+      },
+      { timeout: 15_000 }
+    )
+    .toBe(`${published!.id}:approved:true`);
+  return { localizedAssetVersionId: versionId, bindingId: published!.id };
 }

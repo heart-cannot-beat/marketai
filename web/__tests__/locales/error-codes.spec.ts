@@ -299,6 +299,8 @@ const NOT_SHOWN: Record<string, string> = {
     'an InvalidScaleSnapshot check, raised only inside the evaluation Worker',
   invalid_freshness_reference:
     'an InvalidScaleSnapshot check, raised only inside the evaluation Worker',
+  invalid_policy:
+    'an InvalidScaleSnapshot check, raised only inside the evaluation Worker',
   test_error: "a test's own made-up code (`tests/test_coordinator.py`)",
   some_code: "a test's own made-up code (`tests/test_delegated_identity.py`)",
   usage_metric_unknown:
@@ -317,6 +319,10 @@ const NOT_SHOWN: Record<string, string> = {
     'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
   usage_workspace_mismatch:
     'a Usage fact the metric registry refuses (`UsageFactError`, #8): a programming error that rolls back its provider-call settlement, never sent to a page',
+  usage_source_invalid:
+    'a Usage fact for an AssetVersion Generation did not produce (`UsageFactError`, #8 S2): a programming error that rolls back the version it was written with, never sent to a page',
+  usage_execution_mode_mismatch:
+    'a Usage fact in a bucket its metric does not record (`UsageFactError`, #148): a programming error that rolls back the transaction it was written in, never sent to a page',
 };
 
 const codesIn = (
@@ -552,6 +558,11 @@ const PARAMETERISED = [
   'error-mapped_column_missing: column',
   'error-market_data_price_operation_missing: operations',
   'error-market_data_provider_error: provider_code',
+  // #134: app.scale.targets sends the Target's currency, and the floor
+  // when it has one.
+  'error-minimum_economic_spend_required: currency,floor',
+  'error-minimum_economic_spend_below_platform_floor: currency,floor',
+  'error-spend_floor_currency_unsupported: currency',
   'error-competitor_name_too_long: limit',
   'error-competitor_resolution_expired: hours',
   'error-outside_round_dates: end,start',

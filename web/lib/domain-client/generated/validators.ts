@@ -4235,14 +4235,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     properties: {
       business_metric: { type: 'string', enum: ['cpa', 'roas', 'ctr'] },
       threshold: {
-        anyOf: [
-          { type: 'number', exclusiveMinimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
       },
       business_goal: { type: 'string', maxLength: 2000, minLength: 1 },
       evidence_requirements: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -4265,11 +4258,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
   'DecisionRules-Output': {
     properties: {
       business_metric: { type: 'string', enum: ['cpa', 'roas', 'ctr'] },
-      threshold: {
-        type: 'string',
-        pattern:
-          '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)',
-      },
+      threshold: { type: 'string' },
       business_goal: { type: 'string', maxLength: 2000, minLength: 1 },
       evidence_requirements: { type: 'string', maxLength: 2000, minLength: 1 },
       evaluation_schedule: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -4326,6 +4315,64 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['audience', 'market', 'placement', 'offer', 'landing_page'],
+  },
+  DeliveryTargetCreateRequest: {
+    properties: {
+      winner_decision_id: { type: 'string', minLength: 1 },
+      meta_connection_id: { type: 'string', minLength: 1 },
+      ad_remote_id: { type: 'string', minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['winner_decision_id', 'meta_connection_id', 'ad_remote_id'],
+    description:
+      "Pick one observed ad as a Winner's DeliveryTarget (#129). Only the\nad is named: the server resolves the hierarchy, creative, Offer, Landing\nPage, market, placement and attribution from recorded evidence.",
+  },
+  DeliveryTargetResponse: {
+    properties: {
+      id: { type: 'string' },
+      meta_mode: { type: 'string' },
+      meta_connection_id: { type: 'string' },
+      ad_account_id: { type: 'string' },
+      campaign_remote_id: { type: 'string' },
+      adset_remote_id: { type: 'string' },
+      ad_remote_id: { type: 'string' },
+      ad_creative_id: { type: 'string' },
+      creative_asset_version_id: { type: 'string' },
+      market_code: { type: 'string' },
+      placement: { type: 'string' },
+      offer_version_id: { type: 'string' },
+      landing_page_evidence_hash: { type: 'string' },
+      attribution_setting: { type: 'string' },
+      contract_generation_id: { type: 'string' },
+      source_type: { type: 'string' },
+      observed_at: { type: 'string', format: 'date-time' },
+      expires_at: { type: 'string', format: 'date-time' },
+      created_at: { type: 'string', format: 'date-time' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'meta_mode',
+      'meta_connection_id',
+      'ad_account_id',
+      'campaign_remote_id',
+      'adset_remote_id',
+      'ad_remote_id',
+      'ad_creative_id',
+      'creative_asset_version_id',
+      'market_code',
+      'placement',
+      'offer_version_id',
+      'landing_page_evidence_hash',
+      'attribution_setting',
+      'contract_generation_id',
+      'source_type',
+      'observed_at',
+      'expires_at',
+      'created_at',
+    ],
   },
   DirectionAdd: {
     properties: {
@@ -4769,50 +4816,115 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     properties: {
       enrollment_id: { type: 'string' },
       episode_id: { type: 'string' },
-      evaluation_id: { type: 'string' },
-      snapshot_id: { type: 'string' },
-      policy_version_id: { type: 'string' },
-      target_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      algorithm_version: { type: 'string' },
-      metric_semantic_contract_set_hash: { type: 'string' },
-      maturity: { type: 'string' },
-      data_quality_state: { type: 'string' },
-      health: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      health_reason: { type: 'string' },
-      healthy_evaluations: { type: 'integer' },
-      streak_counters: {
-        items: { additionalProperties: true, type: 'object' },
-        type: 'array',
+      readiness: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceReadinessResponse' },
+          { type: 'null' },
+        ],
       },
-      safe_watermark: { type: 'string', format: 'date' },
-      last_complete_local_day: { type: 'string', format: 'date' },
-      last_sync_at: { type: 'string', format: 'date-time' },
-      freshness_reference_at: { type: 'string', format: 'date-time' },
-      complete_local_days_in_episode: { type: 'integer' },
-      active_delivery_days_in_episode: { type: 'integer' },
-      current_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
-      baseline_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
-      rolling_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
+      evaluation_stale: { type: 'boolean' },
+      evaluation_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      snapshot_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      policy_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      target_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      algorithm_version: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      metric_semantic_contract_set_hash: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      },
+      maturity: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      data_quality_state: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      health: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      health_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      healthy_evaluations: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      streak_counters: {
+        anyOf: [
+          {
+            items: { additionalProperties: true, type: 'object' },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
+      },
+      safe_watermark: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      last_complete_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      last_sync_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      freshness_reference_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      complete_local_days_in_episode: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      active_delivery_days_in_episode: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      current_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
+      baseline_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
+      rolling_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
       quality_issues: {
-        items: { $ref: '#/components/schemas/EvidenceQualityIssueResponse' },
-        type: 'array',
+        anyOf: [
+          {
+            items: {
+              $ref: '#/components/schemas/EvidenceQualityIssueResponse',
+            },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
       },
       signals: {
-        items: { $ref: '#/components/schemas/EvidenceSignalResponse' },
-        type: 'array',
+        anyOf: [
+          {
+            items: { $ref: '#/components/schemas/EvidenceSignalResponse' },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
       },
-      cursor_as_of_local_day: { type: 'string', format: 'date' },
-      cursor_source_revision: { type: 'integer' },
-      cursor_semantic_event_sequence: { type: 'integer' },
-      cursor_lineage_generation: { type: 'integer' },
-      revision: { type: 'integer' },
-      updated_at: { type: 'string', format: 'date-time' },
+      cursor_as_of_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      cursor_source_revision: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      cursor_semantic_event_sequence: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      cursor_lineage_generation: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      revision: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      updated_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
     },
     additionalProperties: false,
     type: 'object',
     required: [
       'enrollment_id',
       'episode_id',
+      'readiness',
+      'evaluation_stale',
       'evaluation_id',
       'snapshot_id',
       'policy_version_id',
@@ -4844,7 +4956,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'updated_at',
     ],
     description:
-      "Current evidence/readiness for an Enrollment's active Episode --\nthe accepted-Evaluation projection (spec §3.4 step 3/4), not a raw\nevidence snapshot. Reflects only a projection-eligible result that has\nalready won the structured cursor CAS.",
+      "Current evidence/readiness for an Enrollment's active Episode (#114).\n\n``readiness`` is the Episode's evidence-readiness projection, null until\nthe first source manifest is collected. Every other field but the two\nids belongs to the accepted-Evaluation projection (spec §3.4 step 3/4),\nwhich reflects only a projection-eligible result that has already won\nthe structured cursor CAS; all of them are null until the first\nEvaluation projects. ``evaluation_stale`` says the accepted Evaluation\nwas sealed from an older source revision than the latest manifest: a\nnewer day is collected (its evaluation pending) or blocked, so the\nEvaluation is history, not the current state (contract §8).",
   },
   EnrollmentListResponse: {
     properties: {
@@ -5049,14 +5161,14 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       min_spend: {
         anyOf: [
           { type: 'number', maximum: 10000000, minimum: 1 },
-          { type: 'string', pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$' },
+          { type: 'string' },
         ],
         default: '20',
       },
       alpha: {
         anyOf: [
           { type: 'number', maximum: 0.1, minimum: 0.001 },
-          { type: 'string', pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$' },
+          { type: 'string' },
         ],
         default: '0.05',
       },
@@ -5072,10 +5184,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         default: 'equal_budget',
       },
       max_spend_ratio: {
-        anyOf: [
-          { type: 'number', maximum: 4, minimum: 1 },
-          { type: 'string', pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$' },
-        ],
+        anyOf: [{ type: 'number', maximum: 4, minimum: 1 }, { type: 'string' }],
         default: '2',
       },
       checkpoint: {
@@ -5113,16 +5222,8 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         minimum: 5,
         default: 20,
       },
-      min_spend: {
-        type: 'string',
-        pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$',
-        default: '20',
-      },
-      alpha: {
-        type: 'string',
-        pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$',
-        default: '0.05',
-      },
+      min_spend: { type: 'string', default: '20' },
+      alpha: { type: 'string', default: '0.05' },
       attribution_lag_days: {
         type: 'integer',
         maximum: 30,
@@ -5134,11 +5235,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         enum: ['equal_budget', 'observational'],
         default: 'equal_budget',
       },
-      max_spend_ratio: {
-        type: 'string',
-        pattern: '^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$',
-        default: '2',
-      },
+      max_spend_ratio: { type: 'string', default: '2' },
       checkpoint: {
         type: 'string',
         const: 'end_of_window',
@@ -5309,6 +5406,53 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'detail',
       'recovery_action',
     ],
+  },
+  EvidenceReadinessResponse: {
+    properties: {
+      manifest_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      manifest_state: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      source_revision: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      target_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      maturity: { type: 'string' },
+      quality_state: { type: 'string' },
+      last_complete_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      freshness_reference_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      blocking_issue_count: { type: 'integer' },
+      warning_issue_count: { type: 'integer' },
+      recovery_action: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      issues: {
+        items: { $ref: '#/components/schemas/EvidenceQualityIssueResponse' },
+        type: 'array',
+      },
+      revision: { type: 'integer' },
+      updated_at: { type: 'string', format: 'date-time' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'manifest_id',
+      'manifest_state',
+      'source_revision',
+      'target_local_day',
+      'maturity',
+      'quality_state',
+      'last_complete_local_day',
+      'freshness_reference_at',
+      'blocking_issue_count',
+      'warning_issue_count',
+      'recovery_action',
+      'issues',
+      'revision',
+      'updated_at',
+    ],
+    description:
+      "The Episode's evidence readiness (contract §8, §18): the projection\nthe source collector moves with every terminal source manifest, ahead of\nany Evaluation. A ``blocked`` latest manifest reads maturity\n``insufficient``, quality ``blocked``, its typed issues and the recovery\naction; ``last_complete_local_day`` and ``freshness_reference_at`` stay\nwhere the last complete manifest put them (null before one).",
   },
   EvidenceSignalResponse: {
     properties: {
@@ -6467,16 +6611,8 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         ],
         default: 'USD',
       },
-      media_budget: {
-        type: 'string',
-        pattern:
-          '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)',
-      },
-      small_round_budget: {
-        type: 'string',
-        pattern:
-          '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)',
-      },
+      media_budget: { type: 'string' },
+      small_round_budget: { type: 'string' },
       duration_days: { type: 'integer', maximum: 90, minimum: 1 },
       allocation: { type: 'string', maxLength: 2000, minLength: 1 },
       rules: { $ref: '#/components/schemas/DecisionRules-Output' },
@@ -8508,6 +8644,11 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         minLength: 1,
         default: 'library_manual_fact_import',
       },
+      default_offer_entry_id: {
+        anyOf: [{ type: 'string', maxLength: 64 }, { type: 'null' }],
+        description:
+          'Offer entry given to every row that names no offer_entry_id (#54). A row that names its own Offer keeps it.',
+      },
     },
     type: 'object',
     required: ['upload_intent_id'],
@@ -9210,6 +9351,56 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     },
     type: 'object',
     required: ['type', 'description'],
+  },
+  ObservedAdListResponse: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/ObservedAdResponse' },
+        type: 'array',
+      },
+      unavailable: {
+        items: { $ref: '#/components/schemas/ObservedAdUnavailableResponse' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items', 'unavailable'],
+  },
+  ObservedAdResponse: {
+    properties: {
+      meta_connection_id: { type: 'string' },
+      ad_account_id: { type: 'string' },
+      campaign_remote_id: { type: 'string' },
+      adset_remote_id: { type: 'string' },
+      ad_remote_id: { type: 'string' },
+      ad_creative_id: { type: 'string' },
+      source_type: { type: 'string' },
+      asset_version_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'meta_connection_id',
+      'ad_account_id',
+      'campaign_remote_id',
+      'adset_remote_id',
+      'ad_remote_id',
+      'ad_creative_id',
+      'source_type',
+      'asset_version_ids',
+    ],
+    description:
+      "One ad a connection has observed (#129): the sandbox scenario's ads,\nor the ads of the connection's published delivery-configuration read.",
+  },
+  ObservedAdUnavailableResponse: {
+    properties: {
+      meta_connection_id: { type: 'string' },
+      reason: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['meta_connection_id', 'reason'],
   },
   OperationAccepted: {
     properties: {
@@ -10433,14 +10624,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     properties: {
       kind: { type: 'string', enum: ['planning', 'ai_qc'] },
       maximum_cost: {
-        anyOf: [
-          { type: 'number', minimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }],
       },
       acknowledge_estimated_cost: { type: 'boolean', const: true },
       note: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -11266,6 +11450,41 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     },
     type: 'object',
   },
+  TargetContextListResponse: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/TargetContextResponse' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items'],
+  },
+  TargetContextResponse: {
+    properties: {
+      product_version_id: { type: 'string' },
+      offer_version_id: { type: 'string' },
+      market_code: { type: 'string' },
+      currency: { type: 'string' },
+      has_active_target: { type: 'boolean' },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      platform_spend_floor_unavailable_reason: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'product_version_id',
+      'offer_version_id',
+      'market_code',
+      'currency',
+      'has_active_target',
+      'platform_spend_floor',
+      'platform_spend_floor_unavailable_reason',
+    ],
+  },
   TargetListResponse: {
     properties: {
       items: {
@@ -11363,6 +11582,8 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/ActionEligibilityModel' },
         type: 'array',
       },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      below_platform_floor: { type: 'boolean' },
     },
     additionalProperties: false,
     type: 'object',
@@ -11382,6 +11603,8 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'withdrawn_at',
       'created_at',
       'allowed_actions',
+      'platform_spend_floor',
+      'below_platform_floor',
     ],
   },
   TargetWithdrawRequest: {
@@ -11586,24 +11809,10 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         default: 'USD',
       },
       media_budget: {
-        anyOf: [
-          { type: 'number', exclusiveMinimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
       },
       small_round_budget: {
-        anyOf: [
-          { type: 'number', exclusiveMinimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
       },
       duration_days: { type: 'integer', maximum: 90, minimum: 1 },
       allocation: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -15352,6 +15561,64 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['until'],
   },
+  create_scale_delivery_target_201: {
+    properties: {
+      id: { type: 'string' },
+      meta_mode: { type: 'string' },
+      meta_connection_id: { type: 'string' },
+      ad_account_id: { type: 'string' },
+      campaign_remote_id: { type: 'string' },
+      adset_remote_id: { type: 'string' },
+      ad_remote_id: { type: 'string' },
+      ad_creative_id: { type: 'string' },
+      creative_asset_version_id: { type: 'string' },
+      market_code: { type: 'string' },
+      placement: { type: 'string' },
+      offer_version_id: { type: 'string' },
+      landing_page_evidence_hash: { type: 'string' },
+      attribution_setting: { type: 'string' },
+      contract_generation_id: { type: 'string' },
+      source_type: { type: 'string' },
+      observed_at: { type: 'string', format: 'date-time' },
+      expires_at: { type: 'string', format: 'date-time' },
+      created_at: { type: 'string', format: 'date-time' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'meta_mode',
+      'meta_connection_id',
+      'ad_account_id',
+      'campaign_remote_id',
+      'adset_remote_id',
+      'ad_remote_id',
+      'ad_creative_id',
+      'creative_asset_version_id',
+      'market_code',
+      'placement',
+      'offer_version_id',
+      'landing_page_evidence_hash',
+      'attribution_setting',
+      'contract_generation_id',
+      'source_type',
+      'observed_at',
+      'expires_at',
+      'created_at',
+    ],
+  },
+  create_scale_delivery_target_request: {
+    properties: {
+      winner_decision_id: { type: 'string', minLength: 1 },
+      meta_connection_id: { type: 'string', minLength: 1 },
+      ad_remote_id: { type: 'string', minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['winner_decision_id', 'meta_connection_id', 'ad_remote_id'],
+    description:
+      "Pick one observed ad as a Winner's DeliveryTarget (#129). Only the\nad is named: the server resolves the hierarchy, creative, Offer, Landing\nPage, market, placement and attribution from recorded evidence.",
+  },
   create_scale_enrollment_201: {
     properties: {
       id: { type: 'string' },
@@ -15547,6 +15814,8 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/ActionEligibilityModel' },
         type: 'array',
       },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      below_platform_floor: { type: 'boolean' },
     },
     additionalProperties: false,
     type: 'object',
@@ -15566,6 +15835,8 @@ const SCHEMAS: Record<string, object> = {
       'withdrawn_at',
       'created_at',
       'allowed_actions',
+      'platform_spend_floor',
+      'below_platform_floor',
     ],
   },
   create_scale_target_request: {
@@ -18055,50 +18326,115 @@ const SCHEMAS: Record<string, object> = {
     properties: {
       enrollment_id: { type: 'string' },
       episode_id: { type: 'string' },
-      evaluation_id: { type: 'string' },
-      snapshot_id: { type: 'string' },
-      policy_version_id: { type: 'string' },
-      target_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      algorithm_version: { type: 'string' },
-      metric_semantic_contract_set_hash: { type: 'string' },
-      maturity: { type: 'string' },
-      data_quality_state: { type: 'string' },
-      health: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      health_reason: { type: 'string' },
-      healthy_evaluations: { type: 'integer' },
-      streak_counters: {
-        items: { additionalProperties: true, type: 'object' },
-        type: 'array',
+      readiness: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceReadinessResponse' },
+          { type: 'null' },
+        ],
       },
-      safe_watermark: { type: 'string', format: 'date' },
-      last_complete_local_day: { type: 'string', format: 'date' },
-      last_sync_at: { type: 'string', format: 'date-time' },
-      freshness_reference_at: { type: 'string', format: 'date-time' },
-      complete_local_days_in_episode: { type: 'integer' },
-      active_delivery_days_in_episode: { type: 'integer' },
-      current_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
-      baseline_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
-      rolling_window: { $ref: '#/components/schemas/EvidenceWindowResponse' },
+      evaluation_stale: { type: 'boolean' },
+      evaluation_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      snapshot_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      policy_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      target_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      algorithm_version: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      metric_semantic_contract_set_hash: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      },
+      maturity: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      data_quality_state: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      health: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      health_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      healthy_evaluations: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      streak_counters: {
+        anyOf: [
+          {
+            items: { additionalProperties: true, type: 'object' },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
+      },
+      safe_watermark: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      last_complete_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      last_sync_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      freshness_reference_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
+      complete_local_days_in_episode: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      active_delivery_days_in_episode: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      current_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
+      baseline_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
+      rolling_window: {
+        anyOf: [
+          { $ref: '#/components/schemas/EvidenceWindowResponse' },
+          { type: 'null' },
+        ],
+      },
       quality_issues: {
-        items: { $ref: '#/components/schemas/EvidenceQualityIssueResponse' },
-        type: 'array',
+        anyOf: [
+          {
+            items: {
+              $ref: '#/components/schemas/EvidenceQualityIssueResponse',
+            },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
       },
       signals: {
-        items: { $ref: '#/components/schemas/EvidenceSignalResponse' },
-        type: 'array',
+        anyOf: [
+          {
+            items: { $ref: '#/components/schemas/EvidenceSignalResponse' },
+            type: 'array',
+          },
+          { type: 'null' },
+        ],
       },
-      cursor_as_of_local_day: { type: 'string', format: 'date' },
-      cursor_source_revision: { type: 'integer' },
-      cursor_semantic_event_sequence: { type: 'integer' },
-      cursor_lineage_generation: { type: 'integer' },
-      revision: { type: 'integer' },
-      updated_at: { type: 'string', format: 'date-time' },
+      cursor_as_of_local_day: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      cursor_source_revision: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      cursor_semantic_event_sequence: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      cursor_lineage_generation: {
+        anyOf: [{ type: 'integer' }, { type: 'null' }],
+      },
+      revision: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      updated_at: {
+        anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+      },
     },
     additionalProperties: false,
     type: 'object',
     required: [
       'enrollment_id',
       'episode_id',
+      'readiness',
+      'evaluation_stale',
       'evaluation_id',
       'snapshot_id',
       'policy_version_id',
@@ -18130,7 +18466,7 @@ const SCHEMAS: Record<string, object> = {
       'updated_at',
     ],
     description:
-      "Current evidence/readiness for an Enrollment's active Episode --\nthe accepted-Evaluation projection (spec §3.4 step 3/4), not a raw\nevidence snapshot. Reflects only a projection-eligible result that has\nalready won the structured cursor CAS.",
+      "Current evidence/readiness for an Enrollment's active Episode (#114).\n\n``readiness`` is the Episode's evidence-readiness projection, null until\nthe first source manifest is collected. Every other field but the two\nids belongs to the accepted-Evaluation projection (spec §3.4 step 3/4),\nwhich reflects only a projection-eligible result that has already won\nthe structured cursor CAS; all of them are null until the first\nEvaluation projects. ``evaluation_stale`` says the accepted Evaluation\nwas sealed from an older source revision than the latest manifest: a\nnewer day is collected (its evaluation pending) or blocked, so the\nEvaluation is history, not the current state (contract §8).",
   },
   get_scale_episode_200: {
     properties: {
@@ -18205,6 +18541,8 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/ActionEligibilityModel' },
         type: 'array',
       },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      below_platform_floor: { type: 'boolean' },
     },
     additionalProperties: false,
     type: 'object',
@@ -18224,6 +18562,8 @@ const SCHEMAS: Record<string, object> = {
       'withdrawn_at',
       'created_at',
       'allowed_actions',
+      'platform_spend_floor',
+      'below_platform_floor',
     ],
   },
   get_spend_guardrail_200: {},
@@ -18351,6 +18691,11 @@ const SCHEMAS: Record<string, object> = {
         maxLength: 100,
         minLength: 1,
         default: 'library_manual_fact_import',
+      },
+      default_offer_entry_id: {
+        anyOf: [{ type: 'string', maxLength: 64 }, { type: 'null' }],
+        description:
+          'Offer entry given to every row that names no offer_entry_id (#54). A row that names its own Offer keeps it.',
       },
     },
     type: 'object',
@@ -18695,7 +19040,32 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['items'],
   },
-  list_scale_target_contexts_200: {},
+  list_scale_observed_ads_200: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/ObservedAdResponse' },
+        type: 'array',
+      },
+      unavailable: {
+        items: { $ref: '#/components/schemas/ObservedAdUnavailableResponse' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items', 'unavailable'],
+  },
+  list_scale_target_contexts_200: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/TargetContextResponse' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items'],
+  },
   list_scale_targets_200: {
     properties: {
       items: {
@@ -19778,14 +20148,7 @@ const SCHEMAS: Record<string, object> = {
     properties: {
       kind: { type: 'string', enum: ['planning', 'ai_qc'] },
       maximum_cost: {
-        anyOf: [
-          { type: 'number', minimum: 0 },
-          {
-            type: 'string',
-            pattern:
-              '^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,15}0*$)\\d{0,8}\\.\\d{0,6}0*$)',
-          },
-        ],
+        anyOf: [{ type: 'number', minimum: 0 }, { type: 'string' }],
       },
       acknowledge_estimated_cost: { type: 'boolean', const: true },
       note: { type: 'string', maxLength: 2000, minLength: 1 },
@@ -20879,6 +21242,8 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/ActionEligibilityModel' },
         type: 'array',
       },
+      platform_spend_floor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      below_platform_floor: { type: 'boolean' },
     },
     additionalProperties: false,
     type: 'object',
@@ -20898,6 +21263,8 @@ const SCHEMAS: Record<string, object> = {
       'withdrawn_at',
       'created_at',
       'allowed_actions',
+      'platform_spend_floor',
+      'below_platform_floor',
     ],
   },
   withdraw_scale_target_request: {
@@ -21388,6 +21755,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['create_scale_advice_snooze_request'],
     ],
     [
+      'create_scale_delivery_target_201',
+      VALIDATOR_FUNCTIONS['create_scale_delivery_target_201'],
+    ],
+    [
+      'create_scale_delivery_target_request',
+      VALIDATOR_FUNCTIONS['create_scale_delivery_target_request'],
+    ],
+    [
       'create_scale_enrollment_201',
       VALIDATOR_FUNCTIONS['create_scale_enrollment_201'],
     ],
@@ -21821,6 +22196,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'list_scale_enrollments_200',
       VALIDATOR_FUNCTIONS['list_scale_enrollments_200'],
+    ],
+    [
+      'list_scale_observed_ads_200',
+      VALIDATOR_FUNCTIONS['list_scale_observed_ads_200'],
     ],
     [
       'list_scale_target_contexts_200',
@@ -22477,6 +22856,11 @@ export const REQUEST_VALIDATORS = {
     'create_scale_advice_snooze_request'
   ] as ValidateFunction<
     DomainOperationMap['create_scale_advice_snooze']['requestBody']
+  >,
+  create_scale_delivery_target: VALIDATOR_FUNCTIONS[
+    'create_scale_delivery_target_request'
+  ] as ValidateFunction<
+    DomainOperationMap['create_scale_delivery_target']['requestBody']
   >,
   create_scale_enrollment: VALIDATOR_FUNCTIONS[
     'create_scale_enrollment_request'

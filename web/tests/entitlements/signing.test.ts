@@ -53,6 +53,16 @@ describe('signEnvelope', () => {
     const verified = verifyEnvelope(envelope, keyRing);
     expect(verified.workspace_id).toBe('ws_1');
   });
+
+  it('refuses a key that is not bytes instead of signing with its text', () => {
+    // An encoded key passed through untyped input (#126) would otherwise
+    // be used as the HMAC key's own text, and every verifier rejects the
+    // envelope.
+    const encoded = TEST_KEY.toString('base64') as unknown as Buffer;
+    expect(() => signEnvelope(makePayload(), TEST_KEY_ID, encoded)).toThrow(
+      'signing key must be bytes'
+    );
+  });
 });
 
 describe('verifyEnvelope', () => {

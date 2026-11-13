@@ -53,6 +53,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Requ
 from sqlalchemy import select
 
 from app.adapters.persistence.database import tenant_session
+from app.meta.models import MetaObservationSyncScheduleRecord
 from app.platform.etag import extract_if_match, set_etag
 from app.platform.meta_mode_auth import MetaModeNotPermitted, require_meta_mode
 from app.platform.platform_operator_identity import require_platform_operator_jwt
@@ -66,6 +67,8 @@ from .candidates import create_enrollment_candidate, list_eligible_candidates
 from .command_journal import lookup_command_outcome
 from .enrollment import activate_enrollment, close_enrollment, create_draft_enrollment, pause_enrollment, resume_enrollment
 from .exports import create_export, create_export_download_intent
+from .delivery_targets import ensure_metric_contract_set
+from .observed_ads import create_delivery_target_from_ad, list_observed_ads
 from .models import (
     ScaleAdviceConversionRecord,
     ScaleAdviceDispositionRecord,
@@ -74,12 +77,7 @@ from .models import (
     ScaleAdviceThreadRecord,
     ScaleEnrollmentRecord,
     ScaleEpisodeRecord,
-    ScaleEvaluationRecord,
-    ScaleEvaluationSignalRecord,
-    ScaleEpisodeProjectionRecord,
-    ScaleEvidenceSnapshotRecord,
     ScaleExportRecord,
-    ScaleSnapshotQualityIssueRecord,
 )
 from .schemas import (
     ActivationPreviewCreateRequest,
@@ -95,6 +93,8 @@ from .schemas import (
     CommandOutcomeResponse,
     ConversionRequest,
     ConversionResponse,
+    DeliveryTargetCreateRequest,
+    DeliveryTargetResponse,
     EnrollmentActivateRequest,
     EnrollmentCloseRequest,
     EnrollmentCreateRequest,
@@ -107,6 +107,11 @@ from .schemas import (
     ExportCreateRequest,
     ExportDownloadIntentResponse,
     ExportResponse,
+    MetricContractSetCreateRequest,
+    MetricContractSetGenerationResponse,
+    MetricContractSetResponse,
+    ObservedAdListResponse,
+    TargetContextListResponse,
     TargetContextResponse,
     TargetCreateRequest,
     TargetListResponse,
@@ -119,6 +124,7 @@ from .schemas import (
     TargetWithdrawRequest,
 )
 from .targets import (
+    applicable_policy,
     create_publication_preview,
     create_withdrawal_preview,
     get_target,
@@ -131,10 +137,12 @@ from .types import AdviceType
 from .v1_router import (
     _META_MODE_PATTERN,
     _candidate_dict,
+    _delivery_target_dict,
     _enrollment_dict,
+    _enrollment_evidence,
     _episode_dict,
-    _evidence_detail_dict,
     _limit_query,
+    _observed_ads_dict,
     _paginate,
     _preview_dict,
     _target_dict,
@@ -437,83 +445,7 @@ def platform_get_enrollment_evidence(
     context: TenantContext = Depends(_platform_context),
 ):
     with tenant_session(context) as session:
-        enrollment = session.execute(
-            select(ScaleEnrollmentRecord).filter_by(
-                workspace_id=context.workspace_id, meta_mode=context.meta_mode, id=enrollment_id,
-            )
-        ).scalar_one_or_none()
-        if enrollment is None:
-            raise HTTPException(404, {"code": "enrollment_not_found", "message": enrollment_id})
-        if enrollment.current_episode_id is None:
-            raise HTTPException(404, {"code": "no_active_episode", "message": enrollment_id})
-        projection = session.execute(
-            select(ScaleEpisodeProjectionRecord).filter_by(
-                workspace_id=context.workspace_id, meta_mode=context.meta_mode,
-                episode_id=enrollment.current_episode_id,
-            )
-        ).scalar_one_or_none()
-        if projection is None:
-            raise HTTPException(
-                404, {"code": "evidence_not_available", "message": "no Evaluation has projected yet"},
-            )
-        evaluation = session.execute(
-            select(ScaleEvaluationRecord).filter_by(
-                workspace_id=context.workspace_id,
-                meta_mode=context.meta_mode,
-                id=projection.evaluation_id,
-                episode_id=projection.episode_id,
-            )
-        ).scalar_one_or_none()
-        if evaluation is None:
-            raise HTTPException(
-                500,
-                {"code": "evidence_projection_incomplete", "message": "accepted Evaluation is unavailable"},
-            )
-        snapshot = session.execute(
-            select(ScaleEvidenceSnapshotRecord).filter_by(
-                workspace_id=context.workspace_id,
-                meta_mode=context.meta_mode,
-                id=evaluation.snapshot_id,
-                episode_id=projection.episode_id,
-            )
-        ).scalar_one_or_none()
-        if snapshot is None:
-            raise HTTPException(
-                500,
-                {"code": "evidence_projection_incomplete", "message": "accepted EvidenceSnapshot is unavailable"},
-            )
-        quality_issues = session.execute(
-            select(ScaleSnapshotQualityIssueRecord)
-            .filter_by(workspace_id=context.workspace_id, meta_mode=context.meta_mode, snapshot_id=snapshot.id)
-            .order_by(
-                ScaleSnapshotQualityIssueRecord.is_blocking.desc(),
-                ScaleSnapshotQualityIssueRecord.code.asc(),
-                ScaleSnapshotQualityIssueRecord.id.asc(),
-            )
-        ).scalars().all()
-        signals = session.execute(
-            select(ScaleEvaluationSignalRecord)
-            .filter_by(workspace_id=context.workspace_id, meta_mode=context.meta_mode, evaluation_id=evaluation.id)
-            .order_by(ScaleEvaluationSignalRecord.signal_id.asc())
-        ).scalars().all()
-
-        return {
-            "enrollment_id": enrollment.id,
-            "episode_id": projection.episode_id,
-            "evaluation_id": projection.evaluation_id,
-            "maturity": projection.maturity,
-            "health": projection.health,
-            "health_reason": projection.health_reason,
-            "healthy_evaluations": projection.healthy_evaluations,
-            "streak_counters": projection.streak_counters,
-            "cursor_as_of_local_day": projection.cursor_as_of_local_day,
-            "cursor_source_revision": projection.cursor_source_revision,
-            "cursor_semantic_event_sequence": projection.cursor_semantic_event_sequence,
-            "cursor_lineage_generation": projection.cursor_lineage_generation,
-            "revision": projection.revision,
-            "updated_at": projection.updated_at,
-            **_evidence_detail_dict(evaluation, snapshot, quality_issues, signals),
-        }
+        return _enrollment_evidence(session, context, enrollment_id)
 
 
 @platform_scale_mode.get(
@@ -717,7 +649,11 @@ def platform_convert_advice_occurrence(
 # ---------------------------------------------------------------------------
 
 
-@platform_scale_mode.get("/target-contexts/current", operation_id="platform_list_scale_target_contexts")
+@platform_scale_mode.get(
+    "/target-contexts/current",
+    operation_id="platform_list_scale_target_contexts",
+    response_model=TargetContextListResponse,
+)
 def platform_list_target_contexts(context: TenantContext = Depends(_platform_context)):
     with tenant_session(context) as session:
         contexts = resolve_target_contexts(session, context)
@@ -742,7 +678,8 @@ def platform_list_targets_route(
             offer_version_id=offer_version_id,
             market_code=market_code,
         )
-        items = [_target_dict(r, context) for r in rows]
+        policy = applicable_policy(session, context)
+        items = [_target_dict(r, context, policy) for r in rows]
     filters_key = f"targets:{lifecycle_state or ''}:{product_version_id or ''}"
     return _paginate(items, context=context, filters_key=filters_key, cursor=cursor, limit=limit)
 
@@ -756,7 +693,7 @@ def platform_get_target_route(
     with tenant_session(context) as session:
         target = get_target(session, context, target_id)
         set_etag(response, target.revision)
-        return _target_dict(target, context)
+        return _target_dict(target, context, applicable_policy(session, context))
 
 
 @platform_scale_mode.post(
@@ -820,7 +757,7 @@ def platform_create_target_route(
             preview_id=body.publication_preview_id,
             idempotency_key=idempotency_key,
         )
-        return _target_dict(target, context)
+        return _target_dict(target, context, applicable_policy(session, context))
 
 
 @platform_scale_mode.post(
@@ -873,7 +810,7 @@ def platform_withdraw_target_route(
             preview_id=body.withdrawal_preview_id,
             idempotency_key=idempotency_key,
         )
-        return _target_dict(target, context)
+        return _target_dict(target, context, applicable_policy(session, context))
 
 
 # ---------------------------------------------------------------------------
@@ -1011,6 +948,97 @@ def platform_create_enrollment_candidate(
             idempotency_key=idempotency_key,
         )
         return _candidate_dict(candidate)
+
+
+@platform_scale_mode.get(
+    "/observed-ads",
+    operation_id="platform_list_scale_observed_ads",
+    response_model=ObservedAdListResponse,
+)
+def platform_list_observed_ads(
+    context: TenantContext = Depends(_platform_context),
+    meta_connection_id: str | None = Query(default=None, min_length=1, max_length=64),
+):
+    with tenant_session(context) as session:
+        return _observed_ads_dict(list_observed_ads(session, context, connection_id=meta_connection_id))
+
+
+@platform_scale_mode.post(
+    "/delivery-targets",
+    operation_id="platform_create_scale_delivery_target",
+    response_model=DeliveryTargetResponse,
+    status_code=201,
+    openapi_extra={"x-marketai-idempotent": True},
+)
+def platform_create_delivery_target(
+    body: DeliveryTargetCreateRequest,
+    context: TenantContext = Depends(_platform_context),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
+):
+    with tenant_session(context) as session:
+        target = create_delivery_target_from_ad(
+            session, context,
+            decision_id=body.winner_decision_id,
+            connection_id=body.meta_connection_id,
+            ad_remote_id=body.ad_remote_id,
+            idempotency_key=idempotency_key,
+        )
+        return _delivery_target_dict(target)
+
+
+@platform_scale_mode.post(
+    "/metric-contract-sets",
+    operation_id="platform_ensure_scale_metric_contract_set",
+    response_model=MetricContractSetResponse,
+    status_code=200,
+)
+def platform_ensure_metric_contract_set(
+    body: MetricContractSetCreateRequest,
+    context: TenantContext = Depends(_platform_context),
+):
+    """Set up a connection's Scale read contracts; idempotent (#112).
+
+    The one way to give an ``internal_validation`` connection its Scale
+    contracts: daily, exact window and delivery configuration, frozen to the
+    account's currency and time zone. Each new generation gets its daily
+    schedule (account-local 04:00), so the platform Workspace's reads start
+    at the next slot; #129's observed ads list the ads of the first attested
+    configuration read. A repeat with the same account returns the same set
+    (200, ``created`` false); a different currency or time zone is a
+    conflict with the active generations, never a silent replacement.
+    """
+    with tenant_session(context) as session:
+        contract_set = ensure_metric_contract_set(
+            session, context, connection_id=body.meta_connection_id,
+            currency=body.currency, timezone_name=body.timezone_name,
+        )
+        schedules = {
+            row.contract_generation_id: row
+            for row in session.scalars(
+                select(MetaObservationSyncScheduleRecord).where(
+                    MetaObservationSyncScheduleRecord.workspace_id == context.workspace_id,
+                    MetaObservationSyncScheduleRecord.meta_mode == context.meta_mode,
+                    MetaObservationSyncScheduleRecord.contract_generation_id.in_(
+                        list(contract_set.generation_ids.values())),
+                    MetaObservationSyncScheduleRecord.state.in_(("active", "paused")),
+                )
+            )
+        }
+        return MetricContractSetResponse(
+            id=contract_set.contract_set_id,
+            meta_mode=context.meta_mode,
+            meta_connection_id=body.meta_connection_id,
+            created=contract_set.created,
+            generations=[
+                MetricContractSetGenerationResponse(
+                    contract_type=contract_type,
+                    generation_id=generation_id,
+                    schedule_state=schedules[generation_id].state if generation_id in schedules else None,
+                    next_fire_at=schedules[generation_id].next_fire_at if generation_id in schedules else None,
+                )
+                for contract_type, generation_id in sorted(contract_set.generation_ids.items())
+            ],
+        )
 
 
 # Mount every mode-scoped route onto the root router at ``/{meta_mode}``.

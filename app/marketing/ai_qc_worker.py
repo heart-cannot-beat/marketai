@@ -21,6 +21,7 @@ from .ai_qc_provider import visual_completion, simulated_completion, prepare_ima
 from .ai_qc import QCOutputError, normalize_report, input_is_current
 from .service import ensure_active
 from . import workflow
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 
 EXCERPT_CHARS = 2000
@@ -70,6 +71,7 @@ def uncertain(session, ctx, call):
     finish_operation(session, ctx, call, OperationState.UNCERTAIN)
 
 
+@runs_as(WORKER_ROLE)
 async def execute_ai_qc(ctx, call_id, blob_store, *, complete=visual_completion):
     credential, attempt_id = None, None
     with tenant_session(ctx) as session:

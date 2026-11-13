@@ -23,7 +23,6 @@ brief sketch's placeholder ``winner_not_confirmed``.
 """
 from __future__ import annotations
 
-import itertools
 import os
 import tempfile
 import unittest
@@ -106,6 +105,7 @@ from app.scale.delivery_targets import DeliveryTargetRequest, create_delivery_ta
 from app.scale.enrollment import CandidateFingerprintDriftError, create_draft_enrollment
 from app.scale.enrollment_lineage import DeliveryTargetNotFoundError
 from tests.experiment_governance_fixtures import govern_asset_versions, govern_product_offer_versions
+from tests.support.market_codes import next_market_code as _next_market
 
 CTX = TenantContext(
     workspace_id="ws_secand",
@@ -131,14 +131,6 @@ PRICE_REGISTRY = {
     "mock-edit": {"mock-edit-1": Decimal("0.05")},
     "mock-translate": {"mock-translate-1": Decimal("0.02")},
 }
-
-_MARKET_COUNTER = itertools.count(0)
-
-
-def _next_market() -> str:
-    n = next(_MARKET_COUNTER)
-    return chr(ord("A") + n // 26) + chr(ord("A") + n % 26)
-
 
 # ---------------------------------------------------------------------------
 # Light Winner chain (mirrors tests/test_winner_eligibility.py's identical
@@ -517,32 +509,11 @@ def _make_matching_delivery_target(chain: dict, tag: str) -> str:
     is *field-for-field compatible* with ``chain``'s Winner lineage (see
     ``app.scale.enrollment_lineage._assert_winner_target_compatible``).
 
-    ``landing_page_version_id`` needs special handling: the target column
-    is FK-enforced against ``library_versions``, while the Winner's own
-    ``landing_page_version_id`` is populated from
-    ``ExperimentVersionRecord.landing_page_evidence_hash`` -- a hash, not a
-    real Library entity id (no Landing Page Library entity exists yet, per
-    ``app.experiments.winner_eligibility``'s own documented flag). A real
-    ``LibraryVersionRecord`` is created here with its id forced to exactly
-    that hash value, satisfying both the DeliveryTarget's FK and the
-    lineage-gate's equality check simultaneously.
+    ``landing_page_evidence_hash`` is the hash the Winner's ExperimentVersion
+    froze; the target carries the same value (#129).
     """
     with tenant_session(CTX) as s:
         upstream = _make_curated_scenario_context(s, tag)
-
-        landing_entry_id = new_id("le")
-        s.add(LibraryEntryRecord(
-            id=landing_entry_id, workspace_id=CTX.workspace_id,
-            entry_type="landing_page", display_name=f"landing-{tag}",
-        ))
-        s.flush()
-        s.add(LibraryVersionRecord(
-            id=chain["landing_page_evidence_hash"], workspace_id=CTX.workspace_id,
-            entry_id=landing_entry_id, entry_type="landing_page",
-            version_no=1, content_json={}, content_hash="d" * 64,
-            published_by="test-fixture",
-        ))
-        s.flush()
 
     request = DeliveryTargetRequest(
         meta_connection_id=upstream["meta_connection_id"],
@@ -559,7 +530,7 @@ def _make_matching_delivery_target(chain: dict, tag: str) -> str:
         attribution_setting=chain["attribution_semantics_hash"],
         contract_generation_id=upstream["contract_generation_id"],
         offer_version_id=chain["offer_version_id"],
-        landing_page_version_id=chain["landing_page_evidence_hash"],
+        landing_page_evidence_hash=chain["landing_page_evidence_hash"],
         source_type="curated_scenario",
         source_manifest={"schema_version": 1, "source_type": "curated_scenario"},
         observed_at=OBSERVED_AT,

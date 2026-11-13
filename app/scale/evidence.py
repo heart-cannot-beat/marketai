@@ -44,10 +44,11 @@ per Task 12):
   ``_POLICY_JSON_INT_FIELDS`` below (no earlier task defined this mapping);
   Target threshold overrides are not modeled on ``ScaleTargetVersionRecord``
   and are always frozen as ``None``;
-* ``DeliveryConfigSnapshot.status_history`` is always ``()`` and
-  ``diagnostic_state`` defaults to ``NONE_`` -- no earlier task added a
-  status-history or diagnostic-state column to
-  ``ScaleDeliveryConfigSourceRecord``;
+* up to snapshot schema v2, ``DeliveryConfigSnapshot.status_history`` is
+  always ``()`` and ``diagnostic_state`` is ``NONE_``: the source record had
+  no such columns. From v3 (#109) both come from the delivery-configuration
+  source record the collector writes (``app.scale.collector``); a v1/v2
+  snapshot still assembles under its own rule, so its hash stays valid;
 * `MetricContractRef.observation_contract_version_id` reuses
   ``ScaleMetricSemanticContractSetMemberRecord.observation_contract_generation``
   -- that record only retains the wrapped #23 physical contract generation
@@ -60,12 +61,13 @@ per Task 12):
 from __future__ import annotations
 
 import hmac
-from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from dataclasses import fields as dataclass_fields, replace
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -80,6 +82,7 @@ from app.scale._contracts import (
     DataQualityItem,
     DataQualityLocator,
     DeliveryConfigSnapshot,
+    DeliveryStatusEvent,
     ExactWindowMetrics,
     MetricContractRef,
     MetricWindow,
@@ -127,14 +130,28 @@ from app.scale.types import (
     MetricContractType,
     PriorStreakAbsenceReason,
     ScaleHealth,
+    TriggerKind,
     WindowRole,
 )
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 # v2 (Issue #57): window days before the Episode's `started_local_day` are
 # sealed as `before_episode` instead of a blocking `daily_slot_missing`.
 # Snapshots sealed as v1 keep v1 assembly rules (see `_before_episode_cutoff`).
-CANONICAL_SCHEMA_VERSION = "scale-snapshot-v2"
+# v3 (Issue #109): the delivery configuration carries the source record's
+# status history and delivery diagnostic; sealing records
+# `freshness_slo_exceeded` (blocking unless the Policy permits it as a
+# warning) when the run's freshness reference is more than the Policy's lag
+# past the manifest's last sync, and freezes each quality issue once. v1/v2
+# snapshots keep their rules (see `_has_delivery_history`).
+# v4 (#132, #133): the frozen Policy carries
+# `consecutive_breakdown_hits_required`, and the hash payload covers it.
+# v1-v3 snapshots were hashed without it and keep that payload (see
+# `_policy_hash_value`), so their stored hashes still verify.
+CANONICAL_SCHEMA_VERSION = "scale-snapshot-v4"
 _SNAPSHOT_SCHEMA_V1 = "scale-snapshot-v1"
+_SNAPSHOT_SCHEMA_V2 = "scale-snapshot-v2"
+_SNAPSHOT_SCHEMA_V3 = "scale-snapshot-v3"
 SNAPSHOT_HASH_DOMAIN = "scale-evidence-snapshot-v1"
 CLAIM_HASH_DOMAIN = "scale-snapshot-claim-v1"
 CONTRACT_SET_HASH_DOMAIN = "scale-metric-contract-set-v1"
@@ -144,6 +161,7 @@ __all__ = [
     "SnapshotAssemblyError",
     "seal_snapshot",
     "assemble_snapshot",
+    "policy_spend_floor",
 ]
 
 
@@ -183,11 +201,10 @@ def _ensure_utc(value: datetime | None) -> datetime | None:
 
 
 def _for_update(session: Session, stmt):
-    """PostgreSQL row locking; SQLite (used by tests and the bounded local
-    path) does not support ``SELECT ... FOR UPDATE``."""
-    if session.get_bind().dialect.name == "postgresql":
-        return stmt.with_for_update()
-    return stmt
+    """PostgreSQL row locking. SQLite (tests, bounded local path) has no
+    ``FOR UPDATE`` and SQLAlchemy leaves it out there, but the statement
+    keeps the lock, so the SQLite grant guard (#59) sees it."""
+    return stmt.with_for_update()
 
 
 def _hash_payload(snapshot: ScaleEvidenceSnapshot) -> dict[str, Any]:
@@ -202,7 +219,7 @@ def _hash_payload(snapshot: ScaleEvidenceSnapshot) -> dict[str, Any]:
         "scenario_version_id": snapshot.scenario_version_id,
         "timezone_name": snapshot.timezone_name,
         "currency": snapshot.currency,
-        "policy": snapshot.policy,
+        "policy": _policy_hash_value(snapshot),
         "target": snapshot.target,
         "metric_contract_set_hash": snapshot.metric_contract_set_hash,
         "metric_contracts": snapshot.metric_contracts,
@@ -224,6 +241,41 @@ def _hash_payload(snapshot: ScaleEvidenceSnapshot) -> dict[str, Any]:
         "freshness_reference_at": snapshot.freshness_reference_at,
         "as_of_local_day": snapshot.as_of_local_day,
     }
+
+
+#: ``ScalePolicySnapshot`` fields that snapshot schema v4 added to the hash
+#: payload (#133).
+_POLICY_FIELDS_SINCE_V4 = ("consecutive_breakdown_hits_required",)
+
+
+def _freezes_policy_v4_fields(schema_version: str) -> bool:
+    """Whether snapshots of this schema hash the Policy fields v4 added."""
+    return schema_version not in (_SNAPSHOT_SCHEMA_V1, _SNAPSHOT_SCHEMA_V2, _SNAPSHOT_SCHEMA_V3)
+
+
+def _policy_hash_value(snapshot: ScaleEvidenceSnapshot) -> Any:
+    """The frozen Policy as the snapshot's schema hashes it.
+
+    The canonical encoder writes a frozen dataclass as an object keyed by
+    field name, so the mapping below encodes exactly as the v1-v3
+    ``ScalePolicySnapshot`` did, before the v4 fields existed.
+    """
+    policy = snapshot.policy
+    if _freezes_policy_v4_fields(snapshot.canonical_schema_version):
+        return policy
+    return {
+        field.name: getattr(policy, field.name)
+        for field in dataclass_fields(policy)
+        if field.name not in _POLICY_FIELDS_SINCE_V4
+    }
+
+
+def _pre_v4_compatible(policy: ScalePolicySnapshot) -> bool:
+    """Whether a v1-v3 snapshot can carry this Policy without losing what it
+    freezes: none of the v4 fields set, and a spend floor of its own."""
+    return policy.spend_floor is not None and all(
+        getattr(policy, name) is None for name in _POLICY_FIELDS_SINCE_V4
+    )
 
 
 def _snapshot_hash(snapshot: ScaleEvidenceSnapshot) -> str:
@@ -273,8 +325,37 @@ _POLICY_JSON_INT_FIELDS = (
 )
 
 
-def _policy_snapshot(policy: ScalePolicyVersionRecord) -> ScalePolicySnapshot:
+#: #132: a Policy that sets the economic floor per currency keeps it under
+#: this ``signal_thresholds`` key, as ISO 4217 code -> Decimal string, each
+#: the minimum total spend of one 7-day window.
+_SPEND_FLOOR_BY_CURRENCY_KEY = "economic_spend_floor_per_7d_window_by_currency"
+#: #133: consecutive hits a breakdown segment needs for review_delivery_mix.
+_BREAKDOWN_HITS_KEY = "consecutive_breakdown_hits_required"
+
+
+def policy_spend_floor(policy: ScalePolicyVersionRecord, currency: str) -> Decimal | None:
+    """The platform economic floor for one 7-day window in ``currency``.
+
+    A Policy with a per-currency table (#132) yields the entry for the
+    Episode's currency exactly as the ad account reports it, or ``None``
+    when the table has no entry; the evaluator then skips economic
+    evaluation. A Policy without the table keeps its single
+    ``spend_floor_minimum_daily_spend``, which carries no currency (v1).
+
+    Target publication (#134) reads the floor here too, so a Target is
+    checked against exactly the floor its evaluations will freeze.
+    """
+    table = (policy.signal_thresholds or {}).get(_SPEND_FLOOR_BY_CURRENCY_KEY)
+    if table is None:
+        return policy.spend_floor_minimum_daily_spend
+    entry = table.get(currency)
+    return None if entry is None else Decimal(str(entry))
+
+
+def _policy_snapshot(policy: ScalePolicyVersionRecord, currency: str) -> ScalePolicySnapshot:
+    """Freeze ``policy`` for a snapshot in ``currency`` (the Episode's)."""
     thresholds = policy.signal_thresholds or {}
+    breakdown_hits = thresholds.get(_BREAKDOWN_HITS_KEY)
     kwargs: dict[str, Any] = {
         "policy_version_id": policy.id,
         "algorithm_version": policy.algorithm_version,
@@ -286,7 +367,7 @@ def _policy_snapshot(policy: ScalePolicyVersionRecord) -> ScalePolicySnapshot:
         "impression_floor": policy.activity_floor_minimum_impressions,
         "click_floor": policy.sample_floor_minimum_clicks,
         "purchase_floor": policy.evidence_floor_minimum_conversions,
-        "spend_floor": policy.spend_floor_minimum_daily_spend,
+        "spend_floor": policy_spend_floor(policy, currency),
         "bootstrap_prng_version": policy.bootstrap_prng_algorithm,
         "bootstrap_draw_count": policy.bootstrap_draw_count,
         "bootstrap_min_valid_draw_ratio": policy.bootstrap_valid_draw_ratio,
@@ -299,6 +380,7 @@ def _policy_snapshot(policy: ScalePolicyVersionRecord) -> ScalePolicySnapshot:
             CanonicalKeyValue(key=k, value=v)
             for k, v in thresholds.get("advice_construction_parameters", ())
         ),
+        "consecutive_breakdown_hits_required": None if breakdown_hits is None else int(breakdown_hits),
     }
     for field in _POLICY_JSON_DECIMAL_FIELDS:
         kwargs[field] = Decimal(str(thresholds[field]))
@@ -384,13 +466,16 @@ def _contract_set_hash(contracts: tuple[MetricContractRef, ...]) -> str:
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     """Seal or reuse the exact snapshot selected by the durable run.
 
     Scope for Task 10 (see module docstring): rejects a run whose frozen
     source manifest is not ``complete`` without mutating the run record
     (pitfall #2 -- the run's shape CHECK forbids a `blocked` run_state
-    without a `snapshot_id`; terminalizing the run is Task 12's job).
+    without a `snapshot_id`; terminalizing the run is Task 12's job). A run
+    whose Episode another unfinished run holds is refused the same way, as
+    ``episode_phase_conflict``, before anything is sealed (#110).
     """
     run = session.execute(
         _for_update(
@@ -432,6 +517,16 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     ).scalar_one_or_none()
     if episode is None:
         raise SnapshotSealingError("episode_not_found", run.episode_id)
+    # A historical backfill (#113) evaluates a day older than any the live
+    # runs still have to seal, so the predecessor it freezes cannot change
+    # under it; it neither waits for the phase nor takes it (spec §3.3 step 8).
+    historical = run.trigger_kind == TriggerKind.BACKFILL.value
+    if not historical and episode.phase_run_id is not None and episode.phase_run_id != run.id:
+        # Another run holds the Episode until its Phase C releases it (spec
+        # §3.4 step 8). Refused before anything is sealed (#110): a snapshot
+        # sealed now would freeze the predecessor that run is about to
+        # replace, and the caller retries this run once the phase is free.
+        raise SnapshotSealingError("episode_phase_conflict", episode.id)
 
     enrollment = session.execute(
         _for_update(
@@ -502,7 +597,9 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
         )
         quality_issues += iss
 
-        delivery_config, delivery_source = _build_delivery_config(session, item_by_key)
+        delivery_config, delivery_source = _build_delivery_config(
+            session, item_by_key, CANONICAL_SCHEMA_VERSION, episode.timezone_name,
+        )
         if delivery_source is None:
             raise SnapshotSealingError("delivery_config_missing")
 
@@ -513,6 +610,14 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
             select(ScaleSourceQualityIssueRecord).filter_by(manifest_id=manifest.id)
         ).scalars().all():
             quality_issues.append(_quality_item_from_source_issue(source_issue))
+
+        if _has_delivery_history(CANONICAL_SCHEMA_VERSION):
+            stale = _freshness_issue(freshness_reference_at, last_sync_at, policy)
+            if stale is not None:
+                quality_issues.append(stale)
+            # A manifest issue the sealed rules also derive (an unavailable
+            # exact window) is one issue, not two.
+            quality_issues = list({_quality_sort_key(item): item for item in quality_issues}.values())
 
         quality_issues = sorted(quality_issues, key=_quality_sort_key)
 
@@ -535,7 +640,7 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
             session, context, episode.id, as_of,
         )
 
-        policy_snapshot = _policy_snapshot(policy)
+        policy_snapshot = _policy_snapshot(policy, episode.currency)
         target_snapshot = _target_snapshot(target) if target is not None else None
         normalized_target_key = target.id if target is not None else NO_TARGET_MARKER
 
@@ -716,11 +821,11 @@ def seal_snapshot(session: Session, context: TenantContext, run_id: str) -> str:
     run.run_state = "snapshot_sealed"
     run.updated_at = utcnow()
 
-    if episode.phase_run_id is not None and episode.phase_run_id != run.id:
-        raise SnapshotSealingError("episode_phase_conflict", episode.id)
-    episode.phase = "evaluating"
-    episode.phase_run_id = run.id
-    episode.revision += 1
+    # The Episode row is locked above, so the phase checked there is still free.
+    if not historical:
+        episode.phase = "evaluating"
+        episode.phase_run_id = run.id
+        episode.revision += 1
 
     session.flush()
     return snapshot_row.id
@@ -740,6 +845,101 @@ def _quality_sort_key(item: DataQualityItem):
             locator.source_evidence_hash,
         ),
         tuple((d.key, str(d.value)) for d in item.details),
+    )
+
+
+def _has_delivery_history(schema_version: str) -> bool:
+    """Whether snapshots of this schema freeze the delivery status history,
+    the delivery diagnostic, and the seal-time freshness check (v3, #109).
+
+    Sealing and assembly both call this, so a v1/v2 snapshot reassembles
+    with the empty history and ``NONE_`` diagnostic it was hashed with,
+    whatever the source record holds today.
+    """
+    return schema_version not in (_SNAPSHOT_SCHEMA_V1, _SNAPSHOT_SCHEMA_V2)
+
+
+def _freshness_issue(
+    freshness_reference_at: datetime, last_sync_at: datetime, policy: ScalePolicyVersionRecord,
+) -> DataQualityItem | None:
+    """Contract §8: the latest successful sync is at most the Policy's lag
+    before the run's frozen freshness reference.
+
+    Beyond it the snapshot carries ``freshness_slo_exceeded``: blocking, as
+    §8 requires, unless the frozen Policy explicitly permits the code as a
+    warning (``quality_warning_permitted_codes``, "whether a warning permits
+    evaluation is the Policy's decision"). A live run's reference is its
+    manifest's ``terminal_at``, so this fires only for a later reevaluation
+    of older evidence.
+    """
+    lag = timedelta(hours=policy.freshness_floor_maximum_lag_hours)
+    if freshness_reference_at - last_sync_at <= lag:
+        return None
+    permitted = (policy.signal_thresholds or {}).get("quality_warning_permitted_codes", ())
+    impact = (
+        DataQualityImpact.WARNING
+        if DataQualityIssueCode.FRESHNESS_SLO_EXCEEDED.value in permitted
+        else DataQualityImpact.BLOCKING
+    )
+    return DataQualityItem(
+        code=DataQualityIssueCode.FRESHNESS_SLO_EXCEEDED,
+        impact=impact,
+        locator=DataQualityLocator(
+            contract_type=MetricContractType.DAILY,
+            window_role=None,
+            local_date=None,
+            breakdown_type=None,
+            segment_key=None,
+            source_evidence_hash="",
+        ),
+        details=(),
+    )
+
+
+def _status_event_at(local_day: date, timezone_name: str) -> datetime:
+    """The instant a day's configuration status stands for: local noon of
+    that day in the Episode's time zone. Kept in that zone so the
+    evaluator's ``observed_at.date()`` is the account-local day."""
+    return datetime.combine(local_day, time(12), tzinfo=ZoneInfo(timezone_name))
+
+
+def _delivery_config_snapshot(
+    row: ScaleDeliveryConfigSourceRecord, schema_version: str, timezone_name: str,
+) -> DeliveryConfigSnapshot:
+    if _has_delivery_history(schema_version):
+        status_history = tuple(
+            DeliveryStatusEvent(
+                observed_at=_status_event_at(date.fromisoformat(entry["local_day"]), timezone_name),
+                entity_level=str(entry["entity_level"]),
+                status=str(entry["status"]),
+            )
+            for entry in sorted(
+                row.status_history or [],
+                key=lambda entry: (entry["local_day"], entry["entity_level"], entry["status"]),
+            )
+        )
+        diagnostic_state = DeliveryDiagnosticState(row.diagnostic_state)
+        detail: list[CanonicalKeyValue] = []
+        if row.diagnostic_observed_at is not None:
+            detail.append(CanonicalKeyValue(
+                key="observed_at",
+                value=_ensure_utc(row.diagnostic_observed_at).astimezone(timezone.utc),
+            ))
+        if row.diagnostic_source_field:
+            detail.append(CanonicalKeyValue(key="source_field", value=row.diagnostic_source_field))
+        diagnostic_detail = tuple(detail)
+    else:
+        status_history, diagnostic_state, diagnostic_detail = (), DeliveryDiagnosticState.NONE_, ()
+    return DeliveryConfigSnapshot(
+        baseline_configuration_hash=row.comparability_hash,
+        current_configuration_hash=row.comparability_hash,
+        effective_campaign_status=row.campaign_status,
+        effective_ad_set_status=row.ad_set_status,
+        effective_ad_status=row.ad_status,
+        status_history=status_history,
+        attribution_setting=row.attribution_setting,
+        diagnostic_state=diagnostic_state,
+        diagnostic_detail=diagnostic_detail,
     )
 
 
@@ -875,7 +1075,10 @@ def _build_exact_window(
 
 
 def _build_delivery_config(
-    session: Session, item_by_key: dict[tuple, ScaleManifestItemRecord],
+    session: Session,
+    item_by_key: dict[tuple, ScaleManifestItemRecord],
+    schema_version: str,
+    timezone_name: str,
 ) -> tuple[DeliveryConfigSnapshot | None, ScaleDeliveryConfigSourceRecord | None]:
     item = item_by_key.get(
         (MetricContractType.DELIVERY_CONFIGURATION.value, None, None, None)
@@ -883,18 +1086,7 @@ def _build_delivery_config(
     if item is None or item.state != "fulfilled":
         return None, None
     row = session.get(ScaleDeliveryConfigSourceRecord, item.source_record_id)
-    snapshot = DeliveryConfigSnapshot(
-        baseline_configuration_hash=row.comparability_hash,
-        current_configuration_hash=row.comparability_hash,
-        effective_campaign_status=row.campaign_status,
-        effective_ad_set_status=row.ad_set_status,
-        effective_ad_status=row.ad_status,
-        status_history=(),
-        attribution_setting=row.attribution_setting,
-        diagnostic_state=DeliveryDiagnosticState.NONE_,
-        diagnostic_detail=(),
-    )
-    return snapshot, row
+    return _delivery_config_snapshot(row, schema_version, timezone_name), row
 
 
 def _build_breakdowns(
@@ -1031,6 +1223,23 @@ def _episode_day_counts(session: Session, episode_id: str, as_of: date) -> tuple
 def _select_predecessor(
     session: Session, context: TenantContext, episode_id: str, as_of: date,
 ) -> tuple[PriorStreakState | None, PriorStreakAbsenceReason | None]:
+    """The latest Evaluation of an earlier local day, and its streak state.
+
+    An Evaluation only historical backfill runs produced is never one
+    (spec §3.3 step 5: the predecessor is a projection-eligible Evaluation;
+    §18: a backfill may change the current streak only through forward
+    replay, which is deferred, #113). One no run names -- written by hand
+    in older tests -- still counts.
+    """
+    def _runs_of(*, backfill: bool):
+        kind = ScaleEvaluationRunRecord.trigger_kind
+        return select(ScaleEvaluationRunRecord.id).where(
+            ScaleEvaluationRunRecord.workspace_id == context.workspace_id,
+            ScaleEvaluationRunRecord.meta_mode == context.meta_mode,
+            ScaleEvaluationRunRecord.evaluation_id == ScaleEvaluationRecord.id,
+            kind == TriggerKind.BACKFILL.value if backfill else kind != TriggerKind.BACKFILL.value,
+        ).exists()
+
     row = session.execute(
         select(ScaleEvaluationRecord, ScaleEvidenceSnapshotRecord.as_of_local_day)
         .join(
@@ -1042,6 +1251,7 @@ def _select_predecessor(
             ScaleEvaluationRecord.meta_mode == context.meta_mode,
             ScaleEvaluationRecord.episode_id == episode_id,
             ScaleEvidenceSnapshotRecord.as_of_local_day < as_of,
+            or_(~_runs_of(backfill=True), _runs_of(backfill=False)),
         )
         .order_by(
             ScaleEvidenceSnapshotRecord.as_of_local_day.desc(),
@@ -1298,7 +1508,9 @@ def assemble_snapshot(
         current_exact = _assemble_exact_window(session, link_by_key, WindowRole.CURRENT_7D)
         baseline_exact = _assemble_exact_window(session, link_by_key, WindowRole.BASELINE_7D)
         rolling_exact = _assemble_exact_window(session, link_by_key, WindowRole.ROLLING_14D)
-        delivery_config = _assemble_delivery_config(session, link_by_key)
+        delivery_config = _assemble_delivery_config(
+            session, link_by_key, snapshot_row.canonical_schema_version, snapshot_row.timezone_name,
+        )
     except SnapshotAssemblyError:
         raise
     except Exception as exc:  # defensive: any missing-child lookup failure
@@ -1333,7 +1545,14 @@ def assemble_snapshot(
     policy = session.get(ScalePolicyVersionRecord, snapshot_row.policy_version_id)
     if policy is None:
         raise SnapshotAssemblyError("provenance_mismatch", "policy_not_found")
-    policy_snapshot = _policy_snapshot(policy)
+    policy_snapshot = _policy_snapshot(policy, snapshot_row.currency)
+    if not _freezes_policy_v4_fields(snapshot_row.canonical_schema_version) and not _pre_v4_compatible(
+        policy_snapshot
+    ):
+        # Only code that predates v4 could seal such a snapshot, and it
+        # could not have evaluated it: replaying it would drop what the
+        # Policy freezes.
+        raise SnapshotAssemblyError("provenance_mismatch", "policy_needs_snapshot_v4")
 
     target_snapshot = None
     if snapshot_row.target_version_id is not None:
@@ -1465,7 +1684,10 @@ def _assemble_exact_window(
 
 
 def _assemble_delivery_config(
-    session: Session, link_by_key: dict[tuple, ScaleEvidenceSourceLinkRecord],
+    session: Session,
+    link_by_key: dict[tuple, ScaleEvidenceSourceLinkRecord],
+    schema_version: str,
+    timezone_name: str,
 ) -> DeliveryConfigSnapshot:
     link = link_by_key.get((MetricContractType.DELIVERY_CONFIGURATION.value, None, None, None))
     if link is None:
@@ -1473,17 +1695,7 @@ def _assemble_delivery_config(
     row = session.get(ScaleDeliveryConfigSourceRecord, link.source_record_id)
     if row is None:
         raise SnapshotAssemblyError("missing_child", "delivery_configuration")
-    return DeliveryConfigSnapshot(
-        baseline_configuration_hash=row.comparability_hash,
-        current_configuration_hash=row.comparability_hash,
-        effective_campaign_status=row.campaign_status,
-        effective_ad_set_status=row.ad_set_status,
-        effective_ad_status=row.ad_status,
-        status_history=(),
-        attribution_setting=row.attribution_setting,
-        diagnostic_state=DeliveryDiagnosticState.NONE_,
-        diagnostic_detail=(),
-    )
+    return _delivery_config_snapshot(row, schema_version, timezone_name)
 
 
 def _assemble_breakdowns(session: Session, snapshot_id: str) -> tuple[BreakdownSegment, ...]:

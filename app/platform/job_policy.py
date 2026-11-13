@@ -99,13 +99,37 @@ JOB_POLICIES: dict[str, JobPolicy] = {
     "cleanup_staging_upload": _policy(_NONE_REQUEUE, "BlobStore.delete 对已删除对象视为成功"),
     "meta_read_ingestion": _policy(_NONE_REQUEUE, "只读 Meta"),
     "meta_schedule_tick": _policy(_NONE_REQUEUE, "由 PostgreSQL 调度函数直接插入，SQL 已写 true"),
+    "meta_observation_tick": _policy(
+        _NONE_REQUEUE,
+        "PG 上由 marketai_dispatch_meta_observation_ticks_v1 插入，SQL 已写 true；"
+        "在计划行锁下复核到期，推进 next_fire_at 与建 run 同一事务（#107）"),
+    "meta_observation_sync": _policy(
+        _NONE_REQUEUE,
+        "只读 insights 和投放配置：沙箱读库，internal_validation 只发 GET（#112）；"
+        "每个查询实例一个 run，按页断点续跑，"
+        "终页、完成、发布、attestation 同一事务（#107、#108）"),
     "launch_recovery": _policy(_NONE_REQUEUE, "只读外部证据来解析不确定的写入，不重放"),
+    "usage.storage_bytes": _policy(
+        _NONE_REQUEUE,
+        "只读本 Workspace 的字节列，单事务写一条 usage_events；语义 key 按 UTC 日，"
+        "同一天重跑是计数的重复，不写第二行（#148）"),
     "marketing.resolve_call": _policy(_NONE_REQUEUE, "核对已有调用记录，不重发"),
     "marketing.export": _policy(_NONE_REQUEUE, "只写 BlobStore"),
     "scale_evaluate": _policy(
-        _NONE_REQUEUE, "Phase A/B/C 检查点可续跑（tests/test_scale_recovery.py）；目前没有入队点"),
+        _NONE_REQUEUE,
+        "Phase A/B/C 检查点可续跑（tests/test_scale_recovery.py）；收集器写 complete manifest 时"
+        "同一事务建 run 并入队；Episode 被前一个 run 占着时可重试，不终结 run（#110）"),
     "scale_advice_expire": _policy(
-        _NONE_REQUEUE, "在线程行锁下复查，非 active 即不写；目前没有入队点"),
+        _NONE_REQUEUE, "在线程行锁下复查，非 active 即不写；Phase C 按截止时间延迟入队（#111）"),
+    "scale_target_change": _policy(
+        _NONE_REQUEUE,
+        "Target 发布或撤回的同一事务入队；每个 Episode 在行锁下单事务：supersede 不再适用的 Advice，"
+        "按 Episode 和 Target 事件找回已建的 target_change run，重放不重复建 run、不重复 supersede（#113）"),
+    "scale_collect_sources": _policy(
+        _NONE_REQUEUE,
+        "只读已存的观察页，不调用适配器；每个 Episode 在行锁下单事务写 manifest，"
+        "按收集键找回已写的，重放不分配新 revision（#109）；"
+        "之后兜底扫描该连接上过了截止时间的 active Advice thread，在线程行锁下复查，重放不重复过期（#111）"),
     # -- Paid, but the handler fences the call through its own durable record.
     "marketing.plan": _policy(_PAID_REQUEUE, "调用记录挡住重复付费"),
     "marketing.ai_qc": _policy(_PAID_REQUEUE, "调用记录挡住重复付费"),

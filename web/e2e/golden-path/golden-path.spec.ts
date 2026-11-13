@@ -2,13 +2,16 @@ import fs from 'node:fs';
 import { test, expect } from './fixtures/index';
 import {
   advanceManifest,
+  approveLocalizedAssetVersionThroughAssets,
   confirmLocalizationBatchThroughUi,
   createLocalizationBatchThroughUi,
   prepareLocalizationBatchThroughUi,
   seedExperimentMetrics,
   seedLocalizationInfrastructure,
+  seedScaleActivationEvidence,
   seedScaleInfrastructure,
 } from './domain-helpers';
+import { en } from '../support/copy';
 import type {
   EntityKind,
   EntityRef,
@@ -130,11 +133,43 @@ test('v9 Beta golden path', async ({
       'Golden Path Workspace',
     ]);
 
-    // Owner-only settings are forbidden. getWorkspacePageProps answers 200
-    // with owner-only error props and WorkspaceLayout renders ForbiddenState,
-    // as e2e/workspace/owner-member.spec.ts establishes.
+    // Settings is every member's (#126): the Member reads the spending
+    // limits provisioning created when the snapshot was delivered -- the
+    // contract's Beta defaults, through the real API -- and cannot change
+    // them; none of the Owner's sections render.
     const settings = await memberPage.goto(`/w/${workspaceSlug}/settings`);
     expect(settings?.status()).toBe(200);
+    const usd = (amount: number) =>
+      new Intl.NumberFormat('en', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 4,
+      }).format(amount);
+    const betaDefaults = {
+      per_operation_limit: 5,
+      rolling_24h_limit: 20,
+      period_limit: 100,
+      outstanding_exposure_limit: 10,
+    };
+    for (const [field, amount] of Object.entries(betaDefaults)) {
+      await expect(
+        memberPage.getByTestId(`spend-guardrail-value-${field}`)
+      ).toHaveText(usd(amount));
+    }
+    await expect(
+      memberPage.getByTestId('spend-guardrail-owner-only')
+    ).toHaveText(en('settings', 'spend-guardrail.owner-only'));
+    await expect(memberPage.getByTestId('spend-guardrail-edit')).toHaveCount(0);
+    await expect(
+      memberPage.getByTestId('provider-credentials-section')
+    ).toHaveCount(0);
+
+    // Members stays Owner-only. getWorkspacePageProps answers 200 with
+    // owner-only error props and WorkspaceLayout renders ForbiddenState, as
+    // e2e/workspace/owner-member.spec.ts establishes.
+    const members = await memberPage.goto(`/w/${workspaceSlug}/members`);
+    expect(members?.status()).toBe(200);
     await expect(
       memberPage.getByRole('heading', { name: 'Access Denied' })
     ).toBeVisible();
@@ -488,6 +523,22 @@ test('v9 Beta golden path', async ({
       };
     });
 
+  await test.step('Step 7.3 — Approve the Winner-market localized asset in Assets', async () => {
+    // The binding the Winner-market item published waits for review; the
+    // exact-version approval in Asset Detail makes it experiment-ready
+    // (#128), which the Scale lineage gate requires. No seed approves it.
+    const winnerMarket = localizationInfra.markets.find(
+      (market) => market.isWinnerMarket
+    );
+    expect(winnerMarket).toBeDefined();
+    await approveLocalizedAssetVersionThroughAssets(
+      session.page(),
+      workspaceSlug,
+      localizationBatchId,
+      winnerMarket!.market
+    );
+  });
+
   // ── Step 8 — Scale ──
 
   const scaleInfra =
@@ -497,7 +548,7 @@ test('v9 Beta golden path', async ({
         winner.winnerDecision.runtimeId,
         ownerInvitation.email
       );
-      expect(seeded.deliveryTargetId).toBeTruthy();
+      expect(seeded.winnerAdId).toBeTruthy();
       expect(seeded.policyVersionId).toBeTruthy();
       expect(seeded.marketCode).toBe('US');
       return seeded;
@@ -517,9 +568,31 @@ test('v9 Beta golden path', async ({
       await page
         .getByRole('button', { name: winner.winnerDecision.runtimeId })
         .click();
+      // #129: pick the observed ad the Winner runs in -- the sandbox ad its
+      // PAUSED Launch created. The server makes the DeliveryTarget from that
+      // ad's recorded evidence and the dialog fills it in.
+      const pickResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/delivery-targets') &&
+          response.request().method() === 'POST',
+        { timeout: 15_000 }
+      );
+      await page
+        .getByRole('button', { name: `Use Meta ad ${scaleInfra.winnerAdId}` })
+        .click();
+      const pickResponse = await pickResponsePromise;
+      expect(pickResponse.status(), await pickResponse.text()).toBe(201);
+      const picked = (await pickResponse.json()) as {
+        id: string;
+        market_code: string;
+        ad_remote_id: string;
+      };
+      expect(picked.ad_remote_id).toBe(scaleInfra.winnerAdId);
+      expect(picked.market_code).toBe(scaleInfra.marketCode);
       const deliveryTargetInput = page.getByLabel(/delivery.*target/i);
-      await expect(deliveryTargetInput).toBeVisible({ timeout: 5_000 });
-      await deliveryTargetInput.fill(scaleInfra.deliveryTargetId);
+      await expect(deliveryTargetInput).toHaveValue(picked.id, {
+        timeout: 5_000,
+      });
 
       const enrollResponsePromise = page.waitForResponse(
         (response) =>
@@ -534,6 +607,13 @@ test('v9 Beta golden path', async ({
         lifecycle: string;
       };
       expect(enrollment.lifecycle).toBe('draft');
+      // Activation needs an attestation of the target's delivery read; the
+      // sandbox would publish one only at its next daily slot (README).
+      seedScaleActivationEvidence(
+        workspaceRef,
+        picked.id,
+        ownerInvitation.email
+      );
       return {
         schemaVersion: 1,
         area: 'scale',

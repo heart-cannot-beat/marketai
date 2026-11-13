@@ -11,6 +11,11 @@ data source. Problems inside a row never do. The draft is created anyway,
 carrying the same ValidationReport the publish command computes
 (``_build_report``), so the Owner reads it row by row (``facts[i].<field>``)
 on the draft before publishing (contract §11.4).
+
+Every row names its Offer entry in ``offer_entry_id`` (#54). The import may
+carry a default Offer: it fills the rows that name none, and a row that
+names its own Offer keeps it. Whether each row's Offer exists in this
+Workspace and covers the row's market is a row finding like any other.
 """
 from __future__ import annotations
 
@@ -32,6 +37,7 @@ from .contracts import (
     DRAFT_READY,
     DRAFT_VALIDATION_FAILED,
     ENTRY_MANUAL_FACT_SET,
+    ENTRY_OFFER,
     LIFECYCLE_ACTIVE,
 )
 from .fact_types import FACT_VALUE_FIELDS, FieldKind
@@ -39,6 +45,7 @@ from .service import (
     LibraryError,
     _audit,
     _build_report,
+    _effective_version,
     _emit,
     _entry,
     _entry_dict,
@@ -160,12 +167,59 @@ def _file_facts(content_payload: dict) -> list:
     return facts
 
 
+def with_default_offer(facts: list, default_offer_entry_id: str | None) -> tuple[list, int]:
+    """``facts`` with the default Offer in every row that names none (#54).
+
+    A row with its own ``offer_entry_id`` keeps it; a row that is not an
+    object stays as it is for the report to name. Returns the rows and how
+    many of them took the default.
+    """
+    default = (default_offer_entry_id or "").strip()
+    if not default:
+        return facts, 0
+    filled = 0
+    rows: list = []
+    for fact in facts:
+        if isinstance(fact, dict) and not _names_offer(fact):
+            fact = {**fact, "offer_entry_id": default}
+            filled += 1
+        rows.append(fact)
+    return rows, filled
+
+
+def default_offer_problem(context: TenantContext, default_offer_entry_id: str) -> str | None:
+    """Why an import cannot take ``default_offer_entry_id`` as its default Offer, or None.
+
+    The default must be an active Offer entry of this Workspace with a
+    published version, or every row it fills would fail on it. Anything
+    that is not an Offer entry of this Workspace reads alike, so an id
+    guessed from another Workspace learns nothing.
+    """
+    with tenant_session(context) as session:
+        entry = session.get(LibraryEntryRecord, default_offer_entry_id)
+        if entry is None or entry.workspace_id != context.workspace_id or entry.entry_type != ENTRY_OFFER:
+            return "默认 Offer 不是本 Workspace 的 Offer 条目"
+        if entry.lifecycle != LIFECYCLE_ACTIVE:
+            return "默认 Offer 已归档"
+        if _effective_version(session, entry) is None:
+            return "默认 Offer 尚无已发布版本"
+    return None
+
+
+def _names_offer(fact: dict) -> bool:
+    value = fact.get("offer_entry_id")
+    # A JSON null or an empty string names no Offer; any other value is the
+    # row's own choice, and the report says if it is not an Offer id.
+    return value is not None and not (isinstance(value, str) and not value.strip())
+
+
 def process_manual_fact_import(
     context: TenantContext,
     *,
     data_source_entry_id: str,
     upload_intent_id: str,
     content_payload: dict | None = None,
+    default_offer_entry_id: str | None = None,
 ) -> dict:
     """Create a Manual Fact Set entry whose draft carries the file's ValidationReport.
 
@@ -180,6 +234,7 @@ def process_manual_fact_import(
             data_source_entry_id=data_source_entry_id,
             upload_intent_id=upload_intent_id,
             content_payload=content_payload,
+            default_offer_entry_id=default_offer_entry_id,
         )
         return _entry_dict(session, context, entry)
 
@@ -191,13 +246,17 @@ def write_manual_fact_set(
     data_source_entry_id: str,
     upload_intent_id: str,
     content_payload: dict | None,
+    default_offer_entry_id: str | None = None,
 ) -> LibraryEntryRecord:
     """Add a Manual Fact Set and its validated draft to ``session``'s transaction.
 
     Raises :class:`ManualFactImportError` only for the file as a whole; rows
     with problems become blocking findings of the draft's ValidationReport.
+    ``default_offer_entry_id`` fills the rows that name no Offer.
     """
-    facts = _file_facts(content_payload or {})
+    facts, default_offer_rows = with_default_offer(
+        _file_facts(content_payload or {}), default_offer_entry_id
+    )
 
     _require_workspace(session, context.workspace_id)
     ds_entry = _entry(session, context, data_source_entry_id)
@@ -256,6 +315,8 @@ def write_manual_fact_set(
             "data_source_entry_id": data_source_entry_id,
             "upload_intent_id": upload_intent_id,
             "fact_count": len(facts),
+            "default_offer_entry_id": (default_offer_entry_id or "").strip() or None,
+            "default_offer_rows": default_offer_rows,
             "content_hash": report.content_hash,
             "blocking": len(report.blocking),
             "warnings": len(report.warnings),

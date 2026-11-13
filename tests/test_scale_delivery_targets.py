@@ -208,7 +208,7 @@ class DeliveryTargetTestBase(unittest.TestCase):
     def _curated_scenario_request(self, **overrides) -> DeliveryTargetRequest:
         ctx = self._make_curated_scenario_context()
         offer_id = self._make_library_version("offer")
-        landing_id = self._make_library_version("landing_page")
+        landing_id = "f" * 64  # the Landing Page evidence hash a Winner froze (#129)
         asset_version_id = self._make_asset_version()
         fields = dict(
             meta_connection_id=ctx["meta_connection_id"],
@@ -225,7 +225,7 @@ class DeliveryTargetTestBase(unittest.TestCase):
             attribution_setting="7d_click_1d_view",
             contract_generation_id=ctx["contract_generation_id"],
             offer_version_id=offer_id,
-            landing_page_version_id=landing_id,
+            landing_page_evidence_hash=landing_id,
             source_type="curated_scenario",
             source_manifest={"schema_version": 1, "source_type": "curated_scenario"},
             observed_at=OBSERVED_AT,
@@ -266,7 +266,7 @@ class TestCreateDeliveryTargetCuratedScenario(DeliveryTargetTestBase):
         not what this test is proving)."""
         ctx_data = self._make_curated_scenario_context()
         offer_id = self._make_library_version("offer")
-        landing_id = self._make_library_version("landing_page")
+        landing_id = "f" * 64  # the Landing Page evidence hash a Winner froze (#129)
         asset_version_id = self._make_asset_version()
 
         def _request() -> DeliveryTargetRequest:
@@ -285,7 +285,7 @@ class TestCreateDeliveryTargetCuratedScenario(DeliveryTargetTestBase):
                 attribution_setting="7d_click_1d_view",
                 contract_generation_id=ctx_data["contract_generation_id"],
                 offer_version_id=offer_id,
-                landing_page_version_id=landing_id,
+                landing_page_evidence_hash=landing_id,
                 source_type="curated_scenario",
                 source_manifest={"schema_version": 1, "source_type": "curated_scenario"},
                 observed_at=OBSERVED_AT,
@@ -349,7 +349,7 @@ class TestCreateDeliveryTargetEvidenceObservation(DeliveryTargetTestBase):
     def test_creates_target_with_evidence_provenance(self):
         ectx = self._make_evidence_observation_context()
         offer_id = self._make_library_version("offer")
-        landing_id = self._make_library_version("landing_page")
+        landing_id = "f" * 64  # the Landing Page evidence hash a Winner froze (#129)
         asset_version_id = self._make_asset_version()
         request = DeliveryTargetRequest(
             meta_connection_id=ectx["meta_connection_id"],
@@ -366,7 +366,7 @@ class TestCreateDeliveryTargetEvidenceObservation(DeliveryTargetTestBase):
             attribution_setting="7d_click_1d_view",
             contract_generation_id=ectx["contract_generation_id"],
             offer_version_id=offer_id,
-            landing_page_version_id=landing_id,
+            landing_page_evidence_hash=landing_id,
             source_type="evidence_observation",
             source_manifest={"schema_version": 1, "source_type": "evidence_observation"},
             observed_at=OBSERVED_AT,
@@ -390,7 +390,7 @@ class TestCreateDeliveryTargetEvidenceObservation(DeliveryTargetTestBase):
     def test_missing_evidence_refs_rejected(self):
         ectx = self._make_evidence_observation_context()
         offer_id = self._make_library_version("offer")
-        landing_id = self._make_library_version("landing_page")
+        landing_id = "f" * 64  # the Landing Page evidence hash a Winner froze (#129)
         asset_version_id = self._make_asset_version()
         request = DeliveryTargetRequest(
             meta_connection_id=ectx["meta_connection_id"],
@@ -407,7 +407,7 @@ class TestCreateDeliveryTargetEvidenceObservation(DeliveryTargetTestBase):
             attribution_setting="7d_click_1d_view",
             contract_generation_id=ectx["contract_generation_id"],
             offer_version_id=offer_id,
-            landing_page_version_id=landing_id,
+            landing_page_evidence_hash=landing_id,
             source_type="evidence_observation",
             source_manifest={"schema_version": 1},
             observed_at=OBSERVED_AT,
@@ -484,7 +484,7 @@ class TestScaleDeliveryTargetRecordShape(DeliveryTargetTestBase):
         ORM construction bypasses create_delivery_target's validation."""
         ctx = self._make_curated_scenario_context()
         offer_id = self._make_library_version("offer")
-        landing_id = self._make_library_version("landing_page")
+        landing_id = "f" * 64  # the Landing Page evidence hash a Winner froze (#129)
         asset_version_id = self._make_asset_version()
         bad = ScaleDeliveryTargetRecord(
             id=new_id("sdt"), workspace_id=self.ws.id, meta_mode="controlled_mock",
@@ -495,7 +495,7 @@ class TestScaleDeliveryTargetRecordShape(DeliveryTargetTestBase):
             creative_binding_evidence_hash="e" * 64, market_code="US", placement="feed",
             attribution_setting="7d_click_1d_view",
             contract_generation_id=ctx["contract_generation_id"],
-            offer_version_id=offer_id, landing_page_version_id=landing_id,
+            offer_version_id=offer_id, landing_page_evidence_hash=landing_id,
             source_type="curated_scenario",
             scenario_version_id=None,  # violates ck_sdt_source_type_biconditional
             source_manifest={}, source_manifest_hash="h" * 64,
@@ -510,7 +510,7 @@ class TestScaleDeliveryTargetRecordShape(DeliveryTargetTestBase):
     def test_database_rejects_empty_hierarchy_identifier(self):
         ctx = self._make_curated_scenario_context()
         offer_id = self._make_library_version("offer")
-        landing_id = self._make_library_version("landing_page")
+        landing_id = "f" * 64  # the Landing Page evidence hash a Winner froze (#129)
         asset_version_id = self._make_asset_version()
         bad = ScaleDeliveryTargetRecord(
             id=new_id("sdt"), workspace_id=self.ws.id, meta_mode="controlled_mock",
@@ -521,7 +521,7 @@ class TestScaleDeliveryTargetRecordShape(DeliveryTargetTestBase):
             creative_binding_evidence_hash="e" * 64, market_code="US", placement="feed",
             attribution_setting="7d_click_1d_view",
             contract_generation_id=ctx["contract_generation_id"],
-            offer_version_id=offer_id, landing_page_version_id=landing_id,
+            offer_version_id=offer_id, landing_page_evidence_hash=landing_id,
             source_type="curated_scenario",
             scenario_version_id=ctx["scenario_version_id"],
             source_manifest={}, source_manifest_hash="h" * 64,

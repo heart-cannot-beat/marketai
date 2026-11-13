@@ -32,6 +32,7 @@ from app.platform.tenancy import TenantContext
 
 from . import drafting
 from .service import RESOURCE_TYPE, failure_action, load_plan
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,7 @@ def _release_unused_reservation(session, ctx: TenantContext, plan) -> bool:
     return release_llm_chat_reservation(session, ctx, job_id=plan.job_id, call_name=CALL_NAME)
 
 
+@runs_as(WORKER_ROLE)
 def mark_plan_failed(
     ctx: TenantContext,
     plan_id: str,
@@ -111,6 +113,7 @@ def mark_plan_failed(
         )
 
 
+@runs_as(WORKER_ROLE)
 async def run_plan_drafting(
     ctx: TenantContext,
     *,

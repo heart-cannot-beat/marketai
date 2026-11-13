@@ -63,6 +63,7 @@ SOURCE_MANIFEST_STATE_VALUES = "('complete', 'blocked')"
 DATA_QUALITY_IMPACT_VALUES = "('warning', 'blocking')"
 EVIDENCE_MATURITY_VALUES = "('warming', 'monitorable', 'economics_ready', 'insufficient')"
 DATA_QUALITY_STATE_VALUES = "('pass', 'warning', 'blocked')"
+DELIVERY_DIAGNOSTIC_STATE_VALUES = "('unknown', 'none', 'learning', 'learning_limited')"
 
 # Shared CHECK value lists for §1.8-§1.9 snapshot and evaluation records.
 SCALE_HEALTH_VALUES = (
@@ -153,6 +154,9 @@ class ScaleEnrollmentRecord(Base):
     product_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     offer_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     market_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Holds the Landing Page evidence hash the Winner's ExperimentVersion froze
+    # (#129): the column keeps its historical name; no Landing Page version
+    # entity exists, the Landing Page belongs to the OfferVersion.
     landing_page_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     market_asset_binding_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Normalized before the binding key is calculated; a campaign-only or
@@ -299,6 +303,9 @@ class ScaleEpisodeRecord(Base):
     product_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     offer_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     market_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Holds the Landing Page evidence hash the Winner's ExperimentVersion froze
+    # (#129): the column keeps its historical name; no Landing Page version
+    # entity exists, the Landing Page belongs to the OfferVersion.
     landing_page_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     market_asset_binding_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     meta_connection_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1093,6 +1100,10 @@ class ScaleDeliveryConfigSourceRecord(Base):
             SCENARIO_BICONDITIONAL_SQL,
             name="ck_sdcs_scenario_biconditional",
         ),
+        CheckConstraint(
+            f"diagnostic_state IN {DELIVERY_DIAGNOSTIC_STATE_VALUES}",
+            name="ck_sdcs_diagnostic_state",
+        ),
         UniqueConstraint(
             "workspace_id", "meta_mode", "episode_id", "source_revision",
             name="uq_sdcs_revision",
@@ -1129,6 +1140,9 @@ class ScaleDeliveryConfigSourceRecord(Base):
     # only inside protected raw evidence, never in this projection-visible row.
     targeting_safety_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     offer_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Holds the Landing Page evidence hash the Winner's ExperimentVersion froze
+    # (#129): the column keeps its historical name; no Landing Page version
+    # entity exists, the Landing Page belongs to the OfferVersion.
     landing_page_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     comparability_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1138,6 +1152,26 @@ class ScaleDeliveryConfigSourceRecord(Base):
     call_intent_id: Mapped[str] = mapped_column(String(64), nullable=False)
     reconciliation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # -- Delivery diagnostic and status history (#109, contract §8/§19) -----
+    # Sealed into `DeliveryConfigSnapshot` from snapshot schema v3 on; v1/v2
+    # snapshots never read them. `diagnostic_state` is `unknown` unless the
+    # Meta read returned the field, and then `diagnostic_source_field` and
+    # `diagnostic_observed_at` record which field and when.
+    diagnostic_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="unknown", server_default=text("'unknown'"),
+    )
+    diagnostic_source_field: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    diagnostic_observed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    # One entry per Episode day the configuration was read for and entity
+    # level: `{"local_day": "YYYY-MM-DD", "entity_level": "campaign" |
+    # "ad_set" | "ad", "status": <effective status>}`, sorted. Sealing turns
+    # each into a `DeliveryStatusEvent` at local noon of that day in the
+    # Episode's time zone, so the evaluator's `observed_at.date()` is the day.
+    status_history: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow,
     )
@@ -1186,6 +1220,16 @@ class ScaleEvidenceSourceManifestRecord(Base):
             "workspace_id", "meta_mode", "episode_id", "source_revision",
             name="uq_sesm_episode_revision",
         ),
+        # A replayed or concurrent `scale_collect_sources` Job finds the
+        # manifest its batch already produced instead of allocating a new
+        # source revision (#109). Manifests without a key are unconstrained.
+        Index(
+            "uq_sesm_episode_collection_key",
+            "workspace_id", "meta_mode", "episode_id", "collection_key",
+            unique=True,
+            postgresql_where=text("collection_key IS NOT NULL"),
+            sqlite_where=text("collection_key IS NOT NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("sesm"))
@@ -1205,6 +1249,10 @@ class ScaleEvidenceSourceManifestRecord(Base):
     safe_watermark: Mapped[date] = mapped_column(Date, nullable=False)
     terminal_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     canonical_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # `scale-collect:{connection_id}:{D}:{run_generation}`: the observation
+    # batch this manifest was collected from (#109). Null for manifests not
+    # written by the collector.
+    collection_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow,
     )
@@ -2531,8 +2579,11 @@ class ScaleAdviceThreadEventRecord(Base):
             f"current_lifecycle IN {ADVICE_LIFECYCLE_VALUES}",
             name="ck_sate_current_lifecycle",
         ),
+        # A superseded thread names the thread that succeeds it, or the
+        # Target event that made it inapplicable (#113), or both.
         CheckConstraint(
-            "(event_type != 'superseded') OR (successor_thread_id IS NOT NULL)",
+            "(event_type != 'superseded') OR (successor_thread_id IS NOT NULL) "
+            "OR (semantic_event_id IS NOT NULL)",
             name="ck_sate_superseded_shape",
         ),
     )
@@ -2552,6 +2603,10 @@ class ScaleAdviceThreadEventRecord(Base):
     current_lifecycle: Mapped[str] = mapped_column(String(20), nullable=False)
     # The new-generation thread this thread was superseded by.
     successor_thread_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The `ScaleTargetLifecycleEventRecord` (publish or withdraw) whose
+    # Target change made this thread inapplicable (#113); set only on a
+    # `superseded` event.
+    semantic_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
     deduplication_key: Mapped[str] = mapped_column(String(128), nullable=False)
     executor_id: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -3101,7 +3156,8 @@ class ScaleDeliveryTargetRecord(Base):
     v3's delivery-target row only stored the Meta remote hierarchy. This one
     independently proves the *complete* delivery context: the remote
     hierarchy, its source provenance per level, the creative content bound to
-    it, market, attribution, and the exact library versions -- everything
+    it, market, attribution, the OfferVersion and the Landing Page evidence
+    hash frozen from it (#129) -- everything
     ``lock_and_validate_enrollment_lineage`` (Task 9) needs to prove a Winner
     and a delivery slot are the same offer, market, placement and
     attribution, not just that both happen to exist. Spec §4.3.
@@ -3167,12 +3223,6 @@ class ScaleDeliveryTargetRecord(Base):
             name="fk_sdt_offer_version",
             ondelete="RESTRICT",
         ),
-        ForeignKeyConstraint(
-            ["workspace_id", "landing_page_version_id"],
-            ["library_versions.workspace_id", "library_versions.id"],
-            name="fk_sdt_landing_page_version",
-            ondelete="RESTRICT",
-        ),
         # Nullable composite FKs: PostgreSQL's default MATCH SIMPLE means a
         # NULL in any referencing column exempts the row from the check, so
         # each of these is only actually enforced for the one source_type
@@ -3218,14 +3268,14 @@ class ScaleDeliveryTargetRecord(Base):
             "adset_remote_id", "ad_remote_id", "ad_creative_id",
             "creative_asset_version_id", "market_code", "placement",
             "attribution_setting", "offer_version_id",
-            "landing_page_version_id", "target_fingerprint",
+            "landing_page_evidence_hash", "target_fingerprint",
             name="uq_sdt_exact_context",
         ),
         UniqueConstraint(
             "workspace_id", "meta_mode", "id", "meta_connection_id",
             "ad_account_id", "scenario_scope_key", "campaign_remote_id",
             "adset_remote_id", "ad_remote_id", "creative_asset_version_id",
-            "market_code", "offer_version_id", "landing_page_version_id",
+            "market_code", "offer_version_id", "landing_page_evidence_hash",
             "target_fingerprint",
             name="uq_sdt_enrollment_binding",
         ),
@@ -3304,9 +3354,13 @@ class ScaleDeliveryTargetRecord(Base):
     attribution_setting: Mapped[str] = mapped_column(String(64), nullable=False)
     contract_generation_id: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    # -- Library versions bound to this delivery slot --------------------------
+    # -- Offer and Landing Page bound to this delivery slot ------------------
     offer_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    landing_page_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The Landing Page evidence hash the source ExperimentVersion froze from
+    # its OfferVersion (#129). The Landing Page is part of the OfferVersion
+    # (creative-library contract §5.2), so there is no Landing Page version
+    # to reference and no foreign key.
+    landing_page_evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
     # -- Source provenance (typed, individual per hierarchy level) -----------
     source_type: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -3337,7 +3391,7 @@ SCALE_COMMAND_TYPE_VALUES = (
     "'activate_enrollment', 'resume_enrollment', "
     "'create_target_publication_preview', 'publish_scale_target', "
     "'create_target_withdrawal_preview', 'withdraw_scale_target', "
-    "'create_scale_export')"
+    "'create_scale_export', 'create_delivery_target')"
 )
 
 

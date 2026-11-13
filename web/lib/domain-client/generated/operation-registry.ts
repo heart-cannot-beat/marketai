@@ -1912,6 +1912,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'create_scale_delivery_target',
+    {
+      operationId: 'create_scale_delivery_target',
+      method: 'POST',
+      pathTemplate: '/api/v1/scale/{meta_mode}/delivery-targets',
+      pathParams: ['meta_mode'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 8192,
+      maxResponseBytes: 65536,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'create_scale_delivery_target_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'create_scale_enrollment',
     {
       operationId: 'create_scale_enrollment',
@@ -5029,6 +5056,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         200: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'list_scale_enrollments_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'list_scale_observed_ads',
+    {
+      operationId: 'list_scale_observed_ads',
+      method: 'GET',
+      pathTemplate: '/api/v1/scale/{meta_mode}/observed-ads',
+      pathParams: ['meta_mode'],
+      queryParams: ['meta_connection_id'],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'list_scale_observed_ads_200' },
           locationShapes: [],
         },
         422: {

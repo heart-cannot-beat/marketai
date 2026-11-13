@@ -67,7 +67,9 @@ class TestTruthPolicySourcesThroughPublish(LibraryFixtures):
         return version_id
 
     def _batch(self) -> dict:
-        draft = self.harness._create_draft_via_http(f"{self.tag}-{next(_TAGS)}")
+        draft = self.harness._create_draft_via_http(
+            f"{self.tag}-{next(_TAGS)}", offer_markets=("US", legacy_routes.MARKET_COUNTRY),
+        )
         draft["recipe_hash"] = self.harness._analysis_recipe_hash(draft["batch_id"])
         self.harness._seed_analysis(draft["winner"], draft["recipe_hash"], draft["batch_id"])
         with tenant_session(self.owner) as session:
@@ -76,10 +78,12 @@ class TestTruthPolicySourcesThroughPublish(LibraryFixtures):
             ).country
         return draft
 
-    def _fact_set(self, data_source_entry_id: str, country: str) -> str:
+    def _fact_set(self, data_source_entry_id: str, draft: dict) -> str:
+        """A published fact set of price and availability rows for the Batch's Offer and market."""
         now = datetime.now(timezone.utc)
         window = {
-            "country_code": country,
+            "offer_entry_id": draft["offer_entry_id"],
+            "country_code": draft["country"],
             "valid_from": (now - timedelta(days=1)).isoformat(),
             "valid_to": (now + timedelta(days=365)).isoformat(),
             "evidence_source": "Acme Charge price list",
@@ -166,7 +170,7 @@ class TestTruthPolicySourcesThroughPublish(LibraryFixtures):
         draft = self._batch()
 
         response = self._start(
-            draft, policy_version_id, self._fact_set(source_entry_id, draft["country"])
+            draft, policy_version_id, self._fact_set(source_entry_id, draft)
         )
 
         self.assertEqual(response.status_code, 200, response.text)
@@ -183,7 +187,7 @@ class TestTruthPolicySourcesThroughPublish(LibraryFixtures):
         policy_version_id = self._policy(source_entry_id)
         first = self._batch()
         started = self._start(
-            first, policy_version_id, self._fact_set(source_entry_id, first["country"])
+            first, policy_version_id, self._fact_set(source_entry_id, first)
         )
         self.assertEqual(started.status_code, 200, started.text)
         self.assertEqual(
@@ -200,7 +204,7 @@ class TestTruthPolicySourcesThroughPublish(LibraryFixtures):
         self.assertEqual(service.get_version(self.owner, policy_version_id)["state"], "effective")
         second = self._batch()
         restarted = self._start(
-            second, policy_version_id, self._fact_set(source_entry_id, second["country"])
+            second, policy_version_id, self._fact_set(source_entry_id, second)
         )
 
         self.assertEqual(restarted.status_code, 200, restarted.text)
@@ -218,7 +222,7 @@ class TestTruthPolicySourcesThroughPublish(LibraryFixtures):
         source_entry_id, source_version_id = self._data_source()
         policy_version_id = self._policy(source_entry_id)
         draft = self._batch()
-        fact_set_version_id = self._fact_set(source_entry_id, draft["country"])
+        fact_set_version_id = self._fact_set(source_entry_id, draft)
 
         preview = self.client.post(f"/api/v1/library/versions/{source_version_id}/withdraw-impact")
         self.assertEqual(preview.status_code, 201, preview.text)
@@ -243,7 +247,7 @@ class TestTruthPolicySourcesThroughPublish(LibraryFixtures):
         source_entry_id, _version_id = self._data_source()
         policy_version_id = self._policy(source_entry_id)
         draft = self._batch()
-        fact_set_version_id = self._fact_set(source_entry_id, draft["country"])
+        fact_set_version_id = self._fact_set(source_entry_id, draft)
 
         service.archive_entry(
             self.owner, source_entry_id,
@@ -342,7 +346,7 @@ class TestTruthPolicySourcesThroughPublish(LibraryFixtures):
 
         draft = self._batch()
         response = self._start(
-            draft, legacy_policy_version_id, self._fact_set(source_entry_id, draft["country"])
+            draft, legacy_policy_version_id, self._fact_set(source_entry_id, draft)
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(

@@ -1,6 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/requireSession';
-import { Role, Team } from '@prisma/client';
+import { Prisma, Role, Team } from '@prisma/client';
+import {
+  recordMembershipChangeInTx,
+  type MemberRemovalReason,
+  type MembershipActor,
+} from '@/lib/membershipAudit';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getCurrentUser } from './user';
 import { normalizeUser } from './user';
@@ -73,8 +78,18 @@ export const addTeamMember = async (
   });
 };
 
-export const removeTeamMember = async (teamId: string, userId: string) => {
-  return await prisma.teamMember.delete({
+/**
+ * Delete one membership and append its `member.removed` audit event in the
+ * caller's transaction. `delete` returns the row as it was removed, so the
+ * recorded role is the one the member held at that moment.
+ */
+export const removeTeamMemberInTx = async (
+  tx: Prisma.TransactionClient,
+  teamId: string,
+  userId: string,
+  removal: { actor: MembershipActor; reason: MemberRemovalReason }
+) => {
+  const removed = await tx.teamMember.delete({
     where: {
       teamId_userId: {
         teamId,
@@ -82,6 +97,30 @@ export const removeTeamMember = async (teamId: string, userId: string) => {
       },
     },
   });
+
+  await recordMembershipChangeInTx(tx, {
+    teamId,
+    membershipId: removed.id,
+    userId,
+    actor: removal.actor,
+    change: {
+      type: 'member.removed',
+      role: removed.role,
+      reason: removal.reason,
+    },
+  });
+
+  return removed;
+};
+
+export const removeTeamMember = async (
+  teamId: string,
+  userId: string,
+  removal: { actor: MembershipActor; reason: MemberRemovalReason }
+) => {
+  return await prisma.$transaction((tx) =>
+    removeTeamMemberInTx(tx, teamId, userId, removal)
+  );
 };
 
 export const getTeams = async (userId: string) => {

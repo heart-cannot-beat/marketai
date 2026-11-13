@@ -121,6 +121,7 @@
       {
         "fact_id": "price-us-65w",
         "fact_type": "price",
+        "offer_entry_id": "le_acme_charge_65w_offer",
         "country_code": "US",
         "valid_from": "2026-01-01",
         "valid_to": "2099-12-31",

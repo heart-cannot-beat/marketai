@@ -22,20 +22,51 @@ exposes exactly two public entry points:
     applicable, append an audit event, and CAS the run to its terminal
     outcome.
 
+  Inside a ``tenant_session`` each phase's transaction carries the session's
+  TenantContext (#96): ``SET LOCAL`` ends with the transaction, so Phase A
+  commits with ``commit_and_rebind`` and Phase C opens its own bound
+  transaction. Without that, PostgreSQL's FORCE RLS hides every Scale row
+  from the statements after Phase A's commit.
+
+Two helpers serve the ``scale_evaluate`` Job (#97):
+:func:`enqueue_scale_evaluation` enqueues a run with its Meta mode in the
+payload, and :func:`evaluation_job_context` reads it back for the handler. A
+claimed Job's context is frozen from the Job row, which records no mode, and
+every Scale table's RLS policy needs one.
+
 Known Task-12 scoping decisions (the full generality is later tasks' job):
 
 * Advice lifecycle processing (thread resolution, occurrence creation,
   dispositions/cooldowns, notification intents -- spec §3.5) is delegated to
   :func:`app.scale.advice.process_advice_candidates`, called from Phase C
-  step 6 with the Evaluation's own persisted advice candidates.
-* Job dispatch for the ``scale_evaluate`` job (spec §3.8) is Task 14's
-  concern. ``request_scale_evaluation`` only creates/reuses the durable run
-  checkpoint; the run id is already the complete job payload the future
-  dispatcher needs.
+  step 6 with the Evaluation's own persisted advice candidates. Phase C
+  step 10 schedules every active thread's delayed ``scale_advice_expire``
+  Job (#111). Both land in Phase C's one transaction.
+* Deciding when to request and enqueue an evaluation (spec §3.8 trigger
+  sources) is ``app.scale.live_trigger`` (#110): the collector's complete
+  source manifest requests a ``live`` run and enqueues it in the same
+  transaction. ``request_scale_evaluation`` only creates/reuses the durable
+  run checkpoint; ``enqueue_scale_evaluation`` is the enqueue it calls.
+* A run whose Episode another unfinished run holds (two adjacent days'
+  runs overlapping) is not terminalized: Phase A raises
+  :class:`ScaleEvaluationDeferred` and the Job retries it once the holder
+  releases the phase (#110). The run stays ``requested``.
 * Forward-replay lineage reconciliation (spec §3.8 "Backfill lineage") is not
   implemented: a ``forward_replay`` run never wins the projection CAS here.
   The run/Evaluation records still carry every field a later task needs to
   add that generality without a schema change.
+* A ``backfill`` run (#113: a complete manifest older than the Episode's
+  latest, ``app.scale.live_trigger``) is historical: it neither takes nor
+  needs the Episode's phase, never rolls the Episode over (a configuration
+  that differs cancels it), and its Evaluation is persisted without moving
+  the projection, the streaks, Advice or their expiry Jobs (spec §3.4 step
+  3). Only a projection-eligible run processes Advice, so a stale semantic
+  run that lost the cursor opens no thread either.
+* A ``target_change`` run (#113, ``app.scale.target_change``) re-evaluates
+  the latest complete manifest one semantic event later than every earlier
+  run of its Episode, so it wins the cursor over the live run of the same
+  manifest; its Advice pass supersedes what remains of the previous
+  Target's Advice, citing the Target event.
 * ``ck_sevr_snapshot_shape`` (a non-``requested`` run_state requires
   ``snapshot_id``) forces every early Phase-A rejection that has no sealed
   snapshot yet (a blocked source manifest, or any other
@@ -52,18 +83,27 @@ Known Task-12 scoping decisions (the full generality is later tasks' job):
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.adapters.persistence.models import AuditEventRecord, new_id, utcnow
-from app.platform.tenancy import TenantContext
+from app.adapters.persistence.models import AuditEventRecord, JobRecord, new_id, utcnow
+from app.platform.jobs import enqueue_in_session
+from app.platform.tenancy import (
+    VALID_META_MODES,
+    TenantContext,
+    apply_to_session,
+    commit_and_rebind,
+    tenant_scope,
+)
 from app.scale._canonical import canonical_encode, canonical_hash
 from app.scale._contracts import ScaleEvaluation, ScaleEvidenceSnapshot
-from app.scale.advice import process_advice_candidates
+from app.scale.advice import enqueue_episode_advice_expiries, process_advice_candidates
 from app.scale.enrollment import (
     DeliveryConfigBaseline,
     EpisodeContext,
@@ -97,12 +137,20 @@ from app.scale.models import (
     ScaleEvidenceSnapshotRecord,
     ScaleManifestItemRecord,
 )
-from app.scale.types import RunOutcomeKind
+from app.scale.types import RunOutcomeKind, TriggerKind
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 __all__ = [
     "ScaleEvaluationRequest",
     "ScaleRunOutcome",
     "ScaleOrchestrationError",
+    "ScaleEvaluationDeferred",
+    "BACKFILL_TRIGGER_KIND",
+    "TARGET_CHANGE_TRIGGER_KIND",
+    "EVALUATION_JOB_MAX_ATTEMPTS",
+    "PHASE_CONFLICT_RETRY_SECONDS",
+    "enqueue_scale_evaluation",
+    "evaluation_job_context",
     "request_scale_evaluation",
     "run_scale_evaluation",
 ]
@@ -124,12 +172,43 @@ _RUN_STATE_BY_OUTCOME = {
 }
 
 
+#: Trigger kinds of the runs #113 (#101 S7) requests: a complete manifest
+#: older than the Episode's latest, and a Target published or withdrawn.
+BACKFILL_TRIGGER_KIND = TriggerKind.BACKFILL.value
+TARGET_CHANGE_TRIGGER_KIND = TriggerKind.TARGET_CHANGE.value
+#: The trigger kinds whose Evaluation may move the Episode's projection.
+_PROJECTING_TRIGGER_KINDS = (
+    TriggerKind.LIVE.value, TriggerKind.POLICY_CHANGE.value, TARGET_CHANGE_TRIGGER_KIND,
+)
+
+#: How long a run waits before it tries an Episode another run holds again.
+PHASE_CONFLICT_RETRY_SECONDS = 60
+#: Attempts of a ``scale_evaluate`` Job. Only a deferral retries (every other
+#: failure is final), so this bounds how long a run waits for the run ahead
+#: of it: ten minutes covers a crashed holder's 300-second lease and rerun.
+EVALUATION_JOB_MAX_ATTEMPTS = 10
+
+
 class ScaleOrchestrationError(RuntimeError):
     """Deterministic, stably-coded rejection raised by this module."""
 
     def __init__(self, code: str, detail: str = ""):
         self.code = code
         super().__init__(f"{code}: {detail}" if detail else code)
+
+
+class ScaleEvaluationDeferred(ScaleOrchestrationError):
+    """The run cannot start yet; nothing was written (#110).
+
+    Raised when another unfinished run holds the Episode's phase -- the
+    previous day's run is still evaluating. The ``scale_evaluate`` Job
+    retries after ``retry_after_seconds`` instead of failing the run.
+    """
+
+    def __init__(self, code: str, detail: str = "", *,
+                 retry_after_seconds: float = PHASE_CONFLICT_RETRY_SECONDS):
+        super().__init__(code, detail)
+        self.retry_after_seconds = retry_after_seconds
 
 
 @dataclass(frozen=True)
@@ -177,10 +256,10 @@ class ScaleRunOutcome:
 
 
 def _for_update(session: Session, stmt):
-    """PostgreSQL row locking; SQLite (tests, bounded local path) is a no-op."""
-    if session.get_bind().dialect.name == "postgresql":
-        return stmt.with_for_update()
-    return stmt
+    """PostgreSQL row locking. SQLite (tests, bounded local path) has no
+    ``FOR UPDATE`` and SQLAlchemy leaves it out there, but the statement
+    keeps the lock, so the SQLite grant guard (#59) sees it."""
+    return stmt.with_for_update()
 
 
 def _require_meta_mode(context: TenantContext) -> str:
@@ -318,13 +397,63 @@ def request_scale_evaluation(
             raise
         return recovered.id
 
-    # Job enqueuing (spec §3.8): the actual `scale_evaluate` dispatch
-    # mechanism, its lease, and its idempotency key
-    # (`scale-eval:{run_id}:{algorithm_version}`) are Task 14's concern. The
-    # durable run this function just created/reused is already the complete
-    # payload a future dispatcher needs -- recording the intent here means
-    # nothing more than handing back this id.
+    # Enqueuing is a separate step (`enqueue_scale_evaluation`); when to
+    # request and enqueue a run is #101's scheduling.
     return run.id
+
+
+def evaluation_job_key(run_id: str, algorithm_version: str, redrive: int = 0) -> str:
+    """``scale-eval:{run_id}:{algorithm_version}``, and ``:redrive-{n}`` for
+    the n-th time a stuck run is enqueued again (#101 Q10)."""
+    key = f"scale-eval:{run_id}:{algorithm_version}"
+    return f"{key}:redrive-{redrive}" if redrive else key
+
+
+def enqueue_scale_evaluation(
+    session: Session, context: TenantContext, evaluation_run_id: str, *, redrive: int = 0,
+) -> JobRecord:
+    """Enqueue the ``scale_evaluate`` Job for one durable run (spec §3.8),
+    or return the Job its idempotency key already names.
+
+    The key is the spec's ``scale-eval:{run_id}:{algorithm_version}``;
+    ``redrive`` names a later Job for a run whose Jobs all ended without
+    finishing it (:func:`evaluation_job_key`). The payload carries the run's
+    Meta mode beside its id (#97): the Worker's claimed context is frozen
+    from the Job row, which records no mode, and the run is visible under
+    RLS only to a context that names it.
+    """
+    meta_mode = _require_meta_mode(context)
+    run = session.execute(
+        select(ScaleEvaluationRunRecord).filter_by(
+            workspace_id=context.workspace_id, meta_mode=meta_mode, id=evaluation_run_id,
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise ScaleOrchestrationError("run_not_found", evaluation_run_id)
+    with tenant_scope(session, context):
+        return enqueue_in_session(
+            session,
+            context=context,
+            job_type="scale_evaluate",
+            payload={"evaluation_run_id": run.id, "meta_mode": meta_mode},
+            idempotency_key=evaluation_job_key(run.id, run.algorithm_version, redrive),
+            resource_type="scale_evaluation_run",
+            resource_id=run.id,
+            max_attempts=EVALUATION_JOB_MAX_ATTEMPTS,
+        )
+
+
+def evaluation_job_context(context: TenantContext, payload: Mapping[str, Any]) -> TenantContext:
+    """The TenantContext a ``scale_evaluate`` Job evaluates under (#97).
+
+    The claimed context names no Meta mode; the payload does. A payload
+    without a valid mode is refused as ``missing_input`` before the Job
+    runs, instead of failing inside the evaluation as ``meta_mode_required``.
+    """
+    meta_mode = str(payload.get("meta_mode") or "")
+    if meta_mode not in VALID_META_MODES:
+        raise ScaleOrchestrationError("missing_input", "缺少或无效的 meta_mode")
+    return replace(context, meta_mode=meta_mode)
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +461,7 @@ def request_scale_evaluation(
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def run_scale_evaluation(
     session: Session, context: TenantContext, evaluation_run_id: str,
 ) -> ScaleRunOutcome:
@@ -354,7 +484,25 @@ def run_scale_evaluation(
 
     evaluation = evaluate_scale(snapshot)
 
+    # Spec §3.4 Phase C: "Open a second tenant transaction".
+    _begin_bound_transaction(session)
     return _phase_c(session, context, run_id, snapshot, evaluation)
+
+
+def _begin_bound_transaction(session: Session) -> None:
+    """Open a transaction carrying the session's TenantContext (#96).
+
+    ``commit_and_rebind`` without the commit: Phase B has already closed its
+    transaction, and binding before ``evaluate_scale`` would hold one open
+    through the computation. A session with no bound context (a bare
+    ``Session``) needs nothing.
+    """
+    context = session.info.get("tenant_context")
+    if context is None:
+        return
+    if not session.in_transaction():
+        session.begin()
+    apply_to_session(session, context)
 
 
 def _fail_after_seal(session: Session, context: TenantContext, run_id: str, detail: str) -> ScaleRunOutcome:
@@ -435,6 +583,15 @@ def _phase_a(
     try:
         snapshot_id = seal_snapshot(session, context, run.id)
     except SnapshotSealingError as exc:
+        if exc.code == "episode_phase_conflict":
+            # The previous run still holds the Episode (#110). Sealing
+            # refused before writing anything; release the locks and let the
+            # Job try again once that run's Phase C has released the phase.
+            # Read before the rollback: it expires every row, and on
+            # PostgreSQL a refresh outside the bound transaction sees none.
+            detail = f"run {episode.phase_run_id} holds Episode {episode.id}"
+            session.rollback()
+            raise ScaleEvaluationDeferred("episode_phase_conflict", detail) from exc
         if run.snapshot_id is None:
             # No snapshot exists (manifest blocked, or any other rejection
             # `seal_snapshot()` raises before inserting a snapshot row). The
@@ -461,11 +618,11 @@ def _phase_a(
                 episode_id=run.episode_id,
                 detail=exc.code,
             )
-        # The snapshot itself sealed (its content is committed, real, sealed
-        # evidence); only the Episode `phase_run_id` fencing step afterward
-        # failed because a different live run already owns it. Persist the
-        # pending `run.snapshot_id`/`run_state` sealing already assigned in
-        # memory, then terminalize -- the constraint is now satisfiable.
+        # A rejection after the snapshot sealed (its content is real, sealed
+        # evidence). `seal_snapshot` raises none today -- the phase fence
+        # moved ahead of sealing (#110) -- but a later one must still leave
+        # the run constraint-safe: persist the pending `run.snapshot_id`/
+        # `run_state` sealing already assigned in memory, then terminalize.
         session.flush()
         outcome = _terminalize(
             session, context, run, episode, kind=RunOutcomeKind.FAILED_INTEGRITY, detail=exc.code,
@@ -481,7 +638,15 @@ def _phase_a(
     # is this module's job. Checked after sealing (see module docstring) so
     # the CHECK constraint on the terminal run_state is always satisfiable.
     if snapshot_row.delivery_comparability_hash != episode.delivery_comparability_hash:
-        outcome = _apply_episode_rollover(session, context, run, enrollment, episode)
+        if run.trigger_kind == BACKFILL_TRIGGER_KIND:
+            # An older day's read never closes the live Episode (#113):
+            # nothing comparable to evaluate, and nothing to roll over.
+            outcome = _terminalize(
+                session, context, run, episode,
+                kind=RunOutcomeKind.CANCELLED, detail="backfill_configuration_differs",
+            )
+        else:
+            outcome = _apply_episode_rollover(session, context, run, enrollment, episode)
         session.commit()
         return outcome
 
@@ -503,7 +668,9 @@ def _phase_a(
         session.commit()
         return outcome
 
-    session.commit()
+    # Phase B reads in the next transaction (the sealed snapshot, or this
+    # run again in `_fail_after_seal`), so the context goes with it (#96).
+    commit_and_rebind(session)
     return run.id, snapshot_id
 
 
@@ -666,12 +833,16 @@ def _phase_c(
         session.commit()
         return outcome
 
+    # A historical backfill holds no phase and projects nothing, so it may
+    # persist against an Episode closed meanwhile (spec §3.4 Phase C).
+    historical = run.trigger_kind == BACKFILL_TRIGGER_KIND
+
     # A concurrent Episode closure raced this run during Phase B's DB-free
     # window (spec §3.4 Phase C: "A concurrent configuration rollover makes
     # a live run `episode_rolled_over`; pause, close, or another closure
     # makes it `cancelled`"). Distinguish by `closure_reason` rather than
     # collapsing every closure into `cancelled`.
-    if episode.phase == "closed":
+    if episode.phase == "closed" and not historical:
         if episode.closure_reason == "delivery_configuration_changed":
             outcome = _terminalize(
                 session, context, run, episode,
@@ -686,7 +857,7 @@ def _phase_c(
         session.commit()
         return outcome
 
-    if episode.phase_run_id != run.id:
+    if episode.phase_run_id != run.id and not historical:
         outcome = _terminalize(
             session, context, run, episode,
             kind=RunOutcomeKind.CANCELLED, detail="episode_phase_owner_changed",
@@ -716,23 +887,32 @@ def _phase_c(
             )
             no_delivery_closing = True
 
-    if not no_delivery_closing:
+    if projection_eligible and not no_delivery_closing:
         # Step 6: Advice lifecycle processing (spec §3.5) -- thread
         # resolution, occurrence creation, eligible-miss transitions, and
-        # recurrence/semantic-change supersession. Note that
-        # `process_advice_candidates` commits its own transaction
-        # internally; the Evaluation/projection writes above are already
-        # flushed (and visible to it within this same session) by the time
-        # it runs.
+        # recurrence/semantic-change supersession. It flushes into this
+        # transaction instead of committing its own (#111): the thread
+        # changes commit with their expiry Jobs and the run's terminal state.
+        # A run that may not project -- a historical backfill or a stale
+        # semantic run -- cannot mutate Advice or notifications either
+        # (spec §3.4 step 3, #113).
         process_advice_candidates(
             session, context, episode.id, evaluation_row.id, evaluation.advice_candidates,
             trigger_kind=run.trigger_kind,
             evaluated_local_day=snapshot.as_of_local_day,
             projection_eligible=projection_eligible,
+            commit=False,
+            semantic_event_id=(
+                run.triggering_semantic_event_id
+                if run.trigger_kind == TARGET_CHANGE_TRIGGER_KIND else None
+            ),
         )
 
     # Step 7: audit.
-    _append_run_audit(session, context, run, enrollment, episode, evaluation_row, evaluation, reused)
+    _append_run_audit(
+        session, context, run, enrollment, episode, evaluation_row, evaluation, reused,
+        projected=projection_eligible,
+    )
 
     # Step 8: unless closure already closed the Episode, CAS its phase back
     # to `collecting`.
@@ -741,13 +921,22 @@ def _phase_c(
         episode.phase_run_id = None
         episode.revision += 1
 
-    # Step 9: CAS the run to its terminal outcome and commit.
+    # Step 9: CAS the run to its terminal outcome.
     outcome_kind = RunOutcomeKind.ALREADY_EVALUATED if reused else RunOutcomeKind.EVALUATED
     run.run_state = "evaluated"
     run.outcome_kind = outcome_kind.value
     run.evaluation_id = evaluation_row.id
     run.updated_at = utcnow()
     session.flush()
+
+    # Step 10: schedule each active thread's freshness-deadline Job (spec
+    # §3.5, #111). After the flush above, so the deadline counts this run's
+    # freshness reference the way the handler's recheck will; before the
+    # commit below, so no thread is committed without the Job for its
+    # current deadline. A deadline this run did not move keeps its Job; a
+    # run that did not project moved none.
+    if projection_eligible:
+        enqueue_episode_advice_expiries(session, context, episode.id)
     session.commit()
 
     return ScaleRunOutcome(
@@ -935,8 +1124,10 @@ def _decide_projection_eligibility(
     revision, semantic-event sequence, and replay lineage -- not insertion
     time or lexical Evaluation ID. Forward-replay lineage reconciliation
     (only a final head may project) is out of this task's scope: a
-    `forward_replay` run is simply never eligible here."""
-    if run.trigger_kind not in ("live", "policy_change", "target_change"):
+    `forward_replay` run is simply never eligible here, and neither is a
+    historical `backfill` (§18: it may not move the projection back,
+    #113)."""
+    if run.trigger_kind not in _PROJECTING_TRIGGER_KINDS:
         return False
     new_cursor = (
         snapshot.as_of_local_day,
@@ -1035,11 +1226,14 @@ def _append_run_audit(
     evaluation_row: ScaleEvaluationRecord,
     evaluation: ScaleEvaluation,
     reused: bool,
+    *,
+    projected: bool,
 ) -> None:
     """Spec §3.4 step 7: audit event carrying the system executor, original
     Enrollment creator/initiator, triggering lineage, run/snapshot/Evaluation
     IDs, and result hash. Reuses the platform's generic `AuditEventRecord`
-    (no Scale-specific audit table exists yet)."""
+    (no Scale-specific audit table exists yet). ``trigger_kind`` and
+    ``projected`` say whether the Evaluation moved the Episode (#113)."""
     session.add(
         AuditEventRecord(
             id=new_id("audit"),
@@ -1064,6 +1258,8 @@ def _append_run_audit(
                 "triggering_sync_run_id": run.triggering_sync_run_id,
                 "triggering_semantic_event_id": run.triggering_semantic_event_id,
                 "original_initiator_id": enrollment.original_initiator_id,
+                "trigger_kind": run.trigger_kind,
+                "projected": projected,
             },
         )
     )

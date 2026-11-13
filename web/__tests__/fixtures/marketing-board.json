@@ -885,5 +885,611 @@
         "m_story"
       ]
     }
+  },
+  "revision": {
+    "pending": {
+      "version": "marketing-board-v1",
+      "question": "Which buying proposition is worth exploring further?",
+      "stage": "screen_angles",
+      "comparison_kind": "whole_combinations",
+      "primary_comparison": {
+        "kind": "between_groups",
+        "groups": [
+          {
+            "id": "g_a",
+            "name": "Group A",
+            "angle_ids": ["a_option"],
+            "combination_ids": ["r_live"]
+          },
+          {
+            "id": "g_b",
+            "name": "Group B",
+            "angle_ids": ["a_safe"],
+            "combination_ids": ["r_cert"]
+          }
+        ]
+      },
+      "secondary_observation": {
+        "kind": "expression_coverage",
+        "angle_id": null
+      },
+      "tree": {
+        "angles": [
+          {
+            "angle_id": "a_option",
+            "proposition": "One more charging option",
+            "group_ids": ["g_a"],
+            "expressions": [
+              {
+                "expression_id": "x_live",
+                "name": "Live connection demo",
+                "visual_mechanism": "live_connection_demo",
+                "details_missing": false,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "r_live",
+                    "group_id": "g_a",
+                    "group_name": "Group A",
+                    "headline": "Plug in and charge",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "u_live_1",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a_option",
+                        "expression_id": "x_live",
+                        "combination_id": "r_live",
+                        "group_id": "g_a",
+                        "stage": "blocked",
+                        "blocked_reason": "quality_changes_requested",
+                        "quality": "needs_changes",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": ["u_cert_1"],
+                        "awaiting_combination_ids": [],
+                        "gap": "review",
+                        "next_action": "revise"
+                      },
+                      {
+                        "asset_version_id": "u_live_1r",
+                        "execution_index": 1,
+                        "execution_version": 2,
+                        "parent_version_id": "u_live_1",
+                        "duplicate_of": null,
+                        "angle_id": "a_option",
+                        "expression_id": "x_live",
+                        "combination_id": "r_live",
+                        "group_id": "g_a",
+                        "stage": "paired_qc_done",
+                        "blocked_reason": null,
+                        "quality": null,
+                        "ai_qc": {
+                          "id": "aiqc_live_1r",
+                          "state": "succeeded",
+                          "current": true,
+                          "quality_suggestion": "ready_to_confirm"
+                        },
+                        "paired_ai_qc": {
+                          "id": "aiqc_live_1r_pair",
+                          "state": "succeeded",
+                          "current": true,
+                          "quality_suggestion": "ready_to_confirm"
+                        },
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": ["u_cert_1"],
+                        "awaiting_combination_ids": [],
+                        "gap": "review",
+                        "next_action": "review"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "angle_id": "a_safe",
+            "proposition": "Safer at high power",
+            "group_ids": ["g_b"],
+            "expressions": [
+              {
+                "expression_id": "x_cert",
+                "name": "Certification evidence explained",
+                "visual_mechanism": "certification_walkthrough",
+                "details_missing": false,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "r_cert",
+                    "group_id": "g_b",
+                    "group_name": "Group B",
+                    "headline": "Certified for high power",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "u_cert_1",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a_safe",
+                        "expression_id": "x_cert",
+                        "combination_id": "r_cert",
+                        "group_id": "g_b",
+                        "stage": "ready",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": ["u_live_1r"],
+                        "awaiting_combination_ids": [],
+                        "gap": "export",
+                        "next_action": "none"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "matrix": {
+        "rows": [
+          {
+            "expression_id": "x_live",
+            "name": "Live connection demo",
+            "visual_mechanism": "live_connection_demo",
+            "angle_ids": ["a_option"],
+            "details_missing": false,
+            "shared": false
+          },
+          {
+            "expression_id": "x_cert",
+            "name": "Certification evidence explained",
+            "visual_mechanism": "certification_walkthrough",
+            "angle_ids": ["a_safe"],
+            "details_missing": false,
+            "shared": false
+          }
+        ],
+        "cols": [
+          {
+            "angle_id": "a_option",
+            "proposition": "One more charging option"
+          },
+          {
+            "angle_id": "a_safe",
+            "proposition": "Safer at high power"
+          }
+        ],
+        "cells": [
+          [["r_live"], null],
+          [null, ["r_cert"]]
+        ]
+      },
+      "product_appearance": {
+        "status": "pending_verification",
+        "reference_version_ids": [],
+        "pending_combination_ids": ["r_live", "r_cert"]
+      }
+    },
+    "approved": {
+      "version": "marketing-board-v1",
+      "question": "Which buying proposition is worth exploring further?",
+      "stage": "screen_angles",
+      "comparison_kind": "whole_combinations",
+      "primary_comparison": {
+        "kind": "between_groups",
+        "groups": [
+          {
+            "id": "g_a",
+            "name": "Group A",
+            "angle_ids": ["a_option"],
+            "combination_ids": ["r_live"]
+          },
+          {
+            "id": "g_b",
+            "name": "Group B",
+            "angle_ids": ["a_safe"],
+            "combination_ids": ["r_cert"]
+          }
+        ]
+      },
+      "secondary_observation": {
+        "kind": "expression_coverage",
+        "angle_id": null
+      },
+      "tree": {
+        "angles": [
+          {
+            "angle_id": "a_option",
+            "proposition": "One more charging option",
+            "group_ids": ["g_a"],
+            "expressions": [
+              {
+                "expression_id": "x_live",
+                "name": "Live connection demo",
+                "visual_mechanism": "live_connection_demo",
+                "details_missing": false,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "r_live",
+                    "group_id": "g_a",
+                    "group_name": "Group A",
+                    "headline": "Plug in and charge",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "u_live_1",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a_option",
+                        "expression_id": "x_live",
+                        "combination_id": "r_live",
+                        "group_id": "g_a",
+                        "stage": "blocked",
+                        "blocked_reason": "quality_changes_requested",
+                        "quality": "needs_changes",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": ["u_cert_1"],
+                        "awaiting_combination_ids": [],
+                        "gap": "none",
+                        "next_action": "none"
+                      },
+                      {
+                        "asset_version_id": "u_live_1r",
+                        "execution_index": 1,
+                        "execution_version": 2,
+                        "parent_version_id": "u_live_1",
+                        "duplicate_of": null,
+                        "angle_id": "a_option",
+                        "expression_id": "x_live",
+                        "combination_id": "r_live",
+                        "group_id": "g_a",
+                        "stage": "ready",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": ["u_cert_1"],
+                        "awaiting_combination_ids": [],
+                        "gap": "export",
+                        "next_action": "export"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "angle_id": "a_safe",
+            "proposition": "Safer at high power",
+            "group_ids": ["g_b"],
+            "expressions": [
+              {
+                "expression_id": "x_cert",
+                "name": "Certification evidence explained",
+                "visual_mechanism": "certification_walkthrough",
+                "details_missing": false,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "r_cert",
+                    "group_id": "g_b",
+                    "group_name": "Group B",
+                    "headline": "Certified for high power",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "u_cert_1",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a_safe",
+                        "expression_id": "x_cert",
+                        "combination_id": "r_cert",
+                        "group_id": "g_b",
+                        "stage": "ready",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": ["u_live_1r"],
+                        "awaiting_combination_ids": [],
+                        "gap": "export",
+                        "next_action": "export"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "matrix": {
+        "rows": [
+          {
+            "expression_id": "x_live",
+            "name": "Live connection demo",
+            "visual_mechanism": "live_connection_demo",
+            "angle_ids": ["a_option"],
+            "details_missing": false,
+            "shared": false
+          },
+          {
+            "expression_id": "x_cert",
+            "name": "Certification evidence explained",
+            "visual_mechanism": "certification_walkthrough",
+            "angle_ids": ["a_safe"],
+            "details_missing": false,
+            "shared": false
+          }
+        ],
+        "cols": [
+          {
+            "angle_id": "a_option",
+            "proposition": "One more charging option"
+          },
+          {
+            "angle_id": "a_safe",
+            "proposition": "Safer at high power"
+          }
+        ],
+        "cells": [
+          [["r_live"], null],
+          [null, ["r_cert"]]
+        ]
+      },
+      "product_appearance": {
+        "status": "pending_verification",
+        "reference_version_ids": [],
+        "pending_combination_ids": ["r_live", "r_cert"]
+      }
+    },
+    "changes_requested": {
+      "version": "marketing-board-v1",
+      "question": "Which buying proposition is worth exploring further?",
+      "stage": "screen_angles",
+      "comparison_kind": "whole_combinations",
+      "primary_comparison": {
+        "kind": "between_groups",
+        "groups": [
+          {
+            "id": "g_a",
+            "name": "Group A",
+            "angle_ids": ["a_option"],
+            "combination_ids": ["r_live"]
+          },
+          {
+            "id": "g_b",
+            "name": "Group B",
+            "angle_ids": ["a_safe"],
+            "combination_ids": ["r_cert"]
+          }
+        ]
+      },
+      "secondary_observation": {
+        "kind": "expression_coverage",
+        "angle_id": null
+      },
+      "tree": {
+        "angles": [
+          {
+            "angle_id": "a_option",
+            "proposition": "One more charging option",
+            "group_ids": ["g_a"],
+            "expressions": [
+              {
+                "expression_id": "x_live",
+                "name": "Live connection demo",
+                "visual_mechanism": "live_connection_demo",
+                "details_missing": false,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "r_live",
+                    "group_id": "g_a",
+                    "group_name": "Group A",
+                    "headline": "Plug in and charge",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "u_live_1",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a_option",
+                        "expression_id": "x_live",
+                        "combination_id": "r_live",
+                        "group_id": "g_a",
+                        "stage": "blocked",
+                        "blocked_reason": "quality_changes_requested",
+                        "quality": "needs_changes",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": ["u_cert_1"],
+                        "awaiting_combination_ids": [],
+                        "gap": "review",
+                        "next_action": "revise"
+                      },
+                      {
+                        "asset_version_id": "u_live_1r",
+                        "execution_index": 1,
+                        "execution_version": 2,
+                        "parent_version_id": "u_live_1",
+                        "duplicate_of": null,
+                        "angle_id": "a_option",
+                        "expression_id": "x_live",
+                        "combination_id": "r_live",
+                        "group_id": "g_a",
+                        "stage": "blocked",
+                        "blocked_reason": "quality_changes_requested",
+                        "quality": "needs_changes",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": ["u_cert_1"],
+                        "awaiting_combination_ids": [],
+                        "gap": "review",
+                        "next_action": "revise"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "angle_id": "a_safe",
+            "proposition": "Safer at high power",
+            "group_ids": ["g_b"],
+            "expressions": [
+              {
+                "expression_id": "x_cert",
+                "name": "Certification evidence explained",
+                "visual_mechanism": "certification_walkthrough",
+                "details_missing": false,
+                "shared": false,
+                "combinations": [
+                  {
+                    "combination_id": "r_cert",
+                    "group_id": "g_b",
+                    "group_name": "Group B",
+                    "headline": "Certified for high power",
+                    "planned_executions": 1,
+                    "executions": [
+                      {
+                        "asset_version_id": "u_cert_1",
+                        "execution_index": 1,
+                        "execution_version": 1,
+                        "parent_version_id": null,
+                        "duplicate_of": null,
+                        "angle_id": "a_safe",
+                        "expression_id": "x_cert",
+                        "combination_id": "r_cert",
+                        "group_id": "g_b",
+                        "stage": "ready",
+                        "blocked_reason": null,
+                        "quality": "approved",
+                        "ai_qc": null,
+                        "paired_ai_qc": null,
+                        "delivery": null,
+                        "product_appearance": {
+                          "status": "pending_verification",
+                          "reason": "no_reference",
+                          "reference_version_ids": []
+                        },
+                        "compare_with": [],
+                        "awaiting_combination_ids": ["r_live"],
+                        "gap": "export",
+                        "next_action": "none"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "matrix": {
+        "rows": [
+          {
+            "expression_id": "x_live",
+            "name": "Live connection demo",
+            "visual_mechanism": "live_connection_demo",
+            "angle_ids": ["a_option"],
+            "details_missing": false,
+            "shared": false
+          },
+          {
+            "expression_id": "x_cert",
+            "name": "Certification evidence explained",
+            "visual_mechanism": "certification_walkthrough",
+            "angle_ids": ["a_safe"],
+            "details_missing": false,
+            "shared": false
+          }
+        ],
+        "cols": [
+          {
+            "angle_id": "a_option",
+            "proposition": "One more charging option"
+          },
+          {
+            "angle_id": "a_safe",
+            "proposition": "Safer at high power"
+          }
+        ],
+        "cells": [
+          [["r_live"], null],
+          [null, ["r_cert"]]
+        ]
+      },
+      "product_appearance": {
+        "status": "pending_verification",
+        "reference_version_ids": [],
+        "pending_combination_ids": ["r_live", "r_cert"]
+      }
+    }
   }
 }

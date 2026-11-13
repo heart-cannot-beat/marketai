@@ -22,6 +22,24 @@ published. The preview's impact hash names the Target it replaces, and
 publish recomputes it, so a context that changed since the preview is
 refused with ``preview_hash_mismatch``.
 
+Both preview and publish check a Target's minimum economic spend against
+the platform floor (#134, §9.2: the platform threshold is a minimum, and an
+Owner may only raise it). The floor is the one the Policy in force for the
+caller's mode sets for the Target's currency -- the Policy a live run would
+freeze (``app.scale.live_trigger.eligible_live_policy``), read through the
+evaluator's own lookup (``app.scale.evidence.policy_spend_floor``). A
+Target with only a ROAS must fill the minimum; any Target that fills it
+may not go below the floor. Targets published before the check stay as
+they are: the evaluator already takes the largest of the floor, the
+Target's minimum and 3x target CPA, and lists and contexts report the
+floor so the page can say which Targets fall below it.
+
+Publishing and withdrawing each enqueue one ``scale_target_change`` Job in
+the same transaction, keyed by the lifecycle event (#113): the Worker
+supersedes the Advice the change made inapplicable and re-evaluates
+Episodes whose evidence is still fresh (``app.scale.target_change``).
+A replayed command returns before it, so it enqueues nothing twice.
+
 Currency is not a column on ``ScaleEnrollmentRecord`` -- it lives on
 ``ScaleEpisodeRecord`` (one row per observation interval, spec §1.5).
 ``resolve_target_contexts`` therefore joins each distinct enrollment context
@@ -33,6 +51,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -45,10 +64,12 @@ from app.platform.action_eligibility import ActionEligibility, compute_actions
 from app.platform.tenancy import TenantContext
 
 from .command_journal import claim_command, command_request_fingerprint
+from .evidence import policy_spend_floor
 from .models import (
     ScaleAdviceThreadRecord,
     ScaleEnrollmentRecord,
     ScaleEpisodeRecord,
+    ScalePolicyVersionRecord,
     ScaleTargetLifecycleEventRecord,
     ScaleTargetPublicationPreviewRecord,
     ScaleTargetVersionRecord,
@@ -56,17 +77,21 @@ from .models import (
 )
 
 __all__ = [
+    "PlatformSpendFloor",
     "TargetLifecycleError",
     "TargetNotFoundError",
     "TargetPreviewExpiredError",
     "TargetPreviewConsumedError",
+    "applicable_policy",
     "create_publication_preview",
     "publish_target",
     "create_withdrawal_preview",
     "withdraw_target",
     "list_targets",
     "get_target",
+    "platform_spend_floor",
     "resolve_target_contexts",
+    "target_below_platform_floor",
     "target_actions",
 ]
 
@@ -82,9 +107,12 @@ class TargetLifecycleError(RuntimeError):
     stable machine-readable reason (matched by callers/tests); ``detail`` is
     optional human context."""
 
-    def __init__(self, code: str, detail: str = "") -> None:
+    def __init__(self, code: str, detail: str = "", *, params: dict | None = None) -> None:
         self.code = code
         self.detail = detail
+        #: What the code's copy interpolates (``app.library.api``'s
+        #: problem ``params``), e.g. the floor a minimum fell below.
+        self.params = params
         super().__init__(f"{code}: {detail}" if detail else code)
 
 
@@ -113,10 +141,10 @@ def _require_owner(context: TenantContext) -> None:
 
 
 def _for_update(session: Session, stmt):
-    """PostgreSQL row locking; SQLite (tests, bounded local path) is a no-op."""
-    if session.get_bind().dialect.name == "postgresql":
-        return stmt.with_for_update()
-    return stmt
+    """PostgreSQL row locking. SQLite (tests, bounded local path) has no
+    ``FOR UPDATE`` and SQLAlchemy leaves it out there, but the statement
+    keeps the lock, so the SQLite grant guard (#59) sees it."""
+    return stmt.with_for_update()
 
 
 def _scenario_scope_key(
@@ -243,6 +271,112 @@ def _active_targets(
     return list(session.execute(stmt).scalars().all())
 
 
+#: Why a currency has no platform floor to check against (#134). The first
+#: is ``app.scale.live_trigger``'s skip reason for the same lookup; the
+#: second is the evaluator's reason for an economic signal it cannot form.
+NO_ELIGIBLE_POLICY = "no_eligible_policy"
+SPEND_FLOOR_CURRENCY_UNSUPPORTED = "spend_floor_currency_unsupported"
+
+
+@dataclass(frozen=True)
+class PlatformSpendFloor:
+    """The platform economic floor one currency is held to under the Policy
+    in force: ``amount`` (minimum total spend of a 7-day window), or
+    ``None`` with the ``unavailable_reason``."""
+
+    currency: str
+    amount: Decimal | None
+    policy_version_id: str | None
+    unavailable_reason: str | None
+
+    @property
+    def amount_text(self) -> str | None:
+        """``amount`` as the API spells it (``"16000"``, not ``"1.6E+4"``)."""
+        return _amount(self.amount)
+
+
+def applicable_policy(session: Session, context: TenantContext) -> ScalePolicyVersionRecord | None:
+    """The Policy a live run in ``context``'s mode freezes now, or ``None``
+    when none permits that mode (``controlled_mock``: explicit evaluation
+    names its Policy itself)."""
+    # Imported here: ``app.scale.live_trigger`` imports this module.
+    from .live_trigger import eligible_live_policy
+
+    return eligible_live_policy(session, context.meta_mode)
+
+
+def platform_spend_floor(policy: ScalePolicyVersionRecord | None, currency: str) -> PlatformSpendFloor:
+    """``policy``'s floor in ``currency``, as the evaluator reads it."""
+    if policy is None:
+        return PlatformSpendFloor(currency, None, None, NO_ELIGIBLE_POLICY)
+    amount = policy_spend_floor(policy, currency)
+    if amount is None:
+        return PlatformSpendFloor(currency, None, policy.id, SPEND_FLOOR_CURRENCY_UNSUPPORTED)
+    return PlatformSpendFloor(currency, amount, policy.id, None)
+
+
+def _has_minimum(minimum_economic_spend: Decimal | None) -> bool:
+    """A minimum of zero is the same as none (``app.scale.schemas``)."""
+    return minimum_economic_spend is not None and minimum_economic_spend > 0
+
+
+def _check_minimum_economic_spend(
+    floor: PlatformSpendFloor,
+    *,
+    target_cpa: Decimal | None,
+    breakeven_roas: Decimal | None,
+    minimum_economic_spend: Decimal | None,
+) -> None:
+    """#134, §9.2: a Target with only a ROAS fills a minimum economic
+    spend, and a Target that fills one may not go below the platform floor
+    in its currency; equal to the floor passes. A Target with a CPA and no
+    minimum needs no floor here: the evaluator holds it to the larger of
+    the floor and 3x its CPA."""
+    has_minimum = _has_minimum(minimum_economic_spend)
+    roas_only = target_cpa is None and breakeven_roas is not None
+    if not (has_minimum or roas_only):
+        return
+    params = {"currency": floor.currency}
+    if floor.unavailable_reason == NO_ELIGIBLE_POLICY:
+        raise TargetLifecycleError(
+            "no_eligible_policy", "no published Policy permits this mode", params=params,
+        )
+    if floor.amount is None:
+        raise TargetLifecycleError(
+            "spend_floor_currency_unsupported",
+            f"Policy {floor.policy_version_id} has no economic floor in {floor.currency}",
+            params=params,
+        )
+    params["floor"] = floor.amount_text
+    if not has_minimum:
+        raise TargetLifecycleError(
+            "minimum_economic_spend_required",
+            f"a ROAS-only Target needs a minimum economic spend of at least {params['floor']}",
+            params=params,
+        )
+    if minimum_economic_spend < floor.amount:
+        raise TargetLifecycleError(
+            "minimum_economic_spend_below_platform_floor",
+            f"{_amount(minimum_economic_spend)} is below the platform floor {params['floor']}",
+            params=params,
+        )
+
+
+def target_below_platform_floor(
+    target: ScaleTargetVersionRecord, floor: PlatformSpendFloor,
+) -> bool:
+    """Whether an active Target misses the publication check (#134) against
+    a floor it can be compared with: only a ROAS and no minimum, or a
+    minimum below the floor. Its evaluations hold it to the platform floor
+    instead (the evaluator's largest-of rule); the Owner may republish it.
+    A Target that is not active is not in force and never is."""
+    if target.lifecycle_state != "active" or floor.amount is None:
+        return False
+    if _has_minimum(target.minimum_economic_spend):
+        return target.minimum_economic_spend < floor.amount
+    return target.target_cpa is None and target.breakeven_roas is not None
+
+
 def resolve_target_contexts(session: Session, context: TenantContext) -> list[dict]:
     """Every distinct (ProductVersion, OfferVersion, market) context with a
     currently active or paused Enrollment in this Workspace, with the
@@ -253,7 +387,12 @@ def resolve_target_contexts(session: Session, context: TenantContext) -> list[di
     publication requires a caller-supplied currency, but discovery here is
     only meaningful once at least one Episode has established what currency
     that context actually delivers in.
+
+    Each context also carries the platform floor a Target published into it
+    is checked against (#134): ``platform_spend_floor`` in its currency, or
+    ``None`` with ``platform_spend_floor_unavailable_reason``.
     """
+    policy = applicable_policy(session, context)
     rows = session.execute(
         select(
             ScaleEnrollmentRecord.product_version_id,
@@ -286,12 +425,15 @@ def resolve_target_contexts(session: Session, context: TenantContext) -> list[di
             session, context.workspace_id,
             row.product_version_id, row.offer_version_id, row.market_code, currency,
         )
+        floor = platform_spend_floor(policy, currency)
         contexts.append({
             "product_version_id": row.product_version_id,
             "offer_version_id": row.offer_version_id,
             "market_code": row.market_code,
             "currency": currency,
             "has_active_target": bool(active_targets),
+            "platform_spend_floor": floor.amount_text,
+            "platform_spend_floor_unavailable_reason": floor.unavailable_reason,
         })
     return contexts
 
@@ -312,7 +454,11 @@ def create_publication_preview(
     """Owner-only. Freeze the impact of publishing a new Target for one
     exact (ProductVersion, OfferVersion, market, currency) context: how many
     active/paused Enrollments would be affected, and which active Target it
-    would replace, as of now."""
+    would replace, as of now.
+
+    A Target whose minimum economic spend misses the platform floor is
+    refused here (#134), after the journal claim, so a retry of a preview
+    already made returns it whatever the Policy says now."""
     _require_owner(context)
     if target_cpa is None and breakeven_roas is None:
         raise TargetLifecycleError("at_least_one_target")
@@ -364,6 +510,13 @@ def create_publication_preview(
             )
         return existing
 
+    _check_minimum_economic_spend(
+        platform_spend_floor(applicable_policy(session, context), currency),
+        target_cpa=target_cpa,
+        breakeven_roas=breakeven_roas,
+        minimum_economic_spend=minimum_economic_spend,
+    )
+
     now = datetime.now(timezone.utc)
     preview = ScaleTargetPublicationPreviewRecord(
         id=preview_id,
@@ -395,7 +548,9 @@ def publish_target(
 ) -> ScaleTargetVersionRecord:
     """Owner-only. Consume a publication preview and create the active
     Target it described, withdrawing the context's active Target in the
-    same transaction (#398).
+    same transaction (#398). The preview's amounts are checked against the
+    platform floor again (#134), so a preview made under an older Policy
+    cannot publish below the floor in force.
 
     The impact is recomputed under row locks and must match the preview's
     hash; otherwise, or when a concurrent first publication of the same
@@ -457,6 +612,15 @@ def publish_target(
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at < now:
         raise TargetPreviewExpiredError(preview_id)
+
+    # #134: checked again against the Policy in force now, which a newer
+    # published version may have changed since the preview.
+    _check_minimum_economic_spend(
+        platform_spend_floor(applicable_policy(session, context), preview.currency),
+        target_cpa=preview.target_cpa,
+        breakeven_roas=preview.breakeven_roas,
+        minimum_economic_spend=preview.minimum_economic_spend,
+    )
 
     replaced = _active_targets(
         session, context.workspace_id,
@@ -552,6 +716,8 @@ def publish_target(
         raise TargetLifecycleError(
             "preview_hash_mismatch", f"another publication of this context won over preview {preview_id}",
         )
+    # One Job for the publication and the withdrawals it implies (#113).
+    _enqueue_target_change(session, context, event)
     return target
 
 
@@ -742,7 +908,19 @@ def withdraw_target(
     )
     session.add(event)
     session.flush()
+    _enqueue_target_change(session, context, event)
     return target
+
+
+def _enqueue_target_change(
+    session: Session, context: TenantContext, event: ScaleTargetLifecycleEventRecord,
+) -> None:
+    """Re-evaluation after the change, in the command's transaction (#113)."""
+    # Imported here: ``app.scale.target_change`` imports ``live_trigger``,
+    # which imports this module.
+    from .target_change import enqueue_target_change
+
+    enqueue_target_change(session, context, event)
 
 
 def list_targets(

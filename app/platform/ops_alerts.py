@@ -41,6 +41,7 @@ class AlertCategory(str, Enum):
     BUDGET = "budget"
     SHUTDOWN = "shutdown"
     WORKER_LIFECYCLE = "worker_lifecycle"
+    SCALE_EVALUATION = "scale_evaluation"
 
 
 def redact(value: str) -> str:

@@ -21,25 +21,121 @@ Three operations:
 * :func:`calculate_tenure` -- derives tenure from the ledger as the longest
   run of consecutive ``coverage_date`` values (§6.6.3, §6.6.5) rather than a
   stored, mutable counter.
+
+A generation's sync schedule (spec §3.14, #107) lives here too, because it is
+part of the generation's lifecycle:
+
+* :func:`ensure_observation_schedule` -- idempotently creates the one active
+  ``MetaObservationSyncScheduleRecord`` of a generation, with ``next_fire_at``
+  the next daily slot in the generation's frozen ``local_timezone``.
+  :func:`create_contract_generation` calls it for every
+  ``customer_sandbox`` and ``internal_validation`` generation the scheduled
+  executor (``app.meta.observation_sync``) can read -- one with a
+  :func:`observation_read_plan`. ``internal_validation`` reads the real
+  Graph API (#112, #101 S6), so its schedule exists only in the platform
+  Workspace (ADR 0009): a generation of that mode anywhere else gets none,
+  and asking for one explicitly is refused with
+  ``meta_platform_workspace_required``. ``controlled_mock`` generations
+  are never scheduled automatically (ADR 0009: fault injection only, no
+  evidence for decisions); tests and e2e call this function for them
+  explicitly. Every open
+  schedule of one connection shares one cron expression and one time zone:
+  the batch Job is keyed by (connection, D), so two schedules firing at
+  different moments for the same D would find the first one's batch already
+  finished (#101 S2).
+* :func:`observation_read_plan` -- the query instances a generation reads
+  each target day: the instances of the Scale read contract it was built
+  from (``app.meta.scale_read_contracts``), or, for any other ``daily``
+  generation, the one 14-day daily read #107 introduced.
+* :func:`retire_contract_generation` -- ``active -> retired``, retiring the
+  generation's schedule in the same transaction.
+* :func:`parse_daily_cron`, :func:`next_fire_after`,
+  :func:`latest_fire_at_or_before`, :func:`observation_target_date`,
+  :func:`fire_at_for_target_date` -- the
+  only cron form accepted is the daily ``M H * * *`` (#101 Q5), computed in
+  the generation's time zone without a cron dependency.
 """
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, timedelta
+import re
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
-from ..adapters.persistence.models import new_id, utcnow
-from .models import ObservationContractGenerationRecord, ObservationCoverageLedgerRecord
+from dataclasses import dataclass
+from typing import Any
+
+from ..adapters.persistence.models import WorkspaceRecord, new_id, utcnow
+from .models import (
+    MetaConnectionRecord,
+    MetaObservationSyncScheduleRecord,
+    ObservationContractGenerationRecord,
+    ObservationCoverageLedgerRecord,
+    ScenarioVersionRecord,
+)
+from .scale_read_contracts import (
+    BREAKDOWN_CONTRACT_TYPES,
+    DELIVERY_CONFIGURATION,
+    EXACT_WINDOW,
+    INSIGHTS_READ,
+    SCALE_READ_POLICY,
+    AccountBinding,
+    QueryInstance,
+    ScaleReadContract,
+    ScaleReadContractError,
+    resolve_generation_contract,
+    sandbox_account_binding,
+)
 
 __all__ = [
     "ContractError",
+    "DAILY_CONTRACT_TYPE",
+    "DEFAULT_SYNC_CRON",
+    "SCHEDULED_CONTRACT_TYPES",
+    "ReadPlan",
     "create_contract_generation",
+    "ensure_observation_schedule",
+    "observation_read_plan",
+    "sandbox_account_for_connection",
+    "retire_contract_generation",
     "record_coverage",
     "calculate_tenure",
+    "parse_daily_cron",
+    "next_fire_after",
+    "latest_fire_at_or_before",
+    "observation_target_date",
+    "fire_at_for_target_date",
+    "occurrence_id",
 ]
+
+#: The daily metric contract (Scale ``MetricContractType.DAILY``): ad-level
+#: insights per local day over a 14-day lookback.
+DAILY_CONTRACT_TYPE = "daily"
+#: Contract types the scheduled executor reads (#101 S2): the daily, exact
+#: window and delivery configuration contracts, plus the breakdown families
+#: the read policy declares -- none in the first batch. Which generation of
+#: these types is read is decided by :func:`observation_read_plan`.
+SCHEDULED_CONTRACT_TYPES = frozenset({
+    DAILY_CONTRACT_TYPE, EXACT_WINDOW, DELIVERY_CONFIGURATION, *SCALE_READ_POLICY.breakdown_contract_types,
+})
+#: The one read of a ``daily`` generation not built from a Scale read
+#: contract (#107): ad-level insights, one row per local day, D-13..D.
+GENERIC_DAILY_INSTANCE = QueryInstance("daily", INSIGHTS_READ, -13, 0, "1")
+#: Modes whose new generations are scheduled automatically (#101 §6, #112).
+AUTO_SCHEDULED_MODES = frozenset({"customer_sandbox", "internal_validation"})
+#: Modes that read the real Graph API: the platform Workspace only (ADR 0009).
+PLATFORM_ONLY_MODES = frozenset({"internal_validation"})
+#: 04:00 in the account's time zone, once a day (#101 Q3): the local day is
+#: over, Meta has had a few hours to settle it, and it avoids the 02:00-03:00
+#: daylight-saving jump.
+DEFAULT_SYNC_CRON = "0 4 * * *"
+
+_DAILY_CRON = re.compile(r"([0-9]{1,2}) ([0-9]{1,2}) \* \* \*")
+_SCHEDULE_OPEN_STATES = ("active", "paused")
 
 
 class ContractError(ValueError):
@@ -173,6 +269,358 @@ def create_contract_generation(
         clock_started_at=None,
     )
     session.add(generation)
+    session.flush()
+    if (meta_mode in AUTO_SCHEDULED_MODES and _read_plan_or_raise(generation) is not None
+            and (meta_mode not in PLATFORM_ONLY_MODES or _is_platform_workspace(session, workspace_id))):
+        ensure_observation_schedule(session, generation)
+    return generation
+
+
+def _is_platform_workspace(session: Session, workspace_id: str) -> bool:
+    workspace = session.get(WorkspaceRecord, workspace_id)
+    return workspace is not None and bool(workspace.is_platform_workspace)
+
+
+def _require_platform_workspace(session: Session, workspace_id: str, meta_mode: str) -> None:
+    """``internal_validation`` schedules: the platform Workspace only (ADR 0009)."""
+    if not _is_platform_workspace(session, workspace_id):
+        raise ContractError(
+            f"{meta_mode} reads Meta only in the platform Workspace, not {workspace_id!r}",
+            code="meta_platform_workspace_required",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Read plan (#101 S2)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ReadPlan:
+    """What the scheduled executor reads for a generation each target day.
+
+    ``contract`` and ``binding`` are set for a generation built from a Scale
+    read contract and ``None`` for a generic daily generation (#107).
+    """
+
+    instances: tuple[QueryInstance, ...]
+    fields: tuple[str, ...]
+    attribution: dict[str, Any]
+    breakdowns: tuple[str, ...]
+    contract: ScaleReadContract | None = None
+    binding: AccountBinding | None = None
+
+    def instance(self, name: str | None) -> QueryInstance:
+        """The named instance; ``None`` is a #107 occurrence without one."""
+        if name is None:
+            if len(self.instances) != 1:
+                raise ContractError("an occurrence without an instance needs a one-instance plan",
+                                    code="meta_read_instance_unknown")
+            return self.instances[0]
+        for instance in self.instances:
+            if instance.name == name:
+                return instance
+        raise ContractError(f"no query instance {name!r} in this plan", code="meta_read_instance_unknown")
+
+
+def observation_read_plan(generation: ObservationContractGenerationRecord) -> ReadPlan | None:
+    """The generation's read plan, or ``None`` when no executor reads it.
+
+    Raises :class:`app.meta.scale_read_contracts.ScaleReadContractError` when
+    the generation names a Scale read contract it no longer matches: it is
+    not read with a field dropped or a window moved (contract §6.2).
+    Breakdown contracts outside the read policy are defined but not read.
+    """
+    resolved = resolve_generation_contract(
+        contract_type=generation.contract_type,
+        ad_account_id=generation.ad_account_id,
+        fields=generation.fields,
+        attribution_window=generation.attribution_window,
+        breakdowns=generation.breakdowns,
+        time_window=generation.time_window,
+        delivery_config=generation.delivery_config,
+        local_timezone=generation.local_timezone,
+    )
+    if resolved is not None:
+        contract, binding = resolved
+        if (contract.contract_type in BREAKDOWN_CONTRACT_TYPES
+                and contract.contract_type not in SCALE_READ_POLICY.breakdown_contract_types):
+            return None
+        return ReadPlan(
+            instances=contract.instances,
+            fields=tuple(sorted(contract.fields)),
+            attribution=contract.attribution(),
+            breakdowns=contract.breakdowns,
+            contract=contract,
+            binding=binding,
+        )
+    if generation.contract_type == DAILY_CONTRACT_TYPE:
+        return ReadPlan(
+            instances=(GENERIC_DAILY_INSTANCE,),
+            fields=tuple(sorted(generation.fields or [])),
+            attribution=dict(generation.attribution_window or {}),
+            breakdowns=tuple(generation.breakdowns or []),
+        )
+    return None
+
+
+def _read_plan_or_raise(generation: ObservationContractGenerationRecord) -> ReadPlan | None:
+    try:
+        return observation_read_plan(generation)
+    except ScaleReadContractError as exc:
+        raise ContractError(str(exc), code=exc.code) from exc
+
+
+def sandbox_account_for_connection(
+    session: Session, *, workspace_id: str, meta_mode: str, connection_id: str,
+) -> AccountBinding:
+    """The account a sandbox connection's default scenario simulates."""
+    connection = session.scalar(
+        select(MetaConnectionRecord).where(
+            MetaConnectionRecord.workspace_id == workspace_id,
+            MetaConnectionRecord.meta_mode == meta_mode,
+            MetaConnectionRecord.id == connection_id,
+        )
+    )
+    if connection is None:
+        raise ContractError(f"no connection {connection_id!r}", code="connection_not_found")
+    scenario = session.scalar(
+        select(ScenarioVersionRecord).where(
+            ScenarioVersionRecord.workspace_id == workspace_id,
+            ScenarioVersionRecord.meta_mode == meta_mode,
+            ScenarioVersionRecord.meta_connection_id == connection_id,
+            ScenarioVersionRecord.is_default == True,  # noqa: E712
+        )
+    )
+    return sandbox_account_binding(connection.ad_account_id, scenario.scenario_config if scenario else None)
+
+
+# ---------------------------------------------------------------------------
+# Daily cron (#101 Q5): ``M H * * *`` only, in the generation's time zone.
+# ---------------------------------------------------------------------------
+
+
+def parse_daily_cron(expression: str) -> tuple[int, int]:
+    """``(minute, hour)`` of a daily ``M H * * *`` expression, or raise."""
+    match = _DAILY_CRON.fullmatch(expression or "")
+    minute, hour = (int(match[1]), int(match[2])) if match else (-1, -1)
+    if not (0 <= minute <= 59 and 0 <= hour <= 23):
+        raise ContractError(
+            f"only a daily 'M H * * *' cron expression is supported, not {expression!r}",
+            code="meta_schedule_cron_invalid",
+        )
+    return minute, hour
+
+
+def _zone(timezone_name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError, TypeError) as exc:
+        raise ContractError(
+            f"unknown time zone {timezone_name!r}", code="meta_contract_timezone_invalid",
+        ) from exc
+
+
+def _as_utc(moment: datetime) -> datetime:
+    """SQLite hands back naive values for timezone-aware columns; they are UTC."""
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def _daily_slot(day: date, minute: int, hour: int, zone: ZoneInfo) -> datetime:
+    # A wall time the daylight-saving jump skips resolves with the offset in
+    # force before it (fold=0), i.e. an hour later on the wall clock; a
+    # repeated one takes its first occurrence. 04:00 is neither anywhere the
+    # IANA database currently jumps.
+    return datetime.combine(day, time(hour, minute), tzinfo=zone).astimezone(timezone.utc)
+
+
+def next_fire_after(expression: str, timezone_name: str, after: datetime) -> datetime:
+    """The first daily slot strictly after ``after``, as UTC."""
+    minute, hour = parse_daily_cron(expression)
+    zone = _zone(timezone_name)
+    after = _as_utc(after)
+    day = after.astimezone(zone).date()
+    for offset in range(3):
+        candidate = _daily_slot(day + timedelta(days=offset), minute, hour, zone)
+        if candidate > after:
+            return candidate
+    raise AssertionError("a daily slot always follows within two days")  # pragma: no cover
+
+
+def latest_fire_at_or_before(expression: str, timezone_name: str, moment: datetime) -> datetime:
+    """The most recent daily slot at or before ``moment``, as UTC."""
+    minute, hour = parse_daily_cron(expression)
+    zone = _zone(timezone_name)
+    moment = _as_utc(moment)
+    day = moment.astimezone(zone).date()
+    for offset in range(3):
+        candidate = _daily_slot(day - timedelta(days=offset), minute, hour, zone)
+        if candidate <= moment:
+            return candidate
+    raise AssertionError("a daily slot always precedes within two days")  # pragma: no cover
+
+
+def observation_target_date(fire_at: datetime, timezone_name: str) -> date:
+    """Target day D of a firing: the slot's local date minus one (#101 S1).
+
+    Derived from the persisted fire time, never from the clock, so a tick
+    that is retried hours later still observes the same day.
+    """
+    return _as_utc(fire_at).astimezone(_zone(timezone_name)).date() - timedelta(days=1)
+
+
+def fire_at_for_target_date(expression: str, timezone_name: str, target_date: date) -> datetime:
+    """The slot whose firing observes ``target_date``: its local day after, as UTC.
+
+    The inverse of :func:`observation_target_date`. A batch the rate limits
+    deferred must resume before the slot of the next target day (#112).
+    """
+    minute, hour = parse_daily_cron(expression)
+    return _daily_slot(target_date + timedelta(days=1), minute, hour, _zone(timezone_name))
+
+
+def occurrence_id(generation_id: str, target_date: date, instance: str | None = None) -> str:
+    """A scheduled sync run's occurrence: ``obs:{generation_id}:{D}:{instance}``
+    (#101 S2); a #107 run has no instance.
+
+    Lives here, not in ``app.meta.observation_sync``, so Scale's collector
+    (#109) can name the runs it reads without importing the executor, which
+    resolves adapters (ADR 0017).
+    """
+    base = f"obs:{generation_id}:{target_date.isoformat()}"
+    return base if instance is None else f"{base}:{instance}"
+
+
+# ---------------------------------------------------------------------------
+# Schedule lifecycle (spec §3.14, #107)
+# ---------------------------------------------------------------------------
+
+
+def ensure_observation_schedule(
+    session: Session,
+    generation: ObservationContractGenerationRecord,
+    *,
+    cron_expression: str = DEFAULT_SYNC_CRON,
+    now: datetime | None = None,
+) -> MetaObservationSyncScheduleRecord:
+    """The generation's open (active or paused) schedule, created if missing.
+
+    Idempotent per generation. A new schedule is ``active`` and fires next
+    at the first ``cron_expression`` slot after ``now`` in the generation's
+    frozen time zone. ``workspace_id``, ``meta_mode`` and the connection come
+    from the generation, so a schedule cannot disagree with it.
+    """
+    existing = session.scalar(
+        select(MetaObservationSyncScheduleRecord)
+        .where(
+            MetaObservationSyncScheduleRecord.workspace_id == generation.workspace_id,
+            MetaObservationSyncScheduleRecord.meta_mode == generation.meta_mode,
+            MetaObservationSyncScheduleRecord.contract_generation_id == generation.id,
+            MetaObservationSyncScheduleRecord.state.in_(_SCHEDULE_OPEN_STATES),
+        )
+        .order_by(MetaObservationSyncScheduleRecord.created_at, MetaObservationSyncScheduleRecord.id)
+        .limit(1)
+    )
+    if existing is not None:
+        return existing
+    if generation.state != "active":
+        raise ContractError(
+            f"contract generation {generation.id!r} is {generation.state!r}",
+            code="meta_contract_not_active",
+        )
+    if generation.meta_mode in PLATFORM_ONLY_MODES:
+        _require_platform_workspace(session, generation.workspace_id, generation.meta_mode)
+    if _read_plan_or_raise(generation) is None:
+        raise ContractError(
+            f"contract type {generation.contract_type!r} has no scheduled executor",
+            code="meta_schedule_contract_unsupported",
+        )
+    parse_daily_cron(cron_expression)
+    _require_connection_slot(session, generation, cron_expression)
+    schedule = MetaObservationSyncScheduleRecord(
+        id=new_id("msched"),
+        workspace_id=generation.workspace_id,
+        meta_mode=generation.meta_mode,
+        meta_connection_id=generation.meta_connection_id,
+        contract_generation_id=generation.id,
+        cron_expression=cron_expression,
+        state="active",
+        next_fire_at=next_fire_after(cron_expression, generation.local_timezone, now or utcnow()),
+    )
+    session.add(schedule)
+    session.flush()
+    return schedule
+
+
+def _require_connection_slot(
+    session: Session, generation: ObservationContractGenerationRecord, cron_expression: str,
+) -> None:
+    """Every open schedule of a connection fires at one cron in one time zone.
+
+    The tick and the batch are keyed by (connection, D) (#107): a schedule
+    firing at another moment for the same D would find the day's batch
+    already finished, and its runs would never be read.
+    """
+    others = session.execute(
+        select(MetaObservationSyncScheduleRecord.cron_expression, ObservationContractGenerationRecord.local_timezone)
+        .join(
+            ObservationContractGenerationRecord,
+            (ObservationContractGenerationRecord.workspace_id == MetaObservationSyncScheduleRecord.workspace_id)
+            & (ObservationContractGenerationRecord.meta_mode == MetaObservationSyncScheduleRecord.meta_mode)
+            & (ObservationContractGenerationRecord.id == MetaObservationSyncScheduleRecord.contract_generation_id),
+        )
+        .where(
+            MetaObservationSyncScheduleRecord.workspace_id == generation.workspace_id,
+            MetaObservationSyncScheduleRecord.meta_mode == generation.meta_mode,
+            MetaObservationSyncScheduleRecord.meta_connection_id == generation.meta_connection_id,
+            MetaObservationSyncScheduleRecord.state.in_(_SCHEDULE_OPEN_STATES),
+        )
+    ).all()
+    for cron, timezone_name in others:
+        if (cron, timezone_name) != (cron_expression, generation.local_timezone):
+            raise ContractError(
+                f"connection {generation.meta_connection_id!r} already syncs at {cron!r} in {timezone_name!r}; "
+                f"a schedule at {cron_expression!r} in {generation.local_timezone!r} would split its day",
+                code="meta_schedule_connection_mismatch",
+            )
+
+
+def retire_contract_generation(
+    session: Session,
+    *,
+    generation_id: str,
+    retired_by_generation_id: str | None = None,
+) -> ObservationContractGenerationRecord:
+    """``active -> retired`` (spec §3.8), retiring its schedule with it.
+
+    Idempotent: retiring a retired generation changes nothing. The schedule
+    moves to ``retired`` in the same transaction, so no dispatcher can fire a
+    generation that no longer collects.
+    """
+    generation = session.scalar(
+        select(ObservationContractGenerationRecord)
+        .where(ObservationContractGenerationRecord.id == generation_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if generation is None:
+        raise ContractError(f"no contract generation {generation_id!r}", code="meta_contract_not_found")
+    if generation.state == "active":
+        generation.state = "retired"
+        generation.retired_at = utcnow()
+        generation.retired_by_generation_id = retired_by_generation_id
+    session.execute(
+        update(MetaObservationSyncScheduleRecord)
+        .where(
+            MetaObservationSyncScheduleRecord.workspace_id == generation.workspace_id,
+            MetaObservationSyncScheduleRecord.meta_mode == generation.meta_mode,
+            MetaObservationSyncScheduleRecord.contract_generation_id == generation.id,
+            MetaObservationSyncScheduleRecord.state.in_(_SCHEDULE_OPEN_STATES),
+        )
+        .values(state="retired")
+    )
     session.flush()
     return generation
 

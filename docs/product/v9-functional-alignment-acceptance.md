@@ -174,7 +174,7 @@
 ### 3.6 创意库
 
 - 创意库保留产品、人物、维度模板、Prompt 规则和数据源五类入口；每个对象使用稳定 LibraryEntry、带 ETag 的 Draft 和不可变 Published Version，Published Version 不允许直接修改。
-- ProductVersion、OfferVersion、MarketSourceMappingVersion、DataSourceVersion 和 CredentialVersion 分离；Clone Product 默认不复制 Offer、价格、数据源映射或 Landing Page。
+- ProductVersion、OfferVersion、MarketSourceMappingVersion、DataSourceVersion 和 CredentialVersion 分离；Clone Product 永不复制 Offer、价格、数据源映射或 Landing Page，需要时由用户为新产品另行创建（[ADR 0016](../adr/0016-clone-product-never-copies-offers-prices-mappings-or-landing-pages.md)）。
 - ReferenceAssetVersion 经过 quarantine、文件/隐私/内容/权利门禁后，通过 ReferenceBinding 和版本化选择规则关联产品、人物或参考组；相同 hash 不合并业务来源，也不跨 Workspace 暴露命中。
 - 人物取值保存 latest 或 pinned PersonBinding；预览解析实际版本，提交后冻结，人物或权利变化不得改写历史任务。
 - DimensionTemplateVersion 可包含多维度、结构化 CreativeBrief 和稳定 ID 约束；Apply 是带谱系的深拷贝，模板升级只能经显式 diff/merge 产生新 Draft。

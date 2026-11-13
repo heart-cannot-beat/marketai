@@ -5,10 +5,20 @@ Distinct from every other router in this codebase: these routes act
 Workspace derived from a verified delegated identity. They therefore do
 not depend on ``request_tenant_context`` (spec §3's BFF-derived,
 single-Workspace identity) -- they use their own
-:func:`request_platform_context` dependency, and reads that must span
-Workspaces use ``platform_session()`` (untenanted) rather than
-``tenant_session()`` (RLS-scoped to one Workspace), mirroring the existing
-cross-tenant callers ``app.platform.jobs`` and ``app.library.prompt_policy``.
+:func:`request_platform_context` dependency.
+
+On PostgreSQL ``marketai_domain_api`` is NOBYPASSRLS and the domain tables
+are FORCE RLS, so an untenanted ``platform_session()`` reads nothing. Every
+route therefore learns what it needs before a TenantContext exists through
+narrow ``SECURITY DEFINER`` functions -- the Workspace's epoch and platform
+flag (``marketai_workspace_admission``), the platform Workspace's creation
+(``marketai_create_platform_workspace_v1``), a credential version's owning
+Workspace (``marketai_credential_version_workspace_v1``), and where Meta
+connections live (``marketai_meta_connection_ids_v1`` across Workspaces,
+``marketai_meta_connection_workspace_v1`` by id; #102) -- and does everything
+else in a TenantContext signed for that Workspace's current epoch (and, for
+Meta rows, their Meta mode, which the Meta tables' policy binds). SQLite has
+no RLS and reads and writes those rows directly.
 
 Routes (per spec §8.2 platform allowlist / §8.7):
 
@@ -19,10 +29,17 @@ Routes (per spec §8.2 platform allowlist / §8.7):
   platform Workspace may hold ``internal_validation`` connections, and only
   a platform operator may create sandbox connections' initial credential
   material -- there is deliberately no self-service "create my first
-  connection" affordance for internal_validation).
+  connection" affordance for internal_validation). A customer Workspace
+  must already exist: only the control-plane projection creates one, and
+  bootstrap answers 409 ``workspace_not_provisioned`` otherwise (#91). The
+  platform Workspace, which the control plane does not project, is created
+  here on its first ``internal_validation`` bootstrap.
 * ``GET /api/platform/v1/meta/connections`` / ``GET .../{id}`` -- the
   platform-wide read view across every Workspace, for operators diagnosing
   a specific tenant's connection without knowing its Workspace up front.
+  The list runs oldest first and holds at most ``limit`` connections (at
+  most :data:`CONNECTION_LIST_LIMIT`, the default); ``after=<last id>``
+  continues from the previous page, and a short page is the last one.
 * ``POST /api/platform/v1/meta/connections/{id}/reconcile`` -- re-derives
   and returns the connection's current projection (connection + active
   binding state). See the docstring on :func:`reconcile_connection` for
@@ -52,25 +69,27 @@ both auth mechanisms. It is overridden directly in tests via
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, text
+from sqlalchemy.orm import Session, aliased
 
 from . import connections as connections_service
 from .models import MetaConnectionRecord, MetaDataSourceBindingRecord
 from .. import config
 from ..adapters.persistence.database import platform_session, tenant_session
-from ..adapters.persistence.models import WorkspaceRecord, utcnow
+from ..adapters.persistence.models import AuditEventRecord, WorkspaceRecord, utcnow
 from ..entitlements.credential_admin import CredentialAdmin
 from ..entitlements.credential_protector import LocalKmsAdapter
 from ..entitlements.credentials import CredentialVersionRecord
 from ..platform.platform_operator_identity import PlatformTokenError
-from ..platform.tenancy import VALID_META_MODES, TenantContext
+from ..platform.tenancy import VALID_META_MODES, TenantContext, is_postgres
 
 router = APIRouter(prefix="/api/platform/v1", tags=["platform-admin"])
 
@@ -193,29 +212,265 @@ def _get_protector() -> LocalKmsAdapter:
     return LocalKmsAdapter(secret.encode() if isinstance(secret, str) else secret)
 
 
-def _ensure_workspace(workspace_id: str, *, is_platform: bool) -> None:
-    """Create the Workspace row if bootstrap targets one that does not exist yet.
+@dataclass(frozen=True)
+class _WorkspaceScope:
+    """What a platform route needs to sign a TenantContext for a Workspace."""
 
-    Bootstrap is how a Workspace gets its *first* Meta connection (module
-    docstring) -- requiring the Workspace to already exist would just move
-    workspace creation into a separate, unspecified platform route. An
-    already-existing Workspace's ``is_platform_workspace`` flag is left
-    untouched: silently promoting an existing tenant Workspace to a
-    platform Workspace on a bootstrap call would be a surprising side
-    effect, so that case instead surfaces as the ordinary
-    ``ConnectionLifecycleError`` from ``create_connection`` (mapped to 400
-    below).
+    authorization_epoch: int
+    is_platform_workspace: bool
+
+
+def _workspace_scope(workspace_id: str) -> _WorkspaceScope | None:
+    """The Workspace's current epoch and platform flag, or ``None`` if the
+    domain database has no such Workspace.
+
+    No TenantContext exists yet and ``workspaces`` is FORCE RLS on
+    PostgreSQL, so the pre-tenant admission function (``SECURITY DEFINER``,
+    granted to the API) is the read the API role has; SQLite has no RLS and
+    reads the row directly.
     """
     with platform_session() as session:
-        if session.get(WorkspaceRecord, workspace_id) is None:
-            session.add(
-                WorkspaceRecord(
-                    id=workspace_id,
-                    name=workspace_id,
-                    created_at=utcnow(),
-                    is_platform_workspace=is_platform,
-                )
+        if is_postgres(session):
+            row = session.execute(
+                text(
+                    "SELECT workspace_id, authorization_epoch, is_platform_workspace "
+                    "FROM public.marketai_workspace_admission(:workspace_id)"
+                ),
+                {"workspace_id": workspace_id},
+            ).first()
+            if row is None or row.workspace_id is None:
+                return None
+            return _WorkspaceScope(int(row.authorization_epoch), bool(row.is_platform_workspace))
+        workspace = session.get(WorkspaceRecord, workspace_id)
+        if workspace is None:
+            return None
+        return _WorkspaceScope(workspace.authorization_epoch, workspace.is_platform_workspace)
+
+
+#: The audit event a platform Workspace's creation writes, once: its id is
+#: derived from the Workspace id, the same way the PostgreSQL function does.
+PLATFORM_WORKSPACE_CREATED = "workspace.platform_created"
+
+
+def _create_platform_workspace(workspace_id: str, *, initiator_id: str) -> bool:
+    """Create ``workspace_id`` as the platform Workspace; ``False`` if it exists.
+
+    Customer Workspaces come only from the control-plane projection, so this
+    creates a row with ``is_platform_workspace = true`` and nothing else, and
+    leaves an existing row exactly as it is (a customer Workspace is never
+    promoted). On PostgreSQL the API role holds no INSERT on ``workspaces``:
+    ``marketai_create_platform_workspace_v1`` (migration ``zzc2f3a4b5c6``)
+    makes the row and its audit event. SQLite has no roles and writes the
+    same two rows here.
+    """
+    with platform_session() as session:
+        if is_postgres(session):
+            return bool(
+                session.execute(
+                    text(
+                        "SELECT public.marketai_create_platform_workspace_v1("
+                        ":workspace_id, :initiator_id)"
+                    ),
+                    {"workspace_id": workspace_id, "initiator_id": initiator_id},
+                ).scalar_one()
             )
+        if session.get(WorkspaceRecord, workspace_id) is not None:
+            return False
+        session.add(
+            WorkspaceRecord(
+                id=workspace_id,
+                name=workspace_id,
+                created_at=utcnow(),
+                is_platform_workspace=True,
+            )
+        )
+        session.flush()
+        audit_key = f"{workspace_id}|platform-workspace-created".encode("utf-8")
+        session.add(
+            AuditEventRecord(
+                id="audit_" + hashlib.md5(audit_key, usedforsecurity=False).hexdigest(),
+                workspace_id=workspace_id,
+                initiator_id=initiator_id,
+                initiator_role="system",
+                executor=PLATFORM_EXECUTOR,
+                request_id="",
+                trace_id="",
+                authorization_epoch=0,
+                meta_mode=None,
+                event_type=PLATFORM_WORKSPACE_CREATED,
+                resource_type="workspace",
+                resource_id=workspace_id,
+                details_json={"is_platform_workspace": True},
+            )
+        )
+        return True
+
+
+def _credential_version_workspace(credential_version_id: str) -> str | None:
+    """The Workspace that owns ``credential_version_id``, or ``None``.
+
+    On PostgreSQL ``credential_versions`` is FORCE RLS and the API may read
+    only its non-secret columns, so the owner comes from
+    ``marketai_credential_version_workspace_v1``, which returns that id and
+    nothing else. SQLite reads the one column directly.
+    """
+    with platform_session() as session:
+        if is_postgres(session):
+            return session.execute(
+                text("SELECT public.marketai_credential_version_workspace_v1(:version_id)"),
+                {"version_id": credential_version_id},
+            ).scalar_one()
+        return session.scalar(
+            select(CredentialVersionRecord.workspace_id).where(
+                CredentialVersionRecord.id == credential_version_id
+            )
+        )
+
+
+#: The most connections ``GET /meta/connections`` returns; on PostgreSQL
+#: ``marketai_meta_connection_ids_v1`` enforces the same cap.
+CONNECTION_LIST_LIMIT = 500
+
+
+@dataclass(frozen=True)
+class _ListedConnection:
+    """One connection in the platform-wide list: where it lives, not what it says."""
+
+    connection_id: str
+    workspace_id: str
+    meta_mode: str
+    workspace: _WorkspaceScope
+
+
+def _list_connection_ids(*, after: str | None, limit: int) -> list[_ListedConnection]:
+    """Connections across every Workspace, oldest first (``created_at``, then
+    ``id``), starting after connection ``after`` when given, at most ``limit``.
+
+    Each carries its Workspace, Meta mode and the Workspace's current epoch
+    and platform flag -- what signing a context to read it takes -- and none
+    of its content. On PostgreSQL that comes from
+    ``marketai_meta_connection_ids_v1`` (migration ``zzd3a4b5c6d7``); SQLite
+    reads the same columns directly.
+    """
+    with platform_session() as session:
+        if is_postgres(session):
+            rows = session.execute(
+                text(
+                    "SELECT workspace_id, meta_mode, authorization_epoch, "
+                    "is_platform_workspace, connection_id "
+                    "FROM public.marketai_meta_connection_ids_v1(:after, :limit)"
+                ),
+                {"after": after, "limit": limit},
+            ).all()
+        else:
+            query = (
+                select(
+                    MetaConnectionRecord.workspace_id,
+                    MetaConnectionRecord.meta_mode,
+                    WorkspaceRecord.authorization_epoch,
+                    WorkspaceRecord.is_platform_workspace,
+                    MetaConnectionRecord.id.label("connection_id"),
+                )
+                .join(WorkspaceRecord, WorkspaceRecord.id == MetaConnectionRecord.workspace_id)
+                .order_by(MetaConnectionRecord.created_at, MetaConnectionRecord.id)
+                .limit(limit)
+            )
+            if after is not None:
+                cursor = aliased(MetaConnectionRecord)
+                after_created_at = (
+                    select(cursor.created_at).where(cursor.id == after).scalar_subquery()
+                )
+                query = query.where(
+                    or_(
+                        MetaConnectionRecord.created_at > after_created_at,
+                        and_(
+                            MetaConnectionRecord.created_at == after_created_at,
+                            MetaConnectionRecord.id > after,
+                        ),
+                    )
+                )
+            rows = session.execute(query).all()
+    return [
+        _ListedConnection(
+            connection_id=row.connection_id,
+            workspace_id=row.workspace_id,
+            meta_mode=row.meta_mode,
+            workspace=_WorkspaceScope(int(row.authorization_epoch), bool(row.is_platform_workspace)),
+        )
+        for row in rows
+    ]
+
+
+def _connection_workspace(connection_id: str) -> tuple[str, str] | None:
+    """The Workspace and Meta mode of ``connection_id``, or ``None``.
+
+    On PostgreSQL ``meta_connection_records`` is FORCE RLS behind a context
+    bound to one Workspace and Meta mode, so both come from
+    ``marketai_meta_connection_workspace_v1``, which returns them and nothing
+    else. SQLite reads the two columns directly.
+    """
+    with platform_session() as session:
+        if is_postgres(session):
+            row = session.execute(
+                text(
+                    "SELECT workspace_id, meta_mode "
+                    "FROM public.marketai_meta_connection_workspace_v1(:connection_id)"
+                ),
+                {"connection_id": connection_id},
+            ).first()
+        else:
+            row = session.execute(
+                select(MetaConnectionRecord.workspace_id, MetaConnectionRecord.meta_mode).where(
+                    MetaConnectionRecord.id == connection_id
+                )
+            ).first()
+    return None if row is None else (row.workspace_id, row.meta_mode)
+
+
+def _platform_tenant_context(
+    workspace_id: str,
+    scope: _WorkspaceScope,
+    platform: LegacyPlatformContext,
+    *,
+    meta_mode: str | None = None,
+) -> TenantContext:
+    """A TenantContext for one Workspace, signed for its current epoch."""
+    return TenantContext(
+        workspace_id=workspace_id,
+        role="owner",
+        initiator_id=platform.actor_id,
+        executor=PLATFORM_EXECUTOR,
+        authorization_epoch=scope.authorization_epoch,
+        meta_mode=meta_mode,
+        is_platform_workspace=scope.is_platform_workspace,
+    )
+
+
+def _connection_context(connection_id: str, platform: LegacyPlatformContext) -> TenantContext:
+    """A context signed to read ``connection_id``: its Workspace's current
+    epoch and the connection's Meta mode. 404 if there is no such connection."""
+    owner = _connection_workspace(connection_id)
+    scope = _workspace_scope(owner[0]) if owner is not None else None
+    if owner is None or scope is None:
+        raise HTTPException(404, "Meta connection not found")
+    workspace_id, meta_mode = owner
+    return _platform_tenant_context(workspace_id, scope, platform, meta_mode=meta_mode)
+
+
+def _scoped_connection(
+    session: Session, context: TenantContext, connection_id: str,
+) -> MetaConnectionRecord:
+    """``connection_id`` read in ``context``; 404 if RLS or a race hides it."""
+    row = session.scalar(
+        select(MetaConnectionRecord).where(
+            MetaConnectionRecord.id == connection_id,
+            MetaConnectionRecord.workspace_id == context.workspace_id,
+            MetaConnectionRecord.meta_mode == context.meta_mode,
+        )
+    )
+    if row is None:
+        raise HTTPException(404, "Meta connection not found")
+    return row
 
 
 def _connection_dict(row: MetaConnectionRecord) -> dict:
@@ -298,14 +553,29 @@ def bootstrap(
             },
         )
 
-    _ensure_workspace(body.workspace_id, is_platform=(body.meta_mode == "internal_validation"))
+    # Customer Workspaces exist only once the control plane has projected
+    # them. The platform Workspace, which it does not project, is the only
+    # one bootstrap creates; an existing Workspace keeps its flag, so
+    # internal_validation on a customer Workspace still fails below with
+    # meta_platform_workspace_required.
+    scope = _workspace_scope(body.workspace_id)
+    if scope is None:
+        if body.meta_mode != "internal_validation":
+            raise HTTPException(
+                409,
+                {
+                    "code": "workspace_not_provisioned",
+                    "message": f"Workspace {body.workspace_id!r} has not been provisioned "
+                    "by the control plane yet.",
+                },
+            )
+        _create_platform_workspace(body.workspace_id, initiator_id=_platform.actor_id)
+        scope = _workspace_scope(body.workspace_id)
+        if scope is None:  # pragma: no cover -- the row was just committed
+            raise RuntimeError(f"platform Workspace {body.workspace_id!r} was not created")
 
-    context = TenantContext(
-        workspace_id=body.workspace_id,
-        role="owner",
-        initiator_id=_platform.actor_id,
-        executor=PLATFORM_EXECUTOR,
-        meta_mode=body.meta_mode,
+    context = _platform_tenant_context(
+        body.workspace_id, scope, _platform, meta_mode=body.meta_mode,
     )
 
     protector = _get_protector()
@@ -371,14 +641,58 @@ def bootstrap(
 
 @router.get("/meta/connections")
 def list_connections(
+    after: str | None = Query(
+        None, max_length=64,
+        description="Continue after this connection id: the last item of the previous page.",
+    ),
+    limit: int = Query(CONNECTION_LIST_LIMIT, ge=1, le=CONNECTION_LIST_LIMIT),
     _platform: LegacyPlatformContext = Depends(request_platform_context),
 ) -> dict:
-    with platform_session() as session:
-        rows = session.scalars(
-            select(MetaConnectionRecord).order_by(MetaConnectionRecord.created_at)
-        ).all()
-        items = [_connection_dict(row) for row in rows]
-    return {"items": items}
+    # Which connections exist and where is the only thing read untenanted;
+    # each Workspace's connections are then read in one TenantContext per
+    # Meta mode, signed for that Workspace's current epoch (#102).
+    if after is not None and _connection_workspace(after) is None:
+        raise HTTPException(
+            400,
+            {"code": "invalid_cursor", "message": f"unknown Meta connection {after!r} in 'after'"},
+        )
+    listed = _list_connection_ids(after=after, limit=limit)
+
+    groups: dict[tuple[str, str], list[_ListedConnection]] = {}
+    for entry in listed:
+        groups.setdefault((entry.workspace_id, entry.meta_mode), []).append(entry)
+
+    items_by_id: dict[str, dict] = {}
+    for (workspace_id, meta_mode), entries in groups.items():
+        context = _platform_tenant_context(
+            workspace_id, entries[0].workspace, _platform, meta_mode=meta_mode,
+        )
+        with tenant_session(context) as session:
+            rows = session.scalars(
+                select(MetaConnectionRecord).where(
+                    MetaConnectionRecord.workspace_id == workspace_id,
+                    MetaConnectionRecord.meta_mode == meta_mode,
+                    MetaConnectionRecord.id.in_([entry.connection_id for entry in entries]),
+                )
+            )
+            items_by_id.update((row.id, _connection_dict(row)) for row in rows)
+
+    unread = len(listed) - len(items_by_id)
+    if unread:
+        # Only a Workspace whose epoch moved between the two reads hides its
+        # rows from the context signed for the old one.
+        logger.warning(
+            "platform_meta_connection_list_unread: %d listed connections were not "
+            "readable in their Workspace's context",
+            unread,
+        )
+    return {
+        "items": [
+            items_by_id[entry.connection_id]
+            for entry in listed
+            if entry.connection_id in items_by_id
+        ]
+    }
 
 
 @router.get("/meta/connections/{connection_id}")
@@ -386,11 +700,9 @@ def get_connection(
     connection_id: str,
     _platform: LegacyPlatformContext = Depends(request_platform_context),
 ) -> dict:
-    with platform_session() as session:
-        row = session.get(MetaConnectionRecord, connection_id)
-        if row is None:
-            raise HTTPException(404, "Meta connection not found")
-        return _connection_dict(row)
+    context = _connection_context(connection_id, _platform)
+    with tenant_session(context) as session:
+        return _connection_dict(_scoped_connection(session, context, connection_id))
 
 
 @router.post("/meta/connections/{connection_id}/reconcile")
@@ -413,11 +725,13 @@ def reconcile_connection(
     operators have one command to re-fetch a connection's ground truth
     without hand-rolling two queries. See the Task 17 report's Concerns for
     what full cross-mode reconciliation would still need.
+
+    Both reads run in one TenantContext signed for the connection's Workspace
+    and Meta mode (#102), so the binding can only be that Workspace's.
     """
-    with platform_session() as session:
-        connection = session.get(MetaConnectionRecord, connection_id)
-        if connection is None:
-            raise HTTPException(404, "Meta connection not found")
+    context = _connection_context(connection_id, _platform)
+    with tenant_session(context) as session:
+        connection = _scoped_connection(session, context, connection_id)
         active_binding = session.scalar(
             select(MetaDataSourceBindingRecord).where(
                 MetaDataSourceBindingRecord.workspace_id == connection.workspace_id,
@@ -449,25 +763,33 @@ async def revoke_credential(
     body: RevokeCredentialRequest,
     _platform: LegacyPlatformContext = Depends(request_platform_context),
 ) -> dict:
-    with platform_session() as session:
-        version = session.get(CredentialVersionRecord, credential_version_id)
-        if version is None:
-            raise HTTPException(404, "credential version not found")
-        workspace_id = version.workspace_id
-        credential_key = version.credential_key
+    # Which Workspace owns the version is the only thing read untenanted;
+    # the version itself is read (non-secret columns only) and revoked in a
+    # TenantContext signed for that Workspace (#94).
+    workspace_id = _credential_version_workspace(credential_version_id)
+    scope = _workspace_scope(workspace_id) if workspace_id is not None else None
+    if workspace_id is None or scope is None:
+        raise HTTPException(404, "credential version not found")
 
-    context = TenantContext(
-        workspace_id=workspace_id,
-        role="owner",
-        initiator_id=_platform.actor_id,
-        executor=PLATFORM_EXECUTOR,
-    )
+    context = _platform_tenant_context(workspace_id, scope, _platform)
 
     protector = _get_protector()
     admin = CredentialAdmin(protector)
     with tenant_session(context) as session:
+        version = session.execute(
+            select(CredentialVersionRecord.credential_key, CredentialVersionRecord.state).where(
+                CredentialVersionRecord.id == credential_version_id,
+                CredentialVersionRecord.workspace_id == workspace_id,
+            )
+        ).first()
+        if version is None:
+            raise HTTPException(404, "credential version not found")
+        # Revocation acts on the key's active version: a version that is no
+        # longer active must not revoke whichever one replaced it.
+        if version.state != "active":
+            raise HTTPException(404, f"credential version is not active (state={version.state!r})")
         try:
-            admin.revoke(session, context, credential_key=credential_key, reason=body.reason)
+            admin.revoke(session, context, credential_key=version.credential_key, reason=body.reason)
         except ValueError as exc:
             raise HTTPException(404, str(exc)) from exc
 

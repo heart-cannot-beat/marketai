@@ -125,6 +125,9 @@ const FACTS = [
     fact_id: 'price-us-standard',
     fact_type: 'price',
     country_code: 'US',
+    // Each row names its Offer entry (#54); `tax-de` stands for a row
+    // published before #54, which names none.
+    offer_entry_id: 'lib_offer_acme_65w',
     amount: '49.00',
     currency: 'USD',
     valid_from: '2026-11-01',
@@ -369,12 +372,21 @@ describe('Manual Fact Set Facts tab', () => {
     );
     expect(
       screen.getAllByRole('columnheader').map((cell) => cell.textContent)
-    ).toEqual(['Fact ID', 'Type', 'Market', 'Amount', 'Valid', 'Other values']);
+    ).toEqual([
+      'Fact ID',
+      'Type',
+      'Market',
+      'Offer',
+      'Amount',
+      'Valid',
+      'Other values',
+    ]);
     expect(factRows()).toEqual([
       [
         'price-us-standard',
         'price',
         'US',
+        'lib_offer_acme_65w',
         '49.00 USD',
         '2026-11-01 to 2026-12-31',
         '—Not set',
@@ -383,6 +395,7 @@ describe('Manual Fact Set Facts tab', () => {
         'tax-de',
         'tax',
         'DE',
+        '—Not set',
         '—Not set',
         '2026-11-01 to 2027-06-30',
         'rate: 0.19',
@@ -418,6 +431,7 @@ describe('Manual Fact Set Facts tab', () => {
         'tax-de',
         'tax',
         'DE',
+        '—Not set',
         '—Not set',
         '2026-11-01 to 2027-06-30',
         'rate: 0.19',
@@ -489,11 +503,20 @@ describe('Manual Fact Set Facts tab', () => {
     expect(screen.getByText('这是草稿，还没有发布。')).toBeInTheDocument();
     expect(
       screen.getAllByRole('columnheader').map((cell) => cell.textContent)
-    ).toEqual(['事实 ID', '类型', '市场', '金额', '有效期', '其他值']);
+    ).toEqual([
+      '事实 ID',
+      '类型',
+      '市场',
+      '销售方案',
+      '金额',
+      '有效期',
+      '其他值',
+    ]);
     expect(factRows()[0]).toEqual([
       'price-us-standard',
       'price',
       'US',
+      'lib_offer_acme_65w',
       '49.00 USD',
       '2026-11-01 至 2026-12-31',
       '—未填写',
@@ -628,6 +651,7 @@ describe('An imported draft whose rows have problems (#23)', () => {
       'Problems',
       'Type',
       'Market',
+      'Offer',
       'Amount',
       'Valid',
       'Other values',

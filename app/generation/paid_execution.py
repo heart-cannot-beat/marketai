@@ -29,6 +29,7 @@ from app.generation.worker import _get_run_item, _transition_item, _persist_outp
 from app.platform.operations import get_operation, transition_operation, OperationState
 from app.providers.adapter import ProviderCallRequest, ProviderDispatchError
 from app.providers.router import get_provider
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 
 def reserve_run(session, ctx, run, items, job_ids, quote, confirmation_id):
@@ -227,6 +228,7 @@ def _prepare(session, ctx, job_id, item_id):
             "credential_scope": credential_scope, "prompt": prompt, "reservation_id": reservation.id}
 
 
+@runs_as(WORKER_ROLE)
 def record_execution_failure(ctx, job_id, item_id):
     """Close pre-dispatch failures; preserve exposure after a committed fence.
 
@@ -262,6 +264,7 @@ def record_execution_failure(ctx, job_id, item_id):
         _sync_operation(session, ctx, item.generation_run_id)
 
 
+@runs_as(WORKER_ROLE)
 async def execute_run_item(ctx, job_id, item_id, blob_store, *, adapter=None):
     # Read and hash-check product photos before committing the paid-call fence.
     references = []

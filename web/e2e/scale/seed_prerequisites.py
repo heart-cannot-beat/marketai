@@ -20,10 +20,11 @@ mutate durable evidence *between* browser steps, not just once up front:
     MetaConnection + fault-injectable ScenarioVersion, a matching
     ScaleDeliveryTargetRecord, the activation-evidence prerequisites
     (EvidenceAttestation + a metric-semantic contract set carrying all
-    three contract types this suite's manifests need), and one published,
-    platform-global ScalePolicyVersionRecord. Returns every id the
-    Controlled-Mock journey needs to drive the real UI from "create Draft
-    Enrollment" onward.
+    three contract types this suite's manifests need). It publishes no
+    ScalePolicyVersion: the suite evaluates under the Beta default the
+    migrations published (#127). Returns every id the Controlled-Mock
+    journey needs to drive the real UI from "create Draft Enrollment"
+    onward.
 
   seed-customer-sandbox
     The same chain, bound to `customer_sandbox` instead, for
@@ -48,7 +49,10 @@ mutate durable evidence *between* browser steps, not just once up front:
     transition. `--kind blocked` instead marks the manifest `blocked`
     (spec §4.5 step 5's terminal blocked-manifest scenario) and skips
     building any evidence at all, mirroring
-    `tests/test_scale_evidence.py::TestSealSnapshotBlockedManifest`.
+    `tests/test_scale_evidence.py::TestSealSnapshotBlockedManifest`. Either
+    kind moves the Episode's readiness projection through the source
+    collector's own step (`app.scale.collector._advance_readiness`, #114);
+    a blocked one first records a `transport_exhausted` source issue.
 
 Required environment (see also `web/e2e/scale/helpers.ts`,
 `web/e2e/scale/fixtures.ts`):
@@ -88,33 +92,6 @@ REQUIRED_ENVIRONMENT = (
 MUTATION_OPT_IN = "E2E_SCALE_ALLOW_MUTATIONS"
 SAFE_DATABASE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "postgres"})
 EXPECTED_DATABASE = "marketai_domain"
-
-_SIGNAL_THRESHOLDS = {
-    "confidence_level": "0.95",
-    "confidence_z": "1.96",
-    "frequency_level_threshold": "3",
-    "frequency_growth_threshold": "0.2",
-    "ctr_decline_threshold": "0.2",
-    "ctr_stability_tolerance": "0.05",
-    "cvr_decline_threshold": "0.2",
-    "cvr_stability_tolerance": "0.05",
-    "cpm_increase_threshold": "0.2",
-    "delivery_decline_threshold": "0.2",
-    "cpa_worsening_threshold": "0.2",
-    "roas_worsening_threshold": "0.2",
-    "bootstrap_lower_percentile": "0.025",
-    "bootstrap_upper_percentile": "0.975",
-    "breakdown_min_spend_share": "0.05",
-    "active_day_floor": 3,
-    "consecutive_composite_fatigue_hits_required": 2,
-    "consecutive_healthy_evaluations_required": 2,
-    "breakdown_min_sample_impressions": 500,
-    "breakdown_min_sample_clicks": 10,
-    "breakdown_min_sample_purchases": 2,
-    "quality_warning_permitted_codes": ["freshness_slo_exceeded"],
-    "streak_reset_reason_codes": ["policy_version_changed"],
-    "advice_construction_parameters": [],
-}
 
 
 def _database_url_problems(name: str, database_url: str) -> list[str]:
@@ -231,44 +208,20 @@ def _seed_full_activation_evidence(session, ctx, *, delivery_target_id: str, met
     return contract_set_id
 
 
-def _publish_policy_version(session, *, tag: str) -> str:
-    from app.scale.models import ScalePolicyVersionRecord
+def _platform_policy_version_id(session) -> str:
+    """The Policy a live ``customer_sandbox`` run freezes: the latest Beta
+    default the migrations published that runs the deployed algorithm (v2
+    since #132). ``advance-manifest`` evaluates under it
+    explicitly in either mode -- explicit evaluation does not read
+    ``mode_permissions``, which keep ``controlled_mock`` out of live runs."""
+    from app.scale.live_trigger import eligible_live_policy
 
-    policy = ScalePolicyVersionRecord(
-        id=f"spol_{tag}",
-        algorithm_version="beta-v1",
-        canonical_schema_version="scale-snapshot-v1",
-        decimal_precision=28,
-        decimal_rounding="round_half_even",
-        z_value=Decimal("1.96"),
-        evidence_floor_minimum_spend=Decimal("50"),
-        evidence_floor_minimum_days=3,
-        evidence_floor_minimum_conversions=1,
-        activity_floor_minimum_impressions=500,
-        sample_floor_minimum_clicks=5,
-        spend_floor_minimum_daily_spend=Decimal("5"),
-        freshness_floor_maximum_lag_hours=48,
-        signal_thresholds=dict(_SIGNAL_THRESHOLDS),
-        streak_rules={},
-        bootstrap_prng_algorithm="bootstrap-prng-v1",
-        bootstrap_draw_count=200,
-        bootstrap_valid_draw_ratio=Decimal("0.5"),
-        bootstrap_percentile_method="nearest_rank",
-        bootstrap_draw_order="sequential",
-        breakdown_families={},
-        breakdown_sample_gate_minimum=1,
-        breakdown_share_gate_minimum_ratio=Decimal("0.05"),
-        bh_fdr_alpha=Decimal("0.10"),
-        advice_severity_thresholds={},
-        notification_cooldown_hours=24,
-        conversion_safe_values={},
-        mode_permissions={},
-        is_published=True,
-        created_by="e2e-seed",
-        published_at=datetime.now(timezone.utc),
-    )
-    session.add(policy)
-    session.flush()
+    policy = eligible_live_policy(session, "customer_sandbox")
+    if policy is None:
+        raise SystemExit(
+            "no published ScalePolicyVersion permits customer_sandbox: "
+            "migrate the domain database to head (#127)"
+        )
     return policy.id
 
 
@@ -377,7 +330,7 @@ def _seed_chain(environment: dict[str, str], *, target_meta_mode: str, fault_con
             session, target_ctx, delivery_target_id=chain["delivery_target_id"],
             meta_mode=target_meta_mode, tag=tag,
         )
-        policy_version_id = _publish_policy_version(session, tag=tag)
+        policy_version_id = _platform_policy_version_id(session)
 
         if fault_config and target_meta_mode == "controlled_mock":
             from app.scale.models import ScaleDeliveryTargetRecord
@@ -561,13 +514,16 @@ def advance_manifest(
     from app.adapters.persistence.database import tenant_session
     from app.adapters.persistence.models import new_id
     from app.platform.tenancy import commit_and_rebind
+    from app.scale.collector import TRANSPORT_EXHAUSTED, _advance_readiness, _blocked
     from app.scale.models import (
         ScaleAdviceThreadRecord,
         ScaleEpisodeRecord,
         ScaleEvaluationRecord,
         ScaleEvidenceSourceManifestRecord,
         ScaleManifestItemRecord,
+        ScaleSourceQualityIssueRecord,
     )
+    from app.scale.evaluator import CURRENT_ALGORITHM_VERSION
     from app.scale.service import request_scale_evaluation, run_scale_evaluation, ScaleEvaluationRequest
 
     ctx = _tenant_context(environment, meta_mode=meta_mode)
@@ -643,6 +599,26 @@ def advance_manifest(
             session.add_all(items)
             session.flush()
 
+        # The source collector's readiness step (#109, #114): a blocked
+        # manifest carries its typed issue and moves the Episode's readiness
+        # to insufficient/blocked with the recovery action; a complete one
+        # moves it on again. The same function the collector calls, so the
+        # evidence page reads what production writes.
+        issues = [] if kind != "blocked" else [
+            _blocked(TRANSPORT_EXHAUSTED, f"e2e: the read of {as_of.isoformat()} failed after its retries"),
+        ]
+        session.add_all([
+            ScaleSourceQualityIssueRecord(
+                id=new_id("ssqi"), workspace_id=ctx.workspace_id, meta_mode=meta_mode,
+                manifest_id=manifest.id, code=issue.code, severity="blocking", is_blocking=True,
+                contract_type=issue.contract_type, window_role=issue.window_role, local_day=issue.local_day,
+                detail=issue.detail, recovery_action=issue.recovery_action,
+            )
+            for issue in issues
+        ])
+        session.flush()
+        _advance_readiness(session, ctx, episode, manifest, issues)
+
         request = ScaleEvaluationRequest(
             enrollment_id=enrollment_id,
             episode_id=episode_id,
@@ -653,7 +629,8 @@ def advance_manifest(
             source_revision=day_index,
             freshness_reference_at=datetime.now(timezone.utc),
             policy_version_id=policy_version_id,
-            algorithm_version="beta-v1",
+            # The deployed algorithm, which the selected Policy runs (#132).
+            algorithm_version=CURRENT_ALGORITHM_VERSION,
             target_version_id=target_version_id,
             semantic_event_sequence=0,
             replay_generation=0,

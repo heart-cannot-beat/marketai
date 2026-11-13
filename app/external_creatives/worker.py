@@ -61,6 +61,7 @@ from app.providers.llm_chat import LlmChatClient, LlmChatError, LlmImage
 
 from . import tagging
 from .service import RESOURCE_TYPE, TERMINAL_STATUSES
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 ASSET_PURPOSE = "external_creative"
 TRUTH_POLICY_VERSION = "external-creative-truth-v1"
@@ -168,6 +169,7 @@ def release_unused_reservation(ctx: TenantContext, creative_id: str) -> None:
                 )
 
 
+@runs_as(WORKER_ROLE)
 def mark_failed(ctx: TenantContext, creative_id: str, *, code: str, detail: str) -> None:
     """Record an unexpected handler fault (best effort)."""
     try:
@@ -190,6 +192,7 @@ def mark_failed(ctx: TenantContext, creative_id: str, *, code: str, detail: str)
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 async def run_external_creative(
     ctx: TenantContext,
     *,

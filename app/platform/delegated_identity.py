@@ -256,7 +256,7 @@ class DelegatedIdentityMiddleware:
             if result == SyncResult.NOT_FOUND:
                 await self._send_401(send, "workspace_not_found", "Workspace does not exist", trace_id)
                 return
-            if result != SyncResult.SYNCED:
+            if result not in (SyncResult.SYNCED, SyncResult.RATE_LIMITED):
                 await self._send_503(
                     send,
                     "projection_sync_unavailable",
@@ -264,13 +264,20 @@ class DelegatedIdentityMiddleware:
                     trace_id,
                 )
                 return
+            # RATE_LIMITED reads again too: the sync that took this window, or
+            # the control plane's push, may have created the row since the
+            # first read.
             try:
                 admission = await self.admission_reader.read(identity.workspace_id)
             except WorkspaceNotFoundError:
                 await self._send_503(
                     send,
                     "projection_sync_unavailable",
-                    "Projection store reported success but no row is readable",
+                    (
+                        "Projection store reported success but no row is readable"
+                        if result == SyncResult.SYNCED
+                        else "Cannot verify workspace existence — upstream unavailable"
+                    ),
                     trace_id,
                 )
                 return

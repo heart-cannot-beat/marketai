@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import or_, select, text, update
+from sqlalchemy import and_, or_, select, text, update
 
 from .. import config
 from ..adapters.persistence.database import engine, platform_session, tenant_session
@@ -23,6 +23,7 @@ from .audit import append_event
 from .job_policy import resolve_safe_to_retry_after_crash
 from .operations import (
     AGGREGATED_ADMISSION_CONTRACT_VERSION,
+    JOB_TERMINAL_STATES,
     NON_TERMINAL_STATES,
     OperationRecord,
     OperationState,
@@ -32,6 +33,7 @@ from .operations import (
     transition_operation,
 )
 from .tenancy import TenantContext, current_context, system_context, tenant_scope
+from .runtime_role import WORKER_ROLE, runs_as
 
 
 @dataclass(frozen=True)
@@ -118,16 +120,32 @@ def enqueue_in_session(
     resource_id: str = "",
     safe_to_retry_after_crash: bool | None = None,
     max_attempts: int = 3,
+    not_before: datetime | None = None,
 ) -> JobRecord:
     """Persist one Job, or return the one ``idempotency_key`` already named.
 
     ``safe_to_retry_after_crash`` comes from ``app.platform.job_policy``:
     leave it ``None``, or pass the registered value. A type the registry
     does not list is refused before anything is written.
+
+    ``not_before`` delays the first claim (#111): it is written to
+    ``next_attempt_at``, which both claim paths already filter on in the
+    selecting query (``marketai_claim_next_job_v2`` on PostgreSQL,
+    :func:`claim_next` on SQLite). A Job that is not yet due is never
+    leased, so it neither holds up the Jobs queued after it nor makes a
+    Worker spin. It is not a lease or a deadline: a stale authorization
+    epoch still rejects the Job at the next claim, due or not. When the key
+    already names a Job, that Job is returned as it is.
     """
     safe_to_retry_after_crash = resolve_safe_to_retry_after_crash(
         job_type, safe_to_retry_after_crash
     )
+    if not_before is not None:
+        if not_before.tzinfo is None:
+            raise ValueError("not_before must be timezone-aware")
+        # SQLite stores the wall-clock value without its offset; UTC keeps
+        # it comparable with the claim's own UTC clock.
+        not_before = not_before.astimezone(timezone.utc)
     bound = current_context(session)
     if bound != context:
         raise ValueError("the job context must match the transaction's TenantContext")
@@ -157,22 +175,26 @@ def enqueue_in_session(
         state="queued",
         safe_to_retry_after_crash=safe_to_retry_after_crash,
         max_attempts=max_attempts,
+        next_attempt_at=not_before,
     )
     session.add(job)
     session.flush()
+    details: dict[str, Any] = {
+        "job_type": job_type,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "idempotency_key_sha256": hashlib.sha256(
+            idempotency_key.encode("utf-8")
+        ).hexdigest(),
+    }
+    if not_before is not None:
+        details["not_before"] = not_before.isoformat()
     append_event(
         session,
         event_type="job.enqueued",
         resource_type="job",
         resource_id=job.id,
-        details={
-            "job_type": job_type,
-            "resource_type": resource_type,
-            "resource_id": resource_id,
-            "idempotency_key_sha256": hashlib.sha256(
-                idempotency_key.encode("utf-8")
-            ).hexdigest(),
-        },
+        details=details,
     )
     return job
 
@@ -302,6 +324,7 @@ def recover_expired_jobs(now: datetime | None = None) -> dict[str, int]:
     return {"recovered": recovered, "uncertain": uncertain}
 
 
+@runs_as(WORKER_ROLE)
 def reconcile_admitted_operations(limit: int = 100) -> int:
     """Fold Operations whose Jobs all went terminal without a Python caller.
 
@@ -313,36 +336,32 @@ def reconcile_admitted_operations(limit: int = 100) -> int:
     reconciler for exactly that gap: it is idempotent, bounded, and folds
     only Operations that already have their complete terminal Job set.
 
+    Candidates are listed across Workspaces -- on PostgreSQL by
+    ``marketai_admitted_operation_candidates_v1``, ids and the Workspace's
+    current epoch only, because the Worker role's untenanted session sees no
+    row at all (before #22 this sweep therefore never found anything there)
+    -- and each one is folded in its own transaction under a TenantContext
+    signed for that epoch.
+
     Returns the number of Operations this pass moved.
     """
     moved = 0
     with platform_session() as session:
-        candidates = session.scalars(
-            select(OperationRecord)
-            .where(
-                OperationRecord.admission_contract_version
-                >= AGGREGATED_ADMISSION_CONTRACT_VERSION,
-                OperationRecord.state.in_(
-                    tuple(state.value for state in NON_TERMINAL_STATES)
-                ),
+        candidates = _admitted_operation_candidates(session, limit)
+    for workspace_id, authorization_epoch, operation_id in candidates:
+        context = system_context(
+            workspace_id, initiator_id=None, authorization_epoch=authorization_epoch
+        )
+        with tenant_session(context) as session:
+            changed = aggregate_operation_from_jobs(
+                session,
+                operation_id,
+                actor=context.executor,
+                context=context,
+                reason="reconciled from terminal sibling Jobs",
             )
-            .order_by(OperationRecord.updated_at)
-            .limit(limit)
-        ).all()
-        for operation in candidates:
-            context = system_context(
-                operation.workspace_id, initiator_id=operation.initiator_id
-            )
-            with tenant_scope(session, context):
-                changed = aggregate_operation_from_jobs(
-                    session,
-                    operation.id,
-                    actor=context.executor,
-                    context=context,
-                    reason="reconciled from terminal sibling Jobs",
-                )
-            if changed is not None:
-                moved += 1
+        if changed is not None:
+            moved += 1
     if moved:
         from .ops_alerts import AlertCategory, Severity, emit as ops_emit
 
@@ -353,6 +372,64 @@ def reconcile_admitted_operations(limit: int = 100) -> int:
             details={"folded": moved},
         )
     return moved
+
+
+def _admitted_operation_candidates(session, limit: int) -> list[tuple[str, int, str]]:
+    """``(workspace_id, current authorization epoch, operation_id)`` to fold.
+
+    Both branches return the same set: open aggregated Operations with at
+    least one Job, all of them ended, except an uncertain Operation that an
+    uncertain Job already accounts for. An Operation still waiting on its
+    Jobs is never listed. The fold would leave it alone and its
+    ``updated_at`` with it, so it would hold its place at the front of the
+    oldest-first window on every pass (#136).
+    """
+    if session.get_bind().dialect.name == "postgresql":
+        rows = session.execute(
+            text(
+                "SELECT workspace_id, authorization_epoch, operation_id "
+                "FROM public.marketai_admitted_operation_candidates_v1("
+                "CAST(:candidate_limit AS integer))"
+            ),
+            {"candidate_limit": limit},
+        ).all()
+    else:
+        # The same conditions as marketai_admitted_operation_candidates_v1.
+        def sibling_jobs(*conditions):
+            return (
+                select(JobRecord.id)
+                .where(
+                    JobRecord.workspace_id == OperationRecord.workspace_id,
+                    JobRecord.operation_id == OperationRecord.id,
+                    *conditions,
+                )
+                .exists()
+            )
+
+        rows = session.execute(
+            select(
+                OperationRecord.workspace_id,
+                WorkspaceRecord.authorization_epoch,
+                OperationRecord.id,
+            )
+            .join(WorkspaceRecord, WorkspaceRecord.id == OperationRecord.workspace_id)
+            .where(
+                OperationRecord.admission_contract_version
+                >= AGGREGATED_ADMISSION_CONTRACT_VERSION,
+                OperationRecord.state.in_(
+                    tuple(state.value for state in NON_TERMINAL_STATES)
+                ),
+                sibling_jobs(),
+                ~sibling_jobs(JobRecord.state.not_in(tuple(JOB_TERMINAL_STATES))),
+                ~and_(
+                    OperationRecord.state == OperationState.UNCERTAIN.value,
+                    sibling_jobs(JobRecord.state == "uncertain"),
+                ),
+            )
+            .order_by(OperationRecord.updated_at, OperationRecord.id)
+            .limit(limit)
+        ).all()
+    return [(str(ws), int(epoch), str(op_id)) for ws, epoch, op_id in rows]
 
 
 def _reject_stale_sqlite_jobs(now: datetime) -> int:
@@ -395,6 +472,7 @@ def _reject_stale_sqlite_jobs(now: datetime) -> int:
     return rejected
 
 
+@runs_as(WORKER_ROLE)
 def claim_next(owner: str, lease_seconds: int | None = None, *,
                job_types: tuple[str, ...] | None = None, exclude_types: tuple[str, ...] = ()) -> ClaimedJob | None:
     now = utcnow()
@@ -705,6 +783,62 @@ def fail(
                 reason=f"sibling Job failed: {code}",
             )
         return row.state
+
+
+#: The bounds of :func:`defer`'s wait, the same cap :func:`fail` applies.
+MIN_DEFER_SECONDS = 1
+MAX_DEFER_SECONDS = 3600
+
+
+def defer(
+    context: TenantContext,
+    job_id: str,
+    owner: str,
+    *,
+    code: str,
+    detail: str,
+    delay_seconds: float,
+) -> datetime:
+    """Put a leased Job back to wait, without spending an attempt.
+
+    For work an external limit paused rather than failed -- the Meta read's
+    rate limits (#112): the Job waits ``delay_seconds`` (1 s to 1 h) in
+    ``retry_wait`` and its ``attempt`` goes back by the one this claim took,
+    so waiting never brings it closer to its last attempt. The handler bounds
+    how long it keeps deferring. Returns when the Job may run again.
+    """
+    now = utcnow()
+    with tenant_session(context) as session:
+        row = session.get(JobRecord, job_id)
+        if (
+            not row
+            or row.workspace_id != context.workspace_id
+            or row.lease_owner != owner
+            or row.state not in ("leased", "running")
+        ):
+            raise RuntimeError("任务租约已丢失，不能推迟")
+        not_before = now + timedelta(seconds=max(MIN_DEFER_SECONDS, min(MAX_DEFER_SECONDS, delay_seconds)))
+        row.state = "retry_wait"
+        row.next_attempt_at = not_before
+        row.attempt = max(0, row.attempt - 1)
+        row.error_code = code
+        row.error_detail = detail[:2000]
+        row.lease_owner = None
+        row.lease_expires_at = None
+        row.heartbeat_at = None
+        append_event(
+            session,
+            event_type="job.deferred",
+            resource_type="job",
+            resource_id=job_id,
+            details={
+                "error_code": code,
+                "not_before": not_before.isoformat(),
+                "attempt": row.attempt,
+                "max_attempts": row.max_attempts,
+            },
+        )
+        return not_before
 
 
 def cancel_resource(context: TenantContext, resource_type: str, resource_id: str) -> int:

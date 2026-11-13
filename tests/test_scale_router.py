@@ -442,6 +442,10 @@ class TestEnrollmentLifecycleRoutes(EnrollmentChainTestBase):
         enrollment = self._create()
         enrollment_id = enrollment["id"]
 
+        draft_evidence = self.client.get(f"/api/v1/scale/{self.mode}/enrollments/{enrollment_id}/evidence")
+        self.assertEqual(draft_evidence.status_code, 404, draft_evidence.text)
+        self.assertEqual(draft_evidence.json()["code"], "no_active_episode")
+
         activate_preview_id = self._create_preview(enrollment_id, 1)
         activate_resp = self.client.put(
             f"/api/v1/scale/{self.mode}/enrollments/{enrollment_id}/activate",
@@ -466,8 +470,13 @@ class TestEnrollmentLifecycleRoutes(EnrollmentChainTestBase):
         evidence_resp = self.client.get(
             f"/api/v1/scale/{self.mode}/enrollments/{enrollment_id}/evidence",
         )
-        self.assertEqual(evidence_resp.status_code, 404)
-        self.assertEqual(evidence_resp.json()["code"], "evidence_not_available")
+        # Activated, nothing collected yet: a state, not a missing resource (#114).
+        self.assertEqual(evidence_resp.status_code, 200, evidence_resp.text)
+        evidence = evidence_resp.json()
+        self.assertEqual(
+            (evidence["episode_id"], evidence["readiness"], evidence["evaluation_id"], evidence["evaluation_stale"]),
+            (active["current_episode_id"], None, None, False),
+        )
 
         stale_pause_resp = self.client.put(
             f"/api/v1/scale/{self.mode}/enrollments/{enrollment_id}/pause",
@@ -1060,6 +1069,13 @@ class TestScaleProblemHandlerShapes(ScaleProblemAssertions, unittest.TestCase):
              409, "invalid_lifecycle"),
             (scale.TargetLifecycleError("idempotency_result_missing", "stgt_1"),
              400, "idempotency_result_missing"),
+            (scale.TargetLifecycleError("minimum_economic_spend_required"),
+             422, "minimum_economic_spend_required"),
+            (scale.TargetLifecycleError("minimum_economic_spend_below_platform_floor"),
+             422, "minimum_economic_spend_below_platform_floor"),
+            (scale.TargetLifecycleError("spend_floor_currency_unsupported"),
+             422, "spend_floor_currency_unsupported"),
+            (scale.TargetLifecycleError("no_eligible_policy"), 409, "no_eligible_policy"),
             (scale.BreakdownNotAvailableError("invalid_breakdown_type", "'bogus'"),
              422, "invalid_breakdown_type"),
             (scale.BreakdownNotAvailableError("enrollment_not_found", "senr_1"), 404, "enrollment_not_found"),
@@ -1330,8 +1346,9 @@ class TestScaleProblemResponses(ScaleProblemAssertions, ScaleRouterTestBase):
         # The widest each column holds; trailing zeros past it change nothing.
         for metrics in (
             {"target_cpa": "999999999999.999999999999"},
-            {"breakeven_roas": "999999.9999"},
-            {"breakeven_roas": "2.50000"},
+            # A ROAS alone carries a minimum at the platform floor (#134).
+            {"breakeven_roas": "999999.9999", "minimum_economic_spend": "100"},
+            {"breakeven_roas": "2.50000", "minimum_economic_spend": "100"},
             {"target_cpa": "20", "minimum_economic_spend": "999999999999.999999999999"},
         ):
             with self.subTest(**metrics):
@@ -1360,6 +1377,112 @@ class TestScaleProblemResponses(ScaleProblemAssertions, ScaleRouterTestBase):
         resp = self._post("/target-publication-previews", self._preview_body(target_cpa="20"))
         self._assert_problem(resp, 403, "owner_required")
         self._assert_no_preview_written()
+
+    # -- The minimum economic spend against the platform floor (#134) ---------
+
+    def _assert_floor_refused(self, resp, status: int, code: str, params: dict) -> None:
+        body = self._assert_problem(resp, status, code)
+        self.assertEqual(body["params"], params)
+        self._assert_no_preview_written()
+
+    def test_a_roas_only_target_needs_a_minimum_at_the_floor(self):
+        resp = self._post("/target-publication-previews", self._preview_body(breakeven_roas="2.5"))
+        self._assert_floor_refused(
+            resp, 422, "minimum_economic_spend_required", {"currency": "USD", "floor": "100"},
+        )
+
+        resp = self._post("/target-publication-previews", self._preview_body(
+            breakeven_roas="2.5", minimum_economic_spend="99.99",
+        ))
+        self._assert_floor_refused(
+            resp, 422, "minimum_economic_spend_below_platform_floor", {"currency": "USD", "floor": "100"},
+        )
+
+        resp = self._post("/target-publication-previews", self._preview_body(
+            breakeven_roas="2.5", minimum_economic_spend="100",
+        ))
+        self.assertEqual(resp.status_code, 201, resp.text)
+        self.assertIs(resp.json()["policy_floor_check_passed"], True)
+        published = self._post("/targets", {"publication_preview_id": resp.json()["id"]})
+        self.assertEqual(published.status_code, 201, published.text)
+        self.assertEqual(
+            (published.json()["platform_spend_floor"], published.json()["below_platform_floor"]),
+            ("100", False),
+        )
+
+    def test_a_currency_outside_the_policy_table_has_its_own_reason(self):
+        resp = self._post("/target-publication-previews", self._preview_body(
+            currency="BRL", breakeven_roas="2.5", minimum_economic_spend="1000",
+        ))
+        self._assert_floor_refused(resp, 422, "spend_floor_currency_unsupported", {"currency": "BRL"})
+
+    def test_a_member_is_refused_by_role_before_the_floor(self):
+        self._as(TenantContext(
+            workspace_id=self.workspace_id, role="member", initiator_id="user_member",
+        ))
+        resp = self._post("/target-publication-previews", self._preview_body(breakeven_roas="2.5"))
+        self._assert_problem(resp, 403, "owner_required")
+        self._assert_no_preview_written()
+
+    def _legacy_target(self, workspace_id: str, **amounts) -> str:
+        """A Target as published before #134, written directly (no check)."""
+        from app.scale.models import ScaleTargetVersionRecord
+
+        session = self._raw_session()
+        target = ScaleTargetVersionRecord(
+            id=new_id("stgt"), workspace_id=workspace_id, product_version_id=f"pv_{workspace_id}",
+            offer_version_id=f"ov_{workspace_id}", market_code="US", currency="USD",
+            lifecycle_state="active", creator_id="user_1", revision=1,
+            published_at=datetime.now(timezone.utc), **amounts,
+        )
+        session.add(target)
+        session.commit()
+        return target.id
+
+    def test_a_published_target_below_the_floor_is_marked_but_kept(self):
+        low = self._legacy_target(
+            self.workspace_id, breakeven_roas=Decimal("2.5"), minimum_economic_spend=Decimal("10"),
+        )
+
+        listed = self.client.get(self._url("/targets"), params={"lifecycle_state": "active"})
+        self.assertEqual(listed.status_code, 200, listed.text)
+        [item] = listed.json()["items"]
+        self.assertEqual(
+            (item["id"], item["minimum_economic_spend"], item["revision"]),
+            (low, "10.000000000000", 1),
+        )
+        self.assertEqual((item["platform_spend_floor"], item["below_platform_floor"]), ("100", True))
+        single = self.client.get(self._url(f"/targets/{low}")).json()
+        self.assertEqual((single["platform_spend_floor"], single["below_platform_floor"]), ("100", True))
+
+        self._switch_to_other_tenant()
+        self.assertEqual(self.client.get(self._url("/targets")).json()["items"], [])
+        self._assert_problem(self.client.get(self._url(f"/targets/{low}")), 404, "target_not_found")
+
+    def test_target_contexts_carry_the_floor_and_stay_in_their_workspace(self):
+        from app.scale.models import ScaleEpisodeRecord
+
+        session = self._raw_session()
+        _seed_enrollment_and_episode(session, self.workspace_id)
+        session.query(ScaleEpisodeRecord).filter_by(workspace_id=self.workspace_id).update(
+            {"currency": "GBP"},
+        )
+        session.commit()
+
+        resp = self.client.get(self._url("/target-contexts/current"))
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json(), {"items": [{
+            "product_version_id": "pv-1",
+            "offer_version_id": "ov-1",
+            "market_code": "US",
+            "currency": "GBP",
+            "has_active_target": False,
+            "platform_spend_floor": "75",
+            "platform_spend_floor_unavailable_reason": None,
+        }]})
+
+        self._switch_to_other_tenant()
+        self.assertEqual(self.client.get(self._url("/target-contexts/current")).json(), {"items": []})
 
     # -- Cursors (#381) ------------------------------------------------------
 
@@ -2039,6 +2162,11 @@ class TestPlatformScaleRouterEnrollmentLifecycle(PlatformScaleRouterTestBase):
         self.assertEqual(list_resp.status_code, 200, list_resp.text)
         self.assertEqual(len(list_resp.json()["items"]), 1)
 
+        evidence_url = f"/api/platform/v1/scale/internal_validation/enrollments/{enrollment['id']}/evidence"
+        draft_evidence = self.client.get(evidence_url, headers=self._headers())
+        self.assertEqual(draft_evidence.status_code, 404, draft_evidence.text)
+        self.assertEqual(draft_evidence.json()["code"], "no_active_episode")
+
         preview_id = self._create_preview(enrollment["id"], 1)
         activate_resp = self.client.put(
             f"/api/platform/v1/scale/internal_validation/enrollments/{enrollment['id']}/activate",
@@ -2050,6 +2178,18 @@ class TestPlatformScaleRouterEnrollmentLifecycle(PlatformScaleRouterTestBase):
         self.assertEqual(active["lifecycle"], "active")
         actions = {a["action"]: a["allowed"] for a in active["allowed_actions"]}
         self.assertEqual(actions, {"activate": False, "pause": True, "resume": False, "close": True})
+
+        # The platform mirror answers the delegated route's body (#114):
+        # activated, nothing collected or evaluated yet.
+        evidence_resp = self.client.get(evidence_url, headers=self._headers())
+        self.assertEqual(evidence_resp.status_code, 200, evidence_resp.text)
+        evidence = evidence_resp.json()
+        self.assertEqual(
+            (evidence["episode_id"], evidence["readiness"], evidence["evaluation_stale"]),
+            (active["current_episode_id"], None, False),
+        )
+        self.assertEqual({key for key, value in evidence.items() if value is not None},
+                         {"enrollment_id", "episode_id", "evaluation_stale"})
 
         pause_resp = self.client.put(
             f"/api/platform/v1/scale/internal_validation/enrollments/{enrollment['id']}/pause",
@@ -2090,6 +2230,49 @@ class TestPlatformScaleRouterEnrollmentLifecycle(PlatformScaleRouterTestBase):
             self.assertEqual(
                 session.query(record).filter_by(workspace_id=self.workspace_id).count(), 0, record,
             )
+
+    def test_platform_target_preview_checks_the_floor_and_reports_it(self):
+        """#134: the platform mirror refuses a ROAS-only Target below the
+        floor of the Policy in force for internal_validation, publishes one
+        at the floor, and lists it with that floor."""
+        from app.scale.models import ScaleCommandJournalRecord, ScaleTargetPublicationPreviewRecord
+
+        base = "/api/platform/v1/scale/internal_validation"
+        body = {
+            "product_version_id": "pv_134", "offer_version_id": "ov_134",
+            "market_code": "GB", "currency": "GBP", "breakeven_roas": "2.5",
+        }
+        refused = self.client.post(
+            f"{base}/target-publication-previews", json={**body, "minimum_economic_spend": "74.99"},
+            headers=self._headers(**{"Idempotency-Key": f"ik-platform-134-{new_id('t')}"}),
+        )
+        self.assertEqual(refused.status_code, 422, refused.text)
+        self.assertEqual(
+            (refused.json()["code"], refused.json()["params"]),
+            ("minimum_economic_spend_below_platform_floor", {"currency": "GBP", "floor": "75"}),
+        )
+        session = SessionLocal()
+        self.addCleanup(session.close)
+        for record in (ScaleTargetPublicationPreviewRecord, ScaleCommandJournalRecord):
+            self.assertEqual(
+                session.query(record).filter_by(workspace_id=self.workspace_id).count(), 0, record,
+            )
+
+        preview = self.client.post(
+            f"{base}/target-publication-previews", json={**body, "minimum_economic_spend": "75"},
+            headers=self._headers(**{"Idempotency-Key": f"ik-platform-134-{new_id('t')}"}),
+        )
+        self.assertEqual(preview.status_code, 201, preview.text)
+        published = self.client.post(
+            f"{base}/targets", json={"publication_preview_id": preview.json()["id"]},
+            headers=self._headers(**{"Idempotency-Key": f"ik-platform-134-{new_id('t')}"}),
+        )
+        self.assertEqual(published.status_code, 201, published.text)
+        listed = self.client.get(f"{base}/targets", headers=self._headers()).json()["items"]
+        self.assertEqual(
+            [(t["id"], t["platform_spend_floor"], t["below_platform_floor"]) for t in listed],
+            [(published.json()["id"], "75", False)],
+        )
 
     def test_platform_operator_may_withdraw_a_published_target(self):
         """#382: the platform routes serialize Targets with the operator's

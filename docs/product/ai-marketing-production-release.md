@@ -2,6 +2,84 @@
 
 日期：2026-10-17。生产入口：[MarketAI](https://marketai-web-production.up.railway.app)。
 
+## Usage 开始记录（#8）
+
+2026-11-12 整理。本节的编号都指本仓库 `heart-cannot-beat/marketai`；本文其余各节的裸编号指 `heart-cannot-beat/marketai-archive`。
+
+[#8](https://github.com/heart-cannot-beat/marketai/issues/8) 迁自 heart-cannot-beat/marketai-archive#351：`usage_events` 没有写入方，`GET /api/v1/usage` 只返回 0。写入方分两片上线，都在合并后随 main 自动部署。#8 已于 2026-11-12 关闭，余下工作拆成 [#145](https://github.com/heart-cannot-beat/marketai/issues/145)–[#151](https://github.com/heart-cannot-beat/marketai/issues/151)。
+
+### 起算日
+
+每个 metric 从它上线的部署日开始记录，之前的事实都不回填。起算日当天只有部署之后的事实，更早的时间窗口里这个 metric 为 0。契约 §3.2 的“连续 30 天真实 Usage”按各 metric 的起算日算。
+
+| metric | 单位 | 起算日（部署日） | PR | 合并提交 | 合并时间（UTC） |
+| --- | --- | --- | --- | --- | --- |
+| `provider_calls` | `call` | 2026-11-08 | [#69](https://github.com/heart-cannot-beat/marketai/pull/69)（S1） | `c0c7040a` | 11-08 15:39 |
+| `asset_versions_generated` | `asset_version` | 2026-11-09 | [#87](https://github.com/heart-cannot-beat/marketai/pull/87)（S2） | `aabd3f5b` | 11-09 14:02 |
+| `generation_items_failed` | `run_item` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
+| `operations` | `operation` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
+| `processing_seconds` | `second` | 2026-11-09 | #87（S2） | `aabd3f5b` | 11-09 14:02 |
+| `storage_bytes` | `byte` | 待合并后补记 | [#148](https://github.com/heart-cannot-beat/marketai/issues/148)（S5） | 待合并后补记 | 待合并后补记 |
+
+- 前五个 metric 都是 `delta` / `increase` / 求和。每条事实按执行模式分进 `byok`、`sandbox`、`mock`、`not_applicable` 四个桶；`mock` 不进 `total`。
+- `storage_bytes` 是 `gauge` / `set`，只记 `not_applicable`，每个 Workspace 每个 UTC 日一条；`GET /api/v1/usage` 对它返回窗口内最新的一条，不求和。见下文“存储字节数”。
+- 已知偏差：Meta 侧受控 Mock 的 Operation 记成 `not_applicable`，计入了 `total`（[#146](https://github.com/heart-cannot-beat/marketai/issues/146)）。
+- 契约 §9 的私有存储字节数由 #148 记录（见下文）；成员和预留邀请数还没有写入方，见 [#149](https://github.com/heart-cannot-beat/marketai/issues/149)。
+
+### 数据库约束（#145，迁移 `zzk145a1b2c3`）
+
+迁移 `zzk145a1b2c3`（`down_revision` 为 `zzj113a1b2c3`）给 `usage_events` 加上规格 §2.12 的四条 CHECK：
+
+| 约束 | 条件 |
+| --- | --- |
+| `ck_usage_events_measurement_kind_valid` | `measurement_kind` 是 `delta` 或 `gauge` |
+| `ck_usage_events_direction_matches_kind` | `delta` 只配 `increase` 或 `decrease`，`gauge` 只配 `set` |
+| `ck_usage_events_quantity_nonnegative` | `quantity >= 0` |
+| `ck_usage_events_execution_mode_valid` | `execution_mode` 是 `byok`、`sandbox`、`mock` 或 `not_applicable` |
+
+- **单位与 metric**：每个 metric 的单位和 kind 仍由代码注册表（`app/entitlements/usage.py` 的 `METRICS`）校验，不进数据库。
+- **PostgreSQL**：每条约束先以 `NOT VALID` 加上，再在同一迁移里 `VALIDATE`。已有的行违反任何一条，Release 失败，整个迁移回滚，库停在 `zzj113a1b2c3`。按 S1、S2 的写法写出的行都满足四条：本机 `tests/test_usage_pg.py` 以 API 与 Worker 角色验证过；整理本节时没有读生产数据。
+- **锁**：Alembic 把一次 upgrade 放在一个事务里，`ADD CONSTRAINT` 的 `ACCESS EXCLUSIVE` 锁一直持有到提交，期间写 Usage 的结算事务要等。按起算日推算，表里只有几天的 Beta 数据，扫描很短。
+- **不变的部分**：append-only 触发器 `trg_usage_events_immutable`、RLS 和各角色授权都不改。
+- **SQLite**：用 batch 重建表。重建前先数违反约束的行，有就拒绝升级，库不变。
+- **回滚**：downgrade 只删这四条约束，行不动。旧代码写出的行也满足约束，所以只回退代码时不需要降库。
+- **Release 结果**：本迁移在 PR 合并后由 Release 服务执行；执行结果待合并后补记。
+
+### 存储字节数（#148，迁移 `zzl148a1b2c3`）
+
+迁移 `zzl148a1b2c3`（`down_revision` 为 `zzk145a1b2c3`）只在 PostgreSQL 上加一个窄函数 `marketai_storage_usage_workspaces_v1(date, integer)`：SECURITY DEFINER、`search_path` 为空、只有 `marketai_domain_worker` 能执行，只返回当天还没有测量 Job 的 active、未暂停 Workspace 的 id 和当前 `authorization_epoch`。不改表、不改 RLS、不加表授权。
+
+- **怎么算**：只读数据库里的字节列（`asset_versions`、`reference_objects`、`external_creatives`、`localization_attempt_outputs`、`export_packages`），不列 BlobStore。同一 Workspace 里多行指向同一个对象 key 时只算一次，按其中最大的字节数。已清除的原件、被拒的外部素材上传、还没打包的导出不算。规则写在 `app/entitlements/storage_usage.py` 的模块说明里。
+- **什么时候写**：Worker 主通道启动后等一个间隔（5 分钟），之后每 5 分钟问一次窄函数，给还没有当天 Job 的 Workspace 各建一个 `usage.storage_bytes` Job。Job 在该 Workspace 的签名上下文里、RLS 下求和并写一条。同一 UTC 日再跑只记为重复，不写第二行；当天第一次测量为准。
+- **起算**：部署后约 5 分钟出现第一批行（Worker 启动后的第一个间隔，再加排队时间）。之后每个 UTC 日在 00:00 后约 5 分钟内测量。之前的日子不回填；Worker 停摆的日子没有行。
+- **回滚**：只回退代码时不需要降库，函数留着没人调用。downgrade 删除函数；如果新代码还在跑，它的调度每个间隔报一次失败（告警，不中断 Worker），已写的行不动。
+- **不执行上限**：10 GiB 上限由 [#147](https://github.com/heart-cannot-beat/marketai/issues/147) 执行。
+- **Release 结果**：本迁移在 PR 合并后由 Release 服务执行；起算日和执行结果待合并后补记。
+
+## Beta 上限的平台默认值（#156）
+
+2026-11-12 整理。本节的编号都指本仓库。
+
+[#156](https://github.com/heart-cannot-beat/marketai/issues/156) 让控制面解析权益时，给 `members.max`、`provider_calls.concurrent.max`、`storage.bytes.max` 补上契约 §8 的 Beta 值（5、2、10 GiB），规则写在契约 §4.2。只改控制面代码：没有迁移，不发布新 PlanVersion，不重新绑定。
+
+- **已有 Workspace 怎么拿到**：不需要手动步骤。Dispatcher cron 每 5 分钟运行一次，先给最新 Snapshot 已超过 6 小时的 ACTIVE、SUSPENDED Workspace 续租。续租走同一个发布模块，每次都重新解析；解析结果多了三个 key，semantic hash 随之改变，所以发出的是下一个 `entitlement_version`，不是只延长租约的续租。部署后约 6 小时再加一个 cron 间隔内，这些 Workspace 都会拿到新版本，之后的续租保持这个版本和值。领域侧按“下一个版本”正常应用。
+- **其他 Workspace**：PROVISIONING 的在激活时的发布里带上；DELETION_PENDING、DELETED 不续租，也不需要。
+- **不变的部分**：PlanVersion 或附加来源给了值的 key 保持原值；三个 key 都已给出的 Workspace 续租时版本不变。
+- **还不执行上限**：席位由 [#157](https://github.com/heart-cannot-beat/marketai/issues/157)、存储由 [#158](https://github.com/heart-cannot-beat/marketai/issues/158) 执行，并发见 [#159](https://github.com/heart-cannot-beat/marketai/issues/159)。领域侧只原样保存这三个数值。
+- **核对（只读；整理本节时没有连生产）**：部署 6 小时后，在控制面库执行下面的查询，结果应为 0。不为 0 时看 Dispatcher 输出里的 `renewal_failed`。
+
+  ```sql
+  SELECT count(*)
+  FROM "Team" t
+  JOIN "CommercialAccessProjection" p ON p."teamId" = t."id"
+  JOIN "EntitlementSnapshot" s ON s."id" = p."currentSnapshotId"
+  WHERE t."lifecycle" IN ('ACTIVE', 'SUSPENDED')
+    AND NOT (s."resolvedEntitlements" ? 'members.max');
+  ```
+
+- **回滚**：只回退代码即可。回退后的下一次续租不再带这三个 key，又会发出一个新的 `entitlement_version`。#157、#158 上线后，它们在缺 key 时失败关闭，所以要先回退它们。
+- **Release 结果**：随 PR 合并后的自动部署生效；核对结果待合并后补记。
+
 ## 竞品广告扫描上线（Epic #265）
 
 2026-11-02。[Epic #265](https://github.com/heart-cannot-beat/marketai-archive/issues/265) 的切片已全部合并，并随 main 自动部署到生产：
@@ -177,7 +255,7 @@ Issue 验收的第一条是“线上空 Workspace：无凭据走 Mock 解析 + �
 
 **待分诊**：
 
-- **#351**（与竞品无关）：`usage_events` 没有写入方，`GET /api/v1/usage` 只返回 0。
+- **#351**（与竞品无关）：`usage_events` 没有写入方，`GET /api/v1/usage` 只返回 0。**2026-11-12 更正**：已不再待分诊。它迁到 `heart-cannot-beat/marketai` 成为 #8；写入方随该仓库的 PR #69（2026-11-08 部署）和 #87（2026-11-09 部署）上线，#8 已关闭。各 metric 的起算日见上文“Usage 开始记录”。
 
 **未覆盖的场景**：真实 402、素材过期补拉、差额为 1 与手动标记的对账、`competitor_crowded`、单 Key 状态、一家失败其余完成的 `partial`、换 Key 续跑、“北美”与无法映射的市场。逐条见验收记录的“未覆盖”。
 

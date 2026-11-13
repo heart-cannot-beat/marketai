@@ -54,6 +54,7 @@ from app.platform.operations import (
     transition_operation,
 )
 from app.platform.tenancy import current_context
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 __all__ = ["handle_export_package"]
 
@@ -71,6 +72,7 @@ FIXED_EXTERNAL_ATTR = 0o644 << 16
 _BUILDABLE_STATES = ("pending",)
 
 
+@runs_as(WORKER_ROLE)
 async def handle_export_package(
     session: Session,
     blob_store: BlobStore,

@@ -24,6 +24,10 @@ jest.mock('@/hooks/scale/useScaleEvidence', () => ({
 const evidence = {
   enrollment_id: 'enr-1',
   episode_id: 'episode-1',
+  // The readiness projection is absent here (an Evaluation seeded without
+  // the collector); `evidence-readiness-states.spec.tsx` covers it.
+  readiness: null,
+  evaluation_stale: false,
   evaluation_id: 'evaluation-1',
   snapshot_id: 'snapshot-1',
   policy_version_id: 'policy-2026-09',
@@ -267,10 +271,10 @@ describe('EvidenceTimeline', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('treats missing first evidence as a warming state', () => {
+  it('says a draft or closed enrollment has no active episode', () => {
     mockUseScaleEnrollmentEvidence.mockReturnValue({
       data: undefined,
-      problem: { status: 404 },
+      problem: { status: 404, code: 'no_active_episode' },
       isLoading: false,
       isStale: false,
       refresh,
@@ -279,7 +283,21 @@ describe('EvidenceTimeline', () => {
       <EvidenceTimeline enrollmentId="enr-1" metaMode="customer_sandbox" />
     );
     expect(
-      screen.getByText('scale:evidence.no-evidence-yet')
+      screen.getByText('scale:evidence.no-active-episode')
     ).toBeInTheDocument();
+  });
+
+  it('says evidence is unavailable for any other refusal', () => {
+    mockUseScaleEnrollmentEvidence.mockReturnValue({
+      data: undefined,
+      problem: { status: 404, code: 'enrollment_not_found' },
+      isLoading: false,
+      isStale: false,
+      refresh,
+    });
+    render(
+      <EvidenceTimeline enrollmentId="enr-1" metaMode="customer_sandbox" />
+    );
+    expect(screen.getByText('scale:evidence.unavailable')).toBeInTheDocument();
   });
 });

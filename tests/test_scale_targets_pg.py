@@ -17,6 +17,10 @@ serves them in production, under RLS:
   Target is withdrawn once;
 * another Workspace, another currency and a Member change nothing.
 
+Each publication and withdrawal enqueues one ``scale_target_change`` Job
+(#113); no Worker runs here, so a test cancels its Workspaces' Jobs when it
+ends (``tests/test_scale_target_change_pg.py`` runs them).
+
 Run with ``DOMAIN_OWNER_DATABASE_URL``, ``DOMAIN_API_DATABASE_URL``,
 ``MARKETAI_DATABASE_URL`` (the owner) and ``MARKETAI_TENANT_CONTEXT_SECRET``
 against a cluster released with ``make db-release``.
@@ -76,8 +80,20 @@ class ScaleTargetReplacementPostgresTests(unittest.TestCase):
         workspace_id = f"{prefix}_{uuid.uuid4().hex[:10]}"
         with self._as_owner(), platform_session() as session:
             session.add(WorkspaceRecord(id=workspace_id, name=workspace_id))
+        self.addCleanup(self._cancel_open_jobs, workspace_id)
         return TenantContext(workspace_id=workspace_id, role=role, initiator_id=actor,
                              initiator_role=role, request_id="test-req", trace_id="trace-test")
+
+    def _cancel_open_jobs(self, workspace_id: str) -> None:
+        """Each publication and withdrawal enqueues ``scale_target_change``
+        (#113); no Worker runs here, so the Jobs are cancelled when the test
+        ends rather than left queued for the next test's queue."""
+        with self.owner.begin() as conn:
+            conn.execute(text(
+                "UPDATE jobs SET state = 'cancelled', finished_at = now(), lease_owner = NULL, "
+                "lease_expires_at = NULL WHERE workspace_id = :ws "
+                "AND state IN ('queued', 'retry_wait', 'leased', 'running')"
+            ), {"ws": workspace_id})
 
     def _post(self, caller: TenantContext, path: str, body: dict, key: str | None = None,
               mode: str = MODE):

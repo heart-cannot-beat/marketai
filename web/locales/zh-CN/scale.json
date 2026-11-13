@@ -108,7 +108,18 @@
     "marketing-boundary": "这个组合只在记录的条件和用户提供的投放证据下得到支持。请选择一个当前兼容的已观察投放目标。这里只准备监控，永远不会创建、启用或修改广告。",
     "match-delivery": "匹配已观察到的投放",
     "choose-delivery": "选择对应的 Meta 广告",
-    "delivery-not-ready": "请先补全当前的源市场真值和素材准备情况，再通过已授权的只读连接同步对应的实际投放。目前还没有可用的兼容投放目标，无法创建监控。"
+    "delivery-not-ready": "请先补全当前的源市场真值和素材准备情况，再通过已授权的只读连接同步对应的实际投放。目前还没有可用的兼容投放目标，无法创建监控。",
+    "observed-ads-title": "选择这个 Winner 正在投放的广告",
+    "observed-ads-description": "这里列出这个模式下各连接已观察到的广告。MarketAI 依据记录下来的广告信息建立投放目标，只读取，从不创建或修改广告。",
+    "observed-ads-empty": "这个模式下还没有连接观察到广告。",
+    "observed-ad-label": "Meta 广告 {{ad}} · 广告组 {{adset}}",
+    "observed-ad-assets": "素材版本：{{ids}}",
+    "observed-ad-unmapped": "这条广告没有记录对应的素材版本",
+    "use-observed-ad": "使用 Meta 广告 {{ad}}",
+    "use-observed-ad-short": "使用这条广告",
+    "observed-ad-picking": "正在核对…",
+    "observed-ad-picked": "投放目标已就绪：{{market}} · {{placement}} · Meta 广告 {{ad}}",
+    "observed-ad-option": "{{market}} · {{placement}} · Meta 广告 {{ad}}（刚选择）"
   },
   "detail": {
     "not-found": "找不到这个监控",
@@ -184,11 +195,24 @@
   },
   "evidence": {
     "heading": "证据",
-    "no-evidence-yet": "这个观察段还没有证据",
+    "no-active-episode": "这个监控没有进行中的观察段，所以没有证据可以显示。",
     "unavailable": "证据不可用",
     "as-of": "截至 {{day}}",
     "refresh": "刷新",
     "refresh-stale": "刷新过时的证据",
+    "state": {
+      "waiting-title": "等待第一个完整日",
+      "waiting-body": "监控已开始。证据按广告账户时区的完整日计算，从 Meta 读完第一个完整日的数据后，才会进行第一次评估。",
+      "collected-title": "第一个完整日已收集",
+      "collected-body": "截至 {{day}} 的数据已收集，第一次评估正在进行。",
+      "blocked-title": "证据被阻塞",
+      "blocked-body": "{{day}} 最新的 Meta 数据无法使用，所以这个广告没有评估，也不显示健康状态。",
+      "stale-body": "下面的评估截至 {{day}}，已经过时。",
+      "last-complete-day": "最后一个完整日：{{day}}",
+      "what-to-do": "处理方式：",
+      "pending-title": "已收集新数据",
+      "pending-body": "截至 {{day}} 的数据已收集，正在评估。下面的评估截至 {{evaluated}}。"
+    },
     "quality": {
       "pass": "数据质量通过",
       "warning": "数据质量警告",
@@ -198,6 +222,7 @@
     "cursor-revision": "游标修订号",
     "watermark": "安全水位",
     "updated-at": "更新时间",
+    "last-evaluation": "最近一次采纳的评估，截至 {{day}}",
     "windows-heading": "确切的证据窗口",
     "window": {
       "current_7d": "最近 7 天",
@@ -234,6 +259,22 @@
     },
     "technical-details": "技术信息",
     "recovery-action": "恢复措施：{{action}}",
+    "source-issue": {
+      "connection_ineligible": "Meta 连接不是启用状态",
+      "source_provenance_mismatch": "Meta 数据与这个广告的账户、时区、币种或广告不一致",
+      "contract_instance_failed": "缺少一项必需的 Meta 读取，或读取与指标合同不一致",
+      "reconciliation_unresolved": "有一次 Meta 读取的结果还没有确认",
+      "incomplete_pagination": "Meta 只返回了一次读取的部分分页",
+      "transport_exhausted": "有一次 Meta 读取在重试后仍然失败",
+      "freshness_slo_exceeded": "部分数据超过了新鲜度时限",
+      "exact_window_value_unavailable": "没有投放的窗口没有覆盖人数和频次"
+    },
+    "recovery": {
+      "repair_connection": "到设置里重新连接或修复 Meta 连接。下一次每日同步时会恢复收集。",
+      "wait_for_next_sync": "现在不用处理。下一次每日 Meta 同步会重新收集这些数据。",
+      "reconcile_meta_sync": "需要运维人员确认这次结果不明的 Meta 读取。下一次每日同步也会重新收集这些数据。",
+      "retry_meta_sync": "下一次每日 Meta 同步会重新收集这些数据。如果反复出现，请到设置里检查 Meta 连接。"
+    },
     "signals-heading": "确定性信号与区间",
     "signal": "信号",
     "signal-state": "状态",
@@ -260,7 +301,9 @@
       "explained_by_pause": "投放暂停可以解释，不计为命中",
       "bootstrap_unavailable": "有效抽样不足，无法计算区间",
       "data_quality_blocked": "数据质量阻塞，未计算",
-      "episode_window_incomplete": "未计算：观察段还不满 14 天窗口"
+      "episode_window_incomplete": "未计算：观察段还不满 14 天窗口",
+      "economics_not_ready": "未计算：证据还没有达到经济评估门槛",
+      "spend_floor_currency_unsupported": "未计算：平台没有为这个广告账户的币种设定最低花费"
     },
     "streak-counters": "连续计数",
     "unknown-signal": "未知信号"
@@ -327,11 +370,17 @@
     "loading": "正在加载…",
     "load-more": "加载更多",
     "withdraw": "撤回",
+    "below-platform-floor": {
+      "label": "低于平台底线，按平台底线计算",
+      "republish-owner": "请重新发布一个最低经济花费不低于 {{floor}} {{currency}} 的目标来替换它。",
+      "republish-member": "工作区 Owner 可以重新发布一个最低经济花费不低于 {{floor}} {{currency}} 的目标来替换它。"
+    },
     "column": {
       "context": "上下文",
       "currency": "币种",
       "target-cpa": "目标 CPA",
       "breakeven-roas": "盈亏平衡 ROAS",
+      "minimum-economic-spend": "最低经济花费",
       "lifecycle": "生命周期",
       "actions": "操作"
     },
@@ -350,6 +399,10 @@
       "context-placeholder": "选择上下文…",
       "has-active-target": "已有一个有效的目标",
       "no-contexts": "没有符合条件的上下文。上下文至少需要一个处于监控中或已暂停、且有已观察到的观察段币种的监控。",
+      "platform-floor": "平台底线：每个 7 日窗口花费 {{floor}} {{currency}}。",
+      "minimum-required-when-roas-only": "只有盈亏平衡 ROAS、没有目标 CPA 时，最低经济花费必填。填写时不能低于平台底线。",
+      "floor-no-eligible-policy": "这个模式下没有生效的策略，无法核对最低经济花费是否达到平台底线。这里只能发布填了目标 CPA、且不填最低经济花费的目标。",
+      "floor-currency-unsupported": "当前生效的策略没有为 {{currency}} 设平台底线，这个上下文不做经济评估。只能发布填了目标 CPA、且不填最低经济花费的目标。",
       "affected-enrollments": "受影响的监控",
       "policy-floor-check": "策略下限检查",
       "policy-floor-passed": "通过",

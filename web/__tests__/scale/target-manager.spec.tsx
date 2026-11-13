@@ -86,6 +86,9 @@ const context = (n: number) => ({
   market_code: n === 2 ? 'DE' : 'US',
   currency: n === 2 ? 'EUR' : 'USD',
   has_active_target: false,
+  // #134: the floor the server reads from the Policy in force.
+  platform_spend_floor: n === 2 ? '90' : '100',
+  platform_spend_floor_unavailable_reason: null as string | null,
 });
 
 /** The server echoes the amounts back; `Decimal("0")` is falsy, so a
@@ -127,9 +130,14 @@ const target = (withdraw: object) => ({
   withdrawn_at: null,
   created_at: '2026-11-05T09:00:00Z',
   allowed_actions: [{ action: 'withdraw', requirements: [], ...withdraw }],
+  below_platform_floor: false,
 });
 
-const problem = (code: string, status: number) => ({
+const problem = (
+  code: string,
+  status: number,
+  params?: Record<string, string>
+) => ({
   kind: 'problem',
   problem: {
     type: `urn:marketai:error:${code.replace(/_/g, '-')}`,
@@ -140,6 +148,7 @@ const problem = (code: string, status: number) => ({
     trace_id: 'trace_382',
     retryable: false,
     field_errors: [],
+    ...(params ? { params } : {}),
   },
 });
 
@@ -195,6 +204,21 @@ const COPY = {
     affected: 'Affected enrollments',
     cpaReason: 'Enter a number greater than 0.',
     roasReason: 'This number has too many digits before the decimal point.',
+    floorUsd: 'Platform floor: 100 USD of spend in each 7-day window.',
+    floorEur: 'Platform floor: 90 EUR of spend in each 7-day window.',
+    roasOnlyRequired:
+      "Minimum economic spend is required only when the target has a breakeven ROAS and no target CPA. If you fill it in, it can't be below the platform floor.",
+    noPolicy:
+      'No Scale Policy is in force in this mode, so there is no platform floor to check a minimum economic spend against. Only a target with a target CPA and no minimum economic spend can be published here.',
+    currencyUnsupported:
+      "The Scale Policy in force sets no platform floor for BRL, so this context isn't evaluated economically. Only a target with a target CPA and no minimum economic spend can be published.",
+    belowFloorRefusal:
+      "The minimum economic spend can't be below the platform floor of 100 USD.",
+    belowFloor: 'Below the platform floor; evaluated at the platform floor',
+    republishOwner:
+      'Publish a new target with a minimum economic spend of at least 100 USD to replace it.',
+    republishMember:
+      'The Workspace Owner can publish a replacement with a minimum economic spend of at least 100 USD.',
   },
   'zh-CN': {
     scale: zhScale,
@@ -219,6 +243,19 @@ const COPY = {
     affected: '受影响的监控',
     cpaReason: '请填写大于 0 的数字。',
     roasReason: '整数部分位数太多。',
+    floorUsd: '平台底线：每个 7 日窗口花费 100 USD。',
+    floorEur: '平台底线：每个 7 日窗口花费 90 EUR。',
+    roasOnlyRequired:
+      '只有盈亏平衡 ROAS、没有目标 CPA 时，最低经济花费必填。填写时不能低于平台底线。',
+    noPolicy:
+      '这个模式下没有生效的策略，无法核对最低经济花费是否达到平台底线。这里只能发布填了目标 CPA、且不填最低经济花费的目标。',
+    currencyUnsupported:
+      '当前生效的策略没有为 BRL 设平台底线，这个上下文不做经济评估。只能发布填了目标 CPA、且不填最低经济花费的目标。',
+    belowFloorRefusal: '最低经济花费不能低于平台底线 100 USD。',
+    belowFloor: '低于平台底线，按平台底线计算',
+    republishOwner: '请重新发布一个最低经济花费不低于 100 USD 的目标来替换它。',
+    republishMember:
+      '工作区 Owner 可以重新发布一个最低经济花费不低于 100 USD 的目标来替换它。',
   },
 } as const;
 type Locale = keyof typeof COPY;
@@ -696,7 +733,10 @@ describe('amounts the server refuses (#381)', () => {
       expect(cpa).toHaveAttribute('aria-invalid', 'true');
       expect(cpa).toHaveAccessibleDescription(copy.cpaReason);
       expect(spend).not.toHaveAttribute('aria-invalid');
-      expect(spend).not.toHaveAccessibleDescription();
+      // Described only by the platform floor (#134), with no reason.
+      expect(spend).toHaveAccessibleDescription(
+        `${copy.floorUsd} ${copy.roasOnlyRequired}`
+      );
       // The summary below the fields still reads the first reason.
       expect(screen.getByRole('alert')).toHaveTextContent(copy.cpaReason);
       expect(document.body.textContent).not.toMatch(
@@ -723,5 +763,190 @@ describe('amounts the server refuses (#381)', () => {
     for (const label of [copy.cpa, copy.roas, copy.spend]) {
       expect(screen.getByLabelText(label)).not.toHaveAttribute('aria-invalid');
     }
+  });
+});
+
+describe('the platform floor in the publish form (#134)', () => {
+  function openWith(locale: Locale, index: string) {
+    const copy = COPY[locale];
+    renderIn(locale);
+    fireEvent.click(screen.getByRole('button', { name: copy.newTarget }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(copy.context), {
+      target: { value: index },
+    });
+    return dialog;
+  }
+
+  test.each(['en', 'zh-CN'] as const)(
+    'shows the floor of the chosen context and when the minimum is required in %s',
+    (locale) => {
+      const copy = COPY[locale];
+      mockContexts = [context(1), context(2)];
+      const dialog = openWith(locale, '0');
+
+      expect(dialog).toHaveTextContent(copy.floorUsd);
+      expect(dialog).toHaveTextContent(copy.roasOnlyRequired);
+
+      fireEvent.change(within(dialog).getByLabelText(copy.context), {
+        target: { value: '1' },
+      });
+      expect(dialog).toHaveTextContent(copy.floorEur);
+      expect(dialog).not.toHaveTextContent(copy.floorUsd);
+    }
+  );
+
+  test('says nothing about a floor before a context is chosen', () => {
+    renderIn('en');
+    fireEvent.click(screen.getByRole('button', { name: COPY.en.newTarget }));
+
+    expect(screen.getByRole('dialog')).not.toHaveTextContent(
+      COPY.en.roasOnlyRequired
+    );
+  });
+
+  test('marks the minimum required only while the target has only a ROAS', () => {
+    const copy = COPY.en;
+    const dialog = openWith('en', '1');
+    const spend = within(dialog).getByLabelText(copy.spend);
+    expect(spend).not.toHaveAttribute('aria-required');
+
+    fireEvent.change(within(dialog).getByLabelText(copy.roas), {
+      target: { value: '2.5' },
+    });
+    expect(spend).toHaveAttribute('aria-required', 'true');
+
+    fireEvent.change(within(dialog).getByLabelText(copy.cpa), {
+      target: { value: '20' },
+    });
+    expect(spend).not.toHaveAttribute('aria-required');
+  });
+
+  test.each([
+    ['en', 'no_eligible_policy', 'USD', 'noPolicy'],
+    ['zh-CN', 'no_eligible_policy', 'USD', 'noPolicy'],
+    ['en', 'spend_floor_currency_unsupported', 'BRL', 'currencyUnsupported'],
+    ['zh-CN', 'spend_floor_currency_unsupported', 'BRL', 'currencyUnsupported'],
+  ] as const)(
+    'in %s, a context with no floor says why (%s)',
+    (locale, reason, currency, key) => {
+      const copy = COPY[locale];
+      mockContexts = [
+        {
+          ...context(1),
+          currency,
+          platform_spend_floor: null,
+          platform_spend_floor_unavailable_reason: reason,
+        },
+      ];
+      const dialog = openWith(locale, '0');
+
+      expect(dialog).toHaveTextContent(copy[key]);
+      expect(dialog).not.toHaveTextContent(copy.roasOnlyRequired);
+      expect(
+        within(dialog).getByLabelText(copy.spend)
+      ).toHaveAccessibleDescription(copy[key]);
+    }
+  );
+
+  test.each(['en', 'zh-CN'] as const)(
+    'shows a minimum below the floor as a refusal of that field in %s',
+    async (locale) => {
+      const copy = COPY[locale];
+      mockPreviewRun.mockResolvedValueOnce(
+        problem('minimum_economic_spend_below_platform_floor', 422, {
+          currency: 'USD',
+          floor: '100',
+        })
+      );
+      const dialog = openWith(locale, '1');
+      fireEvent.change(within(dialog).getByLabelText(copy.roas), {
+        target: { value: '2.5' },
+      });
+      const spend = within(dialog).getByLabelText(copy.spend);
+      fireEvent.change(spend, { target: { value: '99.99' } });
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: copy.preview })
+      );
+
+      await waitFor(() =>
+        expect(spend).toHaveAttribute('aria-invalid', 'true')
+      );
+      expect(mockPreviewRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetCpa: '',
+          breakevenRoas: '2.5',
+          minimumEconomicSpend: '99.99',
+        })
+      );
+      expect(spend).toHaveAccessibleDescription(
+        `${copy.floorUsd} ${copy.roasOnlyRequired} ${copy.belowFloorRefusal}`
+      );
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        copy.belowFloorRefusal
+      );
+      for (const label of [copy.cpa, copy.roas]) {
+        expect(within(dialog).getByLabelText(label)).not.toHaveAttribute(
+          'aria-invalid'
+        );
+      }
+      expect(document.body.textContent).not.toMatch(/minimum_economic_spend/);
+    }
+  );
+});
+
+describe('a published target below the platform floor (#134)', () => {
+  const lowTarget = (withdraw: object) => ({
+    ...target(withdraw),
+    target_cpa: null,
+    breakeven_roas: '2.5000',
+    minimum_economic_spend: '10.000000000000',
+    platform_spend_floor: '100',
+    below_platform_floor: true,
+  });
+
+  test.each(['en', 'zh-CN'] as const)(
+    'is marked and the Owner is asked to republish in %s',
+    (locale) => {
+      const copy = COPY[locale];
+      mockTargets = [lowTarget({ allowed: true })];
+      renderIn(locale);
+
+      const marker = screen.getByTestId('below-platform-floor');
+      expect(marker).toHaveTextContent(copy.belowFloor);
+      expect(marker).toHaveTextContent(copy.republishOwner);
+      expect(screen.getByText('10.000000000000')).toBeInTheDocument();
+    }
+  );
+
+  test.each(['en', 'zh-CN'] as const)(
+    'is marked for a Member, who is told the Owner republishes, in %s',
+    (locale) => {
+      const copy = COPY[locale];
+      mockRole = 'MEMBER';
+      mockTargets = [
+        lowTarget({ allowed: false, reason_code: 'owner_required' }),
+      ];
+      renderIn(locale);
+
+      const marker = screen.getByTestId('below-platform-floor');
+      expect(marker).toHaveTextContent(copy.belowFloor);
+      expect(marker).toHaveTextContent(copy.republishMember);
+      expect(marker).not.toHaveTextContent(copy.republishOwner);
+    }
+  );
+
+  test('a target the server does not flag carries no marker', () => {
+    mockTargets = [
+      {
+        ...target({ allowed: true }),
+        minimum_economic_spend: '100.000000000000',
+        platform_spend_floor: '100',
+      },
+    ];
+    renderIn('en');
+
+    expect(screen.queryByTestId('below-platform-floor')).toBeNull();
+    expect(screen.queryByText(COPY.en.belowFloor)).toBeNull();
   });
 });

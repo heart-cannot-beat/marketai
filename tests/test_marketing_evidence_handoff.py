@@ -11,6 +11,7 @@ from app.marketing.service import digest, MarketingError
 from app.experiments.winner_eligibility import evaluate_winner_identity, validate_winner_eligibility, WinnerIneligibleError
 from app.localization.eligibility import validate_source_for_batch, list_eligible_winners
 from app.scale.candidates import list_eligible_candidates
+from tests.support.market_codes import fixed_market_code
 from tests.test_marketing_workflow import MarketingWorkflowFixtures
 import tests.test_marketing_followup as followup_tests
 
@@ -75,7 +76,7 @@ class TestMarketingEvidenceHandoff(MarketingWorkflowFixtures):
             # The native Localization draft freezes this precise new source.
             import tests.test_localization_batch as local_tests
             from app.localization.batch import create_draft, BatchSourceInput, BatchMarketTargetInput
-            policy=local_tests._make_market_policy_version(s,'GB')
+            policy=local_tests._make_market_policy_version(s,fixed_market_code('GB'))
             draft=create_draft(s,self.context,product_version_id=pv,offer_version_id=ov,truth_data_mode='real',provider_execution_mode='byok',
                 sources=[BatchSourceInput(asset_version_id=asset,decision_id=decision)],
                 market_targets=[BatchMarketTargetInput(market='GB',market_policy_version_id=policy.id)],
@@ -173,18 +174,18 @@ class TestMarketingEvidenceHandoff(MarketingWorkflowFixtures):
                     ad_creative_id='controlled-creative',creative_asset_version_id=chain['asset_version_id'],creative_binding_evidence_hash='a'*64,
                     market_code='US',placement='feed',attribution_setting=chain['attribution_semantics_hash'],
                     contract_generation_id=upstream['contract_generation_id'],offer_version_id=chain['offer_version_id'],
-                    landing_page_version_id=chain['offer_version_id'],source_type='curated_scenario',
+                    landing_page_evidence_hash=chain['landing_page_evidence_hash'],source_type='curated_scenario',
                     source_manifest={'schema_version':1,'source_type':'curated_scenario','fixture':'not real delivery'},
                     observed_at=now,expires_at=now+timedelta(days=30),scenario_version_id=upstream['scenario_version_id']))
                 return target.id
         admission=PaidOperationAdmission(policy=EntitlementPolicy(),quote_engine=CostQuoteEngine(price_registry=fixtures.PRICE_REGISTRY,price_rule_version='test-v1'),reservation_book=ReservationBook())
         # This marketing source already has an exact approval. The legacy
         # helper's extra synthetic approval would be new, unevaluated evidence.
-        with patch.object(fixtures,'CTX',self.context),patch.object(fixtures,'CTX_SANDBOX',sandbox),patch.object(fixtures,'PROD_ID',chain['product_id']),patch.object(fixtures,'_next_market',return_value='US'),patch.object(fixtures,'_build_confirmed_winner',return_value=chain),patch.object(fixtures,'_make_matching_delivery_target',side_effect=target_fixture),patch.object(fixtures,'_seed_review',return_value=None):
+        with patch.object(fixtures,'CTX',self.context),patch.object(fixtures,'CTX_SANDBOX',sandbox),patch.object(fixtures,'PROD_ID',chain['product_id']),patch.object(fixtures,'_next_market',return_value=fixed_market_code('US')),patch.object(fixtures,'_build_confirmed_winner',return_value=chain),patch.object(fixtures,'_make_matching_delivery_target',side_effect=target_fixture),patch.object(fixtures,'_seed_review',return_value=None):
             ready=fixtures._build_ready_winner_and_target('marketing-'+decision_id[-8:],admission)
         with tenant_session(sandbox) as session:
             eligible=validate_winner_eligibility(session,sandbox,decision_id=decision_id)
-            self.assertEqual(eligible.landing_page_version_id,chain['offer_version_id'])
+            self.assertEqual(eligible.landing_page_evidence_hash,chain['landing_page_evidence_hash'])
             choices=list_eligible_candidates(session,sandbox)
             selected=next(item for item in choices if item.decision_id==decision_id)
             self.assertIn(ready['delivery_target_id'],[item['id'] for item in selected.delivery_targets])

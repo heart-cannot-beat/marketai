@@ -86,7 +86,10 @@ const handleDELETE = async (req: NextApiRequest, res: NextApiResponse) => {
     requireConfirmationPhrase(req.query.confirmation, 'REMOVE OWNER');
   }
 
-  await removeTeamMember(teamMember.teamId, memberId);
+  await removeTeamMember(teamMember.teamId, memberId, {
+    actor: { kind: 'USER', id: teamMember.user.id },
+    reason: 'REMOVED',
+  });
 
   sendAudit({
     action: 'member.remove',
@@ -123,7 +126,10 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
     requireConfirmationPhrase(req.body?.confirmation, 'REMOVE OWNER');
   }
 
-  await removeTeamMember(teamMember.teamId, teamMember.user.id);
+  await removeTeamMember(teamMember.teamId, teamMember.user.id, {
+    actor: { kind: 'USER', id: teamMember.user.id },
+    reason: 'LEFT',
+  });
 
   recordMetric('member.left');
 
@@ -161,15 +167,10 @@ const handlePATCH = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   const memberUpdated = await updateTeamMember({
-    where: {
-      teamId_userId: {
-        teamId: teamMember.teamId,
-        userId: memberId,
-      },
-    },
-    data: {
-      role,
-    },
+    teamId: teamMember.teamId,
+    userId: memberId,
+    role,
+    actor: { kind: 'USER', id: teamMember.user.id },
   });
 
   sendAudit({

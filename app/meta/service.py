@@ -38,6 +38,7 @@ from ..platform import jobs
 from ..platform.audit import append_event
 from ..platform.tenancy import TenantContext, TenantScopeError, current_context
 from .contracts import INGESTION_KINDS, contract_hash, metric_contract, request_snapshot
+from ..platform.runtime_role import WORKER_ROLE, runs_as
 
 
 class MetaConfigurationError(RuntimeError):
@@ -321,6 +322,7 @@ def _read_raw_page(path: str) -> dict:
     return value
 
 
+@runs_as(WORKER_ROLE)
 async def process_ingestion(
     context: TenantContext, ingestion_id: str, client: MetaClient | None = None
 ) -> None:
@@ -539,6 +541,7 @@ def _finalize_sync_for_ingestion(context: TenantContext, ingestion_id: str) -> N
             sync.state = "failed"
 
 
+@runs_as(WORKER_ROLE)
 def record_ingestion_failure(
     context: TenantContext, ingestion_id: str, code: str, detail: str, *, terminal: bool
 ) -> None:
@@ -582,6 +585,7 @@ def enqueue_due_schedules(context: TenantContext, now: datetime | None = None) -
     return len(due_ranges)
 
 
+@runs_as(WORKER_ROLE)
 def run_due_schedule(
     context: TenantContext, schedule_id: str, now: datetime | None = None
 ) -> str | None:

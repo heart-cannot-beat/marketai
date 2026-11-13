@@ -26,14 +26,19 @@ this deliberately rather than by surprise):
   separate cross-cutting change, not one of this task's six required
   functions, and not in its required test list. ``ScaleAdviceNotification
   DecisionRecord`` is left for that later integration.
-* **Freshness-deadline job scheduling is deferred to Task 14** (Worker
-  dispatch), mirroring Task 12's own precedent of leaving job-queue
-  wiring to the Worker task. ``expire_advice_thread`` is the complete,
-  directly callable, lock-recheck handler; nothing here enqueues a
-  ``scale_advice_expire`` job (doing so would also require binding this
-  module's plain ``Session`` fixtures to ``app.platform.jobs``'s
-  ``current_context`` session-scope helper, a pattern the existing Task
-  11/12 Scale test suites deliberately do not use).
+* **The freshness-deadline job is delayed to the deadline (#111).**
+  ``expire_advice_thread`` is the complete, directly callable,
+  lock-recheck handler; ``enqueue_advice_expiry`` enqueues its
+  ``scale_advice_expire`` Job with the thread's Meta mode in the payload
+  (#97) and ``not_before`` set to the deadline, and
+  ``advice_expire_job_context`` reads the mode back for the Worker.
+  ``app.scale.service``'s Phase C calls ``enqueue_episode_advice_expiries``
+  once its run is ``evaluated``, in the transaction that wrote the thread
+  changes. ``expire_overdue_connection_advice`` is the fallback, run by the
+  daily source-collection Job (#109) after its Episode loop: it expires an
+  active thread past its deadline whose Job a stale authorization epoch
+  rejected, or whose Job ran while the Worker's clock was behind the
+  database's.
 * **Episode-close supersession is applied lazily, at recurrence.** The
   ``ScaleAdviceThreadEventRecord`` CHECK constraint
   (``ck_sate_superseded_shape``) requires a non-null ``successor_thread_id``
@@ -48,11 +53,18 @@ this deliberately rather than by surprise):
   ``expire_advice_thread`` once its freshness deadline passes (a `expired`
   event, which the CHECK does not constrain this way).
 * **Semantic-identity-change supersession** (Policy/Target/algorithm/
-  metric-contract change) is applied only when this same processing pass
-  also resolves a same-``advice_type`` successor thread under the new
-  semantics, for the same successor-requirement reason. Absent a
-  same-pass successor, the stale thread is left to resolve via ordinary
-  eligible-miss counting or freshness expiry.
+  metric-contract change) is applied when this same processing pass also
+  resolves a same-``advice_type`` successor thread under the new
+  semantics. A **Target** change needs no successor (#113): the Target
+  lifecycle event that made the thread inapplicable is its trigger
+  (``semantic_event_id``, which ``ck_sate_superseded_shape`` accepts in
+  place of a successor). :func:`supersede_for_target_change` applies it
+  when the Worker handles the event (``app.scale.target_change``), and a
+  ``target_change`` run's own pass applies it again to Advice an older
+  run opened under the previous Target in the meantime. A Policy,
+  algorithm or metric-contract change with no same-pass successor still
+  leaves the stale thread to eligible-miss counting or freshness expiry
+  (Policy-change reevaluation is deferred, #113).
 * **`convert_occurrence_to_draft` calls the real, already-existing**
   ``app.generation.draft.create_draft`` (an in-process Generation-owned
   interface, matching spec intent that Scale never constructs a
@@ -67,17 +79,21 @@ this deliberately rather than by surprise):
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
-from typing import Sequence
+from typing import Any, Sequence
 
-from sqlalchemy import select, text
+from sqlalchemy import and_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.adapters.persistence.models import LibraryVersionRecord, new_id, utcnow
+from app.adapters.persistence.database import tenant_session
+from app.adapters.persistence.models import JobRecord, LibraryVersionRecord, new_id, utcnow
 from app.generation.draft import create_draft
-from app.platform.tenancy import TenantContext, commit_and_rebind
+from app.platform.audit import append_event
+from app.platform.jobs import enqueue_in_session
+from app.platform.tenancy import VALID_META_MODES, TenantContext, commit_and_rebind, tenant_scope
 from app.scale._canonical import canonical_encode, canonical_hash
 from app.scale._contracts import AdviceCandidate
 from app.scale.models import (
@@ -96,8 +112,10 @@ from app.scale.models import (
     ScaleTestPlanDraftRecord,
 )
 from app.scale.types import AdviceType, DataQualityState, EvidenceMaturity
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 _SYSTEM_EXECUTOR = "system:scale_advice_lifecycle"
+_FALLBACK_SWEEP_EXECUTOR = "system:scale_advice_fallback_sweep"
 _RESOLVE_AFTER_ELIGIBLE_MISSES = 2
 _SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
 _MISS_STREAK_PREFIX = "miss_streak="
@@ -163,10 +181,10 @@ def _ensure_utc(value: datetime | None) -> datetime | None:
 
 
 def _for_update(session: Session, stmt):
-    """PostgreSQL row locking; SQLite (tests, bounded local path) is a no-op."""
-    if session.get_bind().dialect.name == "postgresql":
-        return stmt.with_for_update()
-    return stmt
+    """PostgreSQL row locking. SQLite (tests, bounded local path) has no
+    ``FOR UPDATE`` and SQLAlchemy leaves it out there, but the statement
+    keeps the lock, so the SQLite grant guard (#59) sees it."""
+    return stmt.with_for_update()
 
 
 def _require_meta_mode(context: TenantContext) -> str:
@@ -286,6 +304,7 @@ def _load_active_threads(
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def process_advice_candidates(
     session: Session,
     context: TenantContext,
@@ -298,12 +317,23 @@ def process_advice_candidates(
     projection_eligible: bool,
     occurred_at: datetime | None = None,
     executor_id: str = _SYSTEM_EXECUTOR,
+    commit: bool = True,
+    semantic_event_id: str | None = None,
 ) -> list[str]:
     """Resolve every candidate to a thread, append occurrences, apply
     eligible-miss resolution and semantic-change/recurrence supersession.
 
     Returns the ordered, de-duplicated list of thread ids this call
     created, appended to, resolved, or superseded.
+
+    ``commit=False`` leaves the changes flushed in the caller's
+    transaction. Phase C passes it so the thread changes, their expiry
+    Jobs and the run's terminal state commit together (spec §3.4, #111).
+
+    ``semantic_event_id`` is the Target lifecycle event a ``target_change``
+    run re-evaluates for (#113): every remaining active thread formed under
+    another Target than this Evaluation's is superseded by it, successor
+    or not.
     """
     meta_mode = _require_meta_mode(context)
     occurred_at = _ensure_utc(occurred_at) or utcnow()
@@ -504,6 +534,18 @@ def process_advice_candidates(
         ))
         touched_thread_ids.append(thread.id)
 
+    # A Target change supersedes without a successor (#113): Advice an
+    # older run opened under the previous Target after the event's own
+    # pass (``supersede_for_target_change``) ran.
+    if semantic_event_id is not None:
+        touched_thread_ids.extend(_supersede_other_targets(
+            session, context, meta_mode,
+            [thread for key, thread in active_threads.items() if key not in touched],
+            target_key=evaluation_row.normalized_target_key,
+            semantic_event_id=semantic_event_id,
+            executor_id=executor_id,
+        ))
+
     # Eligible-miss counting for every remaining active thread this batch
     # did not touch or supersede.
     if is_live_eligible_day:
@@ -532,7 +574,10 @@ def process_advice_candidates(
                 thread.lifecycle_reason = _format_miss_streak(streak, evaluated_local_day)
             touched_thread_ids.append(thread.id)
 
-    commit_and_rebind(session)
+    if commit:
+        commit_and_rebind(session)
+    else:
+        session.flush()
 
     seen: set[str] = set()
     result: list[str] = []
@@ -541,6 +586,101 @@ def process_advice_candidates(
             seen.add(thread_id)
             result.append(thread_id)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Target-change supersession -- contract §15.2, §18 (#113)
+# ---------------------------------------------------------------------------
+
+
+#: ``lifecycle_reason`` and thread-event ``reason`` of Advice a Target
+#: change made inapplicable.
+TARGET_CHANGED = "target_changed"
+
+
+@runs_as(WORKER_ROLE)
+def supersede_for_target_change(
+    session: Session,
+    context: TenantContext,
+    episode_id: str,
+    *,
+    target_key: str,
+    semantic_event_id: str,
+    executor_id: str = _SYSTEM_EXECUTOR,
+) -> list[str]:
+    """Supersede the Episode's active Advice formed under another Target
+    than ``target_key`` (a Target id, or ``NO_TARGET_MARKER``), citing the
+    Target lifecycle event ``semantic_event_id``.
+
+    Spec §3.8: "Policy/Target events first supersede incompatible active
+    Advice". A thread's Target is the one its latest occurrence's
+    Evaluation froze; every Advice identity includes it (its reason
+    signature), so none survives a change. Old Evaluations and occurrences
+    are not touched. Flushes into the caller's transaction, under the
+    thread locks; a thread that is no longer active is left alone, so a
+    replayed event supersedes nothing twice. Returns the superseded thread
+    ids in thread-id order.
+    """
+    meta_mode = _require_meta_mode(context)
+    threads = _load_active_threads(session, context, meta_mode, episode_id)
+    superseded = _supersede_other_targets(
+        session, context, meta_mode, sorted(threads.values(), key=lambda row: row.id),
+        target_key=target_key, semantic_event_id=semantic_event_id, executor_id=executor_id,
+    )
+    session.flush()
+    return superseded
+
+
+def _supersede_other_targets(
+    session: Session,
+    context: TenantContext,
+    meta_mode: str,
+    threads: Sequence[ScaleAdviceThreadRecord],
+    *,
+    target_key: str,
+    semantic_event_id: str,
+    executor_id: str,
+) -> list[str]:
+    superseded: list[str] = []
+    for thread in threads:
+        if thread.lifecycle != "active":
+            continue
+        formed_under = _thread_target_key(session, context, meta_mode, thread)
+        if formed_under is None or formed_under == target_key:
+            continue
+        thread.lifecycle = "superseded"
+        thread.lifecycle_reason = TARGET_CHANGED
+        thread.revision += 1
+        thread.updated_at = utcnow()
+        session.add(ScaleAdviceThreadEventRecord(
+            id=new_id("sate"), workspace_id=context.workspace_id, meta_mode=meta_mode,
+            episode_id=thread.episode_id, thread_id=thread.id, occurrence_id=None,
+            event_type="superseded", previous_lifecycle="active", current_lifecycle="superseded",
+            successor_thread_id=None, semantic_event_id=semantic_event_id, reason=TARGET_CHANGED,
+            deduplication_key=f"superseded:{thread.id}:{semantic_event_id}", executor_id=executor_id,
+        ))
+        superseded.append(thread.id)
+    return superseded
+
+
+def _thread_target_key(
+    session: Session, context: TenantContext, meta_mode: str, thread: ScaleAdviceThreadRecord,
+) -> str | None:
+    """The Target (or no-target marker) the thread's latest occurrence was
+    evaluated under."""
+    return session.execute(
+        select(ScaleEvaluationRecord.normalized_target_key)
+        .join(ScaleAdviceOccurrenceRecord, and_(
+            ScaleAdviceOccurrenceRecord.evaluation_id == ScaleEvaluationRecord.id,
+            ScaleAdviceOccurrenceRecord.workspace_id == ScaleEvaluationRecord.workspace_id,
+            ScaleAdviceOccurrenceRecord.meta_mode == ScaleEvaluationRecord.meta_mode,
+        ))
+        .where(
+            ScaleAdviceOccurrenceRecord.workspace_id == context.workspace_id,
+            ScaleAdviceOccurrenceRecord.meta_mode == meta_mode,
+            ScaleAdviceOccurrenceRecord.id == thread.latest_occurrence_id,
+        )
+    ).scalar_one_or_none()
 
 
 # ---------------------------------------------------------------------------
@@ -966,6 +1106,7 @@ def create_snooze(
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def expire_advice_thread(
     session: Session,
     context: TenantContext,
@@ -983,6 +1124,40 @@ def expire_advice_thread(
     if thread.lifecycle != "active":
         return False
 
+    current_time = _ensure_utc(now) or utcnow()
+    if current_time < _freshness_deadline(session, context, meta_mode, thread):
+        # Newer evidence already moved the deadline; nothing to do.
+        return False
+
+    thread.lifecycle = "expired"
+    thread.lifecycle_reason = "freshness_deadline_exceeded"
+    thread.revision += 1
+    thread.updated_at = current_time
+    session.add(ScaleAdviceThreadEventRecord(
+        id=new_id("sate"),
+        workspace_id=context.workspace_id,
+        meta_mode=meta_mode,
+        episode_id=thread.episode_id,
+        thread_id=thread.id,
+        occurrence_id=None,
+        event_type="expired",
+        previous_lifecycle="active",
+        current_lifecycle="expired",
+        successor_thread_id=None,
+        reason="freshness_deadline_exceeded",
+        deduplication_key=f"expired:{thread.id}",
+        executor_id=executor_id,
+    ))
+    commit_and_rebind(session)
+    return True
+
+
+def _freshness_deadline(
+    session: Session, context: TenantContext, meta_mode: str, thread: ScaleAdviceThreadRecord,
+) -> datetime:
+    """When the thread's latest eligible evidence passes its frozen freshness
+    deadline (spec §3.5): the freshest evaluated live run of its Episode, or
+    else its latest occurrence, plus the Policy's maximum lag."""
     latest_occurrence = session.get(ScaleAdviceOccurrenceRecord, thread.latest_occurrence_id)
     if latest_occurrence is None:
         raise AdviceLifecycleError("occurrence_not_found", thread.latest_occurrence_id)
@@ -1011,30 +1186,168 @@ def expire_advice_thread(
         freshest_run.freshness_reference_at if freshest_run is not None
         else latest_occurrence.occurred_at
     )
-    current_time = _ensure_utc(now) or utcnow()
-    deadline = reference_at + timedelta(hours=policy.freshness_floor_maximum_lag_hours)
-    if current_time < deadline:
-        # Newer evidence already moved the deadline; nothing to do.
-        return False
+    return reference_at + timedelta(hours=policy.freshness_floor_maximum_lag_hours)
 
-    thread.lifecycle = "expired"
-    thread.lifecycle_reason = "freshness_deadline_exceeded"
-    thread.revision += 1
-    thread.updated_at = current_time
-    session.add(ScaleAdviceThreadEventRecord(
-        id=new_id("sate"),
-        workspace_id=context.workspace_id,
-        meta_mode=meta_mode,
-        episode_id=thread.episode_id,
-        thread_id=thread.id,
-        occurrence_id=None,
-        event_type="expired",
-        previous_lifecycle="active",
-        current_lifecycle="expired",
-        successor_thread_id=None,
-        reason="freshness_deadline_exceeded",
-        deduplication_key=f"expired:{thread.id}",
-        executor_id=executor_id,
-    ))
-    commit_and_rebind(session)
-    return True
+
+def enqueue_advice_expiry(
+    session: Session, context: TenantContext, thread_id: str,
+) -> JobRecord | None:
+    """Enqueue the ``scale_advice_expire`` deadline Job for an active thread
+    (spec §3.5), keyed by thread and freshness deadline, or return the Job
+    that key already names. A thread that is no longer active has no
+    deadline: nothing is enqueued.
+
+    The Job is not claimable before the deadline (``not_before``, #111).
+    When later evidence moves the deadline, the next call enqueues a new Job
+    under the new key; the earlier one, once due, rechecks, finds the
+    deadline ahead and changes nothing. The payload carries the thread's
+    Meta mode (#97): the Worker's claimed context names none, and the thread
+    is visible under RLS only to a context that does.
+    """
+    meta_mode = _require_meta_mode(context)
+    thread = session.execute(
+        select(ScaleAdviceThreadRecord).filter_by(
+            workspace_id=context.workspace_id, meta_mode=meta_mode, id=thread_id,
+        )
+    ).scalar_one_or_none()
+    if thread is None:
+        raise AdviceLifecycleError("thread_not_found", thread_id)
+    if thread.lifecycle != "active":
+        return None
+    # In UTC, so one instant names one key whatever the session's time zone.
+    deadline = _freshness_deadline(session, context, meta_mode, thread).astimezone(timezone.utc)
+    with tenant_scope(session, context):
+        return enqueue_in_session(
+            session,
+            context=context,
+            job_type="scale_advice_expire",
+            payload={"thread_id": thread.id, "meta_mode": meta_mode},
+            idempotency_key=f"scale-advice-expire:{thread.id}:{deadline.isoformat()}",
+            resource_type="scale_advice_thread",
+            resource_id=thread.id,
+            not_before=deadline,
+        )
+
+
+def enqueue_episode_advice_expiries(
+    session: Session, context: TenantContext, episode_id: str,
+) -> list[JobRecord]:
+    """Schedule the deadline Job of every active thread of one Episode
+    (spec §3.5: "Every projection-eligible Evaluation advances the ...
+    deadline for all active Episode threads").
+
+    Phase C calls this after its run is flushed as ``evaluated``, so the
+    deadline each key carries is the one ``expire_advice_thread`` will
+    recompute; and before its one commit, so a thread is never committed
+    without the Job for its current deadline. The threads are locked, as
+    the handler locks them. Returns the Jobs in thread-id order.
+    """
+    meta_mode = _require_meta_mode(context)
+    threads = _load_active_threads(session, context, meta_mode, episode_id)
+    scheduled: list[JobRecord] = []
+    for thread in sorted(threads.values(), key=lambda row: row.id):
+        job = enqueue_advice_expiry(session, context, thread.id)
+        if job is not None:
+            scheduled.append(job)
+    return scheduled
+
+
+def advice_expire_job_context(context: TenantContext, payload: Mapping[str, Any]) -> TenantContext:
+    """The TenantContext a ``scale_advice_expire`` Job runs under (#97).
+
+    The claimed context names no Meta mode; the payload does. A payload
+    without a valid mode is refused as ``missing_input`` before the Job
+    runs, instead of failing inside the handler as ``meta_mode_required``.
+    """
+    meta_mode = str(payload.get("meta_mode") or "")
+    if meta_mode not in VALID_META_MODES:
+        raise AdviceLifecycleError("missing_input", "缺少或无效的 meta_mode")
+    return replace(context, meta_mode=meta_mode)
+
+
+# ---------------------------------------------------------------------------
+# The fallback sweep -- #111, #101 design §5
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OverdueAdviceSweep:
+    """What one fallback sweep did: the threads it expired, in id order, and
+    the ones it could not check, by thread id."""
+
+    expired: tuple[str, ...]
+    failed: Mapping[str, str]
+
+
+@runs_as(WORKER_ROLE)
+def expire_overdue_connection_advice(
+    context: TenantContext, connection_id: str, *, now: datetime | None = None,
+) -> OverdueAdviceSweep:
+    """Expire every ``active`` thread past its deadline on one connection: the
+    fallback for a deadline Job that did not (#111; #101 design §5).
+
+    A ``scale_advice_expire`` Job waits until its deadline, a day or more,
+    and two things can leave its thread ``active`` past it:
+
+    * the Workspace's authorization epoch moves meanwhile, and the claim
+      rejects the Job as ``authorization_epoch_stale``, due or not;
+    * the claim compares the deadline with the database clock, while
+      :func:`expire_advice_thread` rechecks it with the Worker's: a Job
+      claimed while a lagging Worker clock is still short of the deadline
+      changes nothing, and its key is spent.
+
+    The source-collection Job (``app.scale.collector``) calls this after its
+    Episode loop. It runs daily for each connection with an ``active`` or
+    ``paused`` Enrollment, also when the batch failed, under the epoch its
+    claim checked. Every ``active`` thread of an Episode on the connection,
+    in this Workspace and Meta mode, goes through
+    :func:`expire_advice_thread`, which locks it, recomputes the deadline
+    and expires it only once the deadline has passed, so a thread whose
+    deadline is ahead, or that its Job already expired, is left as it is.
+
+    Each thread commits on its own. A thread that cannot be checked is
+    recorded as a ``scale.advice_sweep.thread_failed`` audit event and stays
+    for the next collection: the sweep never fails the collection. The
+    ``expired`` event names this sweep as its executor, so the thread's
+    history says which path expired it.
+    """
+    meta_mode = _require_meta_mode(context)
+    current_time = _ensure_utc(now) or utcnow()
+    with tenant_session(context) as session:
+        thread_ids = list(session.scalars(
+            select(ScaleAdviceThreadRecord.id)
+            .join(ScaleEpisodeRecord, and_(
+                ScaleEpisodeRecord.workspace_id == ScaleAdviceThreadRecord.workspace_id,
+                ScaleEpisodeRecord.meta_mode == ScaleAdviceThreadRecord.meta_mode,
+                ScaleEpisodeRecord.id == ScaleAdviceThreadRecord.episode_id,
+            ))
+            .where(
+                ScaleAdviceThreadRecord.workspace_id == context.workspace_id,
+                ScaleAdviceThreadRecord.meta_mode == meta_mode,
+                ScaleAdviceThreadRecord.lifecycle == "active",
+                ScaleEpisodeRecord.meta_connection_id == connection_id,
+            )
+            .order_by(ScaleAdviceThreadRecord.id)
+        ))
+    expired: list[str] = []
+    failed: dict[str, str] = {}
+    for thread_id in thread_ids:
+        try:
+            with tenant_session(context) as session:
+                if expire_advice_thread(
+                    session, context, thread_id, executor_id=_FALLBACK_SWEEP_EXECUTOR, now=current_time,
+                ):
+                    expired.append(thread_id)
+        except Exception as exc:  # noqa: BLE001 -- one thread must not stop the others or the collection
+            failed[thread_id] = f"{type(exc).__name__}: {exc}"[:500]
+    if failed:
+        with tenant_session(context) as session:
+            for thread_id, detail in failed.items():
+                append_event(
+                    session,
+                    event_type="scale.advice_sweep.thread_failed",
+                    resource_type="scale_advice_thread",
+                    resource_id=thread_id,
+                    details={"meta_connection_id": connection_id, "error": detail},
+                )
+    return OverdueAdviceSweep(expired=tuple(expired), failed=failed)

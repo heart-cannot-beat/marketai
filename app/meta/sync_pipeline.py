@@ -24,13 +24,20 @@ Four operations:
   ``record_page(..., is_terminal=True)`` and ``complete_sync_run`` in the
   same session without an intervening commit; SQLAlchemy flushes both
   statements as part of one database transaction.
+* :func:`fail_sync_run` -- moves a run that did not finish to ``failed``
+  (#107: the batch Job's last attempt gave up on it).
 * :func:`dispatch_schedules` -- claims a batch of due, active schedules with
   ``FOR UPDATE SKIP LOCKED`` on PostgreSQL (§6.2), letting multiple
   dispatcher instances run concurrently against disjoint claims. SQLite (no
   ``SKIP LOCKED`` support) falls back to a plain ordered select -- tests and
-  local dev never run concurrent dispatchers against it.
+  local dev never run concurrent dispatchers against it. On PostgreSQL the
+  Worker dispatches through ``marketai_dispatch_meta_observation_ticks_v1``
+  instead (``app.meta.observation_sync``): the schedules are FORCE RLS and
+  the Worker has no tenant to read them under before it dispatches.
 """
 from __future__ import annotations
+
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -38,18 +45,24 @@ from sqlalchemy.orm import Session
 
 from ..adapters.persistence.models import new_id, utcnow
 from .models import (
+    MetaConnectionRecord,
     MetaEvidencePageRecord,
     MetaObservationSyncRunRecord,
     MetaObservationSyncScheduleRecord,
+    ObservationContractGenerationRecord,
 )
 
 __all__ = [
     "SyncPipelineError",
+    "TERMINAL_RUN_STATES",
     "create_sync_run",
     "record_page",
     "complete_sync_run",
+    "fail_sync_run",
     "dispatch_schedules",
 ]
+
+TERMINAL_RUN_STATES = frozenset({"succeeded", "failed", "superseded"})
 
 
 class SyncPipelineError(ValueError):
@@ -199,30 +212,75 @@ def complete_sync_run(
     return run
 
 
+def fail_sync_run(
+    session: Session,
+    *,
+    sync_run_id: str,
+) -> MetaObservationSyncRunRecord:
+    """Move a run that has not finished to ``failed``.
+
+    Idempotent, and a run already in a terminal state keeps it: a run that
+    succeeded is never failed afterwards. Its pages stay, but without a
+    terminal page and a publication they are never evidence (§6.4.4).
+    """
+    run = session.scalar(
+        select(MetaObservationSyncRunRecord)
+        .where(MetaObservationSyncRunRecord.id == sync_run_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if run is None:
+        raise SyncPipelineError(f"no sync run {sync_run_id!r}")
+    if run.state not in TERMINAL_RUN_STATES:
+        run.state = "failed"
+        run.completed_at = utcnow()
+        session.flush()
+    return run
+
+
 def dispatch_schedules(
-    session: Session, batch_size: int
+    session: Session, batch_size: int, *, now: datetime | None = None
 ) -> list[MetaObservationSyncScheduleRecord]:
     """Claim up to ``batch_size`` due, active schedules (spec §6.2).
+
+    Only schedules whose connection and contract generation are still
+    ``active`` are due: a retired connection or generation is never read
+    from again, even if its schedule was left open (#107).
 
     On PostgreSQL, ``FOR UPDATE SKIP LOCKED`` lets multiple dispatcher
     instances run concurrently: each claims a disjoint set of ready
     schedules instead of blocking on rows another dispatcher already holds.
-    SQLite has no ``SKIP LOCKED`` -- the fallback plain select is safe there
-    because SQLite's single-writer model means only one dispatcher runs at a
-    time in tests and local development.
+    SQLite has no ``SKIP LOCKED``, and SQLAlchemy leaves the lock out of its
+    SQL there; the plain select is safe because SQLite's single-writer model
+    means only one dispatcher runs at a time in tests and local development.
+    The statement keeps the lock, so the SQLite grant guard (#59) checks it.
     """
-    now = utcnow()
+    now = now or utcnow()
+    schedule = MetaObservationSyncScheduleRecord
     stmt = (
-        select(MetaObservationSyncScheduleRecord)
-        .where(
-            MetaObservationSyncScheduleRecord.state == "active",
-            MetaObservationSyncScheduleRecord.next_fire_at.is_not(None),
-            MetaObservationSyncScheduleRecord.next_fire_at <= now,
+        select(schedule)
+        .join(
+            MetaConnectionRecord,
+            (MetaConnectionRecord.workspace_id == schedule.workspace_id)
+            & (MetaConnectionRecord.meta_mode == schedule.meta_mode)
+            & (MetaConnectionRecord.id == schedule.meta_connection_id),
         )
-        .order_by(MetaObservationSyncScheduleRecord.next_fire_at)
+        .join(
+            ObservationContractGenerationRecord,
+            (ObservationContractGenerationRecord.workspace_id == schedule.workspace_id)
+            & (ObservationContractGenerationRecord.meta_mode == schedule.meta_mode)
+            & (ObservationContractGenerationRecord.id == schedule.contract_generation_id),
+        )
+        .where(
+            schedule.state == "active",
+            schedule.next_fire_at.is_not(None),
+            schedule.next_fire_at <= now,
+            MetaConnectionRecord.state == "active",
+            ObservationContractGenerationRecord.state == "active",
+        )
+        .order_by(schedule.next_fire_at, schedule.id)
         .limit(batch_size)
+        .with_for_update(skip_locked=True, of=schedule)
     )
-    if session.get_bind().dialect.name == "postgresql":
-        stmt = stmt.with_for_update(skip_locked=True)
 
     return list(session.scalars(stmt).all())

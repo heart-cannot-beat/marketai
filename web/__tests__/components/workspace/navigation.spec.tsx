@@ -7,11 +7,12 @@ import {
   WorkspaceNavigation,
 } from '@/components/workspace/WorkspaceNavigation';
 
+let mockIsOwner = true;
 jest.mock('hooks/useCanAccess', () => ({
   __esModule: true,
   default: () => ({
     canAccess: (resource: string, actions: string[]) =>
-      resource === 'team_member' && actions.includes('create'),
+      mockIsOwner && resource === 'team_member' && actions.includes('create'),
   }),
 }));
 
@@ -102,6 +103,22 @@ describe('WorkspaceNavigation (#165)', () => {
     render(<WorkspaceNavigation slug="acme" activePathname="/w/acme/assets" />);
     expect(screen.getByText('Settings')).toBeInTheDocument();
     expect(screen.getByText('Members')).toBeInTheDocument();
+  });
+
+  it('shows a Member Settings, where the spending limits are, but not Members', () => {
+    mockIsOwner = false;
+    try {
+      render(
+        <WorkspaceNavigation slug="acme" activePathname="/w/acme/assets" />
+      );
+      expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+        'href',
+        '/w/acme/settings'
+      );
+      expect(screen.queryByText('Members')).toBeNull();
+    } finally {
+      mockIsOwner = true;
+    }
   });
 });
 

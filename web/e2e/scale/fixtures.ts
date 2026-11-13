@@ -22,6 +22,7 @@ export {
   inspectCommandJournalEntry,
   inspectZeroMetaWrites,
   computeCommandIdentityHash,
+  deriveBffIdempotencyKey,
   claimWorkerCheckpoint,
   restartScaleApiServer,
   restartScaleWorker,

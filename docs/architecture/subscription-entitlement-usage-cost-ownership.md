@@ -72,7 +72,8 @@ PlanVersion 使用稳定 entitlement key，例如：
 - Workspace 至多有一个当前基础商业访问来源：有效 Subscription 或基础 AccessGrant。
 - 临时促销或支持赠送使用附加 AccessGrant，必须包含来源、原因、开始时间、可选结束时间和签发主体。
 - Restriction 用于安全、欠费、滥用或合规限制，只能禁止功能或降低上限，不能提升权益。
-- 最终权益按“平台绝对上限 → 基础 PlanVersion → 附加 AccessGrant → Restriction”的顺序解析；Restriction 始终优先。
+- 最终权益按“平台绝对上限 → 基础 PlanVersion → 附加 AccessGrant → 平台默认值 → Restriction”的顺序解析；Restriction 始终优先。
+- 平台默认值只补基础和附加来源都没有给出的 key，取 §8 的 Beta 值：`members.max=5`、`provider_calls.concurrent.max=2`、`storage.bytes.max=10737418240`（10 GiB）。任何来源给了值就用来源的值，默认值不参与附加来源的 MAX 合并；Restriction 可以把它压到默认值以下。默认值改变解析结果时，下一次发布（含续租）分配新的 `entitlement_version`（§7）。
 - 禁止直接编辑最终 Entitlement Snapshot 或通过客服脚本修改数据库字段。
 
 ### 4.3 周期

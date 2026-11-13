@@ -102,6 +102,7 @@ from app.platform.operations import aggregate_operation_from_jobs
 from app.platform.tenancy import TenantContext
 from app.providers.adapter import ProviderCapabilities, ProviderResult
 from app.providers.dispatch import ExternalCallCoordinator
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 logger = logging.getLogger(__name__)
 
@@ -851,6 +852,7 @@ def _settle_preparation_call(
     )
 
 
+@runs_as(WORKER_ROLE)
 async def handle_analyze_source(
     ctx: TenantContext,
     *,
@@ -940,6 +942,7 @@ async def handle_analyze_source(
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 async def handle_translate_copy(
     ctx: TenantContext,
     *,
@@ -1075,6 +1078,7 @@ async def handle_translate_copy(
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 async def handle_edit_attempt(
     ctx: TenantContext,
     *,
@@ -1319,6 +1323,7 @@ def _isolated_recovery_attempt(
     return attempt
 
 
+@runs_as(WORKER_ROLE)
 def handle_run_deterministic_qc(
     session: Session,
     ctx: TenantContext,
@@ -1458,6 +1463,7 @@ def _record_placeholder_qc(
     session.flush()
 
 
+@runs_as(WORKER_ROLE)
 def handle_ocr_check(
     session: Session, ctx: TenantContext, *, batch_id: str, item_id: str,
     attempt_id: str, isolated: bool = False,
@@ -1468,6 +1474,7 @@ def handle_ocr_check(
     )
 
 
+@runs_as(WORKER_ROLE)
 def handle_visual_qc(
     session: Session, ctx: TenantContext, *, batch_id: str, item_id: str,
     attempt_id: str, isolated: bool = False,
@@ -1492,6 +1499,7 @@ def _enqueue_finalize(session: Session, ctx: TenantContext, *, item_id: str, bat
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def handle_finalize_item(session: Session, ctx: TenantContext, *, batch_id: str, item_id: str, attempt_id: str) -> None:
     """Spec §2G: "Before finalize_item publishes, it repeats every
     authoritative check. It then atomically creates the child AssetVersion,
@@ -1575,6 +1583,7 @@ def handle_finalize_item(session: Session, ctx: TenantContext, *, batch_id: str,
 # ---------------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 def handle_fold_batch(session: Session, ctx: TenantContext, *, batch_id: str) -> None:
     """Derive the Batch's terminal outcome once every Item is terminal
     (spec §2F); a best-effort no-op otherwise or on a lost CAS race -- the

@@ -13,7 +13,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from .fact_types import FACT_FAMILIES, fact_value_problems
 
@@ -682,7 +682,8 @@ def _validate_offer(content: dict, findings: list[Finding]) -> None:
 def _validate_market_mapping(content: dict, findings: list[Finding]) -> None:
     if not _is_str(content.get("offer_version_id")):
         findings.append(Finding("mapping_offer", "MarketSourceMappingVersion 必须引用一个 OfferVersion", "offer_version_id"))
-    # DataSourceVersion 归 #20 所有；这里只强制显式、非空的不透明 ID。
+    # 形状校验只要求显式、非空的 ID。它是否指向本 Workspace 的 DataSourceVersion
+    # 由发布时的依赖解析判断（#61），模式是否一致见 mapping_data_source_findings。
     if not _is_str(content.get("data_source_version_id")):
         findings.append(
             Finding("mapping_data_source", "必须显式声明 data_source_version_id，不存在隐式默认数据源", "data_source_version_id")
@@ -705,6 +706,32 @@ def _validate_market_mapping(content: dict, findings: list[Finding]) -> None:
         findings.append(Finding("mapping_market", "market 必须是 2 位 ISO 国家代码", "market"))
     if content.get("execution_mode") not in EXECUTION_MODES:
         findings.append(Finding("mapping_execution_mode", "必须显式声明 execution_mode", "execution_mode"))
+
+
+def mapping_data_source_findings(content: dict, data_source_content: Any) -> list[Finding]:
+    """A mapping's execution mode against the DataSourceVersion it names (#61).
+
+    The data source decides the mode (contract §1.9 / §18): a real mapping
+    cannot name a Mock data source version, nor a mock mapping a real one.
+    The service calls this once ``data_source_version_id`` has resolved to a
+    DataSource version of the same Workspace. A missing or unknown mapping
+    mode is already ``mapping_execution_mode``, so it adds nothing here.
+    """
+    mode = content.get("execution_mode") if isinstance(content, dict) else None
+    if mode not in EXECUTION_MODES:
+        return []
+    source = data_source_content if isinstance(data_source_content, dict) else {}
+    source_mode = source.get("execution_mode")
+    if mode == source_mode:
+        return []
+    return [
+        Finding(
+            "mapping_execution_mode_mismatch",
+            f"execution_mode {mode!r} 与所引用 DataSourceVersion 的 {source_mode!r} 不一致；"
+            "执行模式由数据源决定，Mock 与真实不能混用",
+            "execution_mode",
+        )
+    ]
 
 
 def _validate_person(content: dict, findings: list[Finding], *, today: date | None = None) -> None:
@@ -1087,11 +1114,16 @@ def _fact_date(value: str) -> datetime | None:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
-def _validate_fact_window(fact: dict, fpath: str, findings: list[Finding]) -> None:
+def _validate_fact_window(fact: dict, fpath: str, findings: list[Finding], *, now: datetime) -> None:
     """Both ends of a fact's validity are ISO dates and it starts before it ends (#23).
 
     Truth serves a fact while ``valid_from <= now < valid_to``, so an end on
     or before the start is a fact that is never valid.
+
+    Truth judges each row on its own (#60): a row that has already ended is
+    left out at resolution while the other rows stay usable, so publishing
+    it is allowed and only warned about. A row that starts later gives
+    nothing; it is a scheduled fact.
     """
     starts = ends = None
     if not _is_str(fact.get("valid_from")):
@@ -1106,9 +1138,17 @@ def _validate_fact_window(fact: dict, fpath: str, findings: list[Finding]) -> No
                                 "valid_to 必须是 ISO 日期或时间，例如 2026-01-31", f"{fpath}.valid_to"))
     if starts is not None and ends is not None and starts >= ends:
         findings.append(Finding("fact_valid_range", "valid_to 必须晚于 valid_from", f"{fpath}.valid_to"))
+    elif starts is not None and ends is not None and ends <= now:
+        findings.append(Finding(
+            "fact_expired",
+            f"这条事实已于 {fact['valid_to']} 失效：解析真值时会跳过它，其他行照常使用",
+            f"{fpath}.valid_to",
+            severity=SEVERITY_WARNING,
+        ))
 
 
 def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
+    now = datetime.now(timezone.utc)
     if not _is_str(content.get("data_source_entry_id")):
         findings.append(Finding("fact_set_ds_required",
                                 "必须显式声明 data_source_entry_id", "data_source_entry_id"))
@@ -1137,7 +1177,13 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
         cc = fact.get("country_code")
         if not isinstance(cc, str) or len(cc) != 2 or cc != cc.upper():
             findings.append(Finding("fact_country_code", "country_code 必须是大写 2 位 ISO", f"{fpath}.country_code"))
-        _validate_fact_window(fact, fpath, findings)
+        if not _is_str(fact.get("offer_entry_id")):
+            # Contract §11.4: every row names its Offer (#54). The service
+            # resolves the entry and checks its market scope.
+            findings.append(Finding("fact_offer_required",
+                                    "必须声明这行事实所属的 Offer（offer_entry_id）",
+                                    f"{fpath}.offer_entry_id"))
+        _validate_fact_window(fact, fpath, findings, now=now)
         if not _is_str(fact.get("evidence_source")):
             findings.append(Finding("fact_evidence_source_required",
                                     "必须声明证据来源 evidence_source", f"{fpath}.evidence_source"))
@@ -1145,6 +1191,48 @@ def _validate_manual_fact_set(content: dict, findings: list[Finding]) -> None:
             # 值结构与 Truth 适配器解析时用的是同一张表、同一套规则。
             for problem in fact_value_problems(fact_type, fact):
                 findings.append(Finding(problem.code, problem.message, f"{fpath}.{problem.field}"))
+
+
+def offer_market_scope(offer_content: Any) -> frozenset[str] | None:
+    """The upper-case countries an OfferVersion lists in ``market_scope``.
+
+    ``None`` when the content lists none: publish validation requires the
+    list (``offer_market_scope``), so only content that never passed it
+    lacks one, and its scope is unknown rather than empty.
+    """
+    markets = offer_content.get("market_scope") if isinstance(offer_content, dict) else None
+    if not isinstance(markets, list):
+        return None
+    return frozenset(market.strip().upper() for market in markets if _is_str(market))
+
+
+def fact_offer_market_findings(content: dict, offers_by_path: Mapping[str, Any]) -> list[Finding]:
+    """Each row's market against the scope of the OfferVersion it names (#54).
+
+    ``offers_by_path`` maps a row's ``facts[i].offer_entry_id`` path to the
+    content of the OfferVersion it resolved to; a row whose Offer did not
+    resolve is already blocking and is skipped, as is a row whose
+    ``country_code`` is already ``fact_country_code``. Contract §11.4: a row
+    whose scope cannot be mapped is a blocking error.
+    """
+    facts = content.get("facts") if isinstance(content, dict) else None
+    findings: list[Finding] = []
+    for i, fact in enumerate(facts if isinstance(facts, list) else []):
+        path = f"facts[{i}].offer_entry_id"
+        if not isinstance(fact, dict) or path not in offers_by_path:
+            continue
+        country = fact.get("country_code")
+        if not isinstance(country, str) or len(country) != 2 or country != country.upper():
+            continue
+        scope = offer_market_scope(offers_by_path[path])
+        if scope is None or country in scope:
+            continue
+        findings.append(Finding(
+            "fact_offer_market_scope",
+            f"这行事实的市场 {country} 不在所引用 Offer 的市场范围 {sorted(scope)} 内",
+            path,
+        ))
+    return findings
 
 
 def _validate_truth_resolution_policy(content: dict, findings: list[Finding]) -> None:
@@ -1273,6 +1361,7 @@ REL_PRODUCT_SELECTION_RULE = "product_selection_rule"
 REL_MUST_MATCH_EVIDENCE = "must_match_evidence"
 REL_OFFER_PRODUCT = "offer_product"
 REL_MAPPING_OFFER = "mapping_offer"
+REL_MAPPING_DATA_SOURCE = "mapping_data_source"
 REL_PERSON_REFERENCE = "person_reference"
 REL_GROUP_MEMBER = "group_member"
 REL_RULE_GROUP = "rule_group"
@@ -1282,6 +1371,7 @@ REL_SCHEMA_TEMPLATE = "schema_template"
 REL_SCHEMA_PRODUCT = "schema_product"
 REL_POLICY_TEMPLATE = "policy_template"
 REL_FACT_SET_DATA_SOURCE = "fact_set_data_source"
+REL_FACT_SET_OFFER = "fact_set_offer"
 REL_TRUTH_POLICY_DATA_SOURCE = "truth_policy_data_source"
 
 
@@ -1321,6 +1411,9 @@ def extract_dependencies(entry_type: str, content: dict) -> list[DependencyEdge]
         add(content.get("product_version_id"), REL_OFFER_PRODUCT, "product_version_id")
     elif entry_type == ENTRY_MARKET_MAPPING:
         add(content.get("offer_version_id"), REL_MAPPING_OFFER, "offer_version_id")
+        # A version ID, not an entry ID: the mapping pins one DataSourceVersion,
+        # so withdrawing that version lists the mapping (#61).
+        add(content.get("data_source_version_id"), REL_MAPPING_DATA_SOURCE, "data_source_version_id")
     elif entry_type == ENTRY_PERSON:
         for index, item in enumerate(items(content.get("reference_bindings"))):
             if isinstance(item, dict):
@@ -1341,10 +1434,17 @@ def extract_dependencies(entry_type: str, content: dict) -> list[DependencyEdge]
         )
         add(content.get("product_entry_id"), REL_SCHEMA_PRODUCT, "product_entry_id")
     elif entry_type == ENTRY_PROMPT_POLICY:
+        # Each item names a DimensionTemplate entry (#100); the service
+        # resolves it to the entry's current version, as for source_priority.
         for index, template_id in enumerate(items(content.get("allowed_template_entry_ids"))):
             add(template_id, REL_POLICY_TEMPLATE, f"allowed_template_entry_ids[{index}]")
     elif entry_type == ENTRY_MANUAL_FACT_SET:
         add(content.get("data_source_entry_id"), REL_FACT_SET_DATA_SOURCE, "data_source_entry_id")
+        # Each row names an Offer entry (#54); the service resolves it to the
+        # entry's current OfferVersion, one stored edge per distinct version.
+        for i, fact in enumerate(items(content.get("facts"))):
+            if isinstance(fact, dict):
+                add(fact.get("offer_entry_id"), REL_FACT_SET_OFFER, f"facts[{i}].offer_entry_id")
     elif entry_type == ENTRY_TRUTH_RESOLUTION_POLICY:
         for i, rule in enumerate(items(content.get("rules"))):
             if not isinstance(rule, dict):
@@ -1374,6 +1474,7 @@ RELATION_TARGET_TYPES = {
     REL_MUST_MATCH_EVIDENCE: ENTRY_REFERENCE_ASSET,
     REL_OFFER_PRODUCT: ENTRY_PRODUCT,
     REL_MAPPING_OFFER: ENTRY_OFFER,
+    REL_MAPPING_DATA_SOURCE: ENTRY_DATA_SOURCE,
     REL_PERSON_REFERENCE: ENTRY_REFERENCE_ASSET,
     REL_GROUP_MEMBER: ENTRY_REFERENCE_ASSET,
     REL_RULE_GROUP: ENTRY_REFERENCE_GROUP,
@@ -1381,8 +1482,25 @@ RELATION_TARGET_TYPES = {
     REL_SCHEMA_PRODUCT: ENTRY_PRODUCT,
     REL_POLICY_TEMPLATE: ENTRY_DIMENSION_TEMPLATE,
     REL_FACT_SET_DATA_SOURCE: ENTRY_DATA_SOURCE,
+    REL_FACT_SET_OFFER: ENTRY_OFFER,
     REL_TRUTH_POLICY_DATA_SOURCE: ENTRY_DATA_SOURCE,
 }
+
+# Relations whose content names the target *entry*, which publish resolves to
+# that entry's current version (``service._validate_dependencies``). The stored
+# edge points at the version that was current at publish and is never moved,
+# while the dependent keeps resolving to whatever version is current now. The
+# reverse walk behind every impact preview and Withdraw (``dependents``) reads
+# these edges by entry: an edge to any version of the entry counts (#88).
+# ``tests/test_library_entry_resolved_relations.py`` probes the resolver and
+# fails when a relation resolves an entry id without being listed here.
+ENTRY_RESOLVED_RELATIONS = frozenset({
+    REL_SCHEMA_PRODUCT,  # DimensionSchema.product_entry_id
+    REL_FACT_SET_DATA_SOURCE,  # ManualFactSet.data_source_entry_id (#64)
+    REL_FACT_SET_OFFER,  # ManualFactSet facts[].offer_entry_id (#54)
+    REL_TRUTH_POLICY_DATA_SOURCE,  # TruthResolutionPolicy rules[].source_priority (#70)
+    REL_POLICY_TEMPLATE,  # WorkspacePromptPolicy allowed_template_entry_ids (#100)
+})
 
 
 def extract_reference_bindings(entry_type: str, content: dict) -> list[dict]:

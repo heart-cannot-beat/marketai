@@ -122,8 +122,22 @@ class LibraryMigrationDowngradeTests(unittest.TestCase):
         # zz6f7a8b9c0d (soft-removable experiment entries, Issue #284) and
         # zz7a8b9c0d1e (the API reads usage events, Issue #347) and
         # zz8b9c0d1e2f (stored spend guardrail previews, Issue #386) and
-        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46).
-        self.assertEqual(revision, "zz9c0d1e2f3a")
+        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46) and
+        # zza0d1e2f3a4 (Worker-only Operation reconciliation candidates, Issue #22) and
+        # zzb1e2f3a4b5 (the Worker rolls Scale Episodes over, Issue #92) and
+        # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
+        # zzd3a4b5c6d7 (platform Meta connection reads across Workspaces, #102) and
+        # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107) and
+        # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109) and
+        # zzf6b7c8d9e0 (observation ticks keyed by authorization epoch, #119) and
+        # zzg7d8e9f0a1 (the Beta default ScalePolicyVersion is published, #127) and
+        # zzg126a1b2c3 (provisioning creates the guardrail at the Beta defaults, #126) and
+        # zzh129a1b2c3 (DeliveryTargets name the Landing Page by its frozen hash, #129) and
+        # zzi132a1b2c3 (Beta default ScalePolicyVersion v2, #132 and #133) and
+        # zzj113a1b2c3 (Advice superseded by a Target event, #113) and
+# zzk145a1b2c3 (CHECK constraints on usage_events, #145) and
+        # zzl148a1b2c3 (the Worker dispatches daily storage_bytes Usage, #148).
+        self.assertEqual(revision, "zzl148a1b2c3")
         self.assertEqual(event_type, "library.withdrawal.affects_market_asset_binding")
 
 
@@ -211,8 +225,22 @@ class LibraryTemplatesDatasourcesMigrationTests(unittest.TestCase):
         # zz6f7a8b9c0d (soft-removable experiment entries, Issue #284) and
         # zz7a8b9c0d1e (the API reads usage events, Issue #347) and
         # zz8b9c0d1e2f (stored spend guardrail previews, Issue #386) and
-        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46).
-        self.assertEqual(revision, "zz9c0d1e2f3a")
+        # zz9c0d1e2f3a (the API publishes adopted localized versions, Issue #46) and
+        # zza0d1e2f3a4 (Worker-only Operation reconciliation candidates, Issue #22) and
+        # zzb1e2f3a4b5 (the Worker rolls Scale Episodes over, Issue #92) and
+        # zzc2f3a4b5c6 (platform Workspace creation and credential ownership, #91 and #94) and
+        # zzd3a4b5c6d7 (platform Meta connection reads across Workspaces, #102) and
+        # zze4f5a6b7c8 (the Worker dispatches Meta observation schedules, #107) and
+        # zzf5a6b7c8d9 (Scale source collection key and delivery diagnostics, #109) and
+        # zzf6b7c8d9e0 (observation ticks keyed by authorization epoch, #119) and
+        # zzg7d8e9f0a1 (the Beta default ScalePolicyVersion is published, #127) and
+        # zzg126a1b2c3 (provisioning creates the guardrail at the Beta defaults, #126) and
+        # zzh129a1b2c3 (DeliveryTargets name the Landing Page by its frozen hash, #129) and
+        # zzi132a1b2c3 (Beta default ScalePolicyVersion v2, #132 and #133) and
+        # zzj113a1b2c3 (Advice superseded by a Target event, #113) and
+# zzk145a1b2c3 (CHECK constraints on usage_events, #145) and
+        # zzl148a1b2c3 (the Worker dispatches daily storage_bytes Usage, #148).
+        self.assertEqual(revision, "zzl148a1b2c3")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as connection:

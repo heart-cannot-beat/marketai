@@ -102,8 +102,12 @@ def fact(source_id: str = "pca_1", **overrides) -> UsageFact:
     return UsageFact(**values)
 
 
-def usage_rows(session, workspace_id: str) -> list[UsageEventRecord]:
-    return list(session.scalars(select(UsageEventRecord).where(UsageEventRecord.workspace_id == workspace_id)))
+def usage_rows(session, workspace_id: str, metric_key: str | None = None) -> list[UsageEventRecord]:
+    """The Workspace's usage rows; only ``metric_key``'s when given (S2 adds Operation and AssetVersion facts)."""
+    query = select(UsageEventRecord).where(UsageEventRecord.workspace_id == workspace_id)
+    if metric_key is not None:
+        query = query.where(UsageEventRecord.metric_key == metric_key)
+    return list(session.scalars(query))
 
 
 # ---------------------------------------------------------------------------
@@ -131,14 +135,15 @@ class UsageRecorderTests(unittest.TestCase):
         self.session.commit()
         self.assertEqual(usage_rows(self.session, CTX_A.workspace_id), [])
 
-    def test_the_registry_holds_provider_calls_only(self):
-        self.assertEqual(set(METRICS), {"provider_calls"})
+    def test_the_registry_holds_provider_calls(self):
+        # S2's metrics are pinned in tests/test_usage_assets_operations.py.
+        self.assertIn("provider_calls", METRICS)
         self.assertEqual(
             (PROVIDER_CALLS.measurement_kind, PROVIDER_CALLS.direction, PROVIDER_CALLS.unit, PROVIDER_CALLS.aggregation),
             ("delta", "increase", "call", "sum"))
 
     def test_the_registry_refuses_unknown_metrics(self):
-        for metric_key in ("provider_call", "storage_bytes", "active_members", ""):
+        for metric_key in ("provider_call", "storage", "active_members", ""):
             with self.subTest(metric_key=metric_key):
                 self.refused("usage_metric_unknown", fact(metric_key=metric_key))
 
@@ -262,7 +267,7 @@ class UsageRecorderTests(unittest.TestCase):
             "byok": Decimal("2"), "sandbox": Decimal("1"), "mock": Decimal("2"), "not_applicable": Decimal("1")})
         self.assertEqual(summary.total, Decimal("4"))
 
-        other_metric = UsageQuery().summarize(self.session, CTX_A, metric_key="storage_bytes",
+        other_metric = UsageQuery().summarize(self.session, CTX_A, metric_key="operations",
                                               window_start=start, window_end=end)
         self.assertEqual(other_metric.total, Decimal("0"))
         self.assertEqual(set(other_metric.by_execution_mode.values()), {Decimal("0")})
@@ -388,7 +393,8 @@ def provider_call_rows(ctx, job_ids) -> list[UsageEventRecord]:
         attempt_ids = set(session.scalars(select(ProviderCallAttemptRecord.id).where(
             ProviderCallAttemptRecord.workspace_id == ctx.workspace_id,
             ProviderCallAttemptRecord.job_id.in_(list(job_ids)))))
-        return [row for row in usage_rows(session, ctx.workspace_id) if row.source_resource_id in attempt_ids]
+        return [row for row in usage_rows(session, ctx.workspace_id, "provider_calls")
+                if row.source_resource_id in attempt_ids]
 
 
 class PlannerUsageTests(MarketingPlanningFixtures):
@@ -433,7 +439,7 @@ class PlannerUsageTests(MarketingPlanningFixtures):
         self.execute(self.plan_call(project))
         self.assertEqual(self.read(project)["latest_call"]["state"], "succeeded")
         with tenant_session(self.context) as session:
-            self.assertEqual(usage_rows(session, self.context.workspace_id), [])
+            self.assertEqual(usage_rows(session, self.context.workspace_id, "provider_calls"), [])
 
 
 class AIQCUsageTests(MarketingAIQCFixtures):
@@ -503,7 +509,7 @@ class MockGenerationAndEndpointTests(LibraryFixtures):
             handle_run_item(session, ctx, item_id)
         with tenant_session(ctx) as session:
             handle_run_item(session, ctx, item_id)  # no longer dispatchable: a no-op
-            rows = usage_rows(session, ctx.workspace_id)
+            rows = usage_rows(session, ctx.workspace_id, "provider_calls")
             attempt = session.scalar(select(ProviderCallAttemptRecord).where(
                 ProviderCallAttemptRecord.workspace_id == ctx.workspace_id,
                 ProviderCallAttemptRecord.run_item_id == item_id))
@@ -517,7 +523,7 @@ class MockGenerationAndEndpointTests(LibraryFixtures):
         with tenant_session(ctx) as session:
             handle_run_item_dispatch_only(session, ctx, item_id)
         with tenant_session(ctx) as session:
-            self.assertEqual(usage_rows(session, ctx.workspace_id), [])
+            self.assertEqual(usage_rows(session, ctx.workspace_id, "provider_calls"), [])
 
     def _seed_usage(self, ctx, source, mode, occurred_at):
         with tenant_session(ctx) as session:

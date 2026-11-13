@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import inspect
 import logging
 import os
 import signal
@@ -28,7 +29,7 @@ from .platform.job_outcomes import (
 from .providers.base import ProviderError
 from .providers.router import get_provider
 from .adapters.meta.client import MetaApiError, MetaClient
-from .adapters.meta.write_client import MetaWriteError, MetaWritePort
+from .adapters.meta.write_client import HttpMetaWriteAdapter, MetaWriteError, MetaWritePort
 from .meta import service as meta_service
 from .launch import service as launch_service
 from .launch.recovery import RecoveryError, execute_recovery
@@ -41,6 +42,7 @@ from .launch.saga import (
 from .adapters.persistence.database import SessionLocal, assert_runtime_role, tenant_session
 from .platform.blob_store_factory import build_blob_store
 from .platform.blob_store import BlobRef, BlobStoreError
+from .platform.runtime_role import WORKER_ROLE, runs_as
 from .platform.operations import (
     TERMINAL_STATES,
     OperationRecord,
@@ -154,6 +156,15 @@ class WorkerRuntime:
             and config.DOMAIN_TO_CONTROL_PLANE_SYNC_TOKEN
             else None
         )
+        # Monotonic time of the next Meta observation dispatch (#107); None
+        # means the first main-lane tick dispatches.
+        self._next_observation_dispatch_at: float | None = None
+        # Monotonic time of the next storage_bytes dispatch (#148). The first
+        # one waits an interval: a Worker that just started drains its queue
+        # first, and the daily measurement is not urgent.
+        from .entitlements.storage_usage import DISPATCH_INTERVAL_SECONDS
+
+        self._next_storage_usage_dispatch_at: float = time.monotonic() + DISPATCH_INTERVAL_SECONDS
 
     def _begin_drain(self) -> None:
         if self.stopping:
@@ -236,6 +247,7 @@ class WorkerRuntime:
         )
         await asyncio.sleep(delay)
 
+    @runs_as(WORKER_ROLE)
     async def run_once(self, *, job_types=None, exclude_types=()) -> bool:
         if job_types is None and self._onboarding_http_client is not None:
             from .generation.onboarding_dispatcher import (
@@ -247,6 +259,11 @@ class WorkerRuntime:
                 self._onboarding_http_client,
             ):
                 return True
+        if job_types is None:
+            # Busy or idle: a queue that never drains must not starve the
+            # schedules (#101 Q4), nor the daily storage measurement (#148).
+            await self._dispatch_observation_ticks_if_due()
+            await self._dispatch_storage_usage_if_due()
         job = await asyncio.to_thread(jobs.claim_next, self.owner,
             **({'job_types': job_types, 'exclude_types': exclude_types} if job_types is not None or exclude_types else {}))
         if job is None:
@@ -257,6 +274,11 @@ class WorkerRuntime:
             # exactly when there is no queued work competing for the row lock.
             if job_types is None:
                 await asyncio.to_thread(jobs.reconcile_admitted_operations)
+                # Legacy Operations only their handlers settle (#22): fold
+                # the ones whose Job ended without that handler ever running.
+                from . import legacy_operations
+
+                await asyncio.to_thread(legacy_operations.reconcile_legacy_operations_if_due)
             return False
         if job.type == "meta_read_ingestion":
             await self._meta_read_ingestion(job)
@@ -272,6 +294,15 @@ class WorkerRuntime:
             return True
         if job.type == "meta_schedule_tick":
             self._meta_schedule_tick(job)
+            return True
+        if job.type == "meta_observation_tick":
+            self._meta_observation_tick(job)
+            return True
+        if job.type == "meta_observation_sync":
+            self._meta_observation_sync(job)
+            return True
+        if job.type == "usage.storage_bytes":
+            self._usage_storage_bytes(job)
             return True
         if job.type == "verify_upload_intent":
             await self._verify_upload_intent(job)
@@ -329,6 +360,15 @@ class WorkerRuntime:
         if job.type == "scale_evaluate":
             self._scale_evaluate(job)
             return True
+        if job.type == "scale_advice_expire":
+            self._scale_advice_expire(job)
+            return True
+        if job.type == "scale_collect_sources":
+            self._scale_collect_sources(job)
+            return True
+        if job.type == "scale_target_change":
+            self._scale_target_change(job)
+            return True
         if job.type == "scale_export":
             self._scale_export(job)
             return True
@@ -348,6 +388,7 @@ class WorkerRuntime:
         await self._generate_asset(job)
         return True
 
+    @runs_as(WORKER_ROLE)
     async def _localization_job(self, job: jobs.ClaimedJob) -> None:
         """Own the queue lifecycle around one Localization domain handler.
 
@@ -398,6 +439,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _dispatch_localization_job(self, job: jobs.ClaimedJob) -> None:
         from .localization import worker as localization_worker
 
@@ -567,6 +609,7 @@ class WorkerRuntime:
             )
         return attempt_id
 
+    @runs_as(WORKER_ROLE)
     async def _verify_upload_intent(self, job: jobs.ClaimedJob) -> None:
         """Job handler for spec §7.8's Worker verification sequence.
 
@@ -670,6 +713,7 @@ class WorkerRuntime:
             retryable=True,
         )
 
+    @runs_as(WORKER_ROLE)
     async def _cleanup_staging_upload(self, job: jobs.ClaimedJob) -> None:
         """Delete a terminal UploadIntent's staging object idempotently.
 
@@ -744,6 +788,7 @@ class WorkerRuntime:
             return
         jobs.succeed(job.context, job.id, self.owner)
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_resolution(self, job: jobs.ClaimedJob) -> None:
         from .marketing.recovery import execute_resolution, fail_resolution
         jobs.mark_running(job.context, job.id, self.owner)
@@ -763,6 +808,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_ai_qc(self, job: jobs.ClaimedJob) -> None:
         from .marketing.ai_qc_worker import execute_ai_qc
         jobs.mark_running(job.context, job.id, self.owner)
@@ -780,6 +826,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_image_edit(self, job: jobs.ClaimedJob) -> None:
         from .marketing.image_editing import execute_edit, fail_edit
         from .marketing.service import MarketingError
@@ -801,6 +848,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_export(self, job: jobs.ClaimedJob) -> None:
         from .marketing.handoff_worker import execute_export
         jobs.mark_running(job.context, job.id, self.owner)
@@ -818,6 +866,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _marketing_plan(self, job: jobs.ClaimedJob) -> None:
         from .marketing.planner import execute_planning
 
@@ -836,6 +885,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _generation_run_item(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for Generation Worker handler.
 
@@ -998,6 +1048,7 @@ class WorkerRuntime:
                 "could not project the handler fault onto RunItem %s", run_item_id
             )
 
+    @runs_as(WORKER_ROLE)
     async def _generation_qc_asset_version(self, job: jobs.ClaimedJob) -> None:
         """Quality-check the exact generated AssetVersion/RunItem (Issue #169).
 
@@ -1168,6 +1219,7 @@ class WorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _generation_export_package(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for Issue #49 Task 9's export Worker handler.
 
@@ -1220,6 +1272,7 @@ class WorkerRuntime:
             retryable=False,
         )
 
+    @runs_as(WORKER_ROLE)
     def _library_connection_check(self, job: jobs.ClaimedJob) -> None:
         """Run the local DataSource check (#383, ``app.library.connection_checks``).
 
@@ -1284,6 +1337,7 @@ class WorkerRuntime:
             return
         jobs.succeed(job.context, job.id, self.owner)
 
+    @runs_as(WORKER_ROLE)
     async def _library_manual_fact_import(self, job: jobs.ClaimedJob) -> None:
         """Import a finalized upload into a new Manual Fact Set draft (#397).
 
@@ -1304,6 +1358,8 @@ class WorkerRuntime:
         operation_id = str(job.payload.get("operation_id") or "")
         data_source_entry_id = str(job.payload.get("data_source_entry_id") or "")
         upload_intent_id = str(job.payload.get("upload_intent_id") or "")
+        # Jobs queued before #54 carry no default Offer.
+        default_offer_entry_id = job.payload.get("default_offer_entry_id") or None
         if not operation_id or not data_source_entry_id or not upload_intent_id:
             jobs.fail(
                 job.context, job.id, self.owner,
@@ -1367,6 +1423,7 @@ class WorkerRuntime:
                         data_source_entry_id=data_source_entry_id,
                         upload_intent_id=upload_intent_id,
                         content_payload=content_payload,
+                        default_offer_entry_id=default_offer_entry_id,
                     )
                     transition_operation(
                         session, operation_id, OperationState.SUCCEEDED,
@@ -1425,6 +1482,7 @@ class WorkerRuntime:
             code=code, detail=f"Operation 已是 {state}", retryable=False,
         )
 
+    @runs_as(WORKER_ROLE)
     async def _library_reference_gate(self, job: jobs.ClaimedJob) -> None:
         """Run reference upload gate checks on a quarantined object.
 
@@ -1535,6 +1593,7 @@ class WorkerRuntime:
             self._intake_fetcher = fetcher
         return fetcher
 
+    @runs_as(WORKER_ROLE)
     async def _products_intake(self, job: jobs.ClaimedJob) -> None:
         """Fence for the product-intake Job: fetch -> extract -> images.
 
@@ -1599,6 +1658,7 @@ class WorkerRuntime:
                 code=outcome.code or "product_intake_failed", detail=outcome.detail, retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _external_creative(self, job: jobs.ClaimedJob) -> None:
         """Fence for the external-creative Job (Issue #168): gate -> asset -> tag.
 
@@ -1661,6 +1721,7 @@ class WorkerRuntime:
                 code=outcome.code or "external_creative_failed", detail=outcome.detail, retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _test_plan_draft(self, job: jobs.ClaimedJob) -> None:
         """Fence for the test-plan drafting Job (Issues #163, #164).
 
@@ -1714,36 +1775,63 @@ class WorkerRuntime:
                 detail=outcome.detail, retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _scale_evaluate(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_evaluate`` job (spec §3.8, Issue #25
         Task 14). This shared Worker's ``run_scale_evaluation`` call is a pure
         delegation to ``app.scale.service`` -- Scale itself never touches this
-        module's ``meta_client``/``launch_adapter``, and this handler is the
-        one place the two composition roots' responsibilities meet: the
-        dedicated ``app.scale.worker.ScaleWorkerRuntime`` (capability-scoped,
-        no write adapter reachable at all) is the deployment target for Scale
-        job processing; this branch exists so a single-process/local/test
-        deployment that runs one Worker for every job type still has a
-        working dispatch path.
+        module's ``meta_client``/``launch_adapter``. This Worker is the one
+        deployed, so it runs Scale jobs; ADR 0017 allows that only while the
+        process has no Meta write capability, which ``_main`` checks at
+        startup (``assert_no_meta_write_capability``). The capability-scoped
+        ``app.scale.worker.ScaleWorkerRuntime`` is the runtime to split out
+        once that no longer holds.
+
+        The run's Meta mode comes from the payload (``evaluation_job_context``,
+        #97): the claimed context names none, and RLS shows Scale rows only to
+        a context that does. A payload without one fails as ``missing_input``.
+        A run whose Episode the previous run still holds is deferred, not
+        failed: the Job retries it (``ScaleEvaluationDeferred``, #110).
         """
-        from app.scale.service import ScaleOrchestrationError, run_scale_evaluation
+        from app.scale.service import (
+            ScaleEvaluationDeferred,
+            ScaleOrchestrationError,
+            evaluation_job_context,
+            run_scale_evaluation,
+        )
 
         evaluation_run_id = str(job.payload.get("evaluation_run_id") or "")
-        if not evaluation_run_id:
+        try:
+            if not evaluation_run_id:
+                raise ScaleOrchestrationError("missing_input", "缺少 evaluation_run_id")
+            context = evaluation_job_context(job.context, job.payload)
+        except ScaleOrchestrationError as exc:
             jobs.fail(
                 job.context,
                 job.id,
                 self.owner,
-                code="missing_input",
-                detail="缺少 evaluation_run_id",
+                code=exc.code,
+                detail=str(exc),
                 retryable=False,
             )
             return
         jobs.mark_running(job.context, job.id, self.owner)
         try:
-            with tenant_session(job.context) as session:
-                run_scale_evaluation(session, job.context, evaluation_run_id)
+            with tenant_session(context) as session:
+                run_scale_evaluation(session, context, evaluation_run_id)
             jobs.succeed(job.context, job.id, self.owner)
+        except ScaleEvaluationDeferred as exc:
+            # Another run holds the Episode (#110): the run is untouched and
+            # waits for it, it is not failed.
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code=exc.code,
+                detail=str(exc),
+                retryable=True,
+                retry_after_seconds=exc.retry_after_seconds,
+            )
         except ScaleOrchestrationError as exc:
             jobs.fail(
                 job.context,
@@ -1763,6 +1851,139 @@ class WorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
+    def _scale_advice_expire(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_advice_expire`` deadline job (spec
+        §3.5, #97). Like ``_scale_evaluate`` it only delegates to
+        ``app.scale`` and takes the thread's Meta mode from the payload;
+        ``expire_advice_thread`` rechecks the deadline under the thread's row
+        lock, so a rerun after a crash changes nothing twice.
+        """
+        from app.scale.advice import (
+            AdviceLifecycleError,
+            advice_expire_job_context,
+            expire_advice_thread,
+        )
+
+        thread_id = str(job.payload.get("thread_id") or "")
+        try:
+            if not thread_id:
+                raise AdviceLifecycleError("missing_input", "缺少 thread_id")
+            context = advice_expire_job_context(job.context, job.payload)
+        except AdviceLifecycleError as exc:
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code=exc.code,
+                detail=str(exc),
+                retryable=False,
+            )
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            with tenant_session(context) as session:
+                expire_advice_thread(session, context, thread_id)
+            jobs.succeed(job.context, job.id, self.owner)
+        except AdviceLifecycleError as exc:
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code=exc.code,
+                detail=str(exc),
+                retryable=False,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code="scale_advice_expire_failed",
+                detail=str(exc),
+                retryable=False,
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _scale_collect_sources(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_collect_sources`` job (#109, #101
+        S3). Like ``_scale_evaluate`` it only delegates to ``app.scale``: the
+        collector reads the observation batch's stored pages and parses them
+        with ``app.meta``'s pure parsers; it resolves no adapter (ADR 0017).
+        The Meta mode comes from the payload. Each Episode's manifest
+        commits on its own and is found again by its collection key, so a
+        retry after a crash or a partial failure writes nothing twice.
+        """
+        from app.scale.collector import (
+            SourceCollectionError,
+            SourceCollectionFailed,
+            collection_job_input,
+            run_source_collection,
+        )
+
+        try:
+            request = collection_job_input(job.context, job.payload)
+        except SourceCollectionError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_source_collection(
+                request.context,
+                connection_id=request.connection_id,
+                target_date=request.target_date,
+                run_generation=request.run_generation,
+            )
+            jobs.succeed(job.context, job.id, self.owner)
+        except SourceCollectionFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_collect_sources_failed", detail=str(exc), retryable=True,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_collect_sources_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _scale_target_change(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_target_change`` job (#113, #101
+        S7). Like ``_scale_evaluate`` it only delegates to ``app.scale``:
+        the handler supersedes inapplicable Advice and requests
+        ``target_change`` runs, Episode by Episode, each in its own
+        transaction, and finds what it already did on a retry.
+        """
+        from app.scale.target_change import (
+            TargetChangeError,
+            TargetChangeFailed,
+            run_target_change,
+            target_change_job_input,
+        )
+
+        try:
+            target_event_id = target_change_job_input(job.payload)
+        except TargetChangeError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_target_change(job.context, target_event_id)
+            jobs.succeed(job.context, job.id, self.owner)
+        except TargetChangeError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+        except TargetChangeFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_target_change_failed", detail=str(exc), retryable=True,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_target_change_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
     def _scale_export(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_export`` job (#55).
 
@@ -1770,7 +1991,8 @@ class WorkerRuntime:
         is the one that has to run Scale exports. Like ``_scale_evaluate``
         it only delegates to ``app.scale``: ``run_scale_export`` never sees
         this runtime's ``meta_client``/``launch_adapter``, and Scale makes
-        no Meta write. ``run_scale_export`` settles the Operation itself,
+        no Meta write (ADR 0017 sets the conditions under which this shared
+        Worker may run it). ``run_scale_export`` settles the Operation itself,
         in one transaction under the export's row lock, so a rerun after a
         crash (``crash=requeue`` in ``app.platform.job_policy``) finds the
         export completed and only closes the Job.
@@ -1816,6 +2038,7 @@ class WorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _meta_schedule_tick(self, job: jobs.ClaimedJob) -> None:
         schedule_id = str(job.payload.get("schedule_id") or "")
         if not schedule_id:
@@ -1842,6 +2065,203 @@ class WorkerRuntime:
                 retryable=True,
             )
 
+    async def _dispatch_observation_ticks_if_due(self) -> None:
+        """Turn due Meta observation schedules into tick Jobs, at most once a
+        minute per process (#107). A failure is reported and retried on the
+        next interval; it never stops this lane from claiming Jobs."""
+        from .meta import observation_sync
+
+        now = time.monotonic()
+        if self._next_observation_dispatch_at is not None and now < self._next_observation_dispatch_at:
+            return
+        # Set before awaiting: the other main-lane tasks of this process see
+        # it and skip, so one process dispatches once per interval.
+        self._next_observation_dispatch_at = now + observation_sync.DISPATCH_INTERVAL_SECONDS
+        try:
+            await asyncio.to_thread(observation_sync.dispatch_due_observation_ticks)
+        except Exception as exc:  # noqa: BLE001 -- the next interval retries
+            from .platform.ops_alerts import AlertCategory, Severity, emit
+
+            emit(
+                Severity.WARNING,
+                AlertCategory.WORKER_LIFECYCLE,
+                "Meta observation dispatch failed; retrying next interval",
+                details={"owner": self.owner, "error": type(exc).__name__},
+            )
+
+    async def _dispatch_storage_usage_if_due(self) -> None:
+        """Enqueue today's ``storage_bytes`` Job for each Workspace still owed
+        one, at most once an interval per process (#148). A failure is
+        reported and retried on the next interval; it never stops this lane
+        from claiming Jobs."""
+        from .entitlements import storage_usage
+
+        now = time.monotonic()
+        if now < self._next_storage_usage_dispatch_at:
+            return
+        # Set before awaiting: the other main-lane tasks of this process see
+        # it and skip, so one process dispatches once per interval.
+        self._next_storage_usage_dispatch_at = now + storage_usage.DISPATCH_INTERVAL_SECONDS
+        try:
+            await asyncio.to_thread(storage_usage.dispatch_storage_usage_jobs)
+        except Exception as exc:  # noqa: BLE001 -- the next interval retries
+            from .platform.ops_alerts import AlertCategory, Severity, emit
+
+            emit(
+                Severity.WARNING,
+                AlertCategory.WORKER_LIFECYCLE,
+                "Storage usage dispatch failed; retrying next interval",
+                details={"owner": self.owner, "error": type(exc).__name__},
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _usage_storage_bytes(self, job: jobs.ClaimedJob) -> None:
+        """Record the claimed Workspace's ``storage_bytes`` for today (#148).
+
+        Sums the Workspace's byte columns and appends one Usage fact in the
+        claimed Job's signed TenantContext, under RLS, in one transaction. A
+        replay on the same UTC day writes a counted duplicate, never a second
+        row; a failure is retried, and a retry on a later day records that
+        day instead.
+        """
+        from .entitlements.storage_usage import record_storage_bytes
+
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            with tenant_session(job.context) as session:
+                record_storage_bytes(session, job.context)
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="usage_storage_bytes_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+            return
+        jobs.succeed(job.context, job.id, self.owner)
+
+    @runs_as(WORKER_ROLE)
+    def _meta_observation_tick(self, job: jobs.ClaimedJob) -> None:
+        """One due firing of a connection's observation schedules (#107).
+
+        The Meta mode comes from the payload: the claimed context names
+        none, and RLS shows Meta rows only to a context that does. The
+        schedules are re-checked under their row lock, so a replayed tick
+        changes nothing.
+        """
+        from .meta.observation_sync import (
+            ObservationSyncError,
+            observation_job_context,
+            parse_fire_at,
+            run_observation_tick,
+        )
+
+        try:
+            context = observation_job_context(job.context, job.payload)
+            connection_id = str(job.payload.get("connection_id") or "")
+            if not connection_id:
+                raise ObservationSyncError("missing_input", "缺少 connection_id")
+            fire_at = parse_fire_at(str(job.payload.get("fire_at") or ""))
+        except (ObservationSyncError, ValueError) as exc:
+            jobs.fail(job.context, job.id, self.owner, code="missing_input", detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            with tenant_session(context) as session:
+                run_observation_tick(session, context, connection_id=connection_id, fire_at=fire_at)
+            jobs.succeed(job.context, job.id, self.owner)
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="meta_observation_tick_failed", detail=str(exc), retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _meta_observation_sync(self, job: jobs.ClaimedJob) -> None:
+        """Run one connection's sync runs for one target day to a terminal
+        state (#107). Reads go through the mode's read adapter -- the sandbox
+        adapter, or for ``internal_validation`` the GET-only Graph API reader
+        (#112) -- resolved per transaction and never held by this runtime
+        (ADR 0017). Runs resume from their last committed page; on the Job's
+        last attempt the runs that still fail are marked ``failed``.
+
+        Meta's rate limits defer the Job instead (#112): it waits the
+        back-off in ``retry_wait`` without spending an attempt, and resumes
+        every run from its checkpoint. A refused credential fails the runs
+        at once, without retries.
+
+        Once every run is terminal -- all succeeded, or the last attempt
+        failed the rest -- Scale's collection of the batch is enqueued
+        (#109, #101 S3) before the Job is settled: a failed batch becomes a
+        blocked manifest, not a silent gap. The collection key names the
+        batch, so a rerun of this Job names the same collection Job."""
+        from datetime import date
+
+        from .meta.observation_sync import (
+            ObservationBatchDeferred,
+            ObservationBatchFailed,
+            ObservationLeaseLost,
+            ObservationSyncError,
+            observation_job_context,
+            run_observation_sync,
+        )
+
+        try:
+            context = observation_job_context(job.context, job.payload)
+            connection_id = str(job.payload.get("connection_id") or "")
+            if not connection_id:
+                raise ObservationSyncError("missing_input", "缺少 connection_id")
+            target_date = date.fromisoformat(str(job.payload.get("target_date") or ""))
+            run_generation = int(job.payload.get("run_generation") or 1)
+        except (ObservationSyncError, ValueError, TypeError) as exc:
+            jobs.fail(job.context, job.id, self.owner, code="missing_input", detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_observation_sync(
+                context,
+                connection_id=connection_id,
+                target_date=target_date,
+                run_generation=run_generation,
+                final_attempt=job.attempt >= job.max_attempts,
+                heartbeat=lambda: jobs.heartbeat(job.context, job.id, self.owner),
+            )
+            self._enqueue_source_collection(context, connection_id, target_date, run_generation)
+            jobs.succeed(job.context, job.id, self.owner)
+        except ObservationLeaseLost:
+            return  # the Job is no longer ours to settle
+        except ObservationBatchDeferred as exc:
+            jobs.defer(
+                job.context, job.id, self.owner,
+                code="meta_read_rate_limited", detail=str(exc), delay_seconds=exc.retry_after,
+            )
+        except ObservationBatchFailed as exc:
+            detail = str(exc)
+            if exc.final:
+                try:
+                    self._enqueue_source_collection(context, connection_id, target_date, run_generation)
+                except Exception as enqueue_error:  # noqa: BLE001 -- the batch's failure is still recorded
+                    detail = f"{detail}; collection not enqueued: {type(enqueue_error).__name__}"
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="meta_observation_sync_failed", detail=detail, retryable=not exc.final,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="meta_observation_sync_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @staticmethod
+    def _enqueue_source_collection(context: TenantContext, connection_id: str, target_date, run_generation: int) -> None:
+        """Scale's collection of a finished batch (#109); nothing when no
+        Enrollment on the connection could use it."""
+        from .scale.collector import enqueue_source_collection
+
+        with tenant_session(context) as session:
+            enqueue_source_collection(
+                session, context, connection_id=connection_id, target_date=target_date, run_generation=run_generation,
+            )
+
+    @runs_as(WORKER_ROLE)
     async def _launch_canary(self, job: jobs.ClaimedJob) -> None:
         operation_id = str(job.payload.get("operation_id") or "")
         if not operation_id:
@@ -1880,6 +2300,7 @@ class WorkerRuntime:
             raise ValueError("missing or invalid meta_mode")
         return replace(job.context, meta_mode=mode)
 
+    @runs_as(WORKER_ROLE)
     def _launch_provisioning(self, job: jobs.ClaimedJob) -> None:
         operation_id = str(job.payload.get("operation_id") or "")
         provisioning_id = str(job.payload.get("provisioning_id") or "")
@@ -1926,6 +2347,7 @@ class WorkerRuntime:
                         reason="all PAUSED objects provisioned and verified",
                         actor=context.executor,
                         result_ref=OperationResultRef("launch_provisioning", provisioning_id),
+                        meta_mode=context.meta_mode,
                     )
             jobs.succeed(job.context, job.id, self.owner)
         except ProvisioningUncertain as exc:
@@ -1980,6 +2402,7 @@ class WorkerRuntime:
                     transition_operation(
                         session, operation_id, OperationState.FAILED,
                         reason=detail[:500], actor=context.executor,
+                        meta_mode=context.meta_mode,
                     )
         finally:
             jobs.fail(
@@ -1987,6 +2410,7 @@ class WorkerRuntime:
                 code="launch_provisioning_failed", detail=detail, retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _launch_recovery(self, job: jobs.ClaimedJob) -> None:
         reconciliation_id = str(job.payload.get("reconciliation_id") or "")
         if not reconciliation_id:
@@ -2014,6 +2438,7 @@ class WorkerRuntime:
                 code="launch_recovery_failed", detail=str(exc), retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     async def _meta_read_ingestion(self, job: jobs.ClaimedJob) -> None:
         ingestion_id = str(job.payload.get("ingestion_id") or "")
         if not ingestion_id:
@@ -2069,6 +2494,7 @@ class WorkerRuntime:
             except asyncio.CancelledError:
                 pass
 
+    @runs_as(WORKER_ROLE)
     async def _generate_asset(self, job: jobs.ClaimedJob) -> None:
         # ---- dispatch fence ----
         # Jobs with execution_contract_version >= 1 go through the
@@ -2281,6 +2707,71 @@ def _warn_if_onboarding_delivery_unconfigured(base_url: str, service_token: str)
     )
 
 
+# ADR 0017: this Worker runs Scale handlers (`scale_evaluate`,
+# `scale_advice_expire`, `scale_collect_sources`, `scale_target_change`, `scale_export`), so the process must hold no Meta
+# write capability. Every concrete Meta write
+# client in the codebase is listed here; each refuses construction without the
+# write configuration (`config.meta_write_ready()`, which needs a non-empty
+# `META_WRITE_ACCESS_TOKEN`). `tests/test_shared_worker_meta_write_tripwire.py`
+# fails when a write client appears that this tuple does not list.
+_META_WRITE_CLIENTS: tuple[type, ...] = (HttpMetaWriteAdapter,)
+# An object whose class has one of these methods is a Meta write port:
+# `MetaWritePort.ensure_step` (Launch canary) or `MetaAdapterPort.ensure_object`
+# (the Launch provisioning saga's adapter).
+_META_WRITE_PORT_METHODS = ("ensure_step", "ensure_object")
+
+
+class MetaWriteCapabilityError(RuntimeError):
+    """The Worker that runs Scale handlers could write to Meta (ADR 0017)."""
+
+
+def meta_write_capability_findings(runtime: WorkerRuntime) -> list[str]:
+    """Name every way this Worker process could write to Meta (ADR 0017).
+
+    Three conditions, each checked against the running process rather than
+    the deployment contract: no write Token in the environment or config, no
+    write port held by the composed runtime, and no write client that can be
+    constructed under this process's configuration. That last check is also
+    the Launch dispatch condition: `launch_canary` builds the write client
+    itself when no port is injected, so it reaches Meta only if
+    `HttpMetaWriteAdapter()` succeeds. The provisioning and recovery sagas use
+    the sandbox adapter only. Findings name the condition, never a value.
+    """
+    findings: list[str] = []
+    if os.environ.get("META_WRITE_ACCESS_TOKEN", "").strip() or config.META_WRITE_ACCESS_TOKEN:
+        findings.append("meta_write_access_token_set")
+    for name, value in sorted(vars(runtime).items()):
+        if value is not None and any(
+            inspect.getattr_static(type(value), method, None) is not None
+            for method in _META_WRITE_PORT_METHODS
+        ):
+            findings.append(f"meta_write_port_held:{name}")
+    for client in _META_WRITE_CLIENTS:
+        try:
+            client()
+        except MetaWriteError:
+            continue
+        findings.append(f"meta_write_client_constructible:{client.__name__}")
+    return findings
+
+
+def assert_no_meta_write_capability(runtime: WorkerRuntime) -> None:
+    """Refuse to run Scale handlers in a Worker that could write to Meta.
+
+    ADR 0017 lets Scale share this Worker only while the process has no Meta
+    write capability; once it has one, the Scale Worker must be split out
+    first. Failing at startup keeps a misconfigured process from claiming any
+    Job.
+    """
+    findings = meta_write_capability_findings(runtime)
+    if findings:
+        raise MetaWriteCapabilityError(
+            "this Worker runs Scale handlers and must have no Meta write capability "
+            "(ADR 0017); split out the Scale Worker before enabling Meta writes: "
+            + ", ".join(findings)
+        )
+
+
 async def _main(once: bool) -> None:
     assert_runtime_role("marketai_domain_worker")
     # Unconditional: production Worker contracts deny `DELEGATED_JWKS_URL`, so
@@ -2289,13 +2780,14 @@ async def _main(once: bool) -> None:
         config.CONTROL_PLANE_INTERNAL_BASE_URL, config.DOMAIN_TO_CONTROL_PLANE_SYNC_TOKEN
     )
     runtime = WorkerRuntime()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, runtime._begin_drain)
-        except NotImplementedError:  # pragma: no cover - Windows
-            pass
     try:
+        assert_no_meta_write_capability(runtime)
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, runtime._begin_drain)
+            except NotImplementedError:  # pragma: no cover - Windows
+                pass
         if once:
             await runtime.run_once()
         else:

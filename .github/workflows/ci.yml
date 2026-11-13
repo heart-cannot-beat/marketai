@@ -335,6 +335,17 @@ jobs:
             fi
           done
 
+      # SQLite has no roles: the grant guard in the SQLite suite (#59) checks
+      # every API and Worker write against the matrix that
+      # tests/support/grant_matrix.py evaluates from the role file. This
+      # proves the evaluation equals the ACLs a release leaves. It runs before
+      # any step that downgrades and upgrades a migration, whose own GRANTs
+      # are not the role file's.
+      - name: The grant guard's matrix is the one a release leaves
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_grant_matrix_pg -v
+
       - name: Row Level Security holds for every runtime role
         env:
           DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
@@ -367,6 +378,132 @@ jobs:
           DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_postgres_architecture -v
+
+      # #22: the Worker role lists reconciliation candidates through the
+      # worker-only functions and settles every legacy command's Operation
+      # under FORCE RLS; other roles cannot execute the functions.
+      - name: Idle reconcilers settle Operations under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_legacy_operations_pg -v
+
+      # #91 and #94: platform Meta bootstrap and credential revocation as the
+      # API role. The platform Workspace is created and a credential's owner
+      # found only through API-only functions; customer Workspaces are never
+      # created or promoted, and the API still cannot read ciphertext.
+      - name: Platform Meta bootstrap and revocation hold under the real API role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_meta_platform_api_pg -v
+
+      # #107 (#101 S1): a sandbox daily contract made through the API gets a
+      # schedule; the Worker alone dispatches it through its worker-only
+      # function, runs the tick and the batch, and ends with a current
+      # attestation. Two dispatchers make one tick, a tick rejected as
+      # authorization_epoch_stale gets a new one under the new epoch instead of
+      # stalling the schedule (#119), a SIGKILLed Worker resumes at its next
+      # page, and the negatives (API cannot dispatch, another Workspace reads
+      # nothing, retired connection, controlled_mock fault).
+      - name: Scheduled Meta observation sync runs under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_meta_observation_sync_pg -v
+
+      # #108 (#101 S2): production code, as the API role, builds a sandbox
+      # connection's Scale contract set (daily, exact window, delivery
+      # configuration; no breakdown family yet) and a DeliveryTarget on it;
+      # the Worker alone then reads all five query instances in one tick and
+      # one batch and attests each. A controlled_mock fault fails one instance
+      # while the others finish; another Workspace or a Member can neither
+      # establish nor read the set.
+      - name: Scale read contracts run every query instance under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_meta_scale_observation_sync_pg -v
+
+      # #109 (#101 S3): once a connection's batch is terminal the Worker runs
+      # scale_collect_sources, which writes one immutable source manifest per
+      # active Episode and moves its readiness projection -- complete with its
+      # source records, or blocked (an Episode in another currency) with no
+      # source record, snapshot, run or Evaluation. A replay finds the same
+      # manifest; a controlled_mock connection reads only its own runs, the
+      # sandbox context sees only sandbox pages, and Workspace B collects
+      # nothing of A. A batch the claim function rejects for a stale epoch
+      # has its runs and Operations failed by the next tick.
+      - name: Scale source collection runs under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_source_collection_pg -v
+
+      # #127: the release published the Beta default ScalePolicyVersion. The
+      # row equals the code constant column for column; the API and the
+      # Worker select it for customer_sandbox and internal_validation and
+      # nothing for controlled_mock; the runtime roles hold exactly the role
+      # file's privileges on scale_policy_versions; running the migration
+      # again adds no row; downgrade keeps a version a run names and fails
+      # rather than trust an RLS-filtered answer.
+      - name: The Beta default ScalePolicyVersion is published by the release
+        env:
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_platform_policy_pg -v
+
+      # #101's acceptance (#110, S4): a customer_sandbox Enrollment activated
+      # through the API (candidate, draft, preview, activate), then fourteen
+      # days with the slot set into the past and only the Worker running.
+      # Under the Beta default Policy the migrations published (#127), each
+      # day's complete manifest requests its live run and enqueues
+      # scale_evaluate in the same transaction; the API reads warming on days
+      # 1-13 and monitorable from day 14, with the Episode activation opened.
+      # Replaying the tick, batch, collection and evaluation Jobs adds
+      # nothing; a Worker killed after Phase C retries to the recorded
+      # outcome; a blocked day gets no run; overlapping days wait instead of
+      # failing; a paused Enrollment gets no manifest or run; Workspace B and
+      # the controlled_mock context read nothing.
+      - name: Live Scale evaluation runs end to end under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_live_evaluation_pg -v
+
+      # #113 (#101 S7) on the same fixture: a complete manifest older than
+      # the Episode's latest gets a backfill run the Worker evaluates without
+      # taking the Episode's phase or moving the projection the API reads.
+      # A Member's Target command is refused and enqueues nothing; the
+      # Owner's publish and withdraw enqueue scale_target_change in the API's
+      # transaction, and the Worker supersedes the Advice formed under the
+      # previous Target (citing the event, no successor) and requests a
+      # target_change run that wins the projection. Replays add nothing, and
+      # Workspace B's Target reads nothing of A.
+      - name: Target-change re-evaluation and backfill hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_target_change_pg -v
 
       # SQLite cannot see a missing grant (#284): every competitor write
       # command runs here as the role that serves it in production.
@@ -463,9 +600,12 @@ jobs:
       # execution mode with Mock out of the total. UsageRecorder.record_many
       # writes as the Worker (INSERT only) and the API; a repeated key is a
       # counted duplicate, never an error. A row for another Workspace is
-      # refused by RLS; UPDATE and DELETE by the append-only trigger. Then the
-      # privilege matrix, and the migration's downgrade and upgrade again. The
-      # tests remove their own Workspaces and rows.
+      # refused by RLS; UPDATE and DELETE by the append-only trigger. The CHECK
+      # constraints (#145): each refuses its bad row as both roles; rows every
+      # writer wrote before them pass VALIDATE; a bad row fails VALIDATE and
+      # rolls the revision back. Then the privilege matrix, and the
+      # migrations' downgrade and upgrade again. The tests remove their own
+      # Workspaces and rows.
       - name: Usage writes and reads hold under the real roles
         env:
           MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
@@ -473,6 +613,26 @@ jobs:
           DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_usage_pg -v
+
+      # Daily storage_bytes (#148): only the Worker may execute
+      # marketai_storage_usage_workspaces_v1 (SECURITY DEFINER, search_path='',
+      # ids and epochs only). The deployed WorkerRuntime lists the active
+      # Workspaces through it and enqueues one Job each in a signed context;
+      # each Job sums its own Workspace's byte columns under RLS (a blob two
+      # rows name counts once) and appends one gauge row a day. A second pass
+      # adds nothing; Workspace A's Job never sees B's rows, even under the
+      # same key; a Job rejected for a stale epoch is dispatched again under
+      # the new one; GET /api/v1/usage returns the latest value. Then the
+      # migration's downgrade and upgrade again. The tests cancel the Jobs
+      # their dispatch opened and remove their own usage rows.
+      - name: Daily storage_bytes Usage holds under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_usage_storage_bytes_pg -v
 
       # Spend guardrail previews (#386): a preview is a stored row the API
       # role confirms once, after a restart too; another Workspace can neither
@@ -487,6 +647,22 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_spend_guardrail_preview_pg -v
 
+      # #126: provisioning creates a new Workspace's guardrail at the Beta
+      # defaults (5 / 20 / 100 / 10) in its budget currency and never rewrites
+      # an existing one -- Owner-changed or provisioned at 0 before. A Member
+      # reads but cannot preview or confirm, another Workspace can neither read
+      # nor change it, a raise above the platform maximum changes nothing; the
+      # function keeps SECURITY DEFINER, search_path='' and its ACL, and the
+      # migration's downgrade and upgrade again.
+      - name: Provisioned spend guardrail defaults hold under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+          DOMAIN_READONLY_DATABASE_URL: postgresql+psycopg://marketai_domain_readonly:ci_domain_readonly@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_spend_guardrail_provisioning_pg -v
+
       # Scale Targets (#398): publishing into a context with an active Target
       # replaces it as the API role, under RLS and the partial unique index,
       # without rewriting the old Target or its events. A retry returns the
@@ -498,6 +674,52 @@ jobs:
           DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
           DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
         run: python -m unittest tests.test_scale_targets_pg -v
+
+      # Scale Episode rollover (#92): an evaluation that sees the delivery
+      # configuration change closes the Episode and opens the next one as the
+      # Worker role, under RLS, in one transaction with the Enrollment update,
+      # the new baseline delivery source and the closure event. Another
+      # Workspace or Meta mode changes nothing. Then the privilege matrix of
+      # scale_episodes, and the migration: below it the rollover is refused
+      # and leaves the run requested; after it the same run rolls over.
+      - name: Scale Episode rollover holds under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_episode_rollover_pg -v
+
+      # Scale Jobs on the deployed Worker (#96, #97): a queued scale_evaluate
+      # is claimed and runs Phase A, B and C to evaluated as the Worker role,
+      # each phase's transaction bound to the Workspace and the Meta mode the
+      # payload names; a queued scale_advice_expire expires its thread. A Job
+      # without a mode fails as missing_input, another Workspace or mode
+      # changes nothing, and a run stranded in snapshot_sealed by an unbound
+      # phase commit completes when run again.
+      - name: Scale evaluation and Advice expiry Jobs run under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_evaluate_worker_pg -v
+
+      # Advice expiry as a delayed Job (#111): Phase C schedules each active
+      # thread's scale_advice_expire Job with next_attempt_at at its freshness
+      # deadline, in the transaction that writes the thread. As the Worker
+      # role, the unchanged claim function leaves a Job that is not due
+      # unleased and claims the Jobs queued after it; a due Job expires the
+      # thread; a later evaluation schedules a new key and the old Job changes
+      # nothing. A crash before Phase C's commit leaves neither. A stale
+      # authorization epoch rejects the delayed Job, and the connection's next
+      # scale_collect_sources Job sweeps the overdue thread and expires it, as
+      # it does after a Job ran on a lagging Worker clock. Another Workspace,
+      # mode or connection sees and sweeps nothing.
+      - name: Scale Advice expiry runs as a delayed Job under the real Worker role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_advice_expiry_pg -v
 
       # Localization isolated-output adoption (#46): the API publishes the
       # child AssetVersion, publication, lineage and binding in its own
@@ -512,6 +734,52 @@ jobs:
           DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_localization_adopt_pg -v
+
+      # AssetVersion review drives the market binding (#128): the review a
+      # user records in the Assets area moves the localized child's
+      # MarketAssetBinding in the same API transaction, under RLS -- approval
+      # makes it ready_for_experiment, a superseding rejection clears it, each
+      # appends a binding event and keeps both reviews. An unrelated version,
+      # another Workspace and a request without a verified identity move
+      # nothing. Then the privilege matrix of the two binding tables.
+      - name: AssetVersion review moves the market binding under the real API role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_localization_binding_review_pg -v
+
+      # The DeliveryTarget entry (#129): an Owner and a Member pick an observed
+      # sandbox ad through the API, as the API role under RLS. The pick makes
+      # the DeliveryTarget on the connection's Scale contract set, which the
+      # system executor creates with the picker as initiator; a replay returns
+      # the same target, a mismatched ad answers its reason and writes
+      # nothing, and another Workspace sees none of the ads, cannot name the
+      # connection and cannot pick the first Workspace's Winner.
+      - name: Picking an observed ad makes a DeliveryTarget under the real API role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_scale_observed_ads_pg -v
+
+      # #112 (#101 S6): the platform Workspace's internal_validation connection
+      # gets its Scale contracts through the platform route as the API role,
+      # each with a daily schedule. The Worker alone reads a simulated Graph
+      # API (no network, no real token), decrypting the binding's credentials
+      # per read; a usage reading past the threshold defers the batch Job
+      # without spending an attempt, and it resumes to five attested instances
+      # whose ads #129 lists. A customer Workspace, and the platform
+      # Workspace's own sandbox mode, read none of it.
+      - name: internal_validation reads Meta for the platform Workspace only under the real roles
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_meta_internal_validation_sync_pg -v
 
       # An already-provisioned cluster may still carry the former shared role's
       # persistent BYPASSRLS bit. Prove the release revokes it and the retired

@@ -84,11 +84,13 @@ export function ManualFactSetFactList({
 }
 
 /** Columns read by name; #26 settles the value fields of each fact type, so
- * every other field is shown as it is under "Other values". */
+ * every other field is shown as it is under "Other values". Each row names
+ * its Offer entry (#54); a set published before #54 has rows without one. */
 const LISTED_FIELDS = new Set([
   'fact_id',
   'fact_type',
   'country_code',
+  'offer_entry_id',
   'amount',
   'currency',
   'valid_from',
@@ -214,6 +216,7 @@ function FactList({
                 )}
                 <th scope="col">{t('fact-list.columns.fact-type')}</th>
                 <th scope="col">{t('fact-list.columns.market')}</th>
+                <th scope="col">{t('fact-list.columns.offer')}</th>
                 <th scope="col">{t('fact-list.columns.amount')}</th>
                 <th scope="col">{t('fact-list.columns.valid')}</th>
                 <th scope="col">{t('fact-list.columns.other')}</th>
@@ -267,6 +270,9 @@ function FactList({
                       {text(fact.fact_type) ?? notSet}
                     </td>
                     <td>{text(fact.country_code) ?? notSet}</td>
+                    <td className="font-mono text-xs break-all">
+                      {text(fact.offer_entry_id) ?? notSet}
+                    </td>
                     <td className="whitespace-nowrap">{amount || notSet}</td>
                     <td className="whitespace-nowrap">
                       {validFrom || validTo

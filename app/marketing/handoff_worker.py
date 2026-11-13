@@ -13,6 +13,7 @@ from app.platform.operations import get_operation, transition_operation, Operati
 from . import export_text
 from .workflow import scoped, get_round, handoff_quality_current
 from .workflow_models import MarketingHandoffRecord as Handoff
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 
 def safe_cell(value):
@@ -63,6 +64,7 @@ async def package_bytes(manifest, blob_store):
     return output.getvalue()
 
 
+@runs_as(WORKER_ROLE)
 async def execute_export(ctx, handoff_id, blob_store):
     with tenant_session(ctx) as session:
         rows = scoped(session, ctx, Handoff, id=handoff_id)

@@ -18,6 +18,7 @@ from app.platform.operations import create_operation, transition_operation, Oper
 from .contracts import Document
 from .service import MarketingError, creative_intent, digest, ensure_active, get_project
 from .workflow_models import MarketingImageEditRecord as Edit
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 
 class ImageCrop(Document):
@@ -104,6 +105,7 @@ def load_edit(session, ctx, edit_id, *, lock=False):
     return session.scalar(query.with_for_update() if lock else query)
 
 
+@runs_as(WORKER_ROLE)
 async def execute_edit(ctx, edit_id, blob_store):
     from . import workflow
     with tenant_session(ctx) as session:
@@ -167,6 +169,7 @@ async def execute_edit(ctx, edit_id, blob_store):
         raise
 
 
+@runs_as(WORKER_ROLE)
 def fail_edit(ctx, edit_id):
     with tenant_session(ctx) as session:
         edit = load_edit(session, ctx, edit_id, lock=True)

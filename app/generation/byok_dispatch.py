@@ -75,6 +75,7 @@ from app.platform.blob_store import BlobStore
 from app.platform.tenancy import TenantContext
 from app.providers.adapter import ExternalCallAdapter
 from app.providers.dispatch import CoordinatedCallResult, ExternalCallCoordinator
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,7 @@ class _PreparedCall:
     secret: bytes
 
 
+@runs_as(WORKER_ROLE)
 async def handle_run_item_byok(
     coordinator: ExternalCallCoordinator,
     ctx: TenantContext,

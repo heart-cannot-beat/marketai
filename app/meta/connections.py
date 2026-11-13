@@ -135,12 +135,14 @@ def _get_connection(
 def _validate_credential_version(
     session: Session, *, workspace_id: str, credential_version_id: str, expected_key: str,
 ) -> None:
+    # Only the non-secret columns: the API role may not read the ciphertext
+    # (encrypted_secret, encrypted_data_key, nonce) on PostgreSQL (#94).
     cred = session.execute(
-        select(CredentialVersionRecord).where(
+        select(CredentialVersionRecord.credential_key, CredentialVersionRecord.state).where(
             CredentialVersionRecord.id == credential_version_id,
             CredentialVersionRecord.workspace_id == workspace_id,
         )
-    ).scalar_one_or_none()
+    ).first()
     if cred is None:
         raise ConnectionLifecycleError(
             f"credential version {credential_version_id!r} not found in workspace "
@@ -432,10 +434,12 @@ def retire_connection(
     ``LaunchProvisioningRecord`` rows reference the connection.
 
     ``active -> retiring`` when non-terminal provisionings exist: active
-    bindings are marked ``supersession_required`` and active sync
-    schedules are paused (not deleted). A background reconciler -- outside
-    this service's scope -- transitions ``retiring -> retired`` once every
-    provisioning reaches a terminal state.
+    bindings are marked ``supersession_required``. A background reconciler
+    -- outside this service's scope -- transitions ``retiring -> retired``
+    once every provisioning reaches a terminal state.
+
+    Either way the connection's active sync schedules are paused (not
+    deleted, spec §8.7), so the scheduler stops reading from it (#107).
     """
     connection = _get_connection(session, context=context, connection_id=connection_id)
     _require_owner(context)
@@ -471,20 +475,20 @@ def retire_connection(
             )
             .values(state="supersession_required")
         )
-        session.execute(
-            update(MetaObservationSyncScheduleRecord)
-            .where(
-                MetaObservationSyncScheduleRecord.workspace_id == context.workspace_id,
-                MetaObservationSyncScheduleRecord.meta_mode == context.meta_mode,
-                MetaObservationSyncScheduleRecord.meta_connection_id == connection_id,
-                MetaObservationSyncScheduleRecord.state == "active",
-            )
-            .values(state="paused")
-        )
     else:
         connection.state = "retired"
         connection.retired_at = utcnow()
 
+    session.execute(
+        update(MetaObservationSyncScheduleRecord)
+        .where(
+            MetaObservationSyncScheduleRecord.workspace_id == context.workspace_id,
+            MetaObservationSyncScheduleRecord.meta_mode == context.meta_mode,
+            MetaObservationSyncScheduleRecord.meta_connection_id == connection_id,
+            MetaObservationSyncScheduleRecord.state == "active",
+        )
+        .values(state="paused")
+    )
     connection.updated_at = utcnow()
     session.flush()
     return connection

@@ -12,11 +12,22 @@ export interface DispatcherOpts {
   batchSize?: number; // default 10
   leaseSeconds?: number; // default 120
   maxAttempts?: number; // default 5
+  /**
+   * Claim only this Workspace's records. Unset (the scheduled run) claims
+   * every Workspace's. The claim, lease and settlement are otherwise the same.
+   */
+  teamId?: string;
+  /**
+   * Abort each delivery after this many milliseconds; it then settles as a
+   * retryable network failure. Unset means no limit of our own.
+   */
+  deliveryTimeoutMs?: number;
   /** Injection point for tests — replaces the real HTTP POST. */
   deliverFn?: (
     url: string,
     body: Buffer,
-    token: string
+    token: string,
+    signal?: AbortSignal
   ) => Promise<{ status: number }>;
 }
 
@@ -53,10 +64,12 @@ interface OutboxRow {
 async function defaultDeliverFn(
   url: string,
   body: Buffer,
-  token: string
+  token: string,
+  signal?: AbortSignal
 ): Promise<{ status: number }> {
   const res = await fetch(url, {
     method: 'POST',
+    signal,
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/octet-stream',
@@ -185,6 +198,7 @@ export async function claimAndDispatch(
   const leaseId = crypto.randomUUID();
   const leaseExpiry = new Date(Date.now() + leaseSeconds * 1000);
   const now = new Date();
+  const teamId = opts.teamId ?? null;
 
   const claimed = await prisma.$queryRaw<OutboxRow[]>`
     UPDATE "EntitlementSnapshotOutbox"
@@ -201,6 +215,7 @@ export async function claimAndDispatch(
         OR ("deliveryState" = 'FAILED' AND "nextAttemptAt" <= ${now})
         OR ("deliveryState" = 'DELIVERING' AND "deliveryLeaseExpiresAt" < ${now})
       )
+      AND (${teamId}::text IS NULL OR "teamId" = ${teamId})
       ORDER BY "createdAt" ASC
       LIMIT ${batchSize}
       FOR UPDATE SKIP LOCKED
@@ -254,7 +269,14 @@ export async function claimAndDispatch(
     let status: number;
     let networkError: string | null = null;
     try {
-      const res = await deliver(inboxUrl, envelopeBytes, opts.pushToken);
+      const res = opts.deliveryTimeoutMs
+        ? await deliver(
+            inboxUrl,
+            envelopeBytes,
+            opts.pushToken,
+            AbortSignal.timeout(opts.deliveryTimeoutMs)
+          )
+        : await deliver(inboxUrl, envelopeBytes, opts.pushToken);
       status = res.status;
     } catch (err: unknown) {
       status = -1;

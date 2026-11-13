@@ -35,7 +35,6 @@ not Winner eligibility. That scenario is intentionally omitted here.
 """
 from __future__ import annotations
 
-import itertools
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -107,6 +106,7 @@ from app.localization.fact_sources import ManualFactSet, ManualFactSourceAdapter
 from app.localization.truth import FactPolicy, MarketResolutionCommand, SourceStep, TruthResolutionCommand
 from app.platform.tenancy import TenantContext
 from tests.experiment_governance_fixtures import govern_asset_versions, govern_product_offer_versions
+from tests.support.market_codes import next_market_code as _next_market
 
 CTX = TenantContext(
     workspace_id="ws_winelig",
@@ -131,19 +131,6 @@ PRICE_REGISTRY = {
     "mock-edit": {"mock-edit-1": Decimal("0.05")},
     "mock-translate": {"mock-translate-1": Decimal("0.02")},
 }
-
-_MARKET_COUNTER = itertools.count(0)
-
-
-def _next_market() -> str:
-    """A fresh 2-letter market code (ISO-3166-1-alpha-2 *shape* only --
-    ``app.experiments.service._validate_draft_context`` checks length, not
-    real-country membership). Cycles ``AA``..``ZZ`` so
-    ``MarketPolicyRecord.market_id``'s uniqueness constraint never collides
-    across tests sharing this suite's database."""
-    n = next(_MARKET_COUNTER)
-    return chr(ord("A") + n // 26) + chr(ord("A") + n % 26)
-
 
 # ---------------------------------------------------------------------------
 # Fixture helpers -- the light chain (checks 1-7, 11: no binding needed)

@@ -20,6 +20,7 @@ from .contracts import Document, Text
 from .models import PlanningCallRecord
 from .ai_qc_models import MarketingAIQCRecord
 from .service import MarketingError, ensure_active
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 
 class ResolveCall(Document):
@@ -62,6 +63,7 @@ def admit(session, ctx, call_id, body):
     return op
 
 
+@runs_as(WORKER_ROLE)
 def execute_resolution(ctx, operation_id):
     with tenant_session(ctx) as session:
         op = get_operation(session, operation_id)
@@ -104,6 +106,7 @@ def execute_resolution(ctx, operation_id):
         transition_operation(session, op.id, OperationState.SUCCEEDED, 'closed_without_result', ctx.executor)
 
 
+@runs_as(WORKER_ROLE)
 def fail_resolution(ctx, operation_id):
     """Make an exhausted recovery attempt visible without changing the call."""
     with tenant_session(ctx) as session:

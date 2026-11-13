@@ -1018,6 +1018,20 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: false,
   },
   {
+    operationId: 'create_scale_delivery_target',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/scale/:meta_mode/delivery-targets',
+    fastapiPathTemplate: '/api/v1/scale/{meta_mode}/delivery-targets',
+    pathParams: ['meta_mode'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.create_scale_delivery_target,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 8192,
+    maxResponseBytes: 65536,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: false,
+  },
+  {
     operationId: 'create_scale_enrollment',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/scale/:meta_mode/enrollments',
@@ -2919,6 +2933,24 @@ export const DOMAIN_ALLOWLIST = [
         lifecycle: z.string().optional(),
         cursor: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+      })
+      .strict(),
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 524288,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: false,
+  },
+  {
+    operationId: 'list_scale_observed_ads',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/scale/:meta_mode/observed-ads',
+    fastapiPathTemplate: '/api/v1/scale/{meta_mode}/observed-ads',
+    pathParams: ['meta_mode'],
+    querySchema: z
+      .object({
+        meta_connection_id: z.string().optional(),
       })
       .strict(),
     requestBodyValidator: null,

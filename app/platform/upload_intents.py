@@ -47,6 +47,7 @@ from .blob_store import (
 from .purpose_policies import PURPOSE_POLICIES
 from .tenancy import TenantContext, current_context
 from .workspace_admission import WorkspaceAdmissionReader, WorkspaceNotFoundError
+from .runtime_role import WORKER_ROLE, runs_as
 
 __all__ = [
     "UploadIntentRecord",
@@ -440,6 +441,7 @@ class VerificationOutcome:
     detail: str = ""
 
 
+@runs_as(WORKER_ROLE)
 async def verify_upload_intent(
     context: TenantContext,
     intent_id: str,
@@ -562,6 +564,17 @@ async def verify_upload_intent(
     with session_factory() as session:
         _finalize(session, intent_id, lease_id, committed)
     return VerificationOutcome(kind="finalized", committed=committed)
+
+
+def reject_before_verification(session: Session, intent_id: str, rejection_code: str) -> None:
+    """Reject an intent whose verification Job never ran (#22).
+
+    The same terminal write step 2 makes for a stale authorization epoch,
+    for the reconciler that settles a verification the dispatcher refused.
+    """
+    if rejection_code not in REJECTION_CODES:
+        raise ValueError(f"unknown upload rejection code {rejection_code!r}")
+    _reject_without_lease(session, intent_id, rejection_code)
 
 
 def _reject_without_lease(session: Session, intent_id: str, rejection_code: str) -> None:

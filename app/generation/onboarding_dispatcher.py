@@ -20,6 +20,7 @@ from app.adapters.persistence.database import engine, platform_session, tenant_s
 from app.adapters.persistence.models import utcnow
 from app.generation.models import OnboardingFactOutboxRecord
 from app.platform.tenancy import system_context
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 
 logger = logging.getLogger(__name__)
@@ -158,6 +159,7 @@ def settle_onboarding_fact(
         return result.rowcount == 1
 
 
+@runs_as(WORKER_ROLE)
 async def dispatch_one_onboarding_fact(
     owner: str,
     http_client: httpx.AsyncClient,

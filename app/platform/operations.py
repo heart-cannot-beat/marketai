@@ -116,6 +116,11 @@ NON_TERMINAL_STATES = frozenset(
 #: so :func:`aggregate_operation_from_jobs` records that dispatch as an
 #: explicit ``admitted -> running`` event first rather than inventing a
 #: history in which work completed without starting.
+#:
+#: ``queued`` is the unpriced entry state and reaches ``failed`` directly for
+#: the same reason ``admitted`` does: a legacy command whose Job the
+#: dispatcher rejected under a since-revoked authorization epoch failed
+#: without anything having run (#22, ``app.legacy_operations``).
 VALID_TRANSITIONS: dict[OperationState, set[OperationState]] = {
     OperationState.ADMITTED: {
         OperationState.RUNNING,
@@ -123,7 +128,11 @@ VALID_TRANSITIONS: dict[OperationState, set[OperationState]] = {
         OperationState.FAILED,
         OperationState.UNCERTAIN,
     },
-    OperationState.QUEUED: {OperationState.RUNNING, OperationState.CANCELLED},
+    OperationState.QUEUED: {
+        OperationState.RUNNING,
+        OperationState.CANCELLED,
+        OperationState.FAILED,
+    },
     OperationState.RUNNING: {
         OperationState.SUCCEEDED,
         OperationState.FAILED,
@@ -261,12 +270,25 @@ def transition_operation(
     actor: str,
     *,
     result_ref: OperationResultRef | None = None,
+    meta_mode: str | None = None,
 ) -> OperationRecord:
     """Validate and apply one state transition, appending its history event.
 
     The projection (``operation.state``) and the append-only event log are
     written in the same flush and can never disagree: an invalid transition
     raises :class:`InvalidOperationTransitionError` before either is touched.
+
+    A transition into a terminal state also records the Operation's Usage
+    (``operations`` and ``processing_seconds``, Issue #8) in the same
+    transaction; if that write fails, the transition fails with it. Every
+    caller -- v1 aggregation, legacy commands and the idle-time folds --
+    settles an Operation through here, so this is the one place it is
+    counted.
+
+    ``meta_mode`` is passed by the paths that settle an Operation that ran
+    against Meta (Launch, Launch recovery, Scale export, the Meta
+    observation sync): the Meta mode it ran in decides its Usage bucket
+    (Issue #146). Every other caller leaves it ``None``.
     """
     operation = get_operation(session, operation_id)
     from_state = OperationState(operation.state)
@@ -293,6 +315,13 @@ def transition_operation(
         )
     )
     session.flush()
+    if to_state in TERMINAL_STATES:
+        # Imported here: the entitlements package imports this module.
+        from ..entitlements.operation_usage import record_operation_settled
+
+        record_operation_settled(
+            session, current_context(session), operation, settled_at=now, meta_mode=meta_mode,
+        )
     return operation
 
 

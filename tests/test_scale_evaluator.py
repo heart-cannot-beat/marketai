@@ -278,7 +278,7 @@ class TestEvaluateScaleContract(unittest.TestCase):
     def test_import(self):
         from app.scale.evaluator import evaluate_scale, CURRENT_ALGORITHM_VERSION
         self.assertIsNotNone(evaluate_scale)
-        self.assertEqual(CURRENT_ALGORITHM_VERSION, "beta-v1")
+        self.assertEqual(CURRENT_ALGORITHM_VERSION, "beta-v2")
 
     def test_pure_function_no_io(self):
         """Verify evaluator module has no forbidden imports."""
@@ -530,6 +530,44 @@ class TestEconomicsDecline(unittest.TestCase):
         self.assertEqual(
             result.advice_candidates[0].advice_type.value, "review_offer_or_landing_page"
         )
+
+
+class TestZeroRatioBootstrapDraws(unittest.TestCase):
+    """A resampled week can hold only the baseline days whose ratio is zero
+    even when the whole baseline's is positive. That draw is unavailable
+    (spec §2.4), not a division by zero that fails the evaluation (#110:
+    live sandbox data, where purchases land on some days only)."""
+
+    def _signal(self, result, signal_id):
+        [signal] = [s for s in result.signals if s.signal_id == signal_id]
+        return signal
+
+    def test_baseline_days_without_purchase_value_do_not_divide_by_zero_in_roas(self):
+        from app.scale.evaluator import evaluate_scale
+        baseline_daily = _uniform_week(
+            BASELINE_START, 2000, 200, 1, 20, 0,
+            last_day_override=lambda d: _day(d, 2000, 200, 1, 20, 420),
+        )
+        snapshot = _flat_snapshot(baseline_daily=baseline_daily)
+
+        result = evaluate_scale(snapshot)
+
+        self.assertEqual(evaluate_scale(snapshot), result, "deterministic")
+        self.assertIn(self._signal(result, "roas_worsening").state,
+                      (SignalState.HIT, SignalState.MISS, SignalState.UNAVAILABLE))
+
+    def test_baseline_days_without_spend_do_not_divide_by_zero_in_cpa(self):
+        from app.scale.evaluator import evaluate_scale
+        baseline_daily = _uniform_week(
+            BASELINE_START, 2000, 200, 1, 0, 0,
+            last_day_override=lambda d: _day(d, 2000, 200, 1, 140, 0),
+        )
+        snapshot = _flat_snapshot(baseline_daily=baseline_daily)
+
+        result = evaluate_scale(snapshot)
+
+        self.assertIn(self._signal(result, "cpa_worsening").state,
+                      (SignalState.HIT, SignalState.MISS, SignalState.UNAVAILABLE))
 
 
 class TestDeliveryAnomaly(unittest.TestCase):

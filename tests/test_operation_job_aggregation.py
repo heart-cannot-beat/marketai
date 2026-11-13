@@ -40,6 +40,7 @@ from app.platform.operations import (
     transition_operation,
 )
 from app.platform.tenancy import TenantContext, apply_to_session
+from tests.support.usage_tables import operation_usage_tables
 
 
 def _sqlite_url(path: Path) -> str:
@@ -132,6 +133,8 @@ class AggregationTestCase(unittest.TestCase):
                 OperationRecord.__table__,
                 OperationStateEvent.__table__,
                 JobRecord.__table__,
+                # A terminal fold records the Operation's Usage (#8 S2).
+                *operation_usage_tables(),
             ],
         )
         self.session = Session(bind=self.engine)

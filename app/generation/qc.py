@@ -89,6 +89,7 @@ from app.platform.blob_store import BlobStore, CommittedBlobRef
 from app.platform.tenancy import TenantContext
 from app.providers.llm_registry import MAX_IMAGE_BYTES
 from app.providers.llm_types import LlmImage, canonical_digest
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 logger = logging.getLogger(__name__)
 
@@ -811,6 +812,7 @@ async def _generated_image(prepared: _Prepared, ctx: TenantContext, blob_store: 
     raise failure
 
 
+@runs_as(WORKER_ROLE)
 async def run_quality_check(
     ctx: TenantContext,
     *,
@@ -950,6 +952,7 @@ async def run_quality_check(
     )
 
 
+@runs_as(WORKER_ROLE)
 def record_quality_check_fault(
     ctx: TenantContext,
     *,

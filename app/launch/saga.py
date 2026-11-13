@@ -39,6 +39,7 @@ from .models import (
     LaunchSagaStepAttemptRecord,
     MetaLaunchPreviewRecord,
 )
+from ..platform.runtime_role import WORKER_ROLE, runs_as
 
 
 class ProvisioningError(RuntimeError):
@@ -285,6 +286,7 @@ def _execute_readback(
     return state
 
 
+@runs_as(WORKER_ROLE)
 def execute_provisioning(
     session,
     context: TenantContext,

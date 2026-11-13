@@ -25,12 +25,44 @@ Here, as the roles that run in production:
   ``"0"``; a request with no verified identity gets 401;
 * the API role without a tenant context sees no row.
 
+Slice S2 adds AssetVersion and Operation facts, written as the role that
+runs the domain change:
+
+* ``transition_operation`` into a terminal state counts ``operations`` and
+  ``processing_seconds`` as the API and as the Worker. Reading the
+  Operation's execution mode reads every ``MODE_EVIDENCE`` table, so this
+  also proves both roles may SELECT each of them under RLS; settling again
+  is refused, recording again is a duplicate;
+* ``asset_versions_generated`` and ``generation_items_failed`` are written
+  as both roles, and a repeat is a duplicate;
+* one Workspace's Operations never show in another's ``/usage``.
+
+Slice S3 (#145) adds the CHECK constraints of spec §2.12 (migration
+``zzk145a1b2c3``):
+
+* the four checks are there, validated, and named as ``UsageEventRecord``
+  names them;
+* as the API and as the Worker, each check refuses the row that breaks it,
+  through the statement ``record_many`` sends: ``ON CONFLICT DO NOTHING``
+  skips unique violations only, so a bad row is never a counted duplicate;
+* rows every S1 and S2 writer wrote, as both roles, before the checks
+  existed pass ``VALIDATE``, unchanged; the append-only trigger, its function
+  and the privilege matrix are the same afterwards;
+* a row that breaks a check fails ``VALIDATE``, and the whole revision rolls
+  back: no constraint is left behind ``NOT VALID``.
+
+Issue #146: an Operation that ran against Meta is settled, as the API and as
+the Worker, in a session bound to its Meta mode, which the settling path
+passes on. ``controlled_mock`` counts as ``mock``, out of ``total``;
+``customer_sandbox`` and ``internal_validation`` stay ``not_applicable``.
+
 Then the privilege matrix of ``usage_events`` (the API reads and appends, the
 Worker only appends, Readonly only reads, nobody updates or deletes) and the
 migration's upgrade, downgrade and upgrade again.
 
-Every Workspace a test opens, and its usage rows, are removed afterwards by
-the owner with the append-only trigger disabled for that one transaction.
+Every Workspace a test opens, its usage rows and its Operations, are removed
+afterwards by the owner with the append-only triggers disabled for that one
+transaction.
 
 Run with ``DOMAIN_OWNER_DATABASE_URL``, ``DOMAIN_API_DATABASE_URL``,
 ``DOMAIN_WORKER_DATABASE_URL``, ``MARKETAI_DATABASE_URL`` (the owner) and
@@ -44,6 +76,7 @@ import subprocess
 import sys
 import unittest
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -51,7 +84,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import CheckConstraint, create_engine, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import sessionmaker
@@ -59,11 +92,28 @@ from sqlalchemy.orm import sessionmaker
 from app import config
 from app.adapters.persistence.database import platform_session, tenant_session
 from app.adapters.persistence.models import WorkspaceRecord
-from app.entitlements.usage import UsageFact, UsageRecorder, record_provider_call, usage_semantic_key
+from app.entitlements.operation_usage import record_operation_settled
+from app.entitlements.usage import (
+    METRICS,
+    USAGE_EXECUTION_MODES,
+    UsageFact,
+    UsageRecorder,
+    record_asset_version_generated,
+    record_generation_item_failed,
+    record_provider_call,
+    usage_semantic_key,
+)
 from app.entitlements.usage_models import UsageEventRecord
 from app.library.contracts import ROLE_MEMBER, ROLE_OWNER
 from app.main import app
 from app.platform.http_identity import request_tenant_context
+from app.platform.operations import (
+    InvalidOperationTransitionError,
+    OperationRecord,
+    OperationState,
+    create_operation,
+    transition_operation,
+)
 from app.platform.tenancy import TenantContext
 
 URLS = [os.getenv(key) for key in ("DOMAIN_OWNER_DATABASE_URL", "DOMAIN_API_DATABASE_URL", "DOMAIN_WORKER_DATABASE_URL")]
@@ -80,6 +130,17 @@ DML = ("SELECT", "INSERT", "UPDATE", "DELETE")
 OWNER, API, WORKER = 0, 1, 2
 ROLE_NAMES = {API: "api", WORKER: "worker"}
 METRIC = "provider_calls"
+#: The migration that adds the CHECK constraints (#145), and the head it follows.
+CHECKS_REVISION, CHECKS_DOWN_REVISION = "zzk145a1b2c3", "zzj113a1b2c3"
+CHECK_NAMES = {c.name for c in UsageEventRecord.__table__.constraints if isinstance(c, CheckConstraint)}
+#: (check it breaks, columns that break it). Each bad row breaks exactly one.
+BAD_ROWS = (
+    ("measurement_kind_valid", {"measurement_kind": "counter"}),
+    ("direction_matches_kind", {"direction": "set"}),
+    ("direction_matches_kind", {"measurement_kind": "gauge", "direction": "increase"}),
+    ("quantity_nonnegative", {"quantity": Decimal("-1")}),
+    ("execution_mode_valid", {"execution_mode": "controlled_mock"}),
+)
 
 
 def fact(source_id: str, mode: str = "byok", occurred_at: datetime | None = None) -> UsageFact:
@@ -114,8 +175,16 @@ class UsagePostgresTests(unittest.TestCase):
             return
         with self.owner.begin() as connection:
             connection.execute(text("ALTER TABLE usage_events DISABLE TRIGGER trg_usage_events_immutable"))
+            connection.execute(text(
+                "ALTER TABLE operation_state_events DISABLE TRIGGER operation_state_events_reject_mutation"))
             connection.execute(text("DELETE FROM usage_events WHERE workspace_id = ANY(:ids)"),
                                {"ids": self.workspaces})
+            connection.execute(text("DELETE FROM operation_state_events WHERE workspace_id = ANY(:ids)"),
+                               {"ids": self.workspaces})
+            connection.execute(text("DELETE FROM operation_records WHERE workspace_id = ANY(:ids)"),
+                               {"ids": self.workspaces})
+            connection.execute(text(
+                "ALTER TABLE operation_state_events ENABLE TRIGGER operation_state_events_reject_mutation"))
             connection.execute(text("ALTER TABLE usage_events ENABLE TRIGGER trg_usage_events_immutable"))
             connection.execute(text("DELETE FROM workspaces WHERE id = ANY(:ids)"), {"ids": self.workspaces})
 
@@ -286,6 +355,232 @@ class UsagePostgresTests(unittest.TestCase):
         with self._as(API), patch.object(config, "LOCAL_IDENTITY_ENABLED", False):
             self.assertEqual(self.client.get("/api/v1/usage").status_code, 401)
 
+    # -- Slice S2: Operations and AssetVersions ------------------------------
+
+    def _operation(self, ctx: TenantContext) -> str:
+        """A command the API admits. (The Worker opens Operations only for the
+        scheduled Meta observation sync, which has no API command, #107.)"""
+        with self._as(API), tenant_session(ctx) as session:
+            return create_operation(session, command_type="usage.pg_test", context=ctx).id
+
+    def _move(self, index: int, ctx: TenantContext, operation_id: str, state: OperationState) -> None:
+        with self._as(index), tenant_session(ctx) as session:
+            transition_operation(session, operation_id, state, reason="pg test", actor=ROLE_NAMES[index])
+
+    def _metrics(self, ctx: TenantContext, source_id: str) -> list[tuple]:
+        with self._as(API), tenant_session(ctx) as session:
+            return sorted((r.metric_key, r.execution_mode, r.unit) for r in session.query(UsageEventRecord)
+                          .filter(UsageEventRecord.source_resource_id == source_id))
+
+    def test_settling_an_operation_counts_it_as_the_worker_and_the_api(self):
+        ctx = self._workspace("ws_usage_pg_op", ROLE_OWNER, "owner_o")
+        for index, name in ROLE_NAMES.items():
+            with self.subTest(role=name):
+                operation_id = self._operation(ctx)
+                self._move(index, ctx, operation_id, OperationState.RUNNING)
+                self.assertEqual(self._metrics(ctx, operation_id), [], "running is not terminal")
+                self._move(index, ctx, operation_id, OperationState.SUCCEEDED)
+                self.assertEqual(self._metrics(ctx, operation_id), [
+                    ("operations", "not_applicable", "operation"),
+                    ("processing_seconds", "not_applicable", "second"),
+                ])
+                with self.assertRaises(InvalidOperationTransitionError):
+                    self._move(index, ctx, operation_id, OperationState.FAILED)
+                with self._as(index), tenant_session(ctx) as session:
+                    operation = session.get(OperationRecord, operation_id)
+                    again = record_operation_settled(session, ctx, operation,
+                                                     settled_at=datetime.now(timezone.utc))
+                self.assertEqual((again.written, again.duplicates), (0, 2))
+                self.assertEqual(len(self._metrics(ctx, operation_id)), 2)
+
+    def test_a_meta_operation_counts_in_the_bucket_of_its_meta_mode_as_the_worker_and_the_api(self):
+        """#146: the Meta mode the settling path passes decides the bucket; Mock stays out of ``total``."""
+        ctx = self._workspace("ws_usage_pg_meta", ROLE_OWNER, "owner_m")
+        buckets = {"controlled_mock": "mock", "customer_sandbox": "not_applicable",
+                   "internal_validation": "not_applicable"}
+        for index, name in ROLE_NAMES.items():
+            for meta_mode, bucket in buckets.items():
+                with self.subTest(role=name, meta_mode=meta_mode):
+                    bound = replace(ctx, meta_mode=meta_mode)  # the binding a Meta handler holds
+                    with self._as(API), tenant_session(bound) as session:
+                        operation_id = create_operation(session, command_type="scale_export", context=bound).id
+                    with self._as(index), tenant_session(bound) as session:
+                        transition_operation(session, operation_id, OperationState.RUNNING,
+                                             reason="pg test", actor=name)
+                        transition_operation(session, operation_id, OperationState.SUCCEEDED,
+                                             reason="pg test", actor=name, meta_mode=meta_mode)
+                    self.assertEqual(self._metrics(ctx, operation_id), [
+                        ("operations", bucket, "operation"),
+                        ("processing_seconds", bucket, "second"),
+                    ])
+        member = self._as_role(ctx, ROLE_MEMBER, "member_m")
+        for metric in ("operations", "processing_seconds"):
+            with self.subTest(metric=metric):
+                body = self._usage(member, {"metric_key": metric})
+                if metric == "operations":
+                    self.assertEqual((Decimal(body["by_execution_mode"]["mock"]),
+                                      Decimal(body["by_execution_mode"]["not_applicable"])),
+                                     (Decimal("2"), Decimal("4")))
+                self.assertEqual(Decimal(body["total"]), Decimal(body["by_execution_mode"]["not_applicable"]),
+                                 "Mock is never real use")
+
+    def test_an_uncertain_operation_is_counted_once_when_the_worker_settles_it(self):
+        ctx = self._workspace("ws_usage_pg_unc", ROLE_OWNER, "owner_u")
+        operation_id = self._operation(ctx)
+        for state in (OperationState.RUNNING, OperationState.UNCERTAIN):
+            self._move(WORKER, ctx, operation_id, state)
+        self.assertEqual(self._metrics(ctx, operation_id), [])
+        self._move(WORKER, ctx, operation_id, OperationState.FAILED)
+        self.assertEqual([metric for metric, *_ in self._metrics(ctx, operation_id)],
+                         ["operations", "processing_seconds"])
+
+    def test_asset_version_facts_are_written_as_the_worker_and_the_api(self):
+        ctx = self._workspace("ws_usage_pg_av", ROLE_OWNER, "owner_v")
+        for index, name in ROLE_NAMES.items():
+            with self.subTest(role=name):
+                version = SimpleNamespace(id=f"av_{name}_{uuid.uuid4().hex[:8]}", workspace_id=ctx.workspace_id,
+                                          origin_kind="generation", execution_mode="byok",
+                                          created_at=datetime.now(timezone.utc))
+                item_id = f"ri_{name}_{uuid.uuid4().hex[:8]}"
+                with self._as(index), tenant_session(ctx) as session:
+                    self.assertEqual(record_asset_version_generated(session, ctx, version).written, 1)
+                    self.assertEqual(record_asset_version_generated(session, ctx, version).duplicates, 1)
+                    for _ in range(2):
+                        failed = record_generation_item_failed(
+                            session, ctx, run_item_id=item_id, revision=3, execution_mode="controlled_mock",
+                            occurred_at=datetime.now(timezone.utc))
+                    self.assertEqual((failed.written, failed.duplicates), (0, 1))
+                self.assertEqual(self._metrics(ctx, version.id), [("asset_versions_generated", "byok", "asset_version")])
+                self.assertEqual(self._metrics(ctx, item_id), [("generation_items_failed", "mock", "run_item")])
+
+    def test_one_workspace_s_operations_stay_out_of_another_s_usage(self):
+        alpha = self._workspace("ws_usage_pg_op_a", ROLE_MEMBER, "member_a")
+        beta = self._workspace("ws_usage_pg_op_b", ROLE_MEMBER, "member_b")
+        operation_id = self._operation(alpha)
+        for state in (OperationState.RUNNING, OperationState.CANCELLED):
+            self._move(WORKER, alpha, operation_id, state)
+        for metric in ("operations", "processing_seconds"):
+            with self.subTest(metric=metric):
+                mine = self._usage(alpha, {"metric_key": metric})
+                theirs = self._usage(beta, {"metric_key": metric})
+                self.assertEqual(Decimal(mine["by_execution_mode"]["not_applicable"]) > 0, True)
+                self.assertEqual(Decimal(mine["total"]), Decimal(mine["by_execution_mode"]["not_applicable"]))
+                self.assertEqual((theirs["workspace_id"], Decimal(theirs["total"])), (beta.workspace_id, Decimal("0")))
+                self.assertEqual({Decimal(v) for v in theirs["by_execution_mode"].values()}, {Decimal("0")})
+        with self._as(API), tenant_session(beta) as session:  # nor through the table itself
+            self.assertEqual(session.query(UsageEventRecord).filter(
+                UsageEventRecord.source_resource_id == operation_id).count(), 0)
+
+    # -- Slice S3: CHECK constraints (#145) ------------------------------------
+
+    def _insert(self, ctx: TenantContext, **overrides):
+        """The statement ``record_many`` sends, for one row of the Workspace."""
+        now = datetime.now(timezone.utc)
+        values = dict(
+            id=f"ue_{uuid.uuid4().hex}", workspace_id=ctx.workspace_id, metric_key=METRIC,
+            measurement_kind="delta", direction="increase", quantity=Decimal("1"), unit="call",
+            execution_mode="byok", semantic_key_hash=uuid.uuid4().hex * 2, occurred_at=now, created_at=now,
+        )
+        values.update(overrides)
+        return postgresql.insert(UsageEventRecord.__table__).values(**values).on_conflict_do_nothing()
+
+    def _checks(self) -> dict[str, bool]:
+        """Every CHECK on usage_events -> whether it is validated."""
+        with self.owner.connect() as connection:
+            return dict(connection.execute(text(
+                "SELECT conname, convalidated FROM pg_constraint "
+                "WHERE conrelid = 'usage_events'::regclass AND contype = 'c'")).all())
+
+    def _append_only_trigger(self) -> list[tuple]:
+        with self.owner.connect() as connection:
+            return connection.execute(text(
+                "SELECT t.tgname, t.tgenabled, pg_get_triggerdef(t.oid), p.prosrc, p.proconfig::text "
+                "FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid "
+                "WHERE t.tgrelid = 'usage_events'::regclass AND NOT t.tgisinternal ORDER BY t.tgname")).all()
+
+    def _stored(self, ctx: TenantContext) -> list[tuple]:
+        """Every column of the Workspace's rows, as the owner reads them."""
+        with self.owner.connect() as connection:
+            return connection.execute(text("SELECT * FROM usage_events WHERE workspace_id = :ws ORDER BY id"),
+                                      {"ws": ctx.workspace_id}).all()
+
+    def test_the_four_checks_are_validated_and_named_as_the_model_names_them(self):
+        self.assertEqual(len(CHECK_NAMES), 4)
+        self.assertEqual(self._checks(), dict.fromkeys(CHECK_NAMES, True))
+        self.assertEqual([name for name, *_ in self._append_only_trigger()], ["trg_usage_events_immutable"])
+
+    def test_each_check_refuses_the_row_that_breaks_it_as_the_api_and_the_worker(self):
+        ctx = self._workspace("ws_usage_pg_check", ROLE_OWNER, "owner_k")
+        for index, role in ROLE_NAMES.items():
+            for name, overrides in BAD_ROWS:
+                with self.subTest(role=role, check=name, row=overrides):
+                    with self.assertRaises(DBAPIError) as caught:
+                        with self._as(index), tenant_session(ctx) as session:
+                            session.execute(self._insert(ctx, **overrides))
+                    self.assertIn(f'violates check constraint "ck_usage_events_{name}"', str(caught.exception))
+            with self.subTest(role=role, row="valid"):  # the same statement writes a good row
+                with self._as(index), tenant_session(ctx) as session:
+                    written = session.execute(self._insert(ctx), execution_options={"preserve_rowcount": True})
+                    self.assertEqual(written.rowcount, 1)
+        self.assertEqual(len(self._stored(ctx)), len(ROLE_NAMES))
+
+    def test_rows_every_writer_wrote_before_the_checks_pass_validate(self):
+        trigger, head = self._append_only_trigger(), self._alembic("current")
+        self.assertIn("(head)", head)
+        self.addCleanup(self._alembic, "upgrade", "head")  # never leave the cluster below head
+        self._alembic("downgrade", CHECKS_DOWN_REVISION)
+        self.assertEqual(self._checks(), {})
+
+        ctx = self._workspace("ws_usage_pg_validate", ROLE_OWNER, "owner_v")
+        now = datetime.now(timezone.utc)
+        for index, name in ROLE_NAMES.items():
+            with self._as(index), tenant_session(ctx) as session:
+                for mode in ("byok", "sandbox", "mock", "controlled_mock"):  # S1 (#69)
+                    attempt = SimpleNamespace(id=f"pca_{name}_{mode}", workspace_id=ctx.workspace_id,
+                                              execution_mode=mode)
+                    self.assertEqual(record_provider_call(session, ctx, attempt, occurred_at=now).written, 1)
+                version = SimpleNamespace(id=f"av_{name}", workspace_id=ctx.workspace_id,  # S2 (#87)
+                                          origin_kind="generation", execution_mode="byok", created_at=now)
+                self.assertEqual(record_asset_version_generated(session, ctx, version).written, 1)
+                self.assertEqual(record_generation_item_failed(
+                    session, ctx, run_item_id=f"ri_{name}", revision=1, execution_mode="controlled_mock",
+                    occurred_at=now).written, 1)
+            operation_id = self._operation(ctx)
+            for state in (OperationState.RUNNING, OperationState.SUCCEEDED):
+                self._move(index, ctx, operation_id, state)
+        before = self._stored(ctx)
+        self.assertEqual(len(before), len(ROLE_NAMES) * (4 + 1 + 1 + 2))
+        self.assertEqual({row.execution_mode for row in before}, set(USAGE_EXECUTION_MODES))
+        self.assertEqual({row.metric_key for row in before}, set(METRICS) - {"storage_bytes"})  # S1 and S2
+
+        self._alembic("upgrade", CHECKS_REVISION)  # NOT VALID, then VALIDATE over these rows
+        self.assertEqual(self._checks(), dict.fromkeys(CHECK_NAMES, True))
+        self.assertEqual(self._stored(ctx), before)
+        self._alembic("upgrade", "head")
+        self.assertEqual(self._alembic("current"), head)
+        self.assertEqual(self._append_only_trigger(), trigger)
+        self.test_the_privilege_matrix_of_usage_events_holds()
+        with self.assertRaises(DBAPIError) as caught:
+            with self.owner.begin() as connection:
+                connection.execute(text("UPDATE usage_events SET quantity = 2 WHERE workspace_id = :ws"),
+                                   {"ws": ctx.workspace_id})
+        self.assertIn("usage_events is append-only", str(caught.exception))
+
+    def test_a_row_that_breaks_a_check_fails_validate_and_rolls_the_revision_back(self):
+        self.addCleanup(self._alembic, "upgrade", "head")
+        self._alembic("downgrade", CHECKS_DOWN_REVISION)
+        ctx = self._workspace("ws_usage_pg_broken", ROLE_OWNER, "owner_x")
+        self.addCleanup(self._remove_workspaces)  # runs before the upgrade above: the bad row goes first
+        with self.owner.begin() as connection:  # the owner bypasses RLS; no writer sends this row
+            connection.execute(self._insert(ctx, quantity=Decimal("-1")))
+
+        failed = self._alembic_run("upgrade", CHECKS_REVISION)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn('check constraint "ck_usage_events_quantity_nonnegative" of relation "usage_events" '
+                      "is violated by some row", failed.stderr)
+        self.assertIn(CHECKS_DOWN_REVISION, self._alembic("current"))
+        self.assertEqual(self._checks(), {}, "the NOT VALID constraints rolled back with the revision")
+
     def test_the_privilege_matrix_of_usage_events_holds(self):
         with self.owner.connect() as connection:
             forced = connection.execute(text(
@@ -298,11 +593,14 @@ class UsagePostgresTests(unittest.TestCase):
                                               {"r": role, "p": privilege}).scalar()
                     self.assertEqual(held, privilege in expected, f"{role} {privilege} usage_events")
 
-    def _alembic(self, *arguments: str) -> str:
-        completed = subprocess.run(
+    def _alembic_run(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
             [sys.executable, "-m", "alembic", *arguments], cwd=ROOT, capture_output=True, text=True,
             env={**os.environ, "MARKETAI_DATABASE_URL": URLS[0]}, check=False,
         )
+
+    def _alembic(self, *arguments: str) -> str:
+        completed = self._alembic_run(*arguments)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         return completed.stdout
 

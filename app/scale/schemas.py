@@ -90,6 +90,90 @@ class CandidateResponse(_Base):
     created_at: datetime
 
 
+class ObservedAdResponse(_Base):
+    """One ad a connection has observed (#129): the sandbox scenario's ads,
+    or the ads of the connection's published delivery-configuration read."""
+
+    meta_connection_id: str
+    ad_account_id: str
+    campaign_remote_id: str
+    adset_remote_id: str
+    ad_remote_id: str
+    ad_creative_id: str
+    source_type: str
+    asset_version_ids: list[str]
+
+
+class ObservedAdUnavailableResponse(_Base):
+    meta_connection_id: str
+    reason: str
+
+
+class ObservedAdListResponse(_Base):
+    items: list[ObservedAdResponse]
+    unavailable: list[ObservedAdUnavailableResponse]
+
+
+class MetricContractSetCreateRequest(_Base):
+    """Set up a connection's Scale read contracts (#112, platform only).
+
+    A real account's currency and time zone are frozen into its contracts;
+    the account itself is read back and compared on every configuration
+    read (``currency_mismatch`` / ``timezone_mismatch``). A sandbox
+    connection may omit both: its scenario simulates them."""
+
+    meta_connection_id: str = Field(min_length=1, max_length=64)
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    timezone_name: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class MetricContractSetGenerationResponse(_Base):
+    contract_type: str
+    generation_id: str
+    schedule_state: str | None
+    next_fire_at: datetime | None
+
+
+class MetricContractSetResponse(_Base):
+    id: str
+    meta_mode: str
+    meta_connection_id: str
+    created: bool
+    generations: list[MetricContractSetGenerationResponse]
+
+
+class DeliveryTargetCreateRequest(_Base):
+    """Pick one observed ad as a Winner's DeliveryTarget (#129). Only the
+    ad is named: the server resolves the hierarchy, creative, Offer, Landing
+    Page, market, placement and attribution from recorded evidence."""
+
+    winner_decision_id: str = Field(min_length=1)
+    meta_connection_id: str = Field(min_length=1)
+    ad_remote_id: str = Field(min_length=1)
+
+
+class DeliveryTargetResponse(_Base):
+    id: str
+    meta_mode: str
+    meta_connection_id: str
+    ad_account_id: str
+    campaign_remote_id: str
+    adset_remote_id: str
+    ad_remote_id: str
+    ad_creative_id: str
+    creative_asset_version_id: str
+    market_code: str
+    placement: str
+    offer_version_id: str
+    landing_page_evidence_hash: str
+    attribution_setting: str
+    contract_generation_id: str
+    source_type: str
+    observed_at: datetime
+    expires_at: datetime
+    created_at: datetime
+
+
 class EnrollmentActivateRequest(_Base):
     """Issue #86 Task 11: the only field a caller may supply is the id of an
     already-consumed-server-side ``ScaleActivationPreviewRecord`` --
@@ -206,43 +290,79 @@ class EvidenceSignalResponse(_Base):
     reason_code: str
 
 
+class EvidenceReadinessResponse(_Base):
+    """The Episode's evidence readiness (contract §8, §18): the projection
+    the source collector moves with every terminal source manifest, ahead of
+    any Evaluation. A ``blocked`` latest manifest reads maturity
+    ``insufficient``, quality ``blocked``, its typed issues and the recovery
+    action; ``last_complete_local_day`` and ``freshness_reference_at`` stay
+    where the last complete manifest put them (null before one)."""
+
+    manifest_id: str | None
+    #: ``complete`` or ``blocked``.
+    manifest_state: str | None
+    source_revision: int | None
+    #: The account-local day the latest manifest was collected for.
+    target_local_day: date | None
+    maturity: str
+    quality_state: str
+    last_complete_local_day: date | None
+    freshness_reference_at: datetime | None
+    blocking_issue_count: int
+    warning_issue_count: int
+    recovery_action: str | None
+    #: The latest manifest's typed source quality issues, blocking first.
+    issues: list[EvidenceQualityIssueResponse]
+    revision: int
+    updated_at: datetime
+
+
 class EnrollmentEvidenceResponse(_Base):
-    """Current evidence/readiness for an Enrollment's active Episode --
-    the accepted-Evaluation projection (spec §3.4 step 3/4), not a raw
-    evidence snapshot. Reflects only a projection-eligible result that has
-    already won the structured cursor CAS."""
+    """Current evidence/readiness for an Enrollment's active Episode (#114).
+
+    ``readiness`` is the Episode's evidence-readiness projection, null until
+    the first source manifest is collected. Every other field but the two
+    ids belongs to the accepted-Evaluation projection (spec §3.4 step 3/4),
+    which reflects only a projection-eligible result that has already won
+    the structured cursor CAS; all of them are null until the first
+    Evaluation projects. ``evaluation_stale`` says the accepted Evaluation
+    was sealed from an older source revision than the latest manifest: a
+    newer day is collected (its evaluation pending) or blocked, so the
+    Evaluation is history, not the current state (contract §8)."""
 
     enrollment_id: str
     episode_id: str
-    evaluation_id: str
-    snapshot_id: str
-    policy_version_id: str
+    readiness: EvidenceReadinessResponse | None
+    evaluation_stale: bool
+    evaluation_id: str | None
+    snapshot_id: str | None
+    policy_version_id: str | None
     target_version_id: str | None
-    algorithm_version: str
-    metric_semantic_contract_set_hash: str
-    maturity: str
-    data_quality_state: str
+    algorithm_version: str | None
+    metric_semantic_contract_set_hash: str | None
+    maturity: str | None
+    data_quality_state: str | None
     health: str | None
-    health_reason: str
-    healthy_evaluations: int
-    streak_counters: list[dict]
-    safe_watermark: date
-    last_complete_local_day: date
-    last_sync_at: datetime
-    freshness_reference_at: datetime
-    complete_local_days_in_episode: int
-    active_delivery_days_in_episode: int
-    current_window: EvidenceWindowResponse
-    baseline_window: EvidenceWindowResponse
-    rolling_window: EvidenceWindowResponse
-    quality_issues: list[EvidenceQualityIssueResponse]
-    signals: list[EvidenceSignalResponse]
-    cursor_as_of_local_day: date
-    cursor_source_revision: int
-    cursor_semantic_event_sequence: int
-    cursor_lineage_generation: int
-    revision: int
-    updated_at: datetime
+    health_reason: str | None
+    healthy_evaluations: int | None
+    streak_counters: list[dict] | None
+    safe_watermark: date | None
+    last_complete_local_day: date | None
+    last_sync_at: datetime | None
+    freshness_reference_at: datetime | None
+    complete_local_days_in_episode: int | None
+    active_delivery_days_in_episode: int | None
+    current_window: EvidenceWindowResponse | None
+    baseline_window: EvidenceWindowResponse | None
+    rolling_window: EvidenceWindowResponse | None
+    quality_issues: list[EvidenceQualityIssueResponse] | None
+    signals: list[EvidenceSignalResponse] | None
+    cursor_as_of_local_day: date | None
+    cursor_source_revision: int | None
+    cursor_semantic_event_sequence: int | None
+    cursor_lineage_generation: int | None
+    revision: int | None
+    updated_at: datetime | None
 
 
 class EvidenceSnapshotResponse(_Base):
@@ -387,6 +507,17 @@ class TargetContextResponse(_Base):
     market_code: str
     currency: str
     has_active_target: bool
+    #: #134: the platform floor a Target published into this context is
+    #: checked against -- the minimum total spend of a 7-day window in
+    #: ``currency`` under the Policy in force for the request's mode -- or
+    #: ``None`` with ``platform_spend_floor_unavailable_reason``
+    #: (``no_eligible_policy`` or ``spend_floor_currency_unsupported``).
+    platform_spend_floor: str | None
+    platform_spend_floor_unavailable_reason: str | None
+
+
+class TargetContextListResponse(_Base):
+    items: list[TargetContextResponse]
 
 
 # A Target amount is a plain ASCII decimal ("20", "2.50"): no exponent,
@@ -505,6 +636,14 @@ class TargetResponse(_Base):
     withdrawn_at: datetime | None
     created_at: datetime
     allowed_actions: list[ActionEligibilityModel]
+    #: #134: the platform floor in the Target's currency under the Policy in
+    #: force for the request's mode (``None`` when there is none to read).
+    platform_spend_floor: str | None
+    #: #134: an active Target published before the floor check that misses
+    #: it -- only a ROAS and no minimum economic spend, or a minimum below
+    #: ``platform_spend_floor``. It stays in force; its evaluations hold it
+    #: to the platform floor instead.
+    below_platform_floor: bool
 
 
 class TargetListResponse(_Base):

@@ -26,6 +26,45 @@ Without `--project`, the `chromium`, `tablet-chromium` and `mobile-chromium`
 projects each run every spec, so a real-backend suite seeds three times. The
 runners pin `--project=chromium --workers=1`.
 
+## Golden-path seed exceptions
+
+The golden path goes through the product's own pages and APIs, except where
+no product entry exists yet. For those, `golden-path/fixtures.ts` and
+`golden-path/golden_path_seed.py` seed the data directly. This is the list of
+what they still seed ([#63](https://github.com/heart-cannot-beat/marketai/issues/63)).
+When a ticket ships the product entry, it removes the seed and crosses its
+item off here.
+
+- ~~The provisioned Workspace's SpendGuardrail (`fixtures.ts`)~~: removed by
+  [#126](https://github.com/heart-cannot-beat/marketai/issues/126).
+  Provisioning creates it with the contract defaults, and both journeys
+  deliver the signed provisioning snapshots to the API's entitlement inbox as
+  the production dispatcher does (`full-journey` through
+  `dispatchCurrentSnapshot`, `golden-path.spec.ts` when its provisioning
+  completes). The Owner changes the limits in Settings.
+- ~~Review approval of the Winner-market MarketAssetBinding~~: removed by
+  [#128](https://github.com/heart-cannot-beat/marketai/issues/128). The
+  journey approves the localized AssetVersion in the Assets area, and that
+  review moves the binding to `ready_for_experiment`.
+- ~~The published ScalePolicyVersion~~: removed by
+  [#127](https://github.com/heart-cannot-beat/marketai/issues/127). A
+  migration publishes the Beta default Policy, and the golden path and the
+  Scale suite evaluate under it.
+- ~~The curated-scenario DeliveryTarget, with its delivery_configuration
+  contract generation and contract set~~: removed by
+  [#129](https://github.com/heart-cannot-beat/marketai/issues/129). In New
+  Enrollment the journey picks the Winner's observed sandbox ad, and the
+  server makes the DeliveryTarget and the connection's Scale contract set.
+- ~~The landing_page LibraryVersion keyed by the Winner's frozen
+  `landing_page_evidence_hash`~~: removed by
+  [#129](https://github.com/heart-cannot-beat/marketai/issues/129). The
+  lineage gate compares the frozen hash itself.
+- The attestation of the picked DeliveryTarget's delivery_configuration
+  generation, which activation needs (`seed-scale-activation-evidence`). The
+  sandbox's scheduled read publishes one only at the connection's next daily
+  slot, so the journey cannot wait for it
+  ([#129](https://github.com/heart-cannot-beat/marketai/issues/129)).
+
 ## Localization, Scale and Experiments on a local stack
 
 1. Start a disposable Compose stack from the repository root:
@@ -95,21 +134,12 @@ runners pin `--project=chromium --workers=1`.
 The Localization suite stops and restarts the stack's Worker. The Scale suite
 restarts the API and the Worker and drains Jobs with a one-shot Worker; its
 seed needs the Worker running, because it waits for the Worker to finish the
-Localization batch its fixture confirms. The Experiments suite's Launch
-recovery stops, starts and restarts the Worker and restarts the API; the
-Member scenario uses `e2e/.auth/member.json`. It takes about six and a half
-minutes, five of them in Scenario 5c, which waits out the Worker's default
-300-second Job lease.
-
-### Known failures (2026-11-07, #19)
-
-On a local Compose stack each suite finishes in about a minute. These fail
-for reasons outside the suites' copy and seeds:
-
-- Scale, controlled-mock journey step 18 (#72): its hostile requests call the
-  BFF without the page's Origin, CSRF token and `X-Intent-Id`, so the first
-  one (the stale activation) is refused with 403 before it reaches the API
-  instead of the 400, 409 or 428 the step expects.
+Localization batch its fixture confirms. On a local Compose stack the
+Localization and Scale suites each finish in about a minute. The Experiments
+suite's Launch recovery stops, starts and restarts the Worker and restarts the
+API; the Member scenario uses `e2e/.auth/member.json`. It takes about six and
+a half minutes, five of them in Scenario 5c, which waits out the Worker's
+default 300-second Job lease.
 
 ## Manual workflow
 

@@ -132,7 +132,10 @@ describe('Owner membership changes check role and the confirmation phrase only',
       confirmation: 'REMOVE OWNER',
     });
     expect(res.statusCode).toBe(200);
-    expect(removeTeamMember).toHaveBeenCalledWith(team.id, 'owner_2');
+    expect(removeTeamMember).toHaveBeenCalledWith(team.id, 'owner_2', {
+      actor: { kind: 'USER', id: 'owner_1' },
+      reason: 'REMOVED',
+    });
   });
 
   it('changes nothing for a caller outside the Workspace', async () => {

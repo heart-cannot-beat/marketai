@@ -41,11 +41,13 @@ import {
 import {
   seedInfrastructure,
   seedLocalizationInfrastructure,
+  seedScaleActivationEvidence,
   seedScaleInfrastructure,
   seedExperimentMetrics,
   advanceManifest,
   inspectCanonicalSnapshot,
   inspectFakeMetaObjects,
+  approveLocalizedAssetVersionThroughAssets,
   createLocalizationBatchThroughUi,
   prepareLocalizationBatchThroughUi,
   confirmLocalizationBatchThroughUi,
@@ -810,6 +812,11 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
 
   await test.step('Import manual facts into DataSource entry', async () => {
     await page.getByRole('tab', { name: /^Facts$/i }).click();
+    // #54: every row names its Offer. The rows below name none, so the
+    // import gives them the Offer published above as its default.
+    await page
+      .getByLabel(en('library', 'data-source-ops.default-offer-label'))
+      .selectOption({ label: 'GP E2E Offer' });
     await page.getByLabel(/select fact file to import/i).setInputFiles({
       name: 'golden-path-facts.json',
       mimeType: 'application/json',
@@ -821,21 +828,22 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
               fact_type: 'price',
               country_code: 'US',
               valid_from: '2026-01-01',
-              valid_to: '2026-12-31',
+              valid_to: '2099-12-31',
               amount: '19.99',
               currency: 'USD',
               evidence_source: 'Acme Charge US price list',
             },
             {
-              fact_id: 'gp-delivery-de',
+              // A market the Offer sells in (market_scope US, GB).
+              fact_id: 'gp-delivery-gb',
               fact_type: 'delivery',
-              country_code: 'DE',
+              country_code: 'GB',
               valid_from: '2026-01-01',
-              valid_to: '2026-12-31',
+              valid_to: '2099-12-31',
               delivery_days_min: 2,
               delivery_days_max: 5,
-              region: 'DE',
-              evidence_source: 'Acme Charge DE carrier rates',
+              region: 'GB',
+              evidence_source: 'Acme Charge GB carrier rates',
             },
           ],
         })
@@ -846,7 +854,8 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
     ).toBeVisible({ timeout: 120_000 });
 
     // #23: the import checks every row and stores the report on the draft
-    // it opens; these rows, from a published data source, pass.
+    // it opens; these rows, from a published data source and for an Offer
+    // that sells in their markets, pass.
     await page
       .getByRole('button', {
         name: en('library', 'data-source-ops.open-fact-set'),
@@ -2252,11 +2261,26 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
     ).toBe('succeeded');
   });
 
+  await test.step('Approve the Winner-market localized asset in Assets', async () => {
+    // The binding the Winner-market item published waits for review; the
+    // exact-version approval in Asset Detail makes it experiment-ready
+    // (#128), which the Scale lineage gate requires. No seed approves it.
+    const winnerMarket = locInfra.markets.find((m) => m.isWinnerMarket)!.market;
+    const approved = await approveLocalizedAssetVersionThroughAssets(
+      page,
+      slug,
+      batchId,
+      winnerMarket
+    );
+    expect(approved.localizedAssetVersionId).not.toBe(winnerAssetVersionId);
+  });
+
   // =========================================================================
   // STEP 12: Scale — enroll, activate, evidence, evaluate, advice
   // =========================================================================
 
   let scaleInfra: ReturnType<typeof seedScaleInfrastructure>;
+  let deliveryTargetId = '';
 
   await test.step('Seed Scale infrastructure', async () => {
     scaleInfra = seedScaleInfrastructure(
@@ -2264,7 +2288,7 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
       decisionId,
       ownerUserId
     );
-    expect(scaleInfra.deliveryTargetId).toBeTruthy();
+    expect(scaleInfra.winnerAdId).toBeTruthy();
     expect(scaleInfra.policyVersionId).toBeTruthy();
     expect(scaleInfra.marketCode).toBe('US');
   });
@@ -2289,10 +2313,32 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
     await expect(decisionOption).toBeVisible({ timeout: 10_000 });
     await decisionOption.click();
 
-    // Step 2: Enter delivery_target_id — this is a plain text input, not a select
+    // Step 2: pick the observed ad the Winner runs in -- the sandbox ad its
+    // PAUSED Launch created (#129). The server makes the DeliveryTarget from
+    // that ad's recorded evidence and the dialog fills the target in.
+    const pickResponsePromise = page.waitForResponse(
+      (r) =>
+        r.url().includes('/delivery-targets') &&
+        r.request().method() === 'POST',
+      { timeout: 15_000 }
+    );
+    await page
+      .getByRole('button', { name: `Use Meta ad ${scaleInfra.winnerAdId}` })
+      .click();
+    const pickResponse = await pickResponsePromise;
+    expect(pickResponse.status(), await pickResponse.text()).toBe(201);
+    const picked = (await pickResponse.json()) as {
+      id: string;
+      market_code: string;
+      ad_remote_id: string;
+    };
+    expect(picked.ad_remote_id).toBe(scaleInfra.winnerAdId);
+    expect(picked.market_code).toBe(scaleInfra.marketCode);
+    deliveryTargetId = picked.id;
     const deliveryTargetInput = page.getByLabel(/delivery.*target/i);
-    await expect(deliveryTargetInput).toBeVisible({ timeout: 5_000 });
-    await deliveryTargetInput.fill(scaleInfra.deliveryTargetId);
+    await expect(deliveryTargetInput).toHaveValue(picked.id, {
+      timeout: 5_000,
+    });
 
     // Policy version is server-computed, not a UI input
 
@@ -2313,6 +2359,17 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
     };
     enrollmentId = enrollment.id;
     expect(enrollment.lifecycle).toBe('draft');
+  });
+
+  await test.step('Seed the attestation activation needs', async () => {
+    // The sandbox would publish its delivery read only at the connection's
+    // next daily slot; the contract set is the one the pick made (README).
+    const evidence = seedScaleActivationEvidence(
+      ws.workspaceId,
+      deliveryTargetId,
+      ownerUserId
+    );
+    expect(evidence.contractSetId).toBeTruthy();
   });
 
   await test.step('Activate Scale enrollment through UI', async () => {
@@ -2372,8 +2429,9 @@ test('v9 Beta golden-path: empty Workspace to Scale advice', async ({
 
   await test.step('Advance Scale evidence and evaluate', async () => {
     // customer_sandbox: Scale decisions are ineligible under controlled_mock
-    // (ADR 0009). The seeded policy needs 14 complete days before evidence
-    // is economics_ready. Only confirmed creative fatigue opens
+    // (ADR 0009). The Beta default Policy the migrations published (#127)
+    // needs 14 complete days before evidence is economics_ready. Only
+    // confirmed creative fatigue opens
     // refresh_creative -- the one Advice that converts to a GenerationDraft
     // (app/scale/advice.py::convert_occurrence_to_draft) -- and it needs,
     // on consecutive evaluations, high and growing frequency, a supported

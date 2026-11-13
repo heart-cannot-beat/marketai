@@ -42,7 +42,11 @@ from app.adapters.persistence.models import (
     utcnow,
 )
 from app.entitlements.cost_models import ProviderCallAttemptRecord, SpendReservationRecord
-from app.entitlements.usage import record_provider_call
+from app.entitlements.usage import (
+    record_asset_version_generated,
+    record_generation_item_failed,
+    record_provider_call,
+)
 from app.generation.execution_policy import StepAdmission, StepRejection, admit_external_step
 from app.generation.models import (
     GenerationRecipeSnapshotRecord,
@@ -57,6 +61,7 @@ from app.generation.thumbnails import CommittedThumbnail, apply_thumbnail
 from app.platform.jobs import enqueue_in_session
 from app.platform.blob_store import BlobStore, CommittedBlobRef, GeneratedArtifactSpec
 from app.platform.tenancy import TenantContext
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 if TYPE_CHECKING:
     from app.generation.controlled_adapter import GenerationRequest
@@ -81,6 +86,7 @@ class StaleRunItemRevisionError(RuntimeError):
     """Raised when a CAS UPDATE on a RunItem (or its GenerationRun) affects no row."""
 
 
+@runs_as(WORKER_ROLE)
 def handle_run_item(
     session: Session,
     ctx: TenantContext,
@@ -458,6 +464,7 @@ def _persist_output(
     apply_thumbnail(version, committed_thumbnail)
     session.add(version)
     session.flush()
+    record_asset_version_generated(session, ctx, version)
     return asset, version
 
 
@@ -480,6 +487,16 @@ def _transition_item(
     error_summary: str | None = None,
     same_snapshot_resumable: bool | None = None,
 ) -> RunItemRecord:
+    """CAS one RunItem state change; a change into ``failed`` is also counted.
+
+    Marking an item ``failed`` here means Generation produced no
+    AssetVersion for it, so the same transaction records one
+    ``generation_items_failed`` (Issue #8), keyed by the item and the
+    revision this change writes. A failed automatic quality check is
+    written by ``app.generation.qc`` through its own CAS and is not counted:
+    that item did produce its version.
+    """
+    previous_state = item.state
     values: dict = {"state": state, "revision": item.revision + 1, "updated_at": utcnow()}
     if error_summary is not None:
         values["error_summary"] = error_summary
@@ -508,12 +525,22 @@ def _transition_item(
         )
     session.flush()
     session.refresh(item)
+    if state == "failed" and previous_state != "failed":
+        record_generation_item_failed(
+            session,
+            ctx,
+            run_item_id=item.id,
+            revision=values["revision"],
+            execution_mode=item.execution_mode,
+            occurred_at=values["updated_at"],
+        )
     return item
 
 
 _HANDLER_FAULT_STATES = ("pending", "queued", "running")
 
 
+@runs_as(WORKER_ROLE)
 def fail_run_item_after_handler_fault(
     session: Session,
     ctx: TenantContext,
@@ -797,6 +824,7 @@ def _get_or_create_reservation_id(
 # ---------------------------------------------------------------------
 
 
+@runs_as(WORKER_ROLE)
 async def handle_run_item_coordinated(
     coordinator: ExternalCallCoordinator,
     ctx: TenantContext,

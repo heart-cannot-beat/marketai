@@ -34,6 +34,8 @@ interface Started {
   leg: 'upload' | 'import';
   uploadIntentId: string | null;
   operationId: string | null;
+  /** The Offer entry given to the rows that name none (#54), or null. */
+  defaultOfferEntryId: string | null;
 }
 
 /**
@@ -41,11 +43,15 @@ interface Started {
  * (#14). The file is uploaded, its verification Operation and then the
  * import's Operation are followed with one `useOperation`, and a `succeeded`
  * import names the draft it created. `uncertain` stops the poll: nothing will
- * settle it, and the page says how to check instead.
+ * settle it, and the page says how to check instead. A default Offer chosen
+ * with the file goes with its import (#54).
  */
 export function useManualFactImport(dataSourceEntryId: string): {
   view: ManualFactImportView;
-  importFile: (file: File) => Promise<void>;
+  importFile: (
+    file: File,
+    defaultOfferEntryId?: string | null
+  ) => Promise<void>;
   reset: () => void;
 } {
   const { t } = useTranslation('library');
@@ -84,7 +90,11 @@ export function useManualFactImport(dataSourceEntryId: string): {
   }, [state]);
 
   const sendImport = useCallback(
-    async (actionInstanceId: string, uploadIntentId: string) => {
+    async (
+      actionInstanceId: string,
+      uploadIntentId: string,
+      defaultOfferEntryId: string | null
+    ) => {
       try {
         const result = await gateway.importLibraryManualFacts({
           workspaceSlug: current.slug,
@@ -93,6 +103,9 @@ export function useManualFactImport(dataSourceEntryId: string): {
           body: {
             upload_intent_id: uploadIntentId,
             purpose: 'library_manual_fact_import',
+            ...(defaultOfferEntryId
+              ? { default_offer_entry_id: defaultOfferEntryId }
+              : {}),
           },
         });
         if (actionRef.current !== actionInstanceId) return;
@@ -106,6 +119,7 @@ export function useManualFactImport(dataSourceEntryId: string): {
             leg: 'import',
             uploadIntentId,
             operationId: result.data.operation_id,
+            defaultOfferEntryId,
           });
         }
       } catch (error) {
@@ -122,7 +136,7 @@ export function useManualFactImport(dataSourceEntryId: string): {
     started?.leg === 'upload' && state === 'succeeded' ? started : null;
   useEffect(() => {
     if (!verified?.uploadIntentId) return;
-    const { actionInstanceId, uploadIntentId } = verified;
+    const { actionInstanceId, uploadIntentId, defaultOfferEntryId } = verified;
     if (importSentRef.current === actionInstanceId) return;
     importSentRef.current = actionInstanceId;
     setStarted({
@@ -130,8 +144,9 @@ export function useManualFactImport(dataSourceEntryId: string): {
       leg: 'import',
       uploadIntentId,
       operationId: null,
+      defaultOfferEntryId,
     });
-    void sendImport(actionInstanceId, uploadIntentId);
+    void sendImport(actionInstanceId, uploadIntentId, defaultOfferEntryId);
   }, [verified, sendImport]);
 
   const imported =
@@ -148,7 +163,7 @@ export function useManualFactImport(dataSourceEntryId: string): {
   }, [imported, invalidate]);
 
   const importFile = useCallback(
-    async (file: File) => {
+    async (file: File, defaultOfferEntryId: string | null = null) => {
       const actionInstanceId = newActionId();
       actionRef.current = actionInstanceId;
       setFailure(null);
@@ -158,6 +173,7 @@ export function useManualFactImport(dataSourceEntryId: string): {
         leg: 'upload',
         uploadIntentId: null,
         operationId: null,
+        defaultOfferEntryId,
       });
       try {
         const result = await startUpload({
@@ -173,6 +189,7 @@ export function useManualFactImport(dataSourceEntryId: string): {
             leg: 'upload',
             uploadIntentId: result.uploadIntentId,
             operationId: result.operationRecordId,
+            defaultOfferEntryId,
           });
         } else if (result.kind === 'problem') {
           setFailure(errorMessage(t, result.problem));

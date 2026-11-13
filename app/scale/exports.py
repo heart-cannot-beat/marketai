@@ -40,6 +40,7 @@ from app.platform.tenancy import VALID_META_MODES, TenantContext, tenant_scope
 
 from .command_journal import claim_command, command_request_fingerprint
 from .models import ScaleEnrollmentRecord, ScaleEpisodeRecord, ScaleExportRecord
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 
 __all__ = [
     "ExportError",
@@ -297,6 +298,7 @@ def export_job_context(context: TenantContext, payload: Mapping[str, Any]) -> Te
     return replace(context, meta_mode=meta_mode)
 
 
+@runs_as(WORKER_ROLE)
 def run_scale_export(
     session: Session,
     context: TenantContext,
@@ -350,6 +352,7 @@ def run_scale_export(
                 OperationState.FAILED,
                 reason=str(exc)[:200],
                 actor=context.executor,
+                meta_mode=export.meta_mode,
             )
         raise
 
@@ -365,4 +368,6 @@ def run_scale_export(
         reason="export completed",
         actor=context.executor,
         result_ref=OperationResultRef(resource_type="scale_export", resource_id=export.id),
+        # The export's Meta mode is its Usage bucket (#146).
+        meta_mode=export.meta_mode,
     )

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib as _hashlib
 import json as _json
+from dataclasses import replace as _dataclass_replace
 from datetime import date
 from pathlib import Path
 from typing import Iterable
@@ -61,8 +62,10 @@ from .contracts import (
     ELIGIBILITY_BLOCKED,
     ELIGIBILITY_ELIGIBLE,
     ELIGIBILITY_WARNING,
-    ENTRY_DATA_SOURCE,
     ENTRY_DIMENSION_SCHEMA,
+    ENTRY_MANUAL_FACT_SET,
+    ENTRY_MARKET_MAPPING,
+    ENTRY_OFFER,
     ENTRY_PERSON,
     ENTRY_PRODUCT,
     ENTRY_REFERENCE_ASSET,
@@ -71,6 +74,9 @@ from .contracts import (
     LIFECYCLE_ACTIVE,
     LIFECYCLE_ARCHIVED,
     REL_FACT_SET_DATA_SOURCE,
+    REL_FACT_SET_OFFER,
+    REL_MAPPING_DATA_SOURCE,
+    REL_POLICY_TEMPLATE,
     REL_SCHEMA_PRODUCT,
     REL_TRUTH_POLICY_DATA_SOURCE,
     RELATION_TARGET_TYPES,
@@ -85,8 +91,11 @@ from .contracts import (
     diff_content,
     extract_dependencies,
     extract_reference_bindings,
+    fact_offer_market_findings,
+    mapping_data_source_findings,
     validate_content,
 )
+from .dependents import dependent_versions
 
 
 def size_params(limit_bytes: int) -> dict:
@@ -837,12 +846,16 @@ def _validate_dependencies(
     today: date,
 ) -> list[tuple[DependencyEdge, LibraryVersionRecord]]:
     resolved: list[tuple[DependencyEdge, LibraryVersionRecord]] = []
+    # Up to 10,000 fact rows may name the same few Offers: resolve each once.
+    offer_targets: dict[str, str | Finding] = {}
     for edge in edges:
         # REL_SCHEMA_PRODUCT is the one relation whose edge carries an Entry ID
         # (DimensionSchema.product_entry_id: the product binding is a stable
         # identity, not one frozen version) rather than a Version ID. Resolve it
         # through the product's current effective version so the persisted
         # LibraryDependencyRecord stays version-to-version like every other edge.
+        # Every relation resolved here from an entry ID is listed in
+        # ENTRY_RESOLVED_RELATIONS, which impact previews read by entry (#88).
         if edge.relation == REL_SCHEMA_PRODUCT:
             product_entry = session.get(LibraryEntryRecord, edge.to_version_id)
             if product_entry is None or product_entry.workspace_id != context.workspace_id:
@@ -869,11 +882,20 @@ def _validate_dependencies(
                     )
                     continue
                 edge = DependencyEdge(source_entry.current_version_id, edge.relation, edge.path)
-        elif edge.relation == REL_TRUTH_POLICY_DATA_SOURCE:
-            source_edge = _truth_policy_source_edge(session, context, edge, findings)
-            if source_edge is None:
+        elif edge.relation in _ENTRY_REFERENCE_NOUNS:
+            entry_edge = _entry_reference_edge(session, context, edge, findings)
+            if entry_edge is None:
                 continue
-            edge = source_edge
+            edge = entry_edge
+        elif edge.relation == REL_FACT_SET_OFFER:
+            reference = edge.to_version_id
+            if reference not in offer_targets:
+                offer_targets[reference] = _fact_set_offer_target(session, context, reference)
+            outcome = offer_targets[reference]
+            if isinstance(outcome, Finding):
+                findings.append(_dataclass_replace(outcome, path=edge.path))
+                continue
+            edge = DependencyEdge(outcome, edge.relation, edge.path)
         target = session.get(LibraryVersionRecord, edge.to_version_id)
         if target is None or target.workspace_id != context.workspace_id:
             findings.append(
@@ -924,61 +946,110 @@ def _validate_dependencies(
     return resolved
 
 
-def _truth_policy_source_edge(
+# Relations whose item names the target entry and, in the form publish took
+# before the entry form existed, may still hold one of its version IDs:
+# TruthResolutionPolicy ``rules[].source_priority`` (#70) and
+# WorkspacePromptPolicy ``allowed_template_entry_ids`` (#100). The value is
+# the noun the findings name the target by.
+_ENTRY_REFERENCE_NOUNS = {
+    REL_TRUTH_POLICY_DATA_SOURCE: "数据源",
+    REL_POLICY_TEMPLATE: "模板",
+}
+
+
+def _entry_reference_edge(
     session,
     context: TenantContext,
     edge: DependencyEdge,
     findings: list[Finding],
 ) -> DependencyEdge | None:
-    """One TruthResolutionPolicy ``rules[].source_priority`` item (#70).
+    """One item of an ``_ENTRY_REFERENCE_NOUNS`` relation.
 
-    The item names a data source entry and resolves to that entry's current
-    version, like ``product_entry_id`` above, so the stored edge stays
-    version-to-version and withdrawing that version lists the policy in its
-    impact preview. A data source version ID -- the only form publish
-    accepted before #70 -- maps back to its entry and resolves the same way,
-    which is also what Truth resolution reads (``truth._policy_data_source``).
+    The item names an entry of the relation's target type and resolves to
+    that entry's current version, like ``product_entry_id`` above, so the
+    stored edge stays version-to-version. Impact previews read the edge by
+    entry (#88): withdrawing the target's current effective version lists the
+    dependent whichever version its edge names. A version ID of the target
+    maps back to its entry and resolves the same way: for a data source the
+    only form publish accepted before #70, which is also what Truth resolution
+    reads (``truth._policy_data_source``); for a template the form a draft
+    may hold if it was written to get past the failure fixed in #100.
     The common checks below (withdrawn, archived, blocked) then run on the
     resolved version. ``None`` means a blocking finding was recorded.
     """
     reference = edge.to_version_id
-    source_entry = session.get(LibraryEntryRecord, reference)
-    if source_entry is None or source_entry.workspace_id != context.workspace_id:
-        source_entry = None
+    noun = _ENTRY_REFERENCE_NOUNS[edge.relation]
+    target_type = RELATION_TARGET_TYPES[edge.relation]
+    target_entry = session.get(LibraryEntryRecord, reference)
+    if target_entry is None or target_entry.workspace_id != context.workspace_id:
+        target_entry = None
         legacy_version = session.get(LibraryVersionRecord, reference)
         if legacy_version is not None and legacy_version.workspace_id == context.workspace_id:
-            source_entry = session.get(LibraryEntryRecord, legacy_version.entry_id)
-    if source_entry is None or source_entry.workspace_id != context.workspace_id:
-        findings.append(Finding("dependency_not_found", f"引用的数据源不存在: {reference}", edge.path))
+            target_entry = session.get(LibraryEntryRecord, legacy_version.entry_id)
+    if target_entry is None or target_entry.workspace_id != context.workspace_id:
+        findings.append(Finding("dependency_not_found", f"引用的{noun}不存在: {reference}", edge.path))
         return None
-    if source_entry.entry_type != ENTRY_DATA_SOURCE:
+    if target_entry.entry_type != target_type:
         findings.append(
             Finding(
                 "dependency_type_mismatch",
-                f"{edge.relation} 需要 {ENTRY_DATA_SOURCE} 条目，实际为 {source_entry.entry_type}",
+                f"{edge.relation} 需要 {target_type} 条目，实际为 {target_entry.entry_type}",
                 edge.path,
             )
         )
         return None
-    if not source_entry.current_version_id:
+    if not target_entry.current_version_id:
         # No current version: never published, or its current version was
         # withdrawn (withdraw clears current_version_id).
         latest = session.scalars(
             select(LibraryVersionRecord)
-            .where(LibraryVersionRecord.entry_id == source_entry.id)
+            .where(LibraryVersionRecord.entry_id == target_entry.id)
             .order_by(LibraryVersionRecord.version_no.desc())
             .limit(1)
         ).first()
         if latest is not None and latest.state == VERSION_WITHDRAWN:
             findings.append(
-                Finding("dependency_withdrawn", f"引用的数据源当前版本已被 Withdraw: {latest.id}", edge.path)
+                Finding("dependency_withdrawn", f"引用的{noun}当前版本已被 Withdraw: {latest.id}", edge.path)
             )
         else:
             findings.append(
-                Finding("dependency_not_found", f"引用的数据源尚无已发布版本: {reference}", edge.path)
+                Finding("dependency_not_found", f"引用的{noun}尚无已发布版本: {reference}", edge.path)
             )
         return None
-    return DependencyEdge(source_entry.current_version_id, edge.relation, edge.path)
+    return DependencyEdge(target_entry.current_version_id, edge.relation, edge.path)
+
+
+def _fact_set_offer_target(session, context: TenantContext, reference: str) -> str | Finding:
+    """The OfferVersion a manual fact row's ``offer_entry_id`` stands for (#54).
+
+    A row names the Offer *entry*, the way a TruthResolutionPolicy names its
+    data sources (#70): it resolves to the entry's current effective version,
+    so the stored edge stays version-to-version. Impact previews read the edge
+    by entry (#88): withdrawing the Offer's current effective version lists
+    the fact set whichever version its edge names.
+    Republishing the Offer leaves the row valid: Truth matches rows by the
+    entry of the batch's OfferVersion. The common checks (withdrawn, blocked,
+    archived) then run on the resolved version.
+
+    Anything that is not an Offer entry of this Workspace reads alike, so an
+    id guessed from another Workspace learns nothing. The caller adds the
+    row's path to a returned Finding.
+    """
+    entry = session.get(LibraryEntryRecord, reference)
+    if entry is None or entry.workspace_id != context.workspace_id or entry.entry_type != ENTRY_OFFER:
+        return Finding("fact_offer_not_found", f"offer_entry_id 不是本 Workspace 的 Offer 条目: {reference}")
+    current = _effective_version(session, entry)
+    if current is not None:
+        return current.id
+    latest = session.scalars(
+        select(LibraryVersionRecord)
+        .where(LibraryVersionRecord.entry_id == entry.id)
+        .order_by(LibraryVersionRecord.version_no.desc())
+        .limit(1)
+    ).first()
+    if latest is not None and latest.state == VERSION_WITHDRAWN:
+        return Finding("dependency_withdrawn", f"引用的 Offer 当前版本已被 Withdraw: {latest.id}")
+    return Finding("fact_offer_unpublished", f"引用的 Offer 尚无已发布版本: {reference}")
 
 
 def _check_reference_rights(
@@ -1046,6 +1117,21 @@ def _build_report(
         _validate_reference_object(session, context, content, report.findings)
     elif entry.entry_type == ENTRY_DIMENSION_SCHEMA:
         _validate_schema_product_immutable(session, context, entry, content, report.findings)
+    elif entry.entry_type == ENTRY_MARKET_MAPPING:
+        # Only a reference that resolved to a usable DataSource version of
+        # this Workspace is compared; anything else is already blocking (#61).
+        for edge, target in resolved:
+            if edge.relation == REL_MAPPING_DATA_SOURCE:
+                report.findings.extend(mapping_data_source_findings(content, target.content_json))
+    elif entry.entry_type == ENTRY_MANUAL_FACT_SET:
+        # Only rows whose Offer resolved to a usable OfferVersion of this
+        # Workspace are compared with its market scope (#54).
+        offers = {
+            edge.path: target.content_json
+            for edge, target in resolved
+            if edge.relation == REL_FACT_SET_OFFER
+        }
+        report.findings.extend(fact_offer_market_findings(content, offers))
     return report, resolved
 
 
@@ -1636,35 +1722,16 @@ def _effective_version(session, entry: LibraryEntryRecord) -> LibraryVersionReco
 # --------------------------------------------------------------------------
 
 
-def _dependent_versions(session, context: TenantContext, root_ids: set[str]) -> list[LibraryVersionRecord]:
-    """沿 DependencyIndex 反向做传递闭包，返回受影响的下游版本。"""
-    found: dict[str, LibraryVersionRecord] = {}
-    frontier = list(root_ids)
-    seen: set[str] = set(root_ids)
-    while frontier:
-        current = frontier.pop()
-        rows = session.scalars(
-            select(LibraryDependencyRecord).where(
-                LibraryDependencyRecord.to_version_id == current,
-                LibraryDependencyRecord.workspace_id == context.workspace_id,
-            )
-        ).all()
-        for row in rows:
-            if row.from_version_id in seen:
-                continue
-            seen.add(row.from_version_id)
-            version = session.get(LibraryVersionRecord, row.from_version_id)
-            if version is None or version.workspace_id != context.workspace_id:
-                continue
-            found[version.id] = version
-            frontier.append(version.id)
-    return list(found.values())
-
-
 def _impact_payload(
-    session, context: TenantContext, version: LibraryVersionRecord, *, reason: str = ""
+    session,
+    context: TenantContext,
+    version: LibraryVersionRecord,
+    *,
+    reason: str = "",
+    dependents: list[LibraryVersionRecord] | None = None,
 ) -> dict:
-    dependents = _dependent_versions(session, context, {version.id})
+    if dependents is None:
+        dependents = dependent_versions(session, context, {version.id})
     payload = {
         "version_id": version.id,
         "entry_id": version.entry_id,
@@ -1747,6 +1814,10 @@ def withdraw_version(
                 code="library_version_not_withdrawable",
             )
 
+        # Walk before the state changes: an entry's current effective version
+        # also reaches the dependents that name its entry (#88), and that
+        # must match the preview the impact token was issued for.
+        impacted = dependent_versions(session, context, {version.id})
         previous_state = version.state
         now = utcnow()
         version.state = VERSION_WITHDRAWN
@@ -1771,7 +1842,6 @@ def withdraw_version(
             entry.current_version_id = None
             entry.updated_at = now
 
-        impacted = _dependent_versions(session, context, {version.id})
         for dependent in impacted:
             if dependent.eligibility != ELIGIBILITY_BLOCKED:
                 dependent.eligibility = ELIGIBILITY_BLOCKED
@@ -1814,7 +1884,7 @@ def withdraw_version(
                     "affected_entities": [],
                 },
             )
-        result = _impact_payload(session, context, version, reason=clean_reason)
+        result = _impact_payload(session, context, version, reason=clean_reason, dependents=impacted)
         _audit(
             session,
             context,
@@ -2093,7 +2163,7 @@ def clone_product(
     request_fingerprint: str | None = None,
     command_identity: str | None = None,
 ) -> dict:
-    """Clone Product：安全默认只复制低风险内容（§5.2、§12）。
+    """Clone Product：安全默认只复制低风险内容（§5.2、§12、ADR 0016）。
 
     Offer、价格、DataSource Mapping 和 Landing Page 是独立稳定身份，
     Clone Product 永不携带；``include_optional`` 只能追加白名单内的可选字段。

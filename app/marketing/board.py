@@ -191,6 +191,17 @@ def project(plan, executions, *, round_state, handoff=None, bindings=None, data_
     handoff_entries = (handoff or {}).get("entries", {})
     all_ready = {e["combination_id"] for e in items if e["ready"]} == set(combos)
     closed = round_state == "closed"
+    # The newest deliverable version of each execution, by the same `ready` the export gate checks.
+    approved = {}
+    for e in items:
+        if e["ready"]:
+            n = numbers[e["asset_version_id"]]
+            approved[n["root"]] = max(approved.get(n["root"], 0), n["version"])
+
+    def revised(e):
+        """A later version of this execution is approved (①v2 after ①), so this one needs no further change (#161)."""
+        n = numbers[e["asset_version_id"]]
+        return approved.get(n["root"], 0) > n["version"]
 
     def done(ai):
         return bool(ai and ai["state"] == "succeeded" and ai["current"])
@@ -211,6 +222,9 @@ def project(plan, executions, *, round_state, handoff=None, bindings=None, data_
                 return "bound", "data", "import", None
             return "has_data", "none", "none" if evaluation_current else "evaluate", None
         if reason:
+            if revised(e):
+                # It stays blocked and out of every comparison; the approved revision carries the execution on.
+                return "blocked", "none", "none", reason
             return "blocked", "review" if reason == "quality_changes_requested" else "single_qc", "revise", reason
         if e["ready"]:
             return "ready", "export", "export" if all_ready else "none", None

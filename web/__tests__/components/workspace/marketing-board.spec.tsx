@@ -593,6 +593,51 @@ test('the drawer answers belongs to, compared with, what is missing and the one 
   ).not.toHaveAttribute('open');
 });
 
+test('an original whose revision is approved asks for nothing more (#161)', async () => {
+  show(fixture.revision.approved as Board);
+  const angle = 'One more charging option';
+  const original = tile(angle, 'Live connection demo · Execution 1');
+  // Its tile no longer names a missing step.
+  expect(original.closest('li')).not.toHaveTextContent(
+    'Quality review not done'
+  );
+  fireEvent.click(original);
+  const drawer = await screen.findByRole('dialog', { name: 'Image details' });
+  const missing = within(drawer)
+    .getByText('What is missing')
+    .closest('section')!;
+  // The review's request stays on record; nothing is missing any more.
+  expect(missing).toHaveTextContent('The quality review asked for changes.');
+  expect(within(missing).getByText('Nothing missing')).not.toHaveClass(
+    'text-red-700'
+  );
+  const next = within(drawer).getByText('Next step').closest('section')!;
+  expect(next).toHaveTextContent('Nothing to do on this image right now.');
+  expect(next).not.toHaveTextContent('Request a revision');
+  expect(within(next).queryByRole('button')).not.toBeInTheDocument();
+});
+
+test('an original whose revision awaits review or was sent back still asks for a revision (#161)', async () => {
+  for (const state of ['pending', 'changes_requested'] as const) {
+    const { unmount } = show(fixture.revision[state] as Board);
+    const original = tile(
+      'One more charging option',
+      'Live connection demo · Execution 1'
+    );
+    expect(original.closest('li')).toHaveTextContent('Quality review not done');
+    fireEvent.click(original);
+    const drawer = await screen.findByRole('dialog', {
+      name: 'Image details',
+    });
+    const next = within(drawer).getByText('Next step').closest('section')!;
+    expect(next).toHaveTextContent('Request a revision');
+    expect(
+      within(next).getByRole('button', { name: 'Primary revise' })
+    ).toBeInTheDocument();
+    unmount();
+  }
+});
+
 test('a waiting image names the counterparts it waits for', async () => {
   show();
   fireEvent.click(

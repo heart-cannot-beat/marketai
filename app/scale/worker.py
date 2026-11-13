@@ -17,14 +17,21 @@ This module, and every other module under ``app/scale``, must never import
 ``app.launch`` in any form -- ``tests/test_scale_worker_isolation.py``
 enforces this with AST inspection (Gates 23-24) and a transitive
 import-closure check (Gate 25), rather than trusting a docstring promise.
-Putting a Scale job handler inside the shared ``WorkerRuntime`` (which *does*
-hold a ``MetaWritePort`` for Launch jobs) would not satisfy that contract --
-the isolation has to be a separate process/composition root, not a shared
-one with an unreachable code path.
+
+This runtime is not deployed. The deployed shared ``WorkerRuntime`` runs the
+Scale jobs as well, which ADR 0017 allows only while that process has no Meta
+write capability (no write Token, no write port, no constructible write
+client); ``app.worker_runtime._main`` refuses to start otherwise. Once that
+stops holding, Scale moves to this runtime -- after it learns to claim only
+Scale job types (``jobs.claim_next(..., job_types=...)``); today it claims
+every type and would fail the rest as ``unsupported_job_type``.
 
 Scale never performs Meta writes: this Worker dispatches only
 ``scale_evaluate`` (spec §3.1/§3.4, ``app.scale.service.run_scale_evaluation``),
 ``scale_advice_expire`` (spec §3.5, ``app.scale.advice.expire_advice_thread``),
+``scale_collect_sources`` (#109, ``app.scale.collector.run_source_collection``,
+which reads stored observation pages and resolves no adapter),
+``scale_target_change`` (#113, ``app.scale.target_change.run_target_change``)
 and ``scale_export`` (Issue #87 Task 5, ``app.scale.exports.run_scale_export``)
 jobs. None of these calls reach ``app.adapters.meta.write_client`` or
 ``app.launch`` at any depth.
@@ -40,10 +47,28 @@ import uuid
 
 from app.adapters.persistence.database import SessionLocal, assert_runtime_role, tenant_session
 from app.platform import jobs
+from app.platform.runtime_role import WORKER_ROLE, runs_as
 from app.platform.tenancy import TenantContext
-from app.scale.advice import AdviceLifecycleError, expire_advice_thread
+from app.scale.advice import AdviceLifecycleError, advice_expire_job_context, expire_advice_thread
+from app.scale.collector import (
+    SourceCollectionError,
+    SourceCollectionFailed,
+    collection_job_input,
+    run_source_collection,
+)
 from app.scale.exports import ExportError, export_job_context, run_scale_export
-from app.scale.service import ScaleOrchestrationError, run_scale_evaluation
+from app.scale.service import (
+    ScaleEvaluationDeferred,
+    ScaleOrchestrationError,
+    evaluation_job_context,
+    run_scale_evaluation,
+)
+from app.scale.target_change import (
+    TargetChangeError,
+    TargetChangeFailed,
+    run_target_change,
+    target_change_job_input,
+)
 
 _JOB_POLL_SECONDS = float(os.getenv("JOB_POLL_SECONDS", "0.5"))
 
@@ -68,6 +93,7 @@ class ScaleWorkerRuntime:
             if not handled:
                 await asyncio.sleep(_JOB_POLL_SECONDS)
 
+    @runs_as(WORKER_ROLE)
     def run_once(self) -> bool:
         job = jobs.claim_next(self.owner)
         if job is None:
@@ -77,6 +103,12 @@ class ScaleWorkerRuntime:
             return True
         if job.type == "scale_advice_expire":
             self._scale_advice_expire(job)
+            return True
+        if job.type == "scale_collect_sources":
+            self._scale_collect_sources(job)
+            return True
+        if job.type == "scale_target_change":
+            self._scale_target_change(job)
             return True
         if job.type == "scale_export":
             self._scale_export(job)
@@ -91,30 +123,50 @@ class ScaleWorkerRuntime:
         )
         return True
 
+    @runs_as(WORKER_ROLE)
     def _scale_evaluate(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_evaluate`` job (spec §3.8).
 
         ``run_scale_evaluation`` owns its own Phase A/B/C transaction
         boundaries internally; this method only owns the Job lifecycle
         around it, mirroring ``WorkerRuntime._generation_run_item``'s
-        division of responsibility for its own domain call.
+        division of responsibility for its own domain call. The run's Meta
+        mode comes from the payload (``evaluation_job_context``, #97): the
+        claimed context names none, and RLS shows Scale rows only to a
+        context that does.
         """
         evaluation_run_id = str(job.payload.get("evaluation_run_id") or "")
-        if not evaluation_run_id:
+        try:
+            if not evaluation_run_id:
+                raise ScaleOrchestrationError("missing_input", "缺少 evaluation_run_id")
+            context = evaluation_job_context(job.context, job.payload)
+        except ScaleOrchestrationError as exc:
             jobs.fail(
                 job.context,
                 job.id,
                 self.owner,
-                code="missing_input",
-                detail="缺少 evaluation_run_id",
+                code=exc.code,
+                detail=str(exc),
                 retryable=False,
             )
             return
         jobs.mark_running(job.context, job.id, self.owner)
         try:
-            with tenant_session(job.context) as session:
-                run_scale_evaluation(session, job.context, evaluation_run_id)
+            with tenant_session(context) as session:
+                run_scale_evaluation(session, context, evaluation_run_id)
             jobs.succeed(job.context, job.id, self.owner)
+        except ScaleEvaluationDeferred as exc:
+            # Another run holds the Episode (#110): the run is untouched and
+            # waits for it, it is not failed.
+            jobs.fail(
+                job.context,
+                job.id,
+                self.owner,
+                code=exc.code,
+                detail=str(exc),
+                retryable=True,
+                retry_after_seconds=exc.retry_after_seconds,
+            )
         except ScaleOrchestrationError as exc:
             jobs.fail(
                 job.context,
@@ -134,30 +186,39 @@ class ScaleWorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
     def _scale_advice_expire(self, job: jobs.ClaimedJob) -> None:
-        """Dispatch fence for the ``scale_advice_expire`` deadline job (spec §3.5)."""
+        """Dispatch fence for the ``scale_advice_expire`` deadline job (spec §3.5).
+
+        The thread's Meta mode comes from the payload
+        (``advice_expire_job_context``, #97), as ``_scale_evaluate``'s does.
+        """
         thread_id = str(job.payload.get("thread_id") or "")
-        if not thread_id:
+        try:
+            if not thread_id:
+                raise AdviceLifecycleError("missing_input", "缺少 thread_id")
+            context = advice_expire_job_context(job.context, job.payload)
+        except AdviceLifecycleError as exc:
             jobs.fail(
                 job.context,
                 job.id,
                 self.owner,
-                code="missing_input",
-                detail="缺少 thread_id",
+                code=exc.code,
+                detail=str(exc),
                 retryable=False,
             )
             return
         jobs.mark_running(job.context, job.id, self.owner)
         try:
-            with tenant_session(job.context) as session:
-                expire_advice_thread(session, job.context, thread_id)
+            with tenant_session(context) as session:
+                expire_advice_thread(session, context, thread_id)
             jobs.succeed(job.context, job.id, self.owner)
         except AdviceLifecycleError as exc:
             jobs.fail(
                 job.context,
                 job.id,
                 self.owner,
-                code="scale_advice_expire_failed",
+                code=exc.code,
                 detail=str(exc),
                 retryable=False,
             )
@@ -171,6 +232,68 @@ class ScaleWorkerRuntime:
                 retryable=False,
             )
 
+    @runs_as(WORKER_ROLE)
+    def _scale_collect_sources(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_collect_sources`` job (#109), the
+        same as the shared Worker's: the Meta mode comes from the payload,
+        and a partial failure is retried (each Episode's manifest is found
+        again by its collection key)."""
+        try:
+            request = collection_job_input(job.context, job.payload)
+        except SourceCollectionError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_source_collection(
+                request.context,
+                connection_id=request.connection_id,
+                target_date=request.target_date,
+                run_generation=request.run_generation,
+            )
+            jobs.succeed(job.context, job.id, self.owner)
+        except SourceCollectionFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_collect_sources_failed", detail=str(exc), retryable=True,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_collect_sources_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
+    def _scale_target_change(self, job: jobs.ClaimedJob) -> None:
+        """Dispatch fence for the ``scale_target_change`` job (#113, #101
+        S7). Like ``_scale_evaluate`` it only delegates to ``app.scale``:
+        the handler supersedes inapplicable Advice and requests
+        ``target_change`` runs, Episode by Episode, each in its own
+        transaction, and finds what it already did on a retry.
+        """
+        try:
+            target_event_id = target_change_job_input(job.payload)
+        except TargetChangeError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+            return
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_target_change(job.context, target_event_id)
+            jobs.succeed(job.context, job.id, self.owner)
+        except TargetChangeError as exc:
+            jobs.fail(job.context, job.id, self.owner, code=exc.code, detail=str(exc), retryable=False)
+        except TargetChangeFailed as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_target_change_failed", detail=str(exc), retryable=True,
+            )
+        except Exception as exc:
+            jobs.fail(
+                job.context, job.id, self.owner,
+                code="scale_target_change_failed", detail=f"{type(exc).__name__}: {exc}", retryable=True,
+            )
+
+    @runs_as(WORKER_ROLE)
     def _scale_export(self, job: jobs.ClaimedJob) -> None:
         """Dispatch fence for the ``scale_export`` job (Issue #87 Task 5).
 

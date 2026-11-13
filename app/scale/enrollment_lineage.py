@@ -157,7 +157,8 @@ def lock_and_validate_enrollment_lineage(
             "offer_version_id": winner.offer_version_id,
             "market_code": winner.market_code,
             "placement": winner.placement,
-            "landing_page_version_id": winner.landing_page_version_id,
+            # Historical key name; the value is the frozen evidence hash (#129).
+            "landing_page_version_id": winner.landing_page_evidence_hash,
             "market_asset_binding_id": winner.market_asset_binding_id,
             "attribution_semantics_hash": winner.attribution_semantics_hash,
             "delivery_target_id": target.id,
@@ -242,7 +243,7 @@ def _assert_winner_target_compatible(
         ("market_code", winner.market_code, target.market_code),
         ("placement", winner.placement, target.placement),
         ("offer_version_id", winner.offer_version_id, target.offer_version_id),
-        ("landing_page_version_id", winner.landing_page_version_id, target.landing_page_version_id),
+        ("landing_page_evidence_hash", winner.landing_page_evidence_hash, target.landing_page_evidence_hash),
         ("attribution_semantics_hash", winner.attribution_semantics_hash, target.attribution_setting),
     )
     for field, winner_value, target_value in checks:

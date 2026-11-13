@@ -52,7 +52,8 @@ class InvalidScaleSnapshot(ValueError):
     `invalid_or_unsorted_breakdown`, `currency_mismatch`, `negative_metric`,
     `clicks_exceed_impressions`, `invalid_exact_window`,
     `invalid_prior_evaluation`, `invalid_freshness_reference`,
-    `invalid_decimal`.
+    `invalid_decimal`. `invalid_policy` rejects a frozen Policy that lacks a
+    field its algorithm version reads (#132, #133).
     """
 
     def __init__(self, code: str, detail: str = ""):
@@ -183,12 +184,16 @@ class ScalePolicySnapshot:
     confidence_z: Decimal
 
     # Complete-day, active-day, impression, click, purchase, and spend floors.
+    # `spend_floor` is the platform economic floor for one 7-day window, in
+    # the snapshot's currency. A Policy that sets the floor per currency
+    # (#132) freezes only the snapshot currency's entry, and `None` when that
+    # currency is not in its table; only `beta-v2` accepts `None`.
     complete_day_floor: int
     active_day_floor: int
     impression_floor: int
     click_floor: int
     purchase_floor: int
-    spend_floor: Decimal
+    spend_floor: Decimal | None
 
     # Frequency, CTR, CPA, ROAS, CPM, and delivery thresholds.
     frequency_level_threshold: Decimal
@@ -229,6 +234,12 @@ class ScalePolicySnapshot:
 
     # Advice-construction values needed to construct stable candidates.
     advice_construction_parameters: tuple[CanonicalKeyValue, ...]
+
+    # Consecutive evaluations a placement or country segment must hit before
+    # it forms `review_delivery_mix` (contract §13, #133). `None` for a
+    # Policy that predates the field; snapshots of schema v1-v3 leave it out
+    # of their hash payload (`app.scale.evidence._hash_payload`).
+    consecutive_breakdown_hits_required: int | None = None
 
 
 @dataclass(frozen=True)

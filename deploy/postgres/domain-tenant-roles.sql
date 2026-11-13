@@ -528,6 +528,9 @@ BEGIN
     'meta_entity_status_events', 'meta_ad_bindings', 'launch_steps',
     'launch_audit_log', 'experiment_ad_bindings', 'meta_sync_runs',
     'meta_ingestions', 'jobs', 'operation_state_events',
+    -- A scheduled Meta observation sync has no API command to admit it:
+    -- its tick Job opens one Operation per sync run (zze4f5a6b7c8, #107).
+    'operation_records',
     'library_entries', 'library_drafts', 'library_events', 'library_audit',
     -- The reference gate (#158) and product intake (#161) run in the Worker:
     -- intake quarantines the images it fetched as reference objects.
@@ -647,9 +650,12 @@ BEGIN
   END LOOP;
 
   -- ---- Scale evidence, evaluation and advice (f5eeeab4e9b9, ad2) ----
-  -- Mirrors f5eeeab4e9b9's GRANT_MATRIX row for row: every runtime role
+  -- Mirrors f5eeeab4e9b9's GRANT_MATRIX row for row, plus the Worker's
+  -- INSERT on scale_episodes (zzb1e2f3a4b5, #92): an evaluation that sees
+  -- the delivery configuration change closes the Episode and opens the next
+  -- one in the Worker (Scale contract §1 item 4, §16.2). Every runtime role
   -- reads every Scale table, INSERT/UPDATE go to exactly the roles listed
-  -- (table, API, Worker), and no role gets DELETE. The migration grants the
+  -- (table, API, Worker), and no role gets DELETE. The migrations grant the
   -- same matrix, but this file revokes everything on every release and only
   -- the grants repeated here survive the "4/4 runtime grants" pass: without
   -- them a released cluster denies every Scale enrollment, evidence and
@@ -661,7 +667,7 @@ BEGIN
       ARRAY['scale_policy_versions', 'INSERT, UPDATE', ''],
       ARRAY['scale_enrollments', 'INSERT, UPDATE', 'UPDATE'],
       ARRAY['scale_enrollment_events', 'INSERT', 'INSERT'],
-      ARRAY['scale_episodes', 'INSERT, UPDATE', 'UPDATE'],
+      ARRAY['scale_episodes', 'INSERT, UPDATE', 'INSERT, UPDATE'],
       ARRAY['scale_episode_events', 'INSERT', 'INSERT'],
       ARRAY['scale_target_versions', 'INSERT, UPDATE', ''],
       ARRAY['scale_target_lifecycle_events', 'INSERT', ''],
@@ -829,6 +835,62 @@ BEGIN
   IF to_regprocedure('public.marketai_claim_next_onboarding_fact(text,integer)') IS NOT NULL THEN
     EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_claim_next_onboarding_fact(text, integer) FROM PUBLIC';
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_claim_next_onboarding_fact(text, integer) TO marketai_domain_worker';
+  END IF;
+
+  -- Tenant-neutral reconciliation candidates (ids only); every fold that
+  -- follows runs in a signed TenantContext under RLS (#22).
+  IF to_regprocedure('public.marketai_legacy_operation_candidates_v1(text[],integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_legacy_operation_candidates_v1(text[], integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_legacy_operation_candidates_v1(text[], integer) TO marketai_domain_worker';
+  END IF;
+  IF to_regprocedure('public.marketai_admitted_operation_candidates_v1(integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_admitted_operation_candidates_v1(integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_admitted_operation_candidates_v1(integer) TO marketai_domain_worker';
+  END IF;
+
+  -- Meta observation dispatch (zze4f5a6b7c8, #107; ticks keyed by authorization
+  -- epoch since zzf6b7c8d9e0, #119): due schedules become meta_observation_tick
+  -- Jobs and their job.enqueued audit events, nothing else; the tick then runs
+  -- in a signed TenantContext under RLS. Same signature, so the same grant.
+  IF to_regprocedure('public.marketai_dispatch_meta_observation_ticks_v1(integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_dispatch_meta_observation_ticks_v1(integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_dispatch_meta_observation_ticks_v1(integer) TO marketai_domain_worker';
+  END IF;
+
+  -- Daily storage_bytes Usage (zzl148a1b2c3, #148): the active Workspaces
+  -- still owed today's usage.storage_bytes Job, ids and epochs only; the Job
+  -- is enqueued and run in a signed TenantContext under RLS.
+  IF to_regprocedure('public.marketai_storage_usage_workspaces_v1(date,integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_storage_usage_workspaces_v1(date, integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_storage_usage_workspaces_v1(date, integer) TO marketai_domain_worker';
+  END IF;
+
+  -- Platform Meta API (zzc2f3a4b5c6, #91 and #94). The API keeps SELECT only
+  -- on workspaces and only the non-secret columns of credential_versions:
+  -- bootstrap creates the platform Workspace (is_platform_workspace = true,
+  -- never an existing row) through the first function, and credential
+  -- revocation learns which Workspace owns a version (the id, nothing else)
+  -- through the second, then revokes in a signed TenantContext under RLS.
+  IF to_regprocedure('public.marketai_create_platform_workspace_v1(text,text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_create_platform_workspace_v1(text, text) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_create_platform_workspace_v1(text, text) TO marketai_domain_api';
+  END IF;
+  IF to_regprocedure('public.marketai_credential_version_workspace_v1(text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_credential_version_workspace_v1(text) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_credential_version_workspace_v1(text) TO marketai_domain_api';
+  END IF;
+
+  -- Platform Meta connection reads (zzd3a4b5c6d7, #102). The operator's
+  -- cross-Workspace list and by-id lookups learn only where a connection
+  -- lives (id, Workspace, Meta mode, current epoch and platform flag), then
+  -- read the connection and its binding in a signed TenantContext under RLS.
+  IF to_regprocedure('public.marketai_meta_connection_ids_v1(text,integer)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_meta_connection_ids_v1(text, integer) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_meta_connection_ids_v1(text, integer) TO marketai_domain_api';
+  END IF;
+  IF to_regprocedure('public.marketai_meta_connection_workspace_v1(text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.marketai_meta_connection_workspace_v1(text) FROM PUBLIC';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.marketai_meta_connection_workspace_v1(text) TO marketai_domain_api';
   END IF;
 
   -- ---- projection_writer: mutable projection tables ----

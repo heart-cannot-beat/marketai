@@ -53,15 +53,20 @@ from ..adapters.persistence.models import (
 from ..library.contracts import (
     ADAPTER_KINDS,
     ENTRY_DATA_SOURCE,
+    ENTRY_OFFER,
     EXECUTION_MODES,
     LIFECYCLE_ARCHIVED,
     ON_FAILURE_MODES,
     PRICE_FORBIDDEN_ON_FAILURE,
     VERSION_EFFECTIVE,
+    offer_market_scope,
 )
 from ..platform.tenancy import TenantContext
 from .evidence_tier import EvidenceTier, derive_evidence_tier
 from .fact_sources import (
+    OFFER_MATCH_AMBIGUOUS,
+    OFFER_MATCH_ONLY_OFFER,
+    OFFER_MATCH_ROW,
     AvailabilityFactValue,
     ControlledMockFactSourceAdapter,
     DataSourceConfig,
@@ -69,6 +74,7 @@ from .fact_sources import (
     FactSourceAdapter,
     FactSourceFailure,
     FactSourceResult,
+    ManualFactRow,
     ManualFactSet,
     ManualFactSourceAdapter,
     MarketContext,
@@ -277,6 +283,22 @@ def _requested_context(
     }
 
 
+def _with_source_rows(
+    requested_context: Mapping[str, object], source_rows: tuple[Mapping[str, object], ...]
+) -> Mapping[str, object]:
+    """An attempt's context plus, for a manual source, every row it judged (#60).
+
+    `manual_fact_rows` lists each row of the attempt's fact type for the
+    market (`fact_id`, `row`, `valid_from`, `valid_to`, `status`, `used`, and
+    since #54 `offer_entry_id` and `offer_match`), so the package keeps each
+    row's validity and Offer as resolution saw them. Packages resolved before
+    #60 have no such key, and before #54 no Offer keys; none is rewritten.
+    """
+    if not source_rows:
+        return requested_context
+    return {**requested_context, "manual_fact_rows": [dict(row) for row in source_rows]}
+
+
 def _canonical_json(payload: object) -> str:
     def _default(obj):
         if isinstance(obj, Decimal):
@@ -434,7 +456,7 @@ def _resolve_market(
                     adapter_kind=step.adapter_kind,
                     adapter_version=step.adapter_version,
                     manual_fact_set_version_id=step.manual_fact_set_version_id,
-                    requested_context=raw_fact.requested_context,
+                    requested_context=_with_source_rows(raw_fact.requested_context, raw_fact.source_rows),
                     mock_scenario=raw_fact.mock_scenario,
                     mock_version=raw_fact.mock_version,
                     outcome="accepted",
@@ -487,7 +509,9 @@ def _resolve_market(
                     adapter_kind=step.adapter_kind,
                     adapter_version=step.adapter_version,
                     manual_fact_set_version_id=step.manual_fact_set_version_id,
-                    requested_context=_requested_context(command, market_cmd, step),
+                    requested_context=_with_source_rows(
+                        _requested_context(command, market_cmd, step), failure.source_rows
+                    ),
                     mock_scenario=step.mock_scenario,
                     mock_version=step.mock_version,
                     outcome="failed",
@@ -1065,7 +1089,7 @@ def _policy_data_source(
     way the entry's *current* effective version is read, so republishing the
     DataSource never strands a policy, and `truth_source_attempts` records
     the version actually used. Library publish resolves the same way
-    (`library.service._truth_policy_source_edge`).
+    (`library.service._entry_reference_edge`).
     """
     reference = reference.strip()
     if reference in ADAPTER_KINDS:
@@ -1128,29 +1152,108 @@ def _policy_data_source(
 
 
 def _manual_fact_set_for_market(
-    manual_fact_set_version_id: str, content: dict, country_code: str
+    manual_fact_set_version_id: str,
+    content: dict,
+    country_code: str,
+    *,
+    offer_entry_id: str,
+    other_market_offers: frozenset[str],
 ) -> ManualFactSet:
-    facts_by_type: dict[str, dict] = {}
-    windows: list[tuple[datetime, datetime]] = []
-    for raw in content.get("facts", []) or []:
+    """The rows of the fact set for one market and the request's Offer (#54).
+
+    Each row names its Offer entry, and serves a request whose OfferVersion
+    belongs to that entry, so republishing the Offer keeps the fact set
+    usable; another Offer's row is never read. A row that names no Offer --
+    a set published before #54, never rewritten -- serves only when no other
+    Offer of the Workspace covers the market (`other_market_offers` is
+    empty): the request's Offer is then the market's only Offer. Otherwise
+    it is kept apart as unattributed, and a fact type left with only such
+    rows fails `manual_fact_offer_ambiguous` rather than taking a row that
+    may be another Offer's.
+
+    Validity is judged row by row when the adapter resolves (contract §7.3,
+    §7.4): a row out of force is left out on its own, and a fact type left
+    with no row in force follows its rule's `on_failure`. Before #60 the
+    intersection of every row's window was the window of the whole set, so one
+    expired row made every fact of the market `manual_fact_set_expired`.
+    """
+    rows: list[ManualFactRow] = []
+    unattributed: list[ManualFactRow] = []
+    in_market = False
+    for index, raw in enumerate(content.get("facts", []) or []):
         if not isinstance(raw, dict) or raw.get("country_code") != country_code:
             continue
         fact_type = raw.get("fact_type")
         if not isinstance(fact_type, str) or not fact_type:
             continue
-        facts_by_type[fact_type] = raw
-        windows.append((_parse_content_date(raw["valid_from"]), _parse_content_date(raw["valid_to"])))
+        in_market = True
+        named = raw.get("offer_entry_id")
+        if _names_no_offer(raw):
+            named = None
+            match = OFFER_MATCH_AMBIGUOUS if other_market_offers else OFFER_MATCH_ONLY_OFFER
+        elif isinstance(named, str) and named.strip() == offer_entry_id:
+            named = offer_entry_id
+            match = OFFER_MATCH_ROW
+        else:
+            continue
+        fact_id = raw.get("fact_id")
+        row = ManualFactRow(
+            index=index,
+            fact_id=fact_id if isinstance(fact_id, str) else None,
+            fact_type=fact_type,
+            valid_from=_parse_content_date(raw.get("valid_from")),
+            valid_to=_parse_content_date(raw.get("valid_to")),
+            raw=raw,
+            offer_entry_id=named,
+            offer_match=match,
+        )
+        (unattributed if match == OFFER_MATCH_AMBIGUOUS else rows).append(row)
 
-    if not facts_by_type:
+    if not in_market:
         raise TruthResolutionError(
             f"ManualFactSet {manual_fact_set_version_id!r} has no facts for country {country_code!r}"
+        )
+    if not rows and not unattributed:
+        raise TruthResolutionError(
+            f"ManualFactSet {manual_fact_set_version_id!r} has no facts for Offer "
+            f"{offer_entry_id!r} in country {country_code!r}"
         )
 
     return ManualFactSet(
         version_id=manual_fact_set_version_id,
-        facts=facts_by_type,
-        valid_from=max(window[0] for window in windows),
-        valid_to=min(window[1] for window in windows),
+        rows=tuple(rows),
+        unattributed_rows=tuple(unattributed),
+    )
+
+
+def _names_no_offer(row: dict) -> bool:
+    """Whether a fact row names no Offer, as rows published before #54 do."""
+    named = row.get("offer_entry_id")
+    return named is None or (isinstance(named, str) and not named.strip())
+
+
+def _offer_market_scopes(
+    session: Session, ctx: TenantContext
+) -> tuple[tuple[str, frozenset[str]], ...]:
+    """Every Offer entry of the Workspace with an effective version, and the markets it lists (#54).
+
+    Archived entries count: archiving stops new selection, not the Offer's
+    claim on facts written before rows named their Offer. A version that
+    lists no markets (only content that never passed publish validation)
+    covers none.
+    """
+    versions = (
+        session.query(LibraryVersionRecord)
+        .filter(
+            LibraryVersionRecord.workspace_id == ctx.workspace_id,
+            LibraryVersionRecord.entry_type == ENTRY_OFFER,
+            LibraryVersionRecord.state == VERSION_EFFECTIVE,
+        )
+        .all()
+    )
+    return tuple(
+        (version.entry_id, offer_market_scope(version.content_json) or frozenset())
+        for version in versions
     )
 
 
@@ -1163,6 +1266,8 @@ def _build_source_step(
     manual_fact_set_content: dict | None,
     market_country: str,
     market_source_mapping_version_id: str | None,
+    offer_entry_id: str | None = None,
+    other_market_offers: frozenset[str] = frozenset(),
 ) -> SourceStep:
     truth_data_mode = data_source_content.get("execution_mode", "real")
 
@@ -1172,6 +1277,8 @@ def _build_source_step(
                 "TruthResolutionPolicy references the 'manual' adapter_kind but no "
                 "manual_fact_set_version_id was supplied"
             )
+        if offer_entry_id is None:  # pragma: no cover - prepare always resolves it
+            raise TruthResolutionError("a manual source needs the Offer entry of the request")
         return SourceStep(
             data_source_version_id=data_source_version_id,
             adapter=ManualFactSourceAdapter(),
@@ -1180,7 +1287,11 @@ def _build_source_step(
             truth_data_mode=truth_data_mode,
             market_source_mapping_version_id=market_source_mapping_version_id,
             manual_fact_set=_manual_fact_set_for_market(
-                manual_fact_set_version_id, manual_fact_set_content, market_country
+                manual_fact_set_version_id,
+                manual_fact_set_content,
+                market_country,
+                offer_entry_id=offer_entry_id,
+                other_market_offers=other_market_offers,
             ),
             manual_fact_set_version_id=manual_fact_set_version_id,
         )
@@ -1305,6 +1416,8 @@ def prepare_truth_resolution_command(
             "TruthResolutionPolicy lists more than one 'manual' DataSource"
         )
     manual_fact_set_content: dict | None = None
+    offer_entry_id: str | None = None
+    offer_scopes: tuple[tuple[str, frozenset[str]], ...] = ()
     if manual_kinds:
         if manual_fact_set_version_id is None:
             raise TruthResolutionError(
@@ -1315,6 +1428,16 @@ def prepare_truth_resolution_command(
             session, ctx, manual_fact_set_version_id, "ManualFactSetVersion"
         )
         manual_fact_set_content = manual_version.content_json
+        # Rows name an Offer *entry* (#54): the batch's OfferVersion matches
+        # by the entry it belongs to.
+        offer_entry_id = _load_effective_version(
+            session, ctx, offer_version_id, "OfferVersion"
+        ).entry_id
+        if any(
+            isinstance(row, dict) and _names_no_offer(row)
+            for row in manual_fact_set_content.get("facts", []) or []
+        ):
+            offer_scopes = _offer_market_scopes(session, ctx)
 
     truth_data_mode = sources[0][2]["execution_mode"]
 
@@ -1329,6 +1452,12 @@ def prepare_truth_resolution_command(
                 f"MarketPolicyVersion {market_input.market_policy_version_id!r} has no MarketPolicy"
             )
 
+        country = market_policy_version.country
+        other_market_offers = frozenset(
+            entry_id
+            for entry_id, scope in offer_scopes
+            if entry_id != offer_entry_id and country.upper() in scope
+        )
         steps = tuple(
             _build_source_step(
                 adapter_kind,
@@ -1336,8 +1465,10 @@ def prepare_truth_resolution_command(
                 content,
                 manual_fact_set_version_id=manual_fact_set_version_id,
                 manual_fact_set_content=manual_fact_set_content,
-                market_country=market_policy_version.country,
+                market_country=country,
                 market_source_mapping_version_id=market_input.market_source_mapping_version_id,
+                offer_entry_id=offer_entry_id,
+                other_market_offers=other_market_offers,
             )
             for adapter_kind, version_id, content in sources
         )
