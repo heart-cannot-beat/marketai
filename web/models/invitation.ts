@@ -1,9 +1,11 @@
 import env from '@/lib/env';
+import { assertSeatAvailableInTx } from '@/lib/entitlements/seats';
 import { ApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { recordMembershipChangeInTx } from '@/lib/membershipAudit';
 import { reconcileProvisioningWorkspaceFromRuntime } from '@/lib/onboarding';
 import { prisma } from '@/lib/prisma';
+import { retrySerializableTransaction } from '@/lib/serializable-retry';
 import { Invitation, Prisma, Role, TeamMember } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
@@ -64,6 +66,12 @@ export const getInvitation = async (
   return invitation;
 };
 
+/**
+ * Invite one address. The new invitation holds a seat (contract §8), so the
+ * seat check and the insert share one SERIALIZABLE transaction: of two
+ * concurrent invitations competing for the last seat, one commits and the
+ * other is retried, sees the seat taken and is refused.
+ */
 export const createInvitation = async (params: {
   teamId: string;
   invitedBy: string;
@@ -74,31 +82,43 @@ export const createInvitation = async (params: {
   const token = randomUUID();
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   try {
-    return await prisma.$transaction(
-      async (tx) => {
-        const active = await tx.invitation.findFirst({
-          where: {
-            teamId: params.teamId,
-            email,
-            consumedAt: null,
-            revokedAt: null,
-          },
-        });
-        if (active) {
-          throw new ApiError(409, 'An active invitation already exists.');
-        }
-        return tx.invitation.create({
-          data: { ...params, email, token, expires },
-        });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    return await retrySerializableTransaction(() =>
+      prisma.$transaction(
+        async (tx) => {
+          const active = await tx.invitation.findFirst({
+            where: {
+              teamId: params.teamId,
+              email,
+              consumedAt: null,
+              revokedAt: null,
+            },
+          });
+          if (active) {
+            throw new ApiError(409, 'An active invitation already exists.');
+          }
+          await assertSeatAvailableInTx(tx, params.teamId, { kind: 'invite' });
+          return tx.invitation.create({
+            data: { ...params, email, token, expires },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      )
     );
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
-      ['P2002', 'P2034'].includes(error.code)
+      error.code === 'P2002'
     ) {
       throw new ApiError(409, 'An active invitation already exists.');
+    }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2034'
+    ) {
+      throw new ApiError(
+        503,
+        'Concurrent changes kept the invitation from being created. Try again.'
+      );
     }
     throw error;
   }
@@ -125,64 +145,6 @@ export const getInvitationCount = async ({ where }) => {
 
 /** Invitations are matched on a normalized address, never on a raw string. */
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
-
-const SERIALIZABLE_TRANSACTION_ATTEMPTS = 5;
-const SERIALIZABLE_RETRY_BASE_DELAY_MS = 5;
-
-const carriesSerializationFailure = (error: unknown): boolean => {
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as {
-    code?: unknown;
-    message?: unknown;
-    meta?: Record<string, unknown>;
-    cause?: unknown;
-  };
-  if (candidate.code === 'P2034' || candidate.code === '40001') return true;
-
-  const metaValues = candidate.meta
-    ? [
-        candidate.meta.code,
-        candidate.meta.sqlstate,
-        candidate.meta.sqlState,
-        candidate.meta.database_error,
-        candidate.meta.message,
-      ]
-    : [];
-  if (
-    [candidate.message, ...metaValues].some(
-      (value) => typeof value === 'string' && /\b40001\b/.test(value)
-    )
-  ) {
-    return true;
-  }
-  return candidate.cause ? carriesSerializationFailure(candidate.cause) : false;
-};
-
-/** Retry only an aborted SERIALIZABLE transaction, always from its outer edge. */
-export const retryInvitationSerializableTransaction = async <T>(
-  operation: () => Promise<T>
-): Promise<T> => {
-  for (
-    let attempt = 0;
-    attempt < SERIALIZABLE_TRANSACTION_ATTEMPTS;
-    attempt++
-  ) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (
-        !carriesSerializationFailure(error) ||
-        attempt === SERIALIZABLE_TRANSACTION_ATTEMPTS - 1
-      ) {
-        throw error;
-      }
-      await new Promise((resolve) =>
-        setTimeout(resolve, SERIALIZABLE_RETRY_BASE_DELAY_MS * 2 ** attempt)
-      );
-    }
-  }
-  throw new ApiError(503, 'Invitation acceptance did not converge.');
-};
 
 const reconcileAcceptedOwner = async (
   membership: TeamMember & { teamSlug: string }
@@ -217,7 +179,7 @@ export const consumeInvitation = async (params: {
 }): Promise<TeamMember & { teamSlug: string }> => {
   const email = normalizeEmail(params.email);
 
-  const membership = await retryInvitationSerializableTransaction(() =>
+  const membership = await retrySerializableTransaction(() =>
     prisma.$transaction(
       async (tx) => {
         return consumeInvitationInTx(tx, params.token, params.userId, email);
@@ -313,6 +275,16 @@ async function consumeInvitationInTx(
     throw new ApiError(400, 'You are already a member of this Workspace.');
   }
 
+  // The first Owner's invitation is the operator's provisioning step; it is
+  // never refused for seats. Every other acceptance turns this invitation's
+  // seat into a membership and is refused only over the limit.
+  if (invitation.kind !== 'FIRST_OWNER') {
+    await assertSeatAvailableInTx(tx, invitation.teamId, {
+      kind: 'accept',
+      invitationId: invitation.id,
+    });
+  }
+
   const member = await tx.teamMember.create({
     data: {
       teamId: invitation.teamId,
@@ -390,7 +362,7 @@ export const acceptInvitationForNewUser = async (params: {
   password: string;
   emailVerified: Date | null;
 }) => {
-  const accepted = await retryInvitationSerializableTransaction(() =>
+  const accepted = await retrySerializableTransaction(() =>
     prisma.$transaction(
       async (tx) => {
         const invitation = await tx.invitation.findUnique({

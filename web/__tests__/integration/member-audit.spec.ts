@@ -29,6 +29,7 @@ describeIfConfigured('Membership audit events (PostgreSQL)', () => {
   let removeTeamMemberInTx: any;
   let updateTeamMember: any;
   let updateTeamMemberRoleInTx: any;
+  let bindBetaPlan: any;
   const createdUsers: string[] = [];
 
   beforeAll(() => {
@@ -45,6 +46,7 @@ describeIfConfigured('Membership audit events (PostgreSQL)', () => {
       updateTeamMember,
       updateTeamMemberRoleInTx,
     } = require('../../models/teamMember'));
+    ({ bindBetaPlan } = require('../helpers/workspace-entitlements'));
   });
   /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -65,13 +67,16 @@ describeIfConfigured('Membership audit events (PostgreSQL)', () => {
 
   const newWorkspace = async () => {
     const suffix = randomUUID().slice(0, 8);
-    return prisma.team.create({
+    const workspace = await prisma.team.create({
       data: {
         name: `Acme Charge ${suffix}`,
         slug: `acme-${suffix}`,
         lifecycle: 'ACTIVE',
       },
     });
+    // Joins and promotions check the seat limit on its snapshot (#157).
+    await bindBetaPlan(prisma, workspace.id, { grantedBy: 'test-operator' });
+    return workspace;
   };
 
   // Fixture memberships are inserted directly and so record nothing.
@@ -301,6 +306,10 @@ describeIfConfigured('Membership audit events (PostgreSQL)', () => {
       await seedMember(team.id, shared.id, 'MEMBER');
     }
     const asOwner = { kind: 'USER', id: owner.id };
+    // Team B's own snapshot publication already wrote one event.
+    const teamBEvents = () =>
+      prisma.controlPlaneAuditEvent.count({ where: { teamId: teamB.id } });
+    const teamBEventsBefore = await teamBEvents();
 
     await join(teamA.id, owner.id, invitee);
     await updateTeamMember({
@@ -316,11 +325,7 @@ describeIfConfigured('Membership audit events (PostgreSQL)', () => {
 
     expect(await memberEvents(teamA.id)).toHaveLength(3);
     expect(await memberEvents(teamB.id)).toEqual([]);
-    expect(
-      await prisma.controlPlaneAuditEvent.count({
-        where: { teamId: teamB.id },
-      })
-    ).toBe(0);
+    expect(await teamBEvents()).toBe(teamBEventsBefore);
     expect(
       await prisma.teamMember.findUnique({
         where: { teamId_userId: { teamId: teamB.id, userId: shared.id } },

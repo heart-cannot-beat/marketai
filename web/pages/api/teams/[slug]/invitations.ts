@@ -1,5 +1,5 @@
 import { sendTeamInviteEmail } from '@/lib/email/sendTeamInviteEmail';
-import { ApiError } from '@/lib/errors';
+import { ApiError, apiErrorBody } from '@/lib/errors';
 import { sendAudit } from '@/lib/audit';
 import { requireSession } from '@/lib/requireSession';
 import { assertCustomerRole, requireConfirmationPhrase } from '@/lib/rbac';
@@ -51,10 +51,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         });
     }
   } catch (error: any) {
-    const message = error.message || 'Something went wrong';
     const status = error.status || 500;
 
-    res.status(status).json({ error: { message } });
+    res.status(status).json({ error: apiErrorBody(error) });
   }
 }
 
