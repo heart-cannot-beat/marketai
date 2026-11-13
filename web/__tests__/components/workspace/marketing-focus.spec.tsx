@@ -9,6 +9,8 @@ import {
 } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import { MarketingWorkspace } from '@/components/workspace/MarketingWorkspace';
+import { roundFocus } from '@/components/workspace/marketing-focus';
+import type { components } from '@/lib/domain-client/generated/domain-v1';
 import { errorMessage } from '@/lib/i18n/domain-errors';
 import sample from '../../fixtures/marketing-plan.json';
 import workflowFixture from '../../fixtures/marketing-workflow.json';
@@ -755,6 +757,55 @@ test.each(LOCALES)(
       catalog['marketing-focus-go-next_plan'],
       'marketing-next-plan'
     );
+    expect(mainButtons().length).toBeLessThanOrEqual(1);
+  }
+);
+
+/**
+ * #161: changes were requested on an image and its revision ①v2 followed.
+ * Once ①v2 is approved the original asks for nothing, so the bar moves on to
+ * the Meta package; while ①v2 waits or is sent back, nothing changes. The
+ * boards are the server projection's own output.
+ */
+type Revision = keyof typeof boardFixture.revision;
+const revisionRound = (state: Revision) => ({
+  ...qcFixture.row,
+  board: boardFixture.revision[state],
+});
+const REVISIONS: [string, Revision, string, number, string][] = [
+  ['awaiting review', 'pending', 'review', 1, 'u_live_1r'],
+  ['approved', 'approved', 'export', 2, 'u_live_1r'],
+  ['sent back for changes', 'changes_requested', 'revise', 2, 'u_live_1'],
+];
+
+test.each(REVISIONS)(
+  'a revision %s: the round focus is %s on the server board (#161)',
+  (_, state, step, count, executionKey) => {
+    const workflow = {
+      next_action: 'review_creatives',
+    } as unknown as components['schemas']['WorkflowEnvelope'];
+    const round = revisionRound(
+      state
+    ) as unknown as components['schemas']['MarketingRound'];
+    expect(
+      roundFocus(workflow, round, { nextPlan: false, freeze: false })
+    ).toEqual({ step, count, executionKey });
+  }
+);
+
+test.each(REVISIONS)(
+  'a revision %s: the Now bar counts only images that still need changes (#161)',
+  async (_, state, step, count) => {
+    const bar = await open(planned, revisionRound(state));
+    expect(bar).toHaveTextContent(
+      translate(`marketing-focus-gap-${step}`, { count })
+    );
+    const revise = /Images that need changes before delivery/;
+    if (step === 'revise')
+      expect(bar).toHaveTextContent(
+        translate('marketing-focus-gap-revise', { count: 2 })
+      );
+    else if (step === 'export') expect(bar).not.toHaveTextContent(revise);
     expect(mainButtons().length).toBeLessThanOrEqual(1);
   }
 );

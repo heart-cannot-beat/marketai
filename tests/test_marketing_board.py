@@ -244,6 +244,65 @@ class TestBoardProjection(unittest.TestCase):
         nodes = by_version(board(SCREEN, withdrawn, **delivered))
         self.assertEqual((nodes["v1"]["stage"], nodes["v1"]["blocked_reason"], nodes["v1"]["next_action"]), ("blocked", "review_withdrawn", "none"))
 
+    def test_an_approved_later_version_ends_the_request_for_changes_on_earlier_ones(self):
+        """#161: changes requested on ① and its revision ①v2 approved. ① stays blocked, but asks for nothing."""
+        others = [execution(f"v{n}", f"c{n}", n, quality="approved", ready=True) for n in range(2, 6)]
+        original = execution("v1", "c1", 1, quality="needs_changes")
+        changes = ("blocked", "review", "revise", "quality_changes_requested")
+        settled = ("blocked", "none", "none", "quality_changes_requested")
+
+        def states(*versions):
+            nodes = by_version(board(SCREEN, [original, *versions, *others]))
+            return {k: (v["stage"], v["gap"], v["next_action"], v["blocked_reason"]) for k, v in nodes.items() if k and k[1] == "1"}
+
+        # The revision awaits review, or was sent back for changes itself: nothing changes for ①.
+        reviewing = execution("v1r", "c1", 6, parent="v1", ai=check("succeeded"), paired=check("succeeded"))
+        self.assertEqual(states(reviewing), {"v1": changes, "v1r": ("paired_qc_done", "review", "review", None)})
+        sent_back = execution("v1r", "c1", 6, parent="v1", quality="needs_changes")
+        self.assertEqual(states(sent_back), {"v1": changes, "v1r": changes})
+        # Approved but not deliverable (its reference changed) is not an approved revision either.
+        stale = execution("v1r", "c1", 6, parent="v1", quality="approved", refs=False)
+        self.assertEqual(states(stale)["v1"], changes)
+
+        approved = execution("v1r", "c1", 6, parent="v1", quality="approved", ready=True)
+        result = board(SCREEN, [original, approved, *others])
+        nodes = by_version(result)
+        self.assertEqual(states(approved), {"v1": settled, "v1r": ("ready", "export", "export", None)})
+        self.assertEqual(nodes["v1"]["execution_index"], nodes["v1r"]["execution_index"])
+        self.assertEqual([n["next_action"] for n in executions_of(result)].count("revise"), 0)
+        self.assertEqual({n["next_action"] for n in executions_of(result) if n["stage"] != "blocked"}, {"export"})
+        # The original stays out of comparisons, exactly as before the revision was approved.
+        self.assertNotIn("v1", nodes["v2"]["compare_with"])
+
+        # Every earlier version of the execution is settled, along a chain or beside a later approved sibling.
+        chain = [execution("v1r", "c1", 6, parent="v1", quality="needs_changes"),
+                 execution("v1rr", "c1", 7, parent="v1r", quality="approved", ready=True)]
+        self.assertEqual(states(*chain), {"v1": settled, "v1r": settled, "v1rr": ("ready", "export", "export", None)})
+        siblings = [execution("v1a", "c1", 6, parent="v1", quality="needs_changes"),
+                    execution("v1b", "c1", 7, parent="v1", quality="approved", ready=True)]
+        self.assertEqual(states(*siblings)["v1a"], settled)
+        # A newer attempt sent back after the approval still asks for changes: the approval is older.
+        later = [execution("v1b", "c1", 6, parent="v1", quality="approved", ready=True),
+                 execution("v1a", "c1", 7, parent="v1", quality="needs_changes")]
+        self.assertEqual(states(*later), {"v1": settled, "v1b": ("ready", "export", "export", None), "v1a": changes})
+        # Another execution of the same combination is not a revision of ①.
+        independent = execution("v1x", "c1", 7, quality="needs_changes")
+        self.assertEqual(states(approved, independent)["v1x"], changes)
+        # Whatever blocked the earlier version.
+        for blocked_by, gap, reason in ((dict(refs=False), "single_qc", "reference_not_current"),
+                                        (dict(blocking=True), "single_qc", "file_qc_failed")):
+            first = execution("v1", "c1", 1, **blocked_by)
+            nodes = by_version(board(SCREEN, [first, approved, *others]))
+            self.assertEqual((nodes["v1"]["gap"], nodes["v1"]["next_action"], nodes["v1"]["blocked_reason"]), ("none", "none", reason))
+            nodes = by_version(board(SCREEN, [first, reviewing, *others]))
+            self.assertEqual((nodes["v1"]["gap"], nodes["v1"]["next_action"]), (gap, "revise"))
+
+        # Once exported, the frozen delivery decides, as before (#161 only moves this earlier).
+        entries = {vid: f"e{vid}" for vid in ("v1r", "v2", "v3", "v4", "v5")}
+        exported = by_version(board(SCREEN, [original, approved, *others], handoff={"state": "ready", "entries": entries},
+                                    round_state="awaiting_data"))
+        self.assertEqual((exported["v1"]["stage"], exported["v1"]["gap"], exported["v1"]["next_action"]), ("blocked", "none", "none"))
+
     def test_single_then_paired_stages_and_the_legacy_names(self):
         def node(single=None, paired=None, quality=None):
             assets = [execution("v1", "c1", 1, ai=single, paired=paired, quality=quality)] + [execution(f"v{n}", f"c{n}", n) for n in (4, 5)]
@@ -418,3 +477,60 @@ class TestBoardProjectionHttp(MarketingWorkflowFixtures):
         self.assertEqual(nodes[fresh[0]]["compare_with"], [source["asset_version_id"]])
         self.assertEqual(nodes[source["asset_version_id"]]["compare_with"], fresh)
         self.assertEqual(nodes[fresh[0]]["execution_index"], 2)
+
+    def review(self, row, asset, quality):
+        checks = {k: "pass" if quality == "approved" else "fail" for k in asset["required_checks"]}
+        return self.command(row, "reviews", {"asset_version_id": asset["asset_version_id"], "quality": quality, "checks": checks,
+            "note": "Controlled Mock fixture review, not real performance"}, 201)
+
+    def revised(self):
+        """Changes requested on one image and the rest approved; its revision ①v2 comes from the controlled Mock (#161)."""
+        project = self.confirmed()
+        self.generate(project)
+        row = self.start_round(project)
+        source, *others = row["assets"]
+        row = self.review(row, source, "needs_changes")
+        for asset in others:
+            row = self.review(row, asset, "approved")
+        row = self.command(row, "feedback-drafts", {"asset_version_id": source["asset_version_id"], "provider": "mock", "model": "mock-v1"}, 201)
+        self.run_drafts([row["feedback_drafts"][-1]["draft_id"]], colour=(87, 12, 44))
+        data = self.round(row)
+        revision = next(n["asset_version_id"] for n in executions_of(data["board"]) if n["parent_version_id"] == source["asset_version_id"])
+        return data, source["asset_version_id"], next(a for a in data["assets"] if a["asset_version_id"] == revision)
+
+    def actions(self, data, original, revision):
+        nodes = by_version(data["board"])
+        return ({k: (nodes[k]["stage"], nodes[k]["gap"], nodes[k]["next_action"], nodes[k]["blocked_reason"]) for k in (original, revision)},
+                [n["next_action"] for n in nodes.values()])
+
+    def test_an_approved_revision_ends_the_original_request_for_changes(self):
+        data, original, revision = self.revised()
+        nodes = by_version(data["board"])
+        self.assertEqual(nodes[original]["execution_index"], nodes[revision["asset_version_id"]]["execution_index"])
+        # ①v2 awaits review: ① still asks for changes, as before #161.
+        states, actions = self.actions(data, original, revision["asset_version_id"])
+        self.assertEqual(states[original], ("blocked", "review", "revise", "quality_changes_requested"))
+        self.assertEqual(states[revision["asset_version_id"]][2], "single_qc")
+        self.assertEqual((actions.count("revise"), actions.count("export")), (1, 0))
+
+        data = self.review(data, revision, "approved")
+        data = self.round(data)
+        states, actions = self.actions(data, original, revision["asset_version_id"])
+        self.assertEqual(states, {original: ("blocked", "none", "none", "quality_changes_requested"),
+                                  revision["asset_version_id"]: ("ready", "export", "export", None)})
+        self.assertEqual(sorted(actions), ["export"] * 5 + ["none"])
+        # The export gate agrees: the original is not deliverable, the board's export images are.
+        exportable = [n["asset_version_id"] for n in executions_of(data["board"]) if n["next_action"] == "export"]
+        refused = self.command(data, "handoff", {"asset_version_ids": exportable + [original]}, 422)
+        self.assertEqual(refused["code"], "qc_required")
+        data = self.command(data, "handoff", {"asset_version_ids": exportable}, 202)
+        states, _ = self.actions(self.round(data), original, revision["asset_version_id"])
+        self.assertEqual(states[original], ("blocked", "none", "none", "quality_changes_requested"))
+
+    def test_a_revision_sent_back_for_changes_keeps_both_versions_asking(self):
+        data, original, revision = self.revised()
+        data = self.round(self.review(data, revision, "needs_changes"))
+        states, actions = self.actions(data, original, revision["asset_version_id"])
+        changes = ("blocked", "review", "revise", "quality_changes_requested")
+        self.assertEqual(states, {original: changes, revision["asset_version_id"]: changes})
+        self.assertEqual((actions.count("revise"), actions.count("export")), (2, 0))
