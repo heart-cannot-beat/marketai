@@ -99,6 +99,7 @@ FAILURE_COPY: dict[str, tuple[str, str]] = {
     "credential_unavailable": ("工作区的 OpenAI 密钥不可用，请在设置中重新绑定。", "bind_openai_key"),
     "credential_rejected": ("OpenAI 拒绝了工作区的密钥。", "bind_openai_key"),
     "rate_limited": ("OpenAI 暂时限流，请稍后重试。", "retry"),
+    "quota_exhausted": ("工作区 OpenAI 密钥所在账户的余额或额度已用完，请充值或换一个密钥。", "bind_openai_key"),
     "guardrail_exceeded": ("本次识别会超出花费护栏。", "adjust_spend_guardrail"),
 }
 

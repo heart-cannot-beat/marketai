@@ -155,7 +155,7 @@ class LlmChatError(Exception):
 
     ``code`` is machine-readable (``credential_unavailable``,
     ``reservation_missing``, ``guardrail_exceeded``, ``rate_limited``,
-    ``credential_rejected``, ``provider_timeout``, ``schema_validation_failed``,
+    ``quota_exhausted``, ``credential_rejected``, ``provider_timeout``, ``schema_validation_failed``,
     ...). ``retryable`` says whether the *same* intent may be tried again as
     a new call (a rate limit) rather than needing a change first (bind a
     key) or reconciliation (``dispatch_certainty == 'uncertain'``).

@@ -234,6 +234,7 @@ const CONDITIONAL_CODES = [
   'credential_rejected',
   'no_image_returned',
   'provider_rejected',
+  'quota_exhausted',
 ];
 
 /** Families in `domain-errors.ts`, and the fallback for no code at all. */

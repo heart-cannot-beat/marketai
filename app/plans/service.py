@@ -102,6 +102,7 @@ FAILURE_COPY: dict[str, tuple[str, str]] = {
     "credential_rejected": ("OpenAI 拒绝了工作区的密钥，请在设置中重新绑定后重试。", "bind_openai_key"),
     "guardrail_exceeded": ("起草方案会超出花费护栏，请调整护栏后重试。", "adjust_spend_guardrail"),
     "rate_limited": ("OpenAI 暂时限流，请稍后重试。", "retry"),
+    "quota_exhausted": ("工作区 OpenAI 密钥所在账户的余额或额度已用完，请充值或换一个密钥后重试。", "bind_openai_key"),
     "invalid_json": ("AI 返回的结果格式不正确，请重试。", "retry"),
     "schema_validation_failed": ("AI 返回的结果格式不正确，请重试。", "retry"),
     "model_refusal": ("AI 拒绝起草这个方案，请调整产品描述或客群后重试。", "retry"),

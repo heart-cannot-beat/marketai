@@ -74,6 +74,7 @@ FAILURE_COPY: dict[str, tuple[str, str]] = {
     "credential_unavailable": ("工作区的 OpenAI 密钥不可用，可以手动选择标签。", "tag_manually"),
     "credential_rejected": ("OpenAI 拒绝了工作区的密钥，可以手动选择标签。", "tag_manually"),
     "rate_limited": ("OpenAI 暂时限流，可以手动选择标签。", "tag_manually"),
+    "quota_exhausted": ("工作区 OpenAI 密钥所在账户的余额或额度已用完，可以手动选择标签。", "tag_manually"),
     "schema_validation_failed": ("AI 返回的结果格式不正确，可以手动选择标签。", "tag_manually"),
     "invalid_json": ("AI 返回的结果格式不正确，可以手动选择标签。", "tag_manually"),
     "model_refusal": ("AI 拒绝识别这张图片，可以手动选择标签。", "tag_manually"),
