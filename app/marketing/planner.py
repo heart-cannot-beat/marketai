@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from decimal import Decimal
 
 import httpx
@@ -24,6 +25,35 @@ from . import service
 from .planning_schema import openai_format, domain_document
 from app.platform.runtime_role import WORKER_ROLE, runs_as
 
+logger = logging.getLogger(__name__)
+
+#: Statuses with which a provider refuses a request before doing billable work
+#: (the set the shared OpenAI adapter also treats as not dispatched).
+REFUSED_STATUSES = frozenset({400, 401, 403, 404, 405, 409, 413, 415, 422, 429})
+
+
+class PlannerProviderRefused(Exception):
+    """The provider refused the request, or the connection never opened.
+
+    Nothing was billed and nothing needs reconciling: the call fails with
+    ``code`` and its reservation is released. Never carries the key.
+    """
+
+    def __init__(self, code, *, http_status=None, request_id=None):
+        self.code = code
+        self.http_status = http_status
+        self.request_id = request_id
+        super().__init__(f"{code} (HTTP {http_status})" if http_status else code)
+
+
+def _raise_refusal(response):
+    status, request_id = response.status_code, response.headers.get("x-request-id")
+    if status in (401, 403):
+        raise PlannerProviderRefused("planner_credential_rejected", http_status=status, request_id=request_id)
+    if status == 429:
+        raise PlannerProviderRefused("planner_rate_limited", http_status=status, request_id=request_id)
+    raise PlannerProviderRefused("planner_request_rejected", http_status=status, request_id=request_id)
+
 
 class CompletionText(str):
     """Keep non-secret provider evidence alongside the text until it is persisted."""
@@ -34,34 +64,48 @@ class CompletionText(str):
         return instance
 
 
-async def text_completion(provider, model, credential, system, user):
-    """No environment-key fallback. Provider/model and input are frozen at admission."""
+async def text_completion(provider, model, credential, system, user, *, transport=None):
+    """No environment-key fallback. Provider/model and input are frozen at admission.
+
+    A provider refusal or a connection that never opened raises
+    :class:`PlannerProviderRefused`. A 5xx, a timeout or a connection lost
+    mid-request propagates: its outcome is unknown. An answer without text
+    returns empty text -- the provider answered, so it is billed output.
+    """
     messages = completion_messages(system, user)
-    async with httpx.AsyncClient(timeout=120) as client:
-        key = credential.decode()
-        if provider == "gemini":
-            response = await client.post(f"{config.GEMINI_BASE_URL}/models/{model}:generateContent",
-                headers={"x-goog-api-key": key}, json={
-                    "system_instruction": {"parts": [{"text": system}]},
-                    "contents": [{"role": "model" if m["role"] == "assistant" else "user",
-                        "parts": [{"text": m["content"]}]} for m in messages[1:]],
-                    "generationConfig": {"temperature": 0.5, "maxOutputTokens": 8192, "responseMimeType": "application/json"}})
-            response.raise_for_status()
-            payload = response.json()
-            candidate = payload["candidates"][0]
-            return CompletionText("".join(p.get("text", "") for p in candidate["content"]["parts"]),
-                {"request_id": response.headers.get("x-request-id"), "usage": payload.get("usageMetadata"),
-                 "finish_reason": candidate.get("finishReason")})
-        system, response_format = openai_format(system)
-        response = await client.post(f"{config.OPENAI_BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {key}"}, json={"model": model, "max_tokens": 8192,
-                "service_tier": "default", "store": False,
-                "response_format": response_format, "messages": [
-                    {"role": "system", "content": system}, *messages[1:]]})
-        response.raise_for_status()
-        payload = response.json()
-        choice = payload["choices"][0]
-        return CompletionText(choice["message"]["content"],
+    key = credential.decode()
+    if provider == "gemini":
+        url = f"{config.GEMINI_BASE_URL}/models/{model}:generateContent"
+        headers = {"x-goog-api-key": key}
+        body = {
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "model" if m["role"] == "assistant" else "user",
+                "parts": [{"text": m["content"]}]} for m in messages[1:]],
+            "generationConfig": {"temperature": 0.5, "maxOutputTokens": 8192, "responseMimeType": "application/json"}}
+    else:
+        openai_system, response_format = openai_format(system)
+        url = f"{config.OPENAI_BASE_URL}/chat/completions"
+        headers = {"Authorization": f"Bearer {key}"}
+        body = {"model": model, "max_tokens": 8192, "service_tier": "default", "store": False,
+            "response_format": response_format, "messages": [
+                {"role": "system", "content": openai_system}, *messages[1:]]}
+    async with httpx.AsyncClient(timeout=120, transport=transport) as client:
+        try:
+            response = await client.post(url, headers=headers, json=body)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            raise PlannerProviderRefused("planner_provider_unreachable") from exc
+    if response.status_code in REFUSED_STATUSES:
+        _raise_refusal(response)
+    response.raise_for_status()
+    payload = response.json()
+    if provider == "gemini":
+        candidate = (payload.get("candidates") or [{}])[0]
+        parts = (candidate.get("content") or {}).get("parts") or []
+        return CompletionText("".join(p.get("text", "") for p in parts),
+            {"request_id": response.headers.get("x-request-id"), "usage": payload.get("usageMetadata"),
+             "finish_reason": candidate.get("finishReason")})
+    choice = (payload.get("choices") or [{}])[0]
+    return CompletionText((choice.get("message") or {}).get("content") or "",
             {"request_id": response.headers.get("x-request-id"), "response_id": payload.get("id"),
              "usage": payload.get("usage"), "finish_reason": choice.get("finish_reason")})
 
@@ -350,6 +394,18 @@ def _end_operation(session, ctx, call, state):
             else OperationResultRef("marketing_project", call.project_id))
 
 
+def _log_failure(ctx, call, code, exc):
+    """Record why a call did not finish: the code, HTTP status and request id, never the key or input."""
+    response = getattr(exc, "response", None) if isinstance(exc, httpx.HTTPStatusError) else None
+    http_status = getattr(exc, "http_status", None) or (response.status_code if response is not None else None)
+    request_id = getattr(exc, "request_id", None) or (response.headers.get("x-request-id") if response is not None else None)
+    logger.warning(
+        "marketing planning call %s %s: code=%s kind=%s provider=%s model=%s http_status=%s request_id=%s error=%s",
+        call.id, call.state, code, call.kind, call.provider, call.model, http_status, request_id, type(exc).__name__,
+        extra={"workspace_id": ctx.workspace_id, "planning_call_id": call.id, "error_code": code},
+    )
+
+
 @runs_as(WORKER_ROLE)
 async def execute_planning(ctx, call_id, *, complete=text_completion):
     """Worker entry. Returning from an uncertain fence never dispatches again."""
@@ -392,11 +448,12 @@ async def execute_planning(ctx, call_id, *, complete=text_completion):
                     operation_id=call.operation_id, job_id=call.job_id, spend_reservation_id=reservation.id,
                     call_semantic_key_hash=call.id, attempt_no=0, execution_mode="byok", provider=call.provider,
                     credential_version_id=cred.id, dispatch_state="prepared", prepared_at=utcnow(), updated_at=utcnow()))
-        except Exception:
+        except Exception as exc:
             call.state, call.error_code = "failed", "planner_admission_changed"
             if reservation:
                 _settle(session, reservation, None, called=False)
             _end_operation(session, ctx, call, OperationState.FAILED)
+            _log_failure(ctx, call, call.error_code, exc)
             return
         call.state = "running"  # committed before any network I/O
         frozen = {k: getattr(call, k) for k in ("kind", "execution_mode", "provider", "model", "input_json", "input_revision", "project_id")}
@@ -409,7 +466,26 @@ async def execute_planning(ctx, call_id, *, complete=text_completion):
                                   json.dumps(frozen["input_json"], ensure_ascii=False))
             receipt = getattr(text, "provider_receipt", None)
             data = text
-    except Exception:
+    except PlannerProviderRefused as exc:
+        with tenant_session(ctx) as session:
+            call = session.scalar(select(PlanningCallRecord).where(
+                PlanningCallRecord.id == call_id, PlanningCallRecord.workspace_id == ctx.workspace_id).with_for_update())
+            if call.state != "running":  # a recovered lease already marked this call uncertain
+                _log_failure(ctx, call, exc.code, exc)
+                return
+            call.state, call.error_code = "failed", exc.code
+            call.output_json = {"provider_receipt": {"http_status": exc.http_status, "request_id": exc.request_id}}
+            reservation = _reservation(session, ctx, call)
+            if reservation:
+                _settle(session, reservation, attempt_id, called=False)
+            if attempt_id:
+                attempt = session.get(ProviderCallAttemptRecord, attempt_id)
+                attempt.dispatch_state, attempt.error_code = "failed", exc.code
+                attempt.provider_request_id, attempt.completed_at = exc.request_id, utcnow()
+            _end_operation(session, ctx, call, OperationState.FAILED)
+            _log_failure(ctx, call, exc.code, exc)
+        return
+    except Exception as exc:
         with tenant_session(ctx) as session:
             call = session.get(PlanningCallRecord, call_id)
             call.state, call.error_code = "uncertain", "planner_outcome_unknown"
@@ -420,6 +496,7 @@ async def execute_planning(ctx, call_id, *, complete=text_completion):
                 attempt = session.get(ProviderCallAttemptRecord, attempt_id)
                 attempt.dispatch_state, attempt.error_code = "uncertain", "planner_outcome_unknown"
             _end_operation(session, ctx, call, OperationState.UNCERTAIN)
+            _log_failure(ctx, call, call.error_code, exc)
         return
     finally:
         credential = None

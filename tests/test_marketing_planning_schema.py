@@ -2,7 +2,6 @@
 import asyncio
 import json
 from unittest import TestCase
-from unittest.mock import patch
 
 import httpx
 
@@ -32,11 +31,8 @@ class TestPlanningSchema(TestCase):
                 "id": "response-test", "usage": {"prompt_tokens": 100, "completion_tokens": 10},
                 "choices": [{"finish_reason": "stop", "message": {"content": '{"example":true}'}}]})
 
-        client = httpx.AsyncClient
-        with patch("app.marketing.planner.httpx.AsyncClient",
-            side_effect=lambda **kwargs: client(transport=httpx.MockTransport(respond), **kwargs)):
-            result = asyncio.run(text_completion("openai", "gpt-4.1-mini-2025-04-14", b"test-secret",
-                system_prompt("plan"), "{}"))
+        result = asyncio.run(text_completion("openai", "gpt-4.1-mini-2025-04-14", b"test-secret",
+            system_prompt("plan"), "{}", transport=httpx.MockTransport(respond)))
         self.assertEqual(len(requests), 1)
         fmt = requests[0]["response_format"]
         self.assertEqual(fmt["type"], "json_schema")
