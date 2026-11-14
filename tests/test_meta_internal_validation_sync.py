@@ -162,13 +162,26 @@ class InternalValidationSyncTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
 
-    def _make_due(self):
+    def _make_due(self, *, before_next_slot: timedelta | None = None):
+        """Make the latest 04:00 slot due, and pin the scheduler's clock for the rest of the test.
+
+        The tick and the deferral rule read ``observation_sync.utcnow``; a
+        back-off is waited out only if it ends before the next day's slot.
+        The clock is pinned a minute after the due slot -- or
+        ``before_next_slot`` ahead of the next one -- so that distance does
+        not depend on the time of day the test runs at (#176).
+        """
         fire_at = latest_fire_at_or_before(DEFAULT_SYNC_CRON, TIMEZONE, utcnow())
         with platform_session() as session:
             session.execute(update(MetaObservationSyncScheduleRecord)
                             .where(MetaObservationSyncScheduleRecord.workspace_id == self.workspace_id,
                                    MetaObservationSyncScheduleRecord.state == "active")
                             .values(next_fire_at=fire_at))
+        now = (fire_at + timedelta(minutes=1) if before_next_slot is None
+               else next_fire_after(DEFAULT_SYNC_CRON, TIMEZONE, fire_at) - before_next_slot)
+        clock = mock.patch.object(observation_sync, "utcnow", return_value=now)
+        clock.start()
+        self.addCleanup(clock.stop)
         return fire_at
 
     def _drain(self, *, release_retries: bool = False) -> int:
@@ -477,13 +490,18 @@ class RateLimitTests(InternalValidationSyncTestCase):
 
     def test_a_deferral_that_would_outlast_the_next_days_sync_fails_the_runs(self):
         self._establish()
-        self._make_due()
+        # Read ten minutes before the next day's slot: the back-off would end after it.
+        self._make_due(before_next_slot=timedelta(minutes=10))
         self.graph.fault = lambda _index, _request: graph_error(400, 17, "User request limit reached")
-        with mock.patch.object(observation_sync, "_deferral_deadline", lambda *_args: utcnow()):
-            self._drain()
+        self._drain()
         batch = self._batch()
         self.assertEqual((batch.state, batch.error_code), ("failed", "meta_observation_sync_failed"))
         self.assertEqual({run.state for run in self._runs().values()}, {"failed"})
+        self.assertEqual(self._rows(AuditEventRecord, event_type="job.deferred"), [], "never deferred")
+        reasons = [event.details_json["reason"]
+                   for event in self._rows(AuditEventRecord, event_type="meta.sync_run.failed")]
+        self.assertEqual(len(reasons), 5)
+        self.assertTrue(all("rate limited past the next day's sync" in reason for reason in reasons), reasons)
         self.assertEqual(len(self.graph.requests), 1, "the rest are not read")
         self.assertEqual(self._rows(EvidenceAttestationRecord), [])
 

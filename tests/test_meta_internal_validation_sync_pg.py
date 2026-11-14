@@ -196,6 +196,11 @@ class InternalValidationSyncPostgresTests(unittest.TestCase):
             session.execute(update(MetaObservationSyncScheduleRecord)
                             .where(MetaObservationSyncScheduleRecord.workspace_id == platform_id)
                             .values(next_fire_at=fire_at))
+        # The scheduler reads its clock a minute after the slot, so the 15-minute
+        # back-off ends well before the next day's slot whatever the time of day (#176).
+        clock = patch.object(observation_sync, "utcnow", return_value=fire_at + timedelta(minutes=1))
+        clock.start()
+        self.addCleanup(clock.stop)
         self.graph.usage = lambda index, _request: business_usage(85 if index == 1 else 10)
 
         runtime = WorkerRuntime(owner=f"ci-only-meta-iv-pg-{uuid.uuid4().hex[:6]}")
