@@ -28,6 +28,7 @@ import uuid
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
+from unittest import mock
 
 from alembic import command
 from alembic.config import Config
@@ -57,6 +58,7 @@ from app.meta.observation import (
     DEFAULT_SYNC_CRON,
     create_contract_generation,
     ensure_observation_schedule,
+    latest_fire_at_or_before,
     observation_read_plan,
     observation_target_date,
     retire_contract_generation,
@@ -147,15 +149,27 @@ class ScaleObservationTestCase(unittest.TestCase):
         with entered_as(API_ROLE), tenant_session(context) as session:
             return ensure_metric_contract_set(session, context, connection_id=connection_id, **kwargs)
 
-    def _make_due(self, fire_at=None):
+    def _make_due(self):
+        """Make the latest real slot due, and pin the scheduler's clock a minute after it.
+
+        The slot is the schedules' own cron in their generation's time zone
+        (``America/Los_Angeles`` here; UTC for a controlled-mock account
+        whose scenario names none). The next slot minus 24 hours is not a
+        slot across a daylight-saving switch, and a tick on the real clock
+        could then skip to a later slot or find nothing due (#178).
+        """
         with platform_session() as session:
-            rows = list(session.scalars(select(MetaObservationSyncScheduleRecord).where(
-                MetaObservationSyncScheduleRecord.workspace_id == self.workspace_id)))
-            fire_at = fire_at or rows[0].next_fire_at - timedelta(days=1)
+            schedule = session.scalars(select(MetaObservationSyncScheduleRecord).where(
+                MetaObservationSyncScheduleRecord.workspace_id == self.workspace_id)).first()
+            zone = session.get(ObservationContractGenerationRecord, schedule.contract_generation_id).local_timezone
+            fire_at = latest_fire_at_or_before(schedule.cron_expression, zone, utcnow())
             session.execute(update(MetaObservationSyncScheduleRecord)
                             .where(MetaObservationSyncScheduleRecord.workspace_id == self.workspace_id)
                             .values(next_fire_at=fire_at))
-        return fire_at if fire_at.tzinfo else fire_at.replace(tzinfo=utcnow().tzinfo)
+        clock = mock.patch.object(observation_sync, "utcnow", return_value=fire_at + timedelta(minutes=1))
+        clock.start()
+        self.addCleanup(clock.stop)
+        return fire_at
 
     def _drain(self, *, release_retries: bool = False) -> int:
         handled = 0
