@@ -50,10 +50,19 @@ WITHDRAW_REASON = "Localization E2E stale-Truth recovery fixture"
 
 
 def _library_version_id(value: str) -> str:
+    """A Creative Library version id, as the seed hands it over.
+
+    The Library mints ``libver_`` ids (``app/library/service.py``); the
+    shorter ``lv_`` prefix is what hand-built test fixtures use. Either way
+    the id is at most 64 safe characters, so it cannot smuggle a path or a
+    shell token into the command.
+    """
     version_id = value.strip()
-    if not re.fullmatch(r"lv_[A-Za-z0-9_-]{1,61}", version_id):
+    if len(version_id) > 64 or not re.fullmatch(
+        r"(?:libver|lv)_[A-Za-z0-9_-]+", version_id
+    ):
         raise argparse.ArgumentTypeError(
-            "version id must start with lv_ and contain at most 64 safe characters"
+            "version id must start with libver_ or lv_ and contain at most 64 safe characters"
         )
     return version_id
 

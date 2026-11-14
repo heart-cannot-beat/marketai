@@ -179,13 +179,50 @@ def test_plain_postgresql_url_uses_installed_psycopg_driver() -> None:
 
 @pytest.mark.parametrize(
     "version_id",
-    ["", "version_123", "lv_has space", "lv_../other", "lv_" + "a" * 62],
+    [
+        "",
+        "version_123",
+        "lv_",
+        "libver_",
+        "lv_has space",
+        "lv_../other",
+        "libver_has space",
+        "libver_../other",
+        "libver;rm",
+        "lv_" + "a" * 62,
+        "libver_" + "a" * 58,
+    ],
 )
 def test_withdraw_cli_rejects_unsafe_or_unbounded_version_ids(
     version_id: str,
 ) -> None:
     with pytest.raises(argparse.ArgumentTypeError):
         seed._library_version_id(version_id)
+
+
+@pytest.mark.parametrize(
+    "version_id",
+    [
+        # What the Library mints (``new_id("libver")``) and so what the
+        # seed hands to ``withdraw-version`` (#172).
+        "libver_aaead1ca7a6b4727aaba0398a1e8a7ff",
+        "libver_" + "a" * 57,
+        # The prefix hand-built test fixtures use.
+        "lv_1234567890abcdef1234567890abcdef",
+        "lv_" + "a" * 61,
+    ],
+)
+def test_withdraw_cli_accepts_library_version_ids(version_id: str) -> None:
+    assert seed._library_version_id(f"  {version_id} ") == version_id
+
+
+def test_withdraw_cli_parses_a_library_minted_version_id() -> None:
+    version_id = "libver_aaead1ca7a6b4727aaba0398a1e8a7ff"
+
+    arguments = seed._arguments(["withdraw-version", "--version-id", version_id])
+
+    assert arguments.command == "withdraw-version"
+    assert arguments.version_id == version_id
 
 
 def test_withdraw_helper_targets_exact_workspace_truth_version() -> None:
