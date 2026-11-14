@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from decimal import Decimal
 
 import httpx
@@ -19,6 +20,7 @@ from app.generation.paid_execution import _settle
 from app.generation.selection import authorize_paid, credential_binding, SelectionError
 from app.llm import extract_json
 from app.platform.operations import OperationState, OperationResultRef, transition_operation
+from app.providers.llm_registry import OPENAI_CHAT_MODELS
 from .contracts import COMPETITOR_KINDS, Understanding, TestPlan
 from .models import PlanningCallRecord
 from . import service
@@ -39,20 +41,56 @@ class PlannerProviderRefused(Exception):
     ``code`` and its reservation is released. Never carries the key.
     """
 
-    def __init__(self, code, *, http_status=None, request_id=None):
+    def __init__(self, code, *, http_status=None, request_id=None, provider_reason=None):
         self.code = code
         self.http_status = http_status
         self.request_id = request_id
+        #: The provider's own machine-readable reason (Gemini ErrorInfo
+        #: ``reason``, OpenAI ``error.code``/``error.type``), never its message.
+        self.provider_reason = provider_reason
         super().__init__(f"{code} (HTTP {http_status})" if http_status else code)
 
 
-def _raise_refusal(response):
-    status, request_id = response.status_code, response.headers.get("x-request-id")
-    if status in (401, 403):
-        raise PlannerProviderRefused("planner_credential_rejected", http_status=status, request_id=request_id)
+_GEMINI_ERROR_INFO = "type.googleapis.com/google.rpc.ErrorInfo"
+#: A provider reason is an enum-like token; anything else is not logged or used.
+_REASON = re.compile(r"[A-Za-z0-9_.\-]{1,64}")
+
+
+def _refusal_reasons(provider, response):
+    """The structured reasons a refusal carries, most specific first; never its message text.
+
+    Gemini: the ``reason`` of each ``google.rpc.ErrorInfo`` in ``error.details``.
+    OpenAI: ``error.code``, then ``error.type``. A body that is not JSON, or
+    lacks these fields, has none.
+    """
+    try:
+        error = response.json().get("error")
+    except (ValueError, AttributeError):
+        return ()
+    if not isinstance(error, dict):
+        return ()
+    if provider == "gemini":
+        details = error.get("details")
+        found = [item.get("reason") for item in (details if isinstance(details, list) else ())
+                 if isinstance(item, dict) and item.get("@type") == _GEMINI_ERROR_INFO]
+    else:
+        found = [error.get("code"), error.get("type")]
+    return tuple(dict.fromkeys(r for r in found if isinstance(r, str) and _REASON.fullmatch(r)))
+
+
+def _raise_refusal(provider, response):
+    """Classify a refusal by its status, refined only by the provider's structured reason."""
+    status = response.status_code
+    reasons = _refusal_reasons(provider, response)
+    known = {"http_status": status, "request_id": response.headers.get("x-request-id"),
+             "provider_reason": reasons[0] if reasons else None}
+    if status in (401, 403) or (provider == "gemini" and status == 400 and "API_KEY_INVALID" in reasons):
+        raise PlannerProviderRefused("planner_credential_rejected", **known)
+    if provider != "gemini" and status == 429 and "insufficient_quota" in reasons:
+        raise PlannerProviderRefused("planner_quota_exhausted", **known)
     if status == 429:
-        raise PlannerProviderRefused("planner_rate_limited", http_status=status, request_id=request_id)
-    raise PlannerProviderRefused("planner_request_rejected", http_status=status, request_id=request_id)
+        raise PlannerProviderRefused("planner_rate_limited", **known)
+    raise PlannerProviderRefused("planner_request_rejected", **known)
 
 
 class CompletionText(str):
@@ -86,16 +124,21 @@ async def text_completion(provider, model, credential, system, user, *, transpor
         openai_system, response_format = openai_format(system)
         url = f"{config.OPENAI_BASE_URL}/chat/completions"
         headers = {"Authorization": f"Bearer {key}"}
-        body = {"model": model, "max_tokens": 8192, "service_tier": "default", "store": False,
+        # ``max_completion_tokens`` (reasoning tokens included): reasoning
+        # models refuse ``max_tokens``. As in ``openai_chat._payload``.
+        body = {"model": model, "max_completion_tokens": 8192, "service_tier": "default", "store": False,
             "response_format": response_format, "messages": [
                 {"role": "system", "content": openai_system}, *messages[1:]]}
+        spec = OPENAI_CHAT_MODELS.get(model)
+        if spec is not None and spec.reasoning_effort:
+            body["reasoning_effort"] = spec.reasoning_effort
     async with httpx.AsyncClient(timeout=120, transport=transport) as client:
         try:
             response = await client.post(url, headers=headers, json=body)
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
             raise PlannerProviderRefused("planner_provider_unreachable") from exc
     if response.status_code in REFUSED_STATUSES:
-        _raise_refusal(response)
+        _raise_refusal(provider, response)
     response.raise_for_status()
     payload = response.json()
     if provider == "gemini":
@@ -395,13 +438,16 @@ def _end_operation(session, ctx, call, state):
 
 
 def _log_failure(ctx, call, code, exc):
-    """Record why a call did not finish: the code, HTTP status and request id, never the key or input."""
+    """Record why a call did not finish: the code, HTTP status, request id and the
+    provider's structured reason, never the key, the input or the response body."""
     response = getattr(exc, "response", None) if isinstance(exc, httpx.HTTPStatusError) else None
     http_status = getattr(exc, "http_status", None) or (response.status_code if response is not None else None)
     request_id = getattr(exc, "request_id", None) or (response.headers.get("x-request-id") if response is not None else None)
     logger.warning(
-        "marketing planning call %s %s: code=%s kind=%s provider=%s model=%s http_status=%s request_id=%s error=%s",
-        call.id, call.state, code, call.kind, call.provider, call.model, http_status, request_id, type(exc).__name__,
+        "marketing planning call %s %s: code=%s kind=%s provider=%s model=%s http_status=%s request_id=%s "
+        "provider_reason=%s error=%s",
+        call.id, call.state, code, call.kind, call.provider, call.model, http_status, request_id,
+        getattr(exc, "provider_reason", None), type(exc).__name__,
         extra={"workspace_id": ctx.workspace_id, "planning_call_id": call.id, "error_code": code},
     )
 

@@ -332,6 +332,47 @@ class TestOpenAIChatAdapter(unittest.IsolatedAsyncioTestCase):
         self.assertIs(raised.exception.retryable, True)
         self.assertIsNone(raised.exception.reported_cost)
 
+    async def test_exhausted_quota_is_unbilled_and_not_retried(self):
+        for name, error in (
+            ("code", {"message": "You exceeded your current quota", "type": "insufficient_quota",
+                      "code": "insufficient_quota"}),
+            ("type only", {"message": "no quota left", "type": "insufficient_quota", "code": None}),
+        ):
+            with self.subTest(name):
+                script = _Script(httpx.Response(429, json={"error": error}))
+                with self.assertRaises(ProviderDispatchError) as raised:
+                    await script.adapter().execute(_resolved(), credential=memoryview(b"k"), idempotency_key="k")
+                self.assertEqual(len(script.requests), 1)
+                self.assertEqual(raised.exception.dispatch_certainty, "not_dispatched")
+                self.assertEqual(raised.exception.error_code, "quota_exhausted")
+                self.assertIs(raised.exception.retryable, False)
+                self.assertIsNone(raised.exception.reported_cost)
+
+    async def test_a_429_without_the_quota_code_stays_a_rate_limit(self):
+        for body in ({"error": {"message": "Rate limit reached", "type": "requests", "code": "rate_limit_exceeded"}},
+                     {"error": {"message": "You exceeded your current quota"}},
+                     {"error": "insufficient_quota"}):
+            with self.subTest(body=body):
+                script = _Script(httpx.Response(429, json=body))
+                with self.assertRaises(ProviderDispatchError) as raised:
+                    await script.adapter().execute(_resolved(), credential=memoryview(b"k"), idempotency_key="k")
+                self.assertEqual(raised.exception.error_code, "rate_limited")
+                self.assertIs(raised.exception.retryable, True)
+        script = _Script(httpx.Response(429, text="<html>insufficient_quota</html>"))
+        with self.assertRaises(ProviderDispatchError) as raised:
+            await script.adapter().execute(_resolved(), credential=memoryview(b"k"), idempotency_key="k")
+        self.assertEqual(raised.exception.error_code, "rate_limited")
+
+    async def test_exhausted_quota_on_a_schema_retry_keeps_the_billed_first_answer(self):
+        quota = httpx.Response(429, json={"error": {"type": "insufficient_quota", "code": "insufficient_quota"}})
+        script = _Script(_ok("not json"), quota)
+        with self.assertRaises(ProviderDispatchError) as raised:
+            await script.adapter().execute(_resolved(), credential=memoryview(b"k"), idempotency_key="k")
+        self.assertEqual(raised.exception.error_code, "quota_exhausted")
+        self.assertEqual(raised.exception.dispatch_certainty, "dispatched")
+        self.assertIs(raised.exception.retryable, False)
+        self.assertIsNotNone(raised.exception.reported_cost)
+
     async def test_rejected_key_is_unbilled_and_not_retryable(self):
         script = _Script(httpx.Response(401, json={"error": {"message": "bad key"}}))
         with self.assertRaises(ProviderDispatchError) as raised:
@@ -801,6 +842,25 @@ class GovernedLlmChatTests(LibraryFixtures):
                 AuditEventRecord.resource_id == attempt.id,
             )).scalars().all()
             self.assertEqual(len(audits), 1)
+
+    def test_exhausted_quota_fails_the_attempt_without_retry_and_releases_the_reservation(self):
+        self._bind_openai_key()
+        operation_id, job_id, reservation = self._admit(mode="byok", request=_request())
+        script = _Script(httpx.Response(429, json={"error": {
+            "message": "You exceeded your current quota", "type": "insufficient_quota", "code": "insufficient_quota"}}))
+        with self.assertRaises(LlmChatError) as raised:
+            self._chat(self._client(script), job_id=job_id, operation_id=operation_id, mode="byok")
+        self.assertEqual(raised.exception.code, "quota_exhausted")
+        self.assertFalse(raised.exception.retryable)
+        self.assertEqual(raised.exception.dispatch_certainty, "not_dispatched")
+        self.assertEqual(len(script.requests), 1)
+        with tenant_session(self.ctx) as s:
+            attempt = self._attempts(s, job_id)[0]
+            self.assertEqual((attempt.dispatch_state, attempt.error_code), ("failed", "quota_exhausted"))
+            classified = self._events(s, attempt.id, "failure_classified")[0].payload_json
+            self.assertEqual(classified, {"classification": "terminal", "error_code": "quota_exhausted",
+                                          "retryable": False})
+            self.assertEqual(s.get(SpendReservationRecord, reservation.reservation_id).state, "released")
 
     def test_rejected_key_is_classified_not_retryable(self):
         self._bind_openai_key()

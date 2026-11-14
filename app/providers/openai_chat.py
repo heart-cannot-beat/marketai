@@ -22,8 +22,9 @@ Outcomes (the coordinator's vocabulary):
   ``ProviderResult.reported_cost`` prices the reported usage, so the
   reservation settles at what the call actually cost;
 * ``not_dispatched`` -- nothing billed: 4xx refusals (429 ``rate_limited``
-  is ``retryable``; 401/403 ``credential_rejected`` is not), or the
-  connection never opened;
+  is ``retryable``; a 429 whose ``error.code`` or ``error.type`` is
+  ``insufficient_quota`` is ``quota_exhausted`` and, like 401/403
+  ``credential_rejected``, is not), or the connection never opened;
 * ``uncertain`` -- no trustworthy answer (timeouts, 5xx, a dropped
   connection after the request went out): the reservation stays open for
   reconciliation, never a blind resend (no idempotency key, no lookup);
@@ -228,8 +229,11 @@ class OpenAIChatAdapter:
             spec, usage, request, model_version, started, http_calls, answer_digests,
         ) if http_calls else None
         if status in _NOT_DISPATCHED_STATUSES:
+            # An exhausted balance or quota also answers 429, but waiting
+            # does not help: the key's account needs topping up.
             code = (
-                "rate_limited" if status == 429
+                "quota_exhausted" if status == 429 and "insufficient_quota" in _error_kinds(response)
+                else "rate_limited" if status == 429
                 else "credential_rejected" if status in (401, 403)
                 else f"openai_{status}"
             )
@@ -238,7 +242,7 @@ class OpenAIChatAdapter:
                 dispatch_certainty="dispatched" if billed else "not_dispatched",
                 message=f"OpenAI {status}: {detail}",
                 error_code=code,
-                retryable=status == 429,
+                retryable=code == "rate_limited",
                 reported_cost=billed,
             )
         return ProviderDispatchError(
@@ -413,6 +417,17 @@ def _error_detail(response: httpx.Response) -> str:
     except (ValueError, AttributeError):
         message = None
     return str(message or response.text or "").strip()[:300]
+
+
+def _error_kinds(response: httpx.Response) -> tuple[str, ...]:
+    """The refusal's structured ``error.code`` and ``error.type``; never its message text."""
+    try:
+        error = response.json().get("error")
+    except (ValueError, AttributeError):
+        return ()
+    if not isinstance(error, dict):
+        return ()
+    return tuple(value for value in (error.get("code"), error.get("type")) if isinstance(value, str))
 
 
 def _elapsed_ms(started: float) -> int:
