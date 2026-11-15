@@ -346,6 +346,16 @@
     },
     "upload-complete-bound": "Upload complete — the reference was published and bound to this draft.",
     "rights-scope": "Rights scope",
+    "rights-scope-hint": "What gives this workspace the right to use the image. It is saved with the image.",
+    "rights-scope-options": {
+      "owned_product_photo": "Our own product photo",
+      "owned_brand_asset": "Our own logo or brand artwork",
+      "supplier_provided": "Supplied by the manufacturer or a supplier for our ads",
+      "commissioned_work": "Commissioned from a photographer or designer",
+      "licensed_stock": "Licensed stock image",
+      "certification_document": "Certificate or test report issued to us"
+    },
+    "rights-scope-earlier": "{{value}} (saved earlier)",
     "rights-valid-to": "Rights valid until",
     "rights-confirm": "I confirm this workspace holds the rights to use this image as a reference for the declared scope and period.",
     "confirm-rights-first": "Confirm the rights declaration to enable uploads",

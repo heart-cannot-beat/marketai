@@ -1,7 +1,9 @@
 import { useTranslation } from 'next-i18next';
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { useLibraryReferenceUpload } from '@/hooks/library/useLibraryReferenceUpload';
+import { DEFAULT_RIGHTS_SCOPE } from '@/lib/library/rights-scope';
 import { ReferenceGateProgress } from './ReferenceGateProgress';
+import { RightsScopeSelect } from './RightsScopeSelect';
 
 interface ReferenceUploadZoneProps {
   contextEntryId: string;
@@ -13,8 +15,6 @@ interface ReferenceUploadZoneProps {
   /** Product settings impose a tighter limit than the general Library. */
   maxFileBytes?: number;
 }
-
-const DEFAULT_RIGHTS_SCOPE = 'owned_product_photo';
 
 function defaultValidTo(): string {
   const next = new Date();
@@ -47,8 +47,9 @@ export function ReferenceUploadZone({
   }, [progress.phase, progress.referenceObjectId, onComplete]);
   // The rights declaration (contract §7.2) travels with the upload and is
   // what the server publishes into the ReferenceAssetVersion -- the user
-  // never writes it as raw JSON afterwards.
-  const [rightsScope, setRightsScope] = useState(DEFAULT_RIGHTS_SCOPE);
+  // never writes it as raw JSON afterwards. The scope is chosen from a list
+  // whose labels are translated; the code is what gets stored (#182).
+  const [rightsScope, setRightsScope] = useState<string>(DEFAULT_RIGHTS_SCOPE);
   const [rightsValidTo, setRightsValidTo] = useState(defaultValidTo);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
 
@@ -148,18 +149,7 @@ export function ReferenceUploadZone({
   return (
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="form-control w-full">
-          <div className="label">
-            <span className="label-text">{t('references.rights-scope')}</span>
-          </div>
-          <input
-            type="text"
-            className="input input-bordered input-sm w-full"
-            value={rightsScope}
-            onChange={(e) => setRightsScope(e.target.value)}
-            autoComplete="off"
-          />
-        </label>
+        <RightsScopeSelect value={rightsScope} onChange={setRightsScope} />
         <label className="form-control w-full">
           <div className="label">
             <span className="label-text">

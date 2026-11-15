@@ -346,6 +346,16 @@
     },
     "upload-complete-bound": "上传完成，参考素材已发布并绑定到这份草稿。",
     "rights-scope": "授权范围",
+    "rights-scope-hint": "这个工作区凭什么可以使用这张图片；会和图片一起保存。",
+    "rights-scope-options": {
+      "owned_product_photo": "自有产品照片",
+      "owned_brand_asset": "自有 Logo 或品牌设计",
+      "supplier_provided": "厂商或供应商提供，允许用于我们的广告",
+      "commissioned_work": "委托摄影师或设计师制作",
+      "licensed_stock": "已购买授权的图库图片",
+      "certification_document": "颁发给我们的认证证书或检测报告"
+    },
+    "rights-scope-earlier": "{{value}}（之前保存的值）",
     "rights-valid-to": "授权有效期至",
     "rights-confirm": "我确认这个工作区拥有在声明的范围和期限内把这张图片用作参考素材的权利。",
     "confirm-rights-first": "确认权利声明后才能上传",
