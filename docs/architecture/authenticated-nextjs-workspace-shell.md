@@ -91,7 +91,7 @@ Issue #26 交付：
 | `pages/w/[slug]/index.tsx` | `/w/{slug}` | 服务端重定向到 `products`（#162 起；此前为 `generate`） |
 | `pages/w/[slug]/products/index.tsx` | `/w/{slug}/products` | 产品首页（前台两项配置合同 §3.1，#162） |
 | `pages/w/[slug]/products/new.tsx` | `/w/{slug}/products/new` | 添加产品：粘贴 → 识别 → 产品卡确认（#162） |
-| `pages/w/[slug]/tests/index.tsx` | `/w/{slug}/tests` | #337 起只读：全部测试方案（新的在前），顶部提示去「营销测试」，不再折叠「生成默认值」（只在 `settings`）；此前为：全部测试方案（新的在前）；折叠的「生成默认值」（Member 只读，#165） |
+| `pages/w/[slug]/tests/index.tsx` | `/w/{slug}/tests` | #337 起只读：全部测试方案（新的在前），顶部提示去「营销测试」，不再折叠「生成默认值」（#181 起 `settings` 也不再显示）；此前为：全部测试方案（新的在前）；折叠的「生成默认值」（Member 只读，#165） |
 | `pages/w/[slug]/tests/new.tsx` | `/w/{slug}/tests/new` | #337 起：服务端重定向到 `experiments`（含 `?product=`，参数丢弃）；此前为：设置广告测试：三问带默认值、「按默认开始」；产品经一次性 sessionStorage 交接传入，不进 URL（#165） |
 | `pages/w/[slug]/tests/[planId].tsx` | `/w/{slug}/tests/{planId}` | #337 起只读：方向卡片、样图与这一轮的结果，顶部提示去「营销测试」；此前为：方向卡片、先出样图 → 展开完整测试、按方向分组的结果（#165） |
 | `pages/w/[slug]/generate.tsx` | `/w/{slug}/generate` | 新建生成壳 |

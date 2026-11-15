@@ -227,7 +227,7 @@ _Avoid_: 参考素材、上传即生效、AI 打标即确认
 _Avoid_: 单图胜负、按名称跨方案合并、强行选出赢家
 
 **生成默认值**:
-Owner 维护的 Workspace 设置，决定前台测试方案提交 Run 时使用的 Provider、模型、执行模式、画幅和各档每组合变体数；未设置时绑定了 OpenAI 生成凭据则为 BYOK GPT-Image，否则为受控 Mock。它在 Run 提交时冻结进配方，之后修改不改写既有 Run。
+Owner 维护的 Workspace 设置，决定旧前台测试方案提交 Run 时使用的 Provider、模型、执行模式、画幅和各档每组合变体数；未设置时绑定了 OpenAI 生成凭据则为 BYOK GPT-Image，否则为受控 Mock。它在 Run 提交时冻结进配方，之后修改不改写既有 Run。旧测试流程冻结后它只被只读页面读取；营销测试不读它，#181 起 Workspace 设置也不再显示它。
 _Avoid_: 用户偏好、平台全局配置、草稿表单
 
 **创意库草稿**:

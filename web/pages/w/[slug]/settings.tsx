@@ -5,7 +5,6 @@ import { MetaConnectionSection } from '@/components/workspace/MetaConnectionSect
 import { ProviderCredentialsSection } from '@/components/workspace/ProviderCredentialsSection';
 import { SpendGuardrailSection } from '@/components/workspace/SpendGuardrailSection';
 import { SPEND_GUARDRAIL_ANCHOR } from '@/lib/entitlements/spend-guardrail';
-import { GenerationDefaultsSection } from '@/components/test-plans/GenerationDefaultsSection';
 import { PROVIDER_CREDENTIALS_ANCHOR } from '@/components/test-plans/GenerationDefaultsBanner';
 import { getWorkspacePageProps } from '@/lib/workspace-bootstrap';
 import type { NextPageWithLayout } from 'types';
@@ -23,8 +22,10 @@ interface Props {
 /**
  * Workspace settings. Every member reads the spending limits here (#126,
  * subscription-entitlement contract §12); the rest of the page -- the
- * Workspace itself, provider keys, generation defaults, the Meta connection
- * -- is the Owner's, and a Member is not shown it.
+ * Workspace itself, provider keys, the Meta connection -- is the Owner's,
+ * and a Member is not shown it. The「生成默认值」section is gone (#181):
+ * only the frozen legacy test flow read it, and marketing tests choose the
+ * provider, model and format themselves.
  */
 const SettingsPage: NextPageWithLayout<Props> = ({ bootstrap }) => {
   const { t } = useTranslation(['common', 'settings']);
@@ -52,9 +53,6 @@ function OwnerSettings() {
       <TeamSettings team={team} />
       <div className="mt-6 scroll-mt-6" id={PROVIDER_CREDENTIALS_ANCHOR}>
         <ProviderCredentialsSection />
-      </div>
-      <div className="mt-6">
-        <GenerationDefaultsSection />
       </div>
       <div className="mt-6">
         <MetaConnectionSection />

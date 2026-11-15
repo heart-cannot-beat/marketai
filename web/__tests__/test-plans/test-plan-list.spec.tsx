@@ -15,9 +15,6 @@ jest.mock('@/hooks/domain/useDomainQuery', () => ({
 jest.mock('@/components/test-plans/GenerationDefaultsBanner', () => ({
   GenerationDefaultsBanner: () => null,
 }));
-jest.mock('@/components/test-plans/GenerationDefaultsSection', () => ({
-  GenerationDefaultsSection: () => <div data-testid="defaults-editor" />,
-}));
 
 const ROW = {
   status: 'ready',
@@ -69,7 +66,7 @@ describe('TestPlanList', () => {
     ).toHaveAttribute('href', '/w/acme/experiments');
   });
 
-  it('no longer folds in the「生成默认值」editor, which lives in Settings (#337)', () => {
+  it('no longer folds in the「生成默认值」editor (#337; gone from Settings too, #181)', () => {
     mockList = {
       isLoading: false,
       problem: undefined,
@@ -77,7 +74,6 @@ describe('TestPlanList', () => {
       data: { items: [{ ...ROW, plan_id: 'atp_1' }] },
     };
     render(<TestPlanList />);
-    expect(screen.queryByTestId('defaults-editor')).not.toBeInTheDocument();
     expect(screen.queryByText('Generation defaults')).not.toBeInTheDocument();
     expect(document.querySelector('details')).toBeNull();
   });

@@ -32,6 +32,6 @@ ProductsPage.getLayout = function getLayout(page: ReactElement) {
 
 export const getServerSideProps = getWorkspacePageProps({
   // `library`: the reference upload zone (`ReferenceUploadZone`) (#296).
-  namespaces: ['common', 'products', 'tests', 'learnings', 'library'],
+  namespaces: ['common', 'products', 'learnings', 'library'],
 });
 export default ProductsPage;
