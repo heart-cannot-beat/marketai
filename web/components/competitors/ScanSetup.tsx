@@ -58,6 +58,7 @@ export function ScanSetup({
   country,
   marketUnmatched,
   planMarket,
+  marketSource = 'plan',
   onCountryChange,
   onStarted,
 }: {
@@ -66,6 +67,8 @@ export function ScanSetup({
   country: string;
   marketUnmatched: boolean;
   planMarket: string | null;
+  /** Whose market `planMarket` is: a test plan's, or the product's. */
+  marketSource?: 'plan' | 'product';
   onCountryChange: (country: string) => void;
   onStarted: (scan: CompetitorScan) => Promise<void>;
 }) {
@@ -254,9 +257,19 @@ export function ScanSetup({
             }
           >
             {marketUnmatched
-              ? t('scan-market-unmatched', { market: planMarket ?? '' })
+              ? t(
+                  marketSource === 'product'
+                    ? 'scan-market-unmatched-product'
+                    : 'scan-market-unmatched',
+                  { market: planMarket ?? '' }
+                )
               : planMarket
-                ? t('scan-market-from-plan', { market: planMarket })
+                ? t(
+                    marketSource === 'product'
+                      ? 'scan-market-from-product'
+                      : 'scan-market-from-plan',
+                    { market: planMarket }
+                  )
                 : t('scan-market-hint')}
           </p>
         </div>

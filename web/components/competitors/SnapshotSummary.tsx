@@ -36,12 +36,14 @@ const SECONDARY =
  * `competitor_snapshot_stale`, #273). This reads the projection the
  * workspace already loaded with plan review — the same SWR entry, no
  * request of its own — and a projection without the field shows no hint.
+ * Off a test (the sidebar's Competitors page, ADR 0018) no plan cites a
+ * snapshot: no read, no hint.
  */
 export function useSnapshotStale() {
   const router = useRouter();
   const { current } = useWorkspace();
-  const projectId =
-    typeof router.query.test === 'string' ? router.query.test : null;
+  const test = router.query?.test;
+  const projectId = typeof test === 'string' && test ? test : null;
   const project = useSWR<
     Pick<MarketingProjectDetail, 'competitor_snapshot_stale'>
   >(
