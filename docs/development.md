@@ -80,6 +80,6 @@ SQLite 没有数据库角色，所以 `make verify` 带一个授权守护（#59�
 
 Owner 在 Settings → Provider credentials 配置各 Workspace 的供应商 Key；生成、策划和营销 QC 使用 `generation` 范围的绑定。保存 Key 不验证供应商鉴权。权益、USD Spend Guardrail 与模型最大报价缺一不可；Key 和 `.env` 不提交到 GitHub。
 
-API 与 Worker 配置保持一致。图片每张上限和价格版本使用 `MARKETAI_GENERATION_MAX_COSTS_JSON`、`MARKETAI_PRICE_REGISTRY_VERSION`；策划及结果解读使用 `MARKETAI_PLANNING_PROVIDER`、`MARKETAI_PLANNING_MODEL`、`MARKETAI_PLANNING_MAX_COST_USD`；视觉检查使用 `MARKETAI_MARKETING_QC_PROVIDER`、`MARKETAI_MARKETING_QC_MODEL`、`MARKETAI_MARKETING_QC_MAX_COST_USD`。配置格式见[供应商选择](product/generation-provider-selection.md)、[AI 策划](product/ai-marketing-planning-slice.md)、[营销 QC](product/ai-marketing-ai-qc.md)和根目录 [.env.example](../.env.example)。示例报价是部署预留上限，不是供应商现价或账单。
+API 与 Worker 配置保持一致。图片每张上限和价格版本使用 `MARKETAI_GENERATION_MAX_COSTS_JSON`、`MARKETAI_PRICE_REGISTRY_VERSION`；策划及结果解读使用 `MARKETAI_PLANNING_PROVIDER`、`MARKETAI_PLANNING_MODEL`、`MARKETAI_PLANNING_MAX_COST_USD`，以及按供应商的 `MARKETAI_PLANNING_MODELS_JSON`；视觉检查使用 `MARKETAI_MARKETING_QC_PROVIDER`、`MARKETAI_MARKETING_QC_MODEL`、`MARKETAI_MARKETING_QC_MAX_COST_USD`，以及 `MARKETAI_MARKETING_QC_MODELS_JSON`（Workspace 只有 OpenAI Key 时改用其中的 `openai` 条目，#192）。配置格式见[供应商选择](product/generation-provider-selection.md)、[AI 策划](product/ai-marketing-planning-slice.md)、[营销 QC](product/ai-marketing-ai-qc.md)和根目录 [.env.example](../.env.example)。示例报价是部署预留上限，不是供应商现价或账单。
 
 `run.py` 只启动旧版 SQLite 本地组合；验证新版登录/BFF/隔离必须按运行手册配置 Web、委托身份、数据库、权益与共享私有存储。自动化测试中依赖特定数据库或外部环境的跳过项，不视为已验证。生产操作前按发布手册备份并检查角色与存储；不要把本地 Owner 身份用于生产。

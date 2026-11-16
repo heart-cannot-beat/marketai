@@ -48,6 +48,8 @@ MARKETAI_MARKETING_QC_MODEL=gpt-4.1-mini-2025-04-14
 MARKETAI_MARKETING_QC_MAX_COST_USD=0.10
 ```
 
+`MARKETAI_MARKETING_QC_MODELS_JSON` 按供应商给模型和每条最高费用，形状和规则与 [AI 策划的 `MARKETAI_PLANNING_MODELS_JSON`](ai-marketing-planning-slice.md#正式-ai-策划配置) 相同（#192）：Workspace 没有部署那家的 Key、但有 OpenAI Key 时改用表里的 `openai` 条目；两家都没有有效配置时报 `qc_not_configured`。
+
 支持 Gemini 与 OpenAI 的视觉协议。最大费用为每条检查的大于零、不超过 10 USD 的部署报价，必须覆盖实际图片和输出上限，不是内置供应商现价。Workspace 需要该供应商的 `binding_scope=generation` 凭据、有效生成权益和 USD Spend Guardrail；不会借用全局 Key 或其他 Workspace 凭据。
 
 上述固定版本及单条 0.10 USD 配置已用于当前线上 API/Worker，整批仍先预览并显式确认。参考图选择不自动产生模型调用，本次扩展没有追加真实付费检查。

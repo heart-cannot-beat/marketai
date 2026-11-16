@@ -35,6 +35,19 @@ Web `c2859db2` 已成功上线，API/Worker 未部署。正式登录后的三个
 
 Gemini/Seedream 的真实 Key、供应商鉴权、模型可用性、最大成本配置及真实附图输出继续待验。没有为生产工作区填写假 Key，没有修改已有正式 OpenAI 密钥，没有新增付费模型调用，也没有 Meta 写操作。先前 [供应商/设备/故障记录](provider-device-fault-acceptance.md) 中“自助入口待补”的缺口由本次补齐；真实调用暂停这一边界保留。
 
+## 保存前校验 OpenAI Key（领域 API，2026-11-16，#192）
+
+`create_credential` 和 `rotate_credential` 的请求体新增 `verify`（默认 `false`）。不传或为 `false` 时行为和以前一样，不联系供应商；Settings 页面显式传 `false`，所以上文“保存不会调用供应商”仍然成立。新开头的开始页（S7）会传 `true`。
+
+- 为 `true` 且供应商是 OpenAI：先查重（409 `credential_key_active`），再用本次请求里的明文调用 `GET {OPENAI_BASE_URL}/models`（`Authorization: Bearer`，10 秒超时，不跟随重定向、不读代理环境）。它不调用模型、不消耗 token，不计费。
+  - 返回模型列表：保存，并把检查结果作为追加审计事件 `credential.provider_key_checked` 记在新版本上。
+  - `401` / `403` / 没有余额或到了花费上限的 `429`：422 `provider_key_rejected`，`params.reason` 分别是 `key_invalid`、`access_denied`、`quota_exhausted`；不保存，替换时当前版本保持有效。
+  - 超时、网络错误、限流、5xx、读不懂的返回：503 `provider_key_check_unavailable`（`retryable: true`），不保存。
+  - 被拒和没能检查的结果也记审计事件，记在凭据键上。证据只有状态码和 OpenAI 的 `error.code`，不含 Key，也不含 OpenAI 的错误说明（它会带出部分 Key）。
+- 为 `true` 但供应商没有校验（目前除 OpenAI 外的 AI 供应商）：422 `provider_key_check_unsupported`，不发请求、不保存。
+- 校验只能说明 Key 被接受。OpenAI 要求组织先完成验证才能用 GPT Image 出图，这一点只在收费的出图请求上检查，所以组织没验证的 Key 会被保存，第一次出图时才失败。
+- 非 Owner、另一个工作区的请求在发出任何外部请求之前就被拒（403 / 404）。测试见 `tests/test_provider_key_check.py`，全部用 `httpx.MockTransport`，没有真实 Key 或真实请求。
+
 ## 竞品扫描数据供应商（ScrapeCreators，2026-10-28，#267）
 
 范围是竞品扫描（Epic #265 的 C-11）所需的数据供应商密钥：`binding_scope=market_data`、provider `scrapecreators`，以及每次真实解析与扫描报价所用的价格表。没有真实 ScrapeCreators Key、没有真实供应商请求；真实调用留给 C-50 由用户确认费用后进行。

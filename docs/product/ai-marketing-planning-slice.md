@@ -26,6 +26,14 @@ MARKETAI_PLANNING_MODEL=<已核实支持 JSON 输出的文本模型>
 MARKETAI_PLANNING_MAX_COST_USD=<已核实的每次最高费用>
 ```
 
+按供应商的配置（#192，新开头 S5）：
+
+```dotenv
+MARKETAI_PLANNING_MODELS_JSON={"openai":{"model":"<已核实的模型>","max_cost_usd":"<已核实的每次最高费用>"},"gemini":{...}}
+```
+
+部署那家（`MARKETAI_PLANNING_PROVIDER`，默认 `gemini`）有旧的 `MARKETAI_PLANNING_MODEL` 或 `MARKETAI_PLANNING_MAX_COST_USD` 时用旧值，表里同名条目不读；两个都没设才用表里的条目。Workspace 绑定了部署那家的 Key 就用它；没有、但绑定了 OpenAI Key 且表里有有效的 `openai` 条目时改用 OpenAI，这样只有一个 OpenAI Key 也能策划。都不成立时报 `credential_required`（供应商是第一家配置有效的），两家都没有有效配置时报 `planner_not_configured`。选中的供应商、模型和上限照旧冻结在调用记录里，Worker 按它取 Key；不设这个配置的部署行为和以前完全一样。
+
 仅支持已有 Gemini/OpenAI 文本 API 协议。模型必须由部署方显式设置；最大费用必须为大于零且不超过 10 的十进制 USD 金额，不是内置供应商价格。一次请求完整输入（含 Schema）限制为 96000 UTF-8 bytes，输出最多 8192 tokens；原始产品资料最多 16000 字，报价需覆盖完整输入输出边界。模型不兼容协议时任务失败，不自动换模型或使用共享 Key。
 
 Workspace 需 active、有效生成权益、USD Spend Guardrail，以及所选供应商 `binding_scope=generation` 的有效凭据；Owner 可在 Settings → Provider credentials 配置。策划报价与图片报价独立；产品理解、方案起草和结果 AI 解读共用此文本配置。缺配置时保留输入并说明原因，用户可显式体验免费受控 Mock，不会默认回落。
