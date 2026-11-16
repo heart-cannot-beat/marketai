@@ -2035,6 +2035,7 @@
   "error-marketing_export_failed": "导出没有完成，请查看导出包状态。",
   "error-marketing_expression_coverage_required": "筛选角度需要每个角度多个表达；预算只够一个表达时请说明局限。",
   "error-marketing_expression_duplicate": "同一角度下重复列出了同一种表达。",
+  "error-marketing_expression_unused": "每种讲法至少要有一张广告。",
   "error-marketing_fact_ids_duplicate": "每条事实和推测都需要唯一标识。",
   "error-marketing_generation_failed": "生成没有完成，请查看任务状态。",
   "error-marketing_group_membership_invalid": "每个组合必须且只能属于一个测试组。",
