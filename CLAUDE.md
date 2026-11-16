@@ -2,7 +2,7 @@
 
 Work from one GitHub Issue at a time.
 
-For v9 implementation, use [#14](https://github.com/Raybbish/marketai/issues/14) as the dependency map and select a leaf carrying `ready-for-agent`.
+Pick an open Issue in this repository that carries `ready-for-agent`. Issues labelled `wayfinder:map` are dependency maps that show which leaves are unblocked; do not claim a map itself as a task.
 
 1. Read the full ticket and comments with `gh issue view <number> --comments`. Start only when it has `ready-for-agent` and every `Blocked by` issue is closed; then assign it to yourself.
 2. Read `CONTEXT.md` and the contract files linked by the ticket. Contracts and ADRs are the source of truth; if code and contract conflict, report the conflict on the Issue before changing the contract.
