@@ -94,6 +94,9 @@ describe('DomainGateway operation coverage', () => {
     // 239 -> 241: `list_scale_observed_ads` and `create_scale_delivery_target`
     // (#129).
     // 241 -> 242: `list_marketing_reuse_candidates` (#7).
-    expect(DOMAIN_ALLOWLIST.length).toBe(242);
+    // 242 -> 246: ads-first ideas `create_marketing_ideas`,
+    // `get_marketing_ideas`, `list_marketing_ideas` and
+    // `set_marketing_ad_kept` (#189).
+    expect(DOMAIN_ALLOWLIST.length).toBe(246);
   });
 });

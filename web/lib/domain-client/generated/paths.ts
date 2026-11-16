@@ -425,6 +425,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'create_marketing_ideas',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas',
+    pathParams: [],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'create_marketing_image_edit',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/marketing/rounds/:round_id/image-edits',
@@ -931,6 +938,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'get_marketing_ideas',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id',
+    pathParams: ['project_id'],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'get_marketing_project',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/projects/:project_id',
@@ -1282,6 +1296,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     operationId: 'list_marketing_brand_kits',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/brand-kits',
+    pathParams: [],
+    requiresIdempotency: false,
+  },
+  {
+    operationId: 'list_marketing_ideas',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas',
     pathParams: [],
     requiresIdempotency: false,
   },
@@ -1672,6 +1693,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     bffPattern:
       '/api/domain/v1/w/:slug/marketing/products/:product_id/brand-kit',
     pathParams: ['product_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'set_marketing_ad_kept',
+    method: 'PUT',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/ads/:asset_version_id/kept',
+    pathParams: ['project_id', 'asset_version_id'],
     requiresIdempotency: true,
   },
   {

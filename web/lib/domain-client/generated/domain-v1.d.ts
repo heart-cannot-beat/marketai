@@ -2456,6 +2456,67 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Ideas
+     * @description This workspace's ads-first ideas, newest first.
+     */
+    get: operations['list_marketing_ideas'];
+    put?: never;
+    /**
+     * Create Ideas
+     * @description Open ads-first ideas for a product of this workspace; drafting starts later (S2).
+     */
+    post: operations['create_marketing_ideas'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/ideas/{project_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Ideas */
+    get: operations['get_marketing_ideas'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/ideas/{project_id}/ads/{asset_version_id}/kept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set Ad Kept
+     * @description Keep an ad of these ideas, or stop keeping it; each change is audited.
+     */
+    put: operations['set_marketing_ad_kept'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/products/{product_id}/brand-kit': {
     parameters: {
       query?: never;
@@ -4097,6 +4158,16 @@ export interface components {
       expires_at: string;
       consumed_at: string | null;
       /** Format: date-time */
+      created_at: string;
+    };
+    AdSummary: {
+      asset_version_id: string;
+      combination_id: string;
+      angle_id: string;
+      expression_id: string;
+      /** @enum {string} */
+      status: 'draft' | 'exportable' | 'needs_redo';
+      kept: boolean;
       created_at: string;
     };
     AddExperimentEntryRequest: {
@@ -6460,6 +6531,12 @@ export interface components {
     CreateHandoff: {
       asset_version_ids: string[];
     };
+    CreateIdeas: {
+      product_id: string;
+      source_text: string;
+      market: string;
+      ad_language: string;
+    };
     CreateImageEdit: {
       asset_version_id: string;
       crop?: components['schemas']['ImageCrop'] | null;
@@ -8182,6 +8259,50 @@ export interface components {
       provider?: string | null;
       model?: string | null;
     };
+    Ideas: {
+      market: string;
+      ad_language: string;
+      /**
+       * @default en-US
+       * @enum {string}
+       */
+      strategy_language: 'zh-CN' | 'en-US';
+      angles: components['schemas']['Angle'][];
+      combinations: components['schemas']['CreativeCombination'][];
+      /** @default  */
+      style_notes: string;
+      brand_kit?: components['schemas']['BrandKitRef'] | null;
+      competitor_snapshot_id?: string | null;
+      guiding_questions?: components['schemas']['GuidingQuestion'][];
+    };
+    IdeasProjectDetail: {
+      id: string;
+      revision: number;
+      /** @enum {string} */
+      state: 'input' | 'understanding_draft' | 'ideas_ready';
+      product_id: string;
+      market: string;
+      ad_language: string;
+      understanding: components['schemas']['Understanding'] | null;
+      ideas: components['schemas']['Ideas'] | null;
+      latest_call: components['schemas']['PlanningCallSummary'] | null;
+      ads: components['schemas']['AdSummary'][];
+      pending: components['schemas']['PendingAd'][];
+    };
+    IdeasProjectPage: {
+      items: components['schemas']['IdeasProjectSummary'][];
+      next_cursor?: string | null;
+    };
+    IdeasProjectSummary: {
+      id: string;
+      revision: number;
+      state: string;
+      product_id: string;
+      product_name: string;
+      ad_count: number;
+      kept_count: number;
+      updated_at: string;
+    };
     /**
      * @description The verified TenantContext, echoed back for the tracer round trip.
      *
@@ -9436,6 +9557,11 @@ export interface components {
       asset_version_id: string;
       awaiting_combination_ids: string[];
     };
+    PendingAd: {
+      combination_id: string;
+      /** @enum {string} */
+      state: 'queued' | 'running' | 'failed';
+    };
     PlanFailure: {
       code: string;
       message: string;
@@ -10523,6 +10649,9 @@ export interface components {
       /** @enum {string} */
       kind: 'expression_coverage' | 'same_angle';
       angle_id: string | null;
+    };
+    SetKept: {
+      kept: boolean;
     };
     /**
      * @description One scale's planner output priced with the current defaults:
@@ -16422,6 +16551,142 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PlannerCapabilities'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  list_marketing_ideas: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectPage'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  create_marketing_ideas: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateIdeas'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_marketing_ideas: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  set_marketing_ad_kept: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+        asset_version_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetKept'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
         };
       };
       /** @description Validation Error */

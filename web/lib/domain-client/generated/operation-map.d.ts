@@ -365,6 +365,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['CreateHandoff'];
     successResponses: { 202: components['schemas']['ResourceEnvelope'] };
   };
+  create_marketing_ideas: {
+    pathParams: Record<string, never>;
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['CreateIdeas'];
+    successResponses: { 201: components['schemas']['IdeasProjectDetail'] };
+  };
   create_marketing_image_edit: {
     pathParams: { round_id: string };
     queryParams: Record<string, never>;
@@ -828,6 +834,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['EvidenceHandoffEnvelope'] };
   };
+  get_marketing_ideas: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
+  };
   get_marketing_project: {
     pathParams: { project_id: string };
     queryParams: {
@@ -1238,6 +1250,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['BrandKitList'] };
   };
+  list_marketing_ideas: {
+    pathParams: Record<string, never>;
+    queryParams: { limit?: string; cursor?: string };
+    requestBody: never;
+    successResponses: { 200: components['schemas']['IdeasProjectPage'] };
+  };
   list_marketing_projects: {
     pathParams: Record<string, never>;
     queryParams: { limit?: string; cursor?: string; q?: string };
@@ -1589,6 +1607,12 @@ export type DomainOperationMap = {
     queryParams: Record<string, never>;
     requestBody: components['schemas']['BrandKitInput'];
     successResponses: { 200: components['schemas']['ProductBrandKit'] };
+  };
+  set_marketing_ad_kept: {
+    pathParams: { project_id: string; asset_version_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['SetKept'];
+    successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
   };
   start_experiment: {
     pathParams: { experiment_id: string };
