@@ -145,13 +145,22 @@ test('preparing images takes the image settings and answers one draft per ad (#1
   const prepare = REQUEST_VALIDATORS.prepare_marketing_ideas_generation;
   expect(prepare({ provider: 'openai', model: 'gpt-image-1' })).toBe(true);
   expect(
-    prepare({ provider: 'mock', model: 'mock-v1', aspect_ratio: '1:1', variants: 2 })
+    prepare({
+      provider: 'mock',
+      model: 'mock-v1',
+      aspect_ratio: '1:1',
+      variants: 2,
+    })
   ).toBe(true);
-  expect(prepare({ provider: 'openai', model: 'gpt-image-1', variants: 5 })).toBe(
-    false
-  );
   expect(
-    prepare({ provider: 'openai', model: 'gpt-image-1', product_references: {} })
+    prepare({ provider: 'openai', model: 'gpt-image-1', variants: 5 })
+  ).toBe(false);
+  expect(
+    prepare({
+      provider: 'openai',
+      model: 'gpt-image-1',
+      product_references: {},
+    })
   ).toBe(false);
   const prepared = RESPONSE_VALIDATORS.get(
     'prepare_marketing_ideas_generation_201'
@@ -172,7 +181,10 @@ test('an image still being made is pending with its ad', () => {
   const pending = [{ combination_id: 'c1_1', state: 'running' }];
   expect(validate({ ...detail, state: 'ideas_ready', pending })).toBe(true);
   expect(
-    validate({ ...detail, pending: [{ combination_id: 'c1_1', state: 'succeeded' }] })
+    validate({
+      ...detail,
+      pending: [{ combination_id: 'c1_1', state: 'succeeded' }],
+    })
   ).toBe(false);
 });
 
@@ -191,15 +203,15 @@ describe('ideas gateway', () => {
       image_size: '1K' as const,
       variants: 1,
     };
-    const result = await makeGateway(
-      fetchMock
-    ).prepareMarketingIdeasGeneration({
-      workspaceSlug: 'acme',
-      actionInstanceId: 'ideas:prepare:1',
-      expectedRevision: 5,
-      projectId: 'mp_1',
-      body,
-    });
+    const result = await makeGateway(fetchMock).prepareMarketingIdeasGeneration(
+      {
+        workspaceSlug: 'acme',
+        actionInstanceId: 'ideas:prepare:1',
+        expectedRevision: 5,
+        projectId: 'mp_1',
+        body,
+      }
+    );
     expect(result).toMatchObject({ kind: 'created' });
     expect(call(fetchMock)).toEqual({
       method: 'POST',
