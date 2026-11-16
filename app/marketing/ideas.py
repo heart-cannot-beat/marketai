@@ -139,22 +139,38 @@ PENDING_STATES = {"pending": "queued", "queued": "queued", "paused": "queued",
 
 
 def pending_ads(session, ctx, row) -> list[dict]:
-    """Images of this project still being made, oldest first, and the ads whose latest attempt failed.
+    """Images of the current ideas still being made, oldest first, and the ads whose latest attempt failed.
 
-    A failed attempt is reported only while it is the newest attempt at its ad: trying the ad again
-    replaces it. A succeeded attempt is an ad (``project_ads``), never pending."""
-    records = session.execute(select(RunItemRecord.state, GenerationRecipeSnapshotRecord)
+    An attempt that produced an image is an ad (``project_ads``), never pending, even while the image is
+    being checked or after a check stopped it. A failed attempt is reported only while it is the newest
+    attempt at its ad: trying the ad again replaces it. Attempts at content the ideas no longer hold are
+    left out: redrafted ideas reuse combination ids, and nothing was made for the new content yet."""
+    produced = (select(AssetVersionRecord.id).where(AssetVersionRecord.workspace_id == ctx.workspace_id,
+                                                     AssetVersionRecord.producing_run_item_id == RunItemRecord.id)
+                .exists().label("produced"))
+    records = session.execute(select(RunItemRecord.state, produced, GenerationRecipeSnapshotRecord)
         .join(GenerationRunRecord, (GenerationRunRecord.id == RunItemRecord.generation_run_id) & (GenerationRunRecord.workspace_id == ctx.workspace_id))
         .join(GenerationRecipeSnapshotRecord, (GenerationRecipeSnapshotRecord.id == GenerationRunRecord.recipe_snapshot_id) & (GenerationRecipeSnapshotRecord.workspace_id == ctx.workspace_id))
         .where(RunItemRecord.workspace_id == ctx.workspace_id)
         .where(GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']['project_id'].as_string() == row.id)
         .order_by(RunItemRecord.created_at, RunItemRecord.id)).all()
+    current = {}
+
+    def still_current(intent, combination_id):
+        if combination_id not in current:
+            try:
+                current[combination_id] = _content(ideas_intent(row, combination_id))
+            except LookupError:
+                current[combination_id] = None
+        return current[combination_id] is not None and current[combination_id] == _content(intent)
+
     pending, latest = [], {}
-    for state, recipe in records:
+    for state, made, recipe in records:
         intent = _intent(recipe)
-        if intent.get("flow") != FLOW:
-            continue
         combination_id = (intent.get("combination") or {}).get("id", "")
+        if intent.get("flow") != FLOW or not still_current(intent, combination_id):
+            continue
+        state = "succeeded" if made else state
         latest[combination_id] = state
         if PENDING_STATES.get(state) in ("queued", "running"):
             pending.append({"combination_id": combination_id, "state": PENDING_STATES[state]})
@@ -282,12 +298,13 @@ def generation_drafts(session, ctx, row, revision, provider, model, format_confi
             MarketingGenerationLinkRecord.workspace_id == ctx.workspace_id, MarketingGenerationLinkRecord.project_id == row.id,
             MarketingGenerationLinkRecord.plan_revision == revision, MarketingGenerationLinkRecord.combination_id == combo.id))
         if link:
+            # Only the settings the client chose can conflict. The photos and logo are the application's
+            # choice: one checked or replaced since keeps the existing drafts, whose frozen references the
+            # preview checks again, rather than blocking this revision for good.
             existing = session.get(GenerationDraftRecord, link.draft_id)
-            if (existing.provider, existing.model, existing.format_json) != (provider, model, format_config) \
-                    or existing.selectors_json.get("product_references", []) != references \
-                    or existing.selectors_json.get("brand_logo") != logo:
+            if (existing.provider, existing.model, existing.format_json) != (provider, model, format_config):
                 raise service.MarketingError("ideas_drafts_already_prepared",
-                                             "这些广告已按其他出图设置准备过，请刷新后使用已有的设置。", 409)
+                                             "这些广告已按其他出图设置准备过；请用相同的设置，或重新起草主张后再准备。", 409)
             drafts.append({"combination_id": combo.id, "draft_id": link.draft_id})
             continue
         if combo.image_brief is None:  # drafted ideas always have one (``checked_ideas``)

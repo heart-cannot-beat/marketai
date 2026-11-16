@@ -1322,7 +1322,7 @@
   "error-ideas_not_ready": "Draft the claims first.",
   "error-ideas_changed": "The ad ideas changed. Prepare this ad again from the current claims.",
   "error-ideas_unavailable": "The linked ad ideas could not be found.",
-  "error-ideas_drafts_already_prepared": "These ads were already prepared with other image settings. Refresh and use the existing ones.",
+  "error-ideas_drafts_already_prepared": "These ads were already prepared with other image settings. Use the same settings, or draft the claims again to prepare them anew.",
   "error-ad_brief_too_long": "This ad’s image description is too long. Draft the claims again.",
   "error-plan_review_unresolved": "Handle the blocking plan checks and answer the guiding questions before confirming.",
   "error-expression_details_required": "Add how to tell, the visual mechanism and the evidence basis for every expression, then reconfirm the plan.",

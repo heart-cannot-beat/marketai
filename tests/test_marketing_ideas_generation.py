@@ -185,6 +185,34 @@ class IdeasGenerationTests(IdeasGenerationFixtures):
                          sorted((first["combination_id"], second["combination_id"])))
         self.assertEqual(current["pending"], [])
 
+    def test_an_image_under_check_or_stopped_by_it_is_an_ad_not_pending(self):
+        project = self.with_ideas()
+        prepared = self.prepared(project)
+        items = self.submitted(prepared["drafts"][0]["draft_id"])
+        self.execute_items(items)
+        for state in ("qc_pending", "failed"):  # the image exists: being checked, or blocked by the check
+            with tenant_session(self.context) as session:
+                session.get(RunItemRecord, items[0][0]).state = state
+            current = self.read_ideas(project)
+            self.assertEqual([ad["combination_id"] for ad in current["ads"]], [prepared["drafts"][0]["combination_id"]])
+            self.assertEqual(current["pending"], [], state)
+
+    def test_attempts_at_replaced_ideas_are_not_pending(self):
+        project = self.with_ideas()
+        prepared = self.prepared(project)
+        first, second = prepared["drafts"][:2]
+        self.submitted(first["draft_id"])
+        failing = self.submitted(second["draft_id"])
+        with tenant_session(self.context) as session:
+            session.get(RunItemRecord, failing[0][0]).state = "failed"
+
+        def new_headlines(doc):
+            for combination in doc["combinations"][:2]:
+                combination["headline"] = "Charge every night, then forget it"
+        self.rewrite_ideas(project["id"], new_headlines)
+        # The new ideas reuse the combination ids, but nothing was made for them yet.
+        self.assertEqual(self.read_ideas(project)["pending"], [])
+
     def test_keeping_works_on_a_generated_ad(self):
         project = self.with_ideas()
         prepared = self.prepared(project)
@@ -207,6 +235,15 @@ class IdeasGenerationTests(IdeasGenerationFixtures):
         with tenant_session(self.context) as session:
             self.assertEqual(len(session.scalars(select(GenerationDraftRecord).where(
                 GenerationDraftRecord.workspace_id == self.context.workspace_id)).all()), len(first["drafts"]))
+
+    def test_photos_checked_after_preparing_do_not_block_preparing_again(self):
+        """Only the settings the client chose can conflict; the product's photos are the application's."""
+        from unittest.mock import patch
+        project = self.with_ideas()
+        first = self.prepared(project)
+        checked = [{"reference_version_id": "rv_new", "source": "product_set", "content_sha256": "0" * 64}]
+        with patch("app.marketing.product_references.from_product_set", return_value=checked):
+            self.assertEqual(self.prepared(project), first)
 
     def test_the_same_key_replays_the_prepared_drafts(self):
         project = self.with_ideas()

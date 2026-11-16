@@ -1322,7 +1322,7 @@
   "error-ideas_not_ready": "请先起草广告主张。",
   "error-ideas_changed": "广告想法已变化，请按当前的主张重新准备这张广告。",
   "error-ideas_unavailable": "找不到关联的广告想法。",
-  "error-ideas_drafts_already_prepared": "这些广告已按其他出图设置准备过，请刷新后使用已有的设置。",
+  "error-ideas_drafts_already_prepared": "这些广告已按其他出图设置准备过。请用相同的设置，或重新起草主张后再准备。",
   "error-ad_brief_too_long": "这张广告的画面说明太长，请重新起草主张。",
   "error-plan_review_unresolved": "确认前请先处理方案检查中的阻塞项，并回答引导问题。",
   "error-expression_details_required": "请为每种表达方式补充怎么讲、视觉机制和证据依据，然后重新确认方案。",
