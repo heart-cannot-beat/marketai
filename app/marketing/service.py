@@ -36,9 +36,11 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
-def get_project(session, ctx, project_id):
+def get_project(session, ctx, project_id, *, flow: str = "plan_first"):
+    """A project of ``flow`` only: plan-first paths never see an ads-first project (ADR 0018), and back."""
     row = session.scalar(select(MarketingProjectRecord).where(
-        MarketingProjectRecord.id == project_id, MarketingProjectRecord.workspace_id == ctx.workspace_id))
+        MarketingProjectRecord.id == project_id, MarketingProjectRecord.workspace_id == ctx.workspace_id,
+        MarketingProjectRecord.flow == flow))
     if row is None:
         raise MarketingError("marketing_project_not_found", "找不到这次测试。", 404)
     return row
@@ -53,6 +55,8 @@ def ensure_active(session, ctx):
 def checkpoint(session, ctx, row, reason):
     content = {"state": row.state, "source_text": row.source_text, "product_id": row.product_id,
                "understanding": row.understanding_json, "plan": row.plan_json}
+    if row.flow == "ads_first":  # plan-first revisions keep their exact content and hash
+        content.update(flow=row.flow, market=row.market, ad_language=row.ad_language, ideas=row.ideas_json)
     session.add(MarketingRevisionRecord(id=new_id("mr"), workspace_id=ctx.workspace_id,
         project_id=row.id, revision=row.revision, reason=reason, content_hash=digest(content), content_json=content))
     append_event(session, event_type=f"marketing.{reason}", resource_type="marketing_project", resource_id=row.id,

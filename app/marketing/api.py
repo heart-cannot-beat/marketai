@@ -101,7 +101,8 @@ def list_projects(request: Request, ctx: TenantContext = Depends(request_tenant_
     filters = 'marketing-projects-created-v1:' + search
     with tenant_session(ctx) as session:
         cls = MarketingProjectRecord
-        query = select(cls).where(cls.workspace_id == ctx.workspace_id)
+        # Ads-first projects have their own endpoints; old Web releases validate this list strictly (ADR 0018).
+        query = select(cls).where(cls.workspace_id == ctx.workspace_id).where(cls.flow == "plan_first")
         if search:
             query = query.where(or_(func.lower(cls.source_text).contains(search, autoescape=True),
                 func.lower(cls.understanding_json['product_name'].as_string()).contains(search, autoescape=True),
