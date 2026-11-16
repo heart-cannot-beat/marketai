@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import os
 import unittest
+import uuid
 from unittest.mock import patch
 
 from sqlalchemy import create_engine, select, update
@@ -62,11 +63,14 @@ class ReuseAcrossTheProductCardOnPostgresTests(unittest.TestCase):
         with self._as(0):
             fixture.setUp()
             self.addCleanup(fixture.doCleanups)
-            mine = fixture.context
+            # Later and earlier suites share this database, and the fixture's own
+            # ``ws_gen_<n>`` names repeat in every process: use Workspaces of our own.
+            mine = fixture.context = fixture._make_context(f"ws_reuse_pg_{uuid.uuid4().hex[:10]}")
             self.addCleanup(self._retire, mine.workspace_id)
+            fixture.card = fixture.publish_card("Alpha")
             first, first_round = fixture.started()
             _, second_round = fixture.started()
-            stranger = fixture._make_context()
+            stranger = fixture._make_context(f"ws_reuse_pg_{uuid.uuid4().hex[:10]}")
             self.addCleanup(self._retire, stranger.workspace_id)
         theirs = {a["asset_version_id"] for a in first_round["assets"]}
         with self._as(1):
