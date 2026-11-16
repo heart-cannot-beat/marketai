@@ -255,6 +255,7 @@ describe.each([
       provider,
       plaintext_b64: utf8ToBase64('sk-proj-abc'),
       display_label: 'Team key',
+      verify: false,
     });
     expect(createParams).not.toHaveProperty('stepUpGrant');
     expect(createParams.actionInstanceId).toBeTruthy();
@@ -422,6 +423,7 @@ describe.each([
     });
     expect(rotateParams.body).toEqual({
       new_plaintext_b64: utf8ToBase64('sk-proj-new'),
+      verify: false,
     });
     expect(executeByOperation.create_credential).not.toHaveBeenCalled();
   });
@@ -822,6 +824,7 @@ describe('ProviderCredentialsSection — ScrapeCreators (market data)', () => {
       provider: 'scrapecreators',
       plaintext_b64: utf8ToBase64('fixture-scan-key'),
       display_label: null,
+      verify: false,
     });
     expect(executeByOperation.bind_credential.mock.calls[0][0]).toMatchObject({
       pathParams: { credential_version_id: 'cv_scan_1', scope: 'market_data' },

@@ -25,7 +25,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictBool
 from sqlalchemy import and_
 from sqlalchemy import func as sa_func
 
@@ -139,11 +139,14 @@ class CreateCredentialRequest(BaseModel):
     provider: str
     plaintext_b64: str  # base64-encoded
     display_label: str | None = None
+    # Ask the provider whether it accepts the key before storing it (OpenAI only, #192).
+    verify: StrictBool = False
 
 
 class RotateCredentialRequest(BaseModel):
     model_config = {"extra": "forbid"}
     new_plaintext_b64: str
+    verify: StrictBool = False
 
 
 class RevokeCredentialRequest(BaseModel):
@@ -239,6 +242,15 @@ def _record_stored_check(session, tenant: TenantContext, meta, check) -> dict | 
     ).get(meta.credential_version_id)
 
 
+def _record_stored_key_check(session, meta, check) -> None:
+    """Evidence of the AI provider check that let ``meta``'s version through (``verify``)."""
+    if check is None:
+        return
+    from app.entitlements import provider_key_check
+
+    provider_key_check.record_check(session, check, credential_version_id=meta.credential_version_id)
+
+
 async def _check_market_data_key(
     tenant: TenantContext, provider: str, credential_key: str, plaintext: bytes,
 ):
@@ -260,7 +272,37 @@ async def _check_market_data_key(
     return check
 
 
-def _coded(status_code: int, code: str, message: str) -> HTTPException:
+async def _check_provider_key(
+    tenant: TenantContext, provider: str, credential_key: str, plaintext: bytes,
+):
+    """Ask an AI provider whether it accepts a key before it is stored (``verify``, #192).
+
+    Runs outside any transaction (it is a network call). A key that was
+    refused, or could not be checked, is not stored; the check's evidence
+    stays on the lineage it was meant for.
+    """
+    from app.entitlements import provider_key_check
+
+    if not provider_key_check.checks_key(provider):
+        raise _coded(422, "provider_key_check_unsupported",
+                     f"keys for {provider!r} cannot be checked before saving; nothing was stored",
+                     params={"provider": provider})
+    check = await provider_key_check.check_key(provider, plaintext)
+    if check.outcome == "valid":
+        return check
+    with tenant_session(tenant) as session:
+        provider_key_check.record_check(session, check, credential_key=credential_key)
+    if check.outcome == "rejected":
+        raise _coded(422, "provider_key_rejected",
+                     f"{provider} did not accept the key ({check.reason}); nothing was stored",
+                     params={"provider": provider, "reason": check.reason})
+    raise _coded(503, "provider_key_check_unavailable",
+                 f"{provider} could not check the key right now; nothing was stored",
+                 params={"provider": provider}, retryable=True)
+
+
+def _coded(status_code: int, code: str, message: str, *, params: dict | None = None,
+           retryable: bool = False) -> HTTPException:
     """An HTTPException the app-wide Problem Details handler renders with ``code``.
 
     Every credential command reaches FastAPI through the web BFF proxy, which
@@ -269,7 +311,12 @@ def _coded(status_code: int, code: str, message: str) -> HTTPException:
     well-formed ``application/problem+json`` body -- a bare ``detail`` string
     would surface in the browser as ``invalid_domain_response``.
     """
-    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+    detail = {"code": code, "message": message}
+    if params is not None:
+        detail["params"] = params
+    if retryable:
+        detail["retryable"] = True
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 def _admin_problem(status_code: int, exc: ValueError) -> HTTPException:
@@ -304,7 +351,9 @@ async def create_credential(
     protector = _get_protector()
     admin = CredentialAdmin(protector)
     check = None
-    if is_market_data_provider(body.provider):
+    key_check = None
+    market_data = is_market_data_provider(body.provider)
+    if market_data or body.verify:
         # Refuse a duplicate before spending a vendor round trip on it.
         with tenant_session(tenant) as session:
             if admin.active_version_id(session, tenant, body.credential_key) is not None:
@@ -312,7 +361,12 @@ async def create_credential(
                     409, "credential_key_active",
                     f"active credential already exists for {body.credential_key!r}",
                 )
+    if market_data:
         check = await _check_market_data_key(
+            tenant, body.provider, body.credential_key, plaintext,
+        )
+    elif body.verify:
+        key_check = await _check_provider_key(
             tenant, body.provider, body.credential_key, plaintext,
         )
     with tenant_session(tenant) as session:
@@ -329,6 +383,7 @@ async def create_credential(
         except ValueError as exc:
             raise _coded(409, "credential_key_active", str(exc))
         last_check = _record_stored_check(session, tenant, meta, check)
+        _record_stored_key_check(session, meta, key_check)
     # 200, not 201: the OpenAPI contract (and the BFF's generated operation
     # registry, which fails closed on an undeclared status) declares 200.
     return JSONResponse(content=_credential_metadata_to_dict(meta, last_check=last_check))
@@ -364,8 +419,11 @@ async def rotate_credential(
     # A replacement key is checked like a new one; refused, the current
     # version stays active and bound.
     check = None
+    key_check = None
     if is_market_data_provider(provider):
         check = await _check_market_data_key(tenant, provider, credential_key, new_plaintext)
+    elif body.verify:
+        key_check = await _check_provider_key(tenant, provider, credential_key, new_plaintext)
     with tenant_session(tenant) as session:
         try:
             meta = admin.rotate(
@@ -378,6 +436,7 @@ async def rotate_credential(
         except ValueError as exc:
             raise _coded(404, "credential_not_found", str(exc))
         last_check = _record_stored_check(session, tenant, meta, check)
+        _record_stored_key_check(session, meta, key_check)
     return JSONResponse(_credential_metadata_to_dict(meta, last_check=last_check))
 
 

@@ -6496,6 +6496,8 @@ export interface components {
       provider: string;
       plaintext_b64: string;
       display_label?: string | null;
+      /** @default false */
+      verify: boolean;
     };
     CreateDownloadIntentRequest: {
       owner_kind: string;
@@ -10514,6 +10516,8 @@ export interface components {
     };
     RotateCredentialRequest: {
       new_plaintext_b64: string;
+      /** @default false */
+      verify: boolean;
     };
     RoundClose: {
       /** @enum {string} */

@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from sqlalchemy import select, update
 
@@ -13,7 +12,7 @@ from app.entitlements.quote_engine import CostQuoteEngine
 from app.entitlements.reservation_book import ReservationBook
 from app.entitlements.types import BillableCallSpec, ReservationPlan
 from app.generation.draft import create_draft
-from app.generation.selection import authorize_paid, check_budget, credential_binding, product_input, SelectionError
+from app.generation.selection import authorize_paid, check_budget, product_input, SelectionError
 from app.platform.audit import append_event
 from app.platform.jobs import enqueue_in_session
 from app.platform.operations import create_operation
@@ -312,22 +311,17 @@ def edit_project(session, ctx, row, revision, command, understanding=None, plan=
 
 
 def planner_capability(session, ctx):
-    provider = os.getenv("MARKETAI_PLANNING_PROVIDER", "gemini").strip()
-    model = os.getenv("MARKETAI_PLANNING_MODEL", "").strip()
-    maximum = os.getenv("MARKETAI_PLANNING_MAX_COST_USD", "").strip()
-    reason = None
-    try:
-        amount = Decimal(maximum)
-        if provider not in ("gemini", "openai") or not model or not amount.is_finite() or not Decimal("0") < amount <= Decimal("10"):
-            raise ValueError()
-        if not credential_binding(session, ctx, provider):
-            raise SelectionError("credential_required", "未配置工作区策划凭据。")
-        authorize_paid(session, ctx)
-        check_budget(session, ctx, amount)
-    except SelectionError as exc:
-        reason = exc.code
-    except (InvalidOperation, ValueError):
-        reason = "planner_not_configured"
+    """Planning and result interpretation; an OpenAI key stands in for the deployment provider's (#192)."""
+    from .provider_choice import choose
+    choice = choose(session, ctx, "MARKETAI_PLANNING")
+    provider, model, maximum = choice.provider, choice.model, choice.maximum
+    reason = "planner_not_configured" if choice.reason == "not_configured" else choice.reason
+    if reason is None:
+        try:
+            authorize_paid(session, ctx)
+            check_budget(session, ctx, choice.amount)
+        except SelectionError as exc:
+            reason = exc.code
     return {"provider": provider, "model": model, "available": reason is None,
             "unavailable_reason": reason, "maximum_cost": maximum if reason is None else "0",
             "currency": "USD", "quote_hash": digest([provider, model, maximum, "planning-v1"])}

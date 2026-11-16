@@ -24055,6 +24055,10 @@
                 "type": "null"
               }
             ]
+          },
+          "verify": {
+            "type": "boolean",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -40424,6 +40428,10 @@
         "properties": {
           "new_plaintext_b64": {
             "type": "string"
+          },
+          "verify": {
+            "type": "boolean",
+            "default": false
           }
         },
         "additionalProperties": false,

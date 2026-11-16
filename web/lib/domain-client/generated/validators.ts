@@ -3795,6 +3795,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       provider: { type: 'string' },
       plaintext_b64: { type: 'string' },
       display_label: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      verify: { type: 'boolean', default: false },
     },
     additionalProperties: false,
     type: 'object',
@@ -11247,7 +11248,10 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
   },
   RotateCredentialRequest: {
-    properties: { new_plaintext_b64: { type: 'string' } },
+    properties: {
+      new_plaintext_b64: { type: 'string' },
+      verify: { type: 'boolean', default: false },
+    },
     additionalProperties: false,
     type: 'object',
     required: ['new_plaintext_b64'],
@@ -14672,6 +14676,7 @@ const SCHEMAS: Record<string, object> = {
       provider: { type: 'string' },
       plaintext_b64: { type: 'string' },
       display_label: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      verify: { type: 'boolean', default: false },
     },
     additionalProperties: false,
     type: 'object',
@@ -20960,7 +20965,10 @@ const SCHEMAS: Record<string, object> = {
   },
   rotate_credential_200: {},
   rotate_credential_request: {
-    properties: { new_plaintext_b64: { type: 'string' } },
+    properties: {
+      new_plaintext_b64: { type: 'string' },
+      verify: { type: 'boolean', default: false },
+    },
     additionalProperties: false,
     type: 'object',
     required: ['new_plaintext_b64'],
