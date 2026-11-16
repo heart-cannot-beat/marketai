@@ -821,6 +821,11 @@ BEGIN
   IF to_regclass('public.marketing_revisions') IS NOT NULL THEN
     EXECUTE 'GRANT INSERT ON public.marketing_revisions TO marketai_domain_worker';
   END IF;
+  -- Ads-first keep marks (#189): the API records the user's current mark; others only read it.
+  IF to_regclass('public.marketing_ad_keeps') IS NOT NULL THEN
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE ON public.marketing_ad_keeps TO marketai_domain_api';
+    EXECUTE 'GRANT SELECT ON public.marketing_ad_keeps TO marketai_domain_worker, marketai_domain_readonly';
+  END IF;
   IF to_regclass('public.workspace_provider_bindings') IS NOT NULL THEN
     EXECUTE 'GRANT SELECT ON public.workspace_provider_bindings TO marketai_domain_api';
   END IF;
