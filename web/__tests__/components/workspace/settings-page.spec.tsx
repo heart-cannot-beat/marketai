@@ -23,9 +23,6 @@ jest.mock('@/components/team', () => ({
 jest.mock('@/components/workspace/ProviderCredentialsSection', () => ({
   ProviderCredentialsSection: () => <div data-testid="provider-credentials" />,
 }));
-jest.mock('@/components/test-plans/GenerationDefaultsSection', () => ({
-  GenerationDefaultsSection: () => <div data-testid="generation-defaults" />,
-}));
 jest.mock('@/components/workspace/MetaConnectionSection', () => ({
   MetaConnectionSection: () => <div data-testid="meta-connection" />,
 }));
@@ -66,7 +63,6 @@ describe('/w/{slug}/settings', () => {
     for (const ownerOnly of [
       'team-settings',
       'provider-credentials',
-      'generation-defaults',
       'meta-connection',
     ]) {
       expect(screen.queryByTestId(ownerOnly)).toBeNull();
@@ -78,11 +74,26 @@ describe('/w/{slug}/settings', () => {
     for (const section of [
       'team-settings',
       'provider-credentials',
-      'generation-defaults',
       'meta-connection',
       'spend-guardrail',
     ]) {
       expect(screen.getByTestId(section)).toBeInTheDocument();
     }
+  });
+
+  /**
+   * #181: only the frozen legacy test flow read the「生成默认值」, and a
+   * marketing test picks its provider, model and format itself, so Settings
+   * no longer offers them -- nor says tests generate with them.
+   */
+  it('no longer shows the generation defaults, not even to the Owner', () => {
+    render(<SettingsPage bootstrap={bootstrap('OWNER')} />);
+    expect(screen.queryByText(/generation defaults/i)).toBeNull();
+    expect(
+      screen.queryByText(/no longer ask for a model and aspect ratio/i)
+    ).toBeNull();
+    expect(
+      document.querySelector('[data-testid="generation-defaults-section"]')
+    ).toBeNull();
   });
 });

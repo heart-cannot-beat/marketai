@@ -8,10 +8,13 @@ import { useGenerationDefaults } from '@/hooks/test-plans/useGenerationDefaults'
 export const PROVIDER_CREDENTIALS_ANCHOR = 'provider-credentials';
 
 /**
- * The front flow's top banner (contract §4): shown while the Workspace
- * generates in Mock (no OpenAI key bound) or when its defaults ask for
- * OpenAI without a usable key. The Owner gets a link to Settings → provider
- * credentials; a Member is told to ask the Owner (Settings is Owner-only).
+ * The legacy front flow's top banner (contract §4): shown while the
+ * Workspace generates in Mock (no OpenAI key bound) or when its defaults ask
+ * for OpenAI without a usable key. The Owner gets a link to Settings →
+ * provider credentials; a Member is told to ask the Owner (Settings is
+ * Owner-only). Since #181 only the read-only legacy `/tests` pages show it:
+ * the product home dropped it, as marketing tests do not read these
+ * defaults.
  */
 export function GenerationDefaultsBanner() {
   const { t } = useTranslation('tests');

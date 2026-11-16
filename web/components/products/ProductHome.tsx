@@ -13,7 +13,6 @@ import {
   stashProductHandoff,
   takeProductHandoff,
 } from '@/lib/products/handoff';
-import { GenerationDefaultsBanner } from '@/components/test-plans/GenerationDefaultsBanner';
 import { ProductThumbnail } from './ProductThumbnail';
 import { ProductReferenceSettings } from './ProductReferenceSettings';
 import { ProductBrandKitSettings } from './ProductBrandKitSettings';
@@ -129,7 +128,10 @@ function ProductHomeCard({
  * starts a marketing test (`/w/{slug}/experiments`, J-32 #230) from this
  * product's confirmed card and verified photos through a one-shot handoff,
  * so no id lands in the URL. The learnings card (#166) is hidden since the
- * legacy flow was frozen (#337): it only knows legacy plans' assets.
+ * legacy flow was frozen (#337): it only knows legacy plans' assets. The
+ * legacy「生成默认值」banner is gone too (#181): a marketing test marks each
+ * image provider that still needs setup where it is chosen, and its
+ * Controlled Mock is an explicit choice there, not a Workspace mode.
  */
 export function ProductHome() {
   const { t } = useTranslation('products');
@@ -164,8 +166,6 @@ export function ProductHome() {
           </Link>
         )}
       </div>
-
-      <GenerationDefaultsBanner />
 
       {highlighted && (
         <div className="alert alert-success" role="status">

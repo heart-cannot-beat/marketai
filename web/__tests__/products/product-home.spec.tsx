@@ -28,8 +28,9 @@ jest.mock('@/hooks/library/useReferenceImageUrl', () => ({
     problem: undefined,
   }),
 }));
-jest.mock('@/components/test-plans/GenerationDefaultsBanner', () => ({
-  GenerationDefaultsBanner: () => null,
+const mockGenerationDefaults = jest.fn();
+jest.mock('@/hooks/test-plans/useGenerationDefaults', () => ({
+  useGenerationDefaults: () => mockGenerationDefaults(),
 }));
 const mockLearningsSlot = jest.fn<null, [unknown, unknown]>(() => null);
 jest.mock('@/components/products/ProductLearningsSlot', () => ({
@@ -77,6 +78,7 @@ function directory(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   window.sessionStorage.clear();
   mockRefresh.mockClear();
+  mockGenerationDefaults.mockReset();
   mockDirectory = directory();
 });
 
@@ -128,6 +130,31 @@ describe('ProductHome', () => {
     expect(screen.queryByTestId('product-learnings')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /What we learned about/ })
+    ).not.toBeInTheDocument();
+  });
+
+  /**
+   * #181: the banner came from the legacy「生成默认值」and only looked at
+   * the OpenAI key, while a marketing test also offers Gemini and Seedream
+   * and only uses Controlled Mock when asked. The product home no longer
+   * reads those defaults or claims an example mode.
+   */
+  it('shows no example-mode banner from the legacy generation defaults (#181)', () => {
+    mockGenerationDefaults.mockReturnValue({
+      defaults: { execution_mode: 'mock', warnings: ['mock_mode'] },
+      isLoading: false,
+      problem: undefined,
+      refresh: jest.fn(),
+    });
+    render(<ProductHome />);
+    expect(screen.getAllByTestId('product-card')).toHaveLength(2);
+    expect(mockGenerationDefaults).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId('generation-defaults-banner')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Example mode/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Bind an OpenAI key' })
     ).not.toBeInTheDocument();
   });
 
