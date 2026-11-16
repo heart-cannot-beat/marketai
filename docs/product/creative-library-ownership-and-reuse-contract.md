@@ -128,6 +128,8 @@ ReferenceAssetVersion 保存不可变文件 hash、MIME、像素尺寸、来源�
 - 内容安全检查；
 - 权利状态、授权范围、有效期和操作者声明。
 
+授权范围（`rights.scope`）存为代码。上传表单用下拉框提供常见取值，界面按语言显示名称（#182）：`owned_product_photo`（自有产品照片，默认）、`owned_brand_asset`（自有 Logo 或品牌设计）、`supplier_provided`（厂商或供应商提供并允许用于广告）、`commissioned_work`（委托摄影师或设计师制作）、`licensed_stock`（已购买授权的图库图片）、`certification_document`（颁发给本工作区品牌的认证证书或检测报告）。服务端不限定取值，只要求非空且不超过 200 个字符，所以此前保存的其他取值（包括自由文本）照常有效；界面遇到列表以外的取值时按原样显示。
+
 原件保持私有，仅在授权审计场景访问；Provider 使用去 EXIF、符合能力限制的受控派生版本。检查失败、权利缺失、撤销或过期都阻止新的外部调用。
 
 ### 7.3 ReferenceGroupVersion 与选择规则

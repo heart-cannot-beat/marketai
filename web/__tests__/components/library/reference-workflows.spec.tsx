@@ -81,6 +81,7 @@ jest.mock('@/hooks/library/useLibraryBindings', () => ({
 }));
 
 import { ReferenceUploadZone } from '@/components/library/references/ReferenceUploadZone';
+import { RIGHTS_SCOPES } from '@/lib/library/rights-scope';
 import { ReferenceGateProgress } from '@/components/library/references/ReferenceGateProgress';
 import { ReferenceBindingList } from '@/components/library/references/ReferenceBindingList';
 import { DraftReferenceBindings } from '@/components/library/references/DraftReferenceBindings';
@@ -213,6 +214,38 @@ describe('ReferenceUploadZone', () => {
           scope: 'owned_product_photo',
           valid_to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         }),
+      })
+    );
+  });
+
+  it('declares the rights scope chosen from the list by its code (#182)', () => {
+    render(
+      createElement(ReferenceUploadZone, {
+        contextEntryId: 'entry-1',
+      })
+    );
+    // No free-text box prefilled with a code any more: a list of scopes.
+    expect(screen.queryByRole('textbox')).toBeNull();
+    const scope = screen.getByLabelText('library:references.rights-scope');
+    expect(scope).toHaveValue('owned_product_photo');
+    expect(scope).toHaveDisplayValue(
+      'library:references.rights-scope-options.owned_product_photo'
+    );
+    expect(screen.getAllByRole('option')).toHaveLength(RIGHTS_SCOPES.length);
+
+    fireEvent.change(scope, { target: { value: 'supplier_provided' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    const file = new File([new ArrayBuffer(16)], 'charger.png', {
+      type: 'image/png',
+    });
+    fireEvent.change(screen.getByLabelText('library:references.file-input'), {
+      target: { files: [file] },
+    });
+
+    expect(mockUpload).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({
+        rights: expect.objectContaining({ scope: 'supplier_provided' }),
       })
     );
   });
