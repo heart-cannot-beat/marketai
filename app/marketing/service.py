@@ -45,6 +45,18 @@ def get_project(session, ctx, project_id, *, flow: str = "plan_first"):
     return row
 
 
+def call_project(session, ctx, project_id):
+    """The project a planning call was admitted for, whatever its flow.
+
+    Admission already looked the project up by its flow, and a project's flow never changes, so the
+    Worker writes a result back to that same project, plan-first or ads-first (#190)."""
+    row = session.scalar(select(MarketingProjectRecord).where(
+        MarketingProjectRecord.id == project_id, MarketingProjectRecord.workspace_id == ctx.workspace_id))
+    if row is None:
+        raise MarketingError("marketing_project_not_found", "找不到这次测试。", 404)
+    return row
+
+
 def ensure_active(session, ctx):
     workspace = session.get(WorkspaceRecord, ctx.workspace_id)
     if not workspace or workspace.lifecycle != "active" or workspace.authorization_epoch != ctx.authorization_epoch:
@@ -64,9 +76,10 @@ def checkpoint(session, ctx, row, reason):
 
 
 def latest_call(session, ctx, project_id):
+    """The newest drafting call of a project; a plan-first project never has an ``ideas`` call."""
     return session.scalar(select(PlanningCallRecord).where(
         PlanningCallRecord.workspace_id == ctx.workspace_id, PlanningCallRecord.project_id == project_id,
-        PlanningCallRecord.kind.in_(("understanding", "plan")))
+        PlanningCallRecord.kind.in_(("understanding", "plan", "ideas")))
         .order_by(PlanningCallRecord.created_at.desc(), PlanningCallRecord.id.desc()).limit(1))
 
 
@@ -327,10 +340,14 @@ def planner_capability(session, ctx):
             "currency": "USD", "quote_hash": digest([provider, model, maximum, "planning-v1"])}
 
 
-def planning_repair_context(session, ctx, row):
+#: Per drafting kind, the policy its explicit repair carries; the planner renders each its own correction turn.
+REPAIRS = {"plan": "marketing-explicit-plan-repair-v1", "ideas": "marketing-explicit-ideas-repair-v1"}
+
+
+def planning_repair_context(session, ctx, row, kind="plan"):
     """Only an explicit new attempt may reuse this same understanding's rejection."""
     previous = latest_call(session, ctx, row.id)
-    if (not previous or previous.kind != "plan" or previous.state != "failed"
+    if (not previous or previous.kind != kind or previous.state != "failed"
             or previous.error_code != "planner_output_invalid"
             or previous.input_json.get("understanding") != row.understanding_json):
         return None
@@ -340,11 +357,13 @@ def planning_repair_context(session, ctx, row):
         for e in output.get("validation_errors", [])[:10] if isinstance(e, dict)]
     if not errors:
         return None
-    feedback = {"policy": "marketing-explicit-plan-repair-v1", "previous_call_id": previous.id,
+    feedback = {"policy": REPAIRS[kind], "previous_call_id": previous.id,
         "validation_errors": errors}
     rejected = output.get("rejected_output")
     if isinstance(rejected, dict):
-        candidate = {k: v for k, v in rejected.items() if k in TestPlan.model_fields}
+        from .ideas_contracts import Ideas
+        fields = Ideas.model_fields if kind == "ideas" else TestPlan.model_fields
+        candidate = {k: v for k, v in rejected.items() if k in fields}
         if len(json.dumps(candidate, ensure_ascii=False).encode()) <= 16000:
             feedback["rejected_plan"] = candidate
     return feedback
