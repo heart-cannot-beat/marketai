@@ -187,12 +187,12 @@ def test_mock_rounds_never_read_the_settings(self):  # execution_mode "mock" →
   - `async check_key(provider: str, plaintext: bytes, *, transport: httpx.AsyncBaseTransport | None = None) -> ProviderKeyCheck`
   - `record_check(session, check: ProviderKeyCheck, *, credential_version_id: str | None = None, credential_key: str | None = None) -> None`（`append_event`，details 是 `provider`、`outcome`、`reason`、`http_status`、`elapsed_ms`、`diagnostic`）
 
-- [ ] **Step 1：写失败的测试**（`check_key("openai", key, transport=httpx.MockTransport(fake))`，`config.OPENAI_BASE_URL` 打成 `https://openai.test/v1`）
+- [ ] **Step 1：写失败的测试**（`check_key("openai", key, transport=httpx.MockTransport(fake))`，`config.OPENAI_BASE_URL` 打成 `https://api.openai.example/v1`）
 
 ```python
 async def test_a_model_list_means_the_key_is_valid(self):
     # 200 {"object": "list", "data": [{"id": "fixture-model", "object": "model"}]} → outcome "valid", reason None
-    # exactly one request: GET https://openai.test/v1/models, Authorization "Bearer fixture-openai-key", empty body
+    # exactly one request: GET https://api.openai.example/v1/models, Authorization "Bearer fixture-openai-key", empty body
 async def test_401_is_an_invalid_key(self):          # outcome "rejected", reason "key_invalid", http_status 401
 async def test_403_is_access_denied(self):           # "rejected", "access_denied"
 async def test_no_credit_or_spend_limit_is_quota_exhausted(self):

@@ -25,7 +25,7 @@ from tests.support.library_fixtures import LibraryFixtures
 
 FIXTURE_KEY = b"fixture-openai-key"
 KEY_NAME = "openai_api_key"
-BASE_URL = "https://openai.test/v1"
+BASE_URL = "https://api.openai.example/v1"
 MODEL_LIST = {"object": "list", "data": [{"id": "fixture-model", "object": "model", "created": 0, "owned_by": "acme"}]}
 QUOTA_CODES = ("insufficient_quota", "credit_balance_exhausted", "organization_spend_limit_exceeded",
                "project_spend_limit_exceeded", "organization_usage_limit_exceeded")
@@ -140,7 +140,12 @@ class OpenAIKeyCheckTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(openai.requests, [])
 
     async def test_rejection_never_echoes_the_key_or_the_provider_message(self):
-        with self.assertLogs(provider_key_check.logger, "INFO") as logs:
+        # Migration tests run Alembic in this process, and its `fileConfig`
+        # disables every already-imported logger (see `tests.test_runtime_wiring`).
+        logger = provider_key_check.logger
+        self.addCleanup(setattr, logger, "disabled", logger.disabled)
+        logger.disabled = False
+        with self.assertLogs(logger, "INFO") as logs:
             check = await self._check(_OpenAI(httpx.Response(401, json=ECHOING_401)))
         self.assertEqual(check.diagnostic, "models answered 401 (invalid_api_key)")
         for kept in (repr(check), *logs.output):

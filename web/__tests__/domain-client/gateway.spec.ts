@@ -747,6 +747,7 @@ describe('DefaultDomainGateway — Owner credentials', () => {
         provider: 'openai',
         plaintext_b64: 'c2stcHJvai1hYmM=',
         display_label: null,
+        verify: true,
       },
     });
 
@@ -763,6 +764,7 @@ describe('DefaultDomainGateway — Owner credentials', () => {
       provider: 'openai',
       plaintext_b64: 'c2stcHJvai1hYmM=',
       display_label: null,
+      verify: true,
     });
   });
 
@@ -787,7 +789,7 @@ describe('DefaultDomainGateway — Owner credentials', () => {
       workspaceSlug: 'acme',
       actionInstanceId: 'credential:rotate:1',
       credentialKey: 'openai_api_key',
-      body: { new_plaintext_b64: 'bmV3' },
+      body: { new_plaintext_b64: 'bmV3', verify: false },
     });
     const revoked = await gateway.revokeCredential({
       workspaceSlug: 'acme',

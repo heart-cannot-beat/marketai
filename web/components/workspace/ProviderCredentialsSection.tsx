@@ -417,7 +417,9 @@ function ProviderCredentialEditor({
           .execute({
             actionInstanceId: newActionId(),
             pathParams: { credential_key: credential.credential_key },
-            body: { new_plaintext_b64: utf8ToBase64(plaintext) },
+            // Settings saves without asking the provider first, as before;
+            // a market-data key is always checked by the server.
+            body: { new_plaintext_b64: utf8ToBase64(plaintext), verify: false },
           })
           .catch(() => null)
           .finally(() => rotateCommand.reset());
@@ -445,6 +447,7 @@ function ProviderCredentialEditor({
               provider: definition.provider,
               plaintext_b64: utf8ToBase64(plaintext),
               display_label: label === '' ? null : label,
+              verify: false,
             },
           })
           .catch(() => null)
