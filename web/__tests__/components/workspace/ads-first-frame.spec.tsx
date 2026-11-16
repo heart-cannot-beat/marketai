@@ -29,6 +29,11 @@ jest.mock(
       return null;
     }
 );
+jest.mock('@/components/shared/LanguageSwitcher', () => ({
+  LanguageSwitcher: () => (
+    <select data-testid="language-switcher" aria-label="Language" />
+  ),
+}));
 jest.mock('hooks/useCanAccess', () => ({
   __esModule: true,
   default: () => ({ canAccess: () => true }),
@@ -337,12 +342,13 @@ describe('WorkspaceMenu: the phone menu (#194)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
     const dialog = screen.getByRole('dialog');
     const close = within(dialog).getByRole('button', { name: 'Close menu' });
-    const members = within(dialog).getByRole('link', { name: 'Members' });
-    members.focus();
-    fireEvent.keyDown(members, { key: 'Tab' });
+    // The language choice ends the menu, as it ends the sidebar.
+    const language = within(dialog).getByTestId('language-switcher');
+    language.focus();
+    fireEvent.keyDown(language, { key: 'Tab' });
     expect(close).toHaveFocus();
     fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
-    expect(members).toHaveFocus();
+    expect(language).toHaveFocus();
   });
 
   it('closes after following a link, and when tapping outside', () => {

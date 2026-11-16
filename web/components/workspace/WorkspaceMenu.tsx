@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Brand from '@/components/shared/shell/Brand';
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { WorkspaceSelector } from './WorkspaceSelector';
 import { WorkspaceNavigation } from './WorkspaceNavigation';
 
@@ -143,6 +144,9 @@ export function WorkspaceMenu({ slug }: { slug: string }) {
                   instance="menu"
                 />
               </nav>
+              <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
+                <LanguageSwitcher className="px-2" />
+              </div>
             </div>
           </div>,
           document.body

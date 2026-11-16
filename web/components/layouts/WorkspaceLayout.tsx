@@ -107,14 +107,15 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-64 flex-1 min-w-0">
         {/* Below lg the sidebar is hidden; keep the account menu (and sign
             out) reachable from a slim bar instead. With the ads-first switch
-            on, the bar also opens the navigation as a menu (design §5.8). */}
+            on, the bar opens the sidebar's content as a menu (design §5.8),
+            and the language choice moves into it as on the sidebar. */}
         <div className="sticky top-0 z-40 flex items-center justify-between gap-x-4 border-b border-gray-200 bg-white px-4 py-2 lg:hidden">
           <div className="flex items-center gap-x-2 [&>div]:pt-0">
             {env.adsFirstEnabled && <WorkspaceMenu slug={slug} />}
             <Brand />
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-x-2">
-            <LanguageSwitcher compact />
+            {!env.adsFirstEnabled && <LanguageSwitcher compact />}
             <div className="min-w-0 max-w-56 flex-1">
               <WorkspaceAccountMenu placement="down" />
             </div>

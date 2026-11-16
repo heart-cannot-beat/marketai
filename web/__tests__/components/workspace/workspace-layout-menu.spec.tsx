@@ -42,7 +42,7 @@ jest.mock('@/components/workspace/WorkspaceAccountMenu', () => ({
 }));
 jest.mock('@/components/shared/shell/Brand', () => () => null);
 jest.mock('@/components/shared/LanguageSwitcher', () => ({
-  LanguageSwitcher: () => null,
+  LanguageSwitcher: () => <select data-testid="language-switcher" />,
 }));
 
 const renderLayout = () =>
@@ -64,10 +64,13 @@ describe('WorkspaceLayout phone menu (#194)', () => {
       'data-slug',
       'alpha'
     );
+    // The phone bar leaves the language choice to the menu; the sidebar keeps it.
+    expect(screen.getAllByTestId('language-switcher')).toHaveLength(1);
   });
 
   it('leaves the phone top bar as it is with the switch off', () => {
     renderLayout();
     expect(screen.queryByTestId('workspace-menu-mock')).toBeNull();
+    expect(screen.getAllByTestId('language-switcher')).toHaveLength(2);
   });
 });
