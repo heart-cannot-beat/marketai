@@ -121,9 +121,9 @@ test('drafted ideas carry an ideas call; a plan call is not one of theirs (#190)
   expect(
     validate({ ...detail, state: 'ideas_ready', latest_call: latest })
   ).toBe(true);
-  expect(validate({ ...detail, latest_call: { ...latest, kind: 'plan' } })).toBe(
-    false
-  );
+  expect(
+    validate({ ...detail, latest_call: { ...latest, kind: 'plan' } })
+  ).toBe(false);
   const accepted = RESPONSE_VALIDATORS.get(
     'start_marketing_ideas_planning_202'
   )!;
@@ -133,9 +133,9 @@ test('drafted ideas carry an ideas call; a plan call is not one of theirs (#190)
 
 test('drafting asks for the understanding or the ideas only', () => {
   const start = REQUEST_VALIDATORS.start_marketing_ideas_planning;
-  expect(start({ kind: 'ideas', execution_mode: 'byok', quote_hash: 'q' })).toBe(
-    true
-  );
+  expect(
+    start({ kind: 'ideas', execution_mode: 'byok', quote_hash: 'q' })
+  ).toBe(true);
   expect(start({ kind: 'understanding', execution_mode: 'mock' })).toBe(true);
   expect(start({ kind: 'plan', execution_mode: 'byok' })).toBe(false);
   expect(start({ kind: 'ideas' })).toBe(false);

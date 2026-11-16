@@ -1070,8 +1070,7 @@ export interface DomainGateway {
     projectId: string;
     body: DomainOperationMap['start_marketing_ideas_planning']['requestBody'];
   }): Promise<
-    | DomainResultFor<'start_marketing_ideas_planning'>
-    | ReconciliationRequired
+    DomainResultFor<'start_marketing_ideas_planning'> | ReconciliationRequired
   >;
   startMarketingPlanning(params: {
     workspaceSlug: string;
@@ -4894,8 +4893,7 @@ export class DefaultDomainGateway implements DomainGateway {
     projectId: string;
     body: DomainOperationMap['start_marketing_ideas_planning']['requestBody'];
   }): Promise<
-    | DomainResultFor<'start_marketing_ideas_planning'>
-    | ReconciliationRequired
+    DomainResultFor<'start_marketing_ideas_planning'> | ReconciliationRequired
   > {
     return this.runCommand(
       'start_marketing_ideas_planning',
