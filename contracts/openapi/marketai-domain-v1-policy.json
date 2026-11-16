@@ -1108,6 +1108,12 @@
     "maxResponseBytes": 524288,
     "forwardConditionalHeaders": false
   },
+  "start_marketing_ideas_planning": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/planning",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
   "edit_marketing_project": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/projects/:project_id",
     "maxRequestBytes": 131072,

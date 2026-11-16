@@ -1062,6 +1062,17 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'set_marketing_ad_kept'> | ReconciliationRequired
   >;
+  /** Draft the understanding, or the ideas from it, with no fact checked yet (ADR 0018, #190). */
+  startMarketingIdeasPlanning(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    body: DomainOperationMap['start_marketing_ideas_planning']['requestBody'];
+  }): Promise<
+    | DomainResultFor<'start_marketing_ideas_planning'>
+    | ReconciliationRequired
+  >;
   startMarketingPlanning(params: {
     workspaceSlug: string;
     actionInstanceId: string;
@@ -4873,6 +4884,31 @@ export class DefaultDomainGateway implements DomainGateway {
       params.body,
       200,
       'ok'
+    );
+  }
+
+  async startMarketingIdeasPlanning(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    body: DomainOperationMap['start_marketing_ideas_planning']['requestBody'];
+  }): Promise<
+    | DomainResultFor<'start_marketing_ideas_planning'>
+    | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'start_marketing_ideas_planning',
+      params.actionInstanceId,
+      buildBffPath('start_marketing_ideas_planning', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      202,
+      'accepted',
+      { ifMatch: params.expectedRevision }
     );
   }
 

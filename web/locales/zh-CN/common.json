@@ -1318,6 +1318,7 @@
   "error-small_round_budget_exceeds_media_budget": "小轮预算不能超过总投放预算。",
   "error-validation_error": "请检查标出的字段并修正测试信息。",
   "error-expressions_not_distinct": "同一个角度下的表达方式使用了相同的视觉机制。请给其中一种换一个讲法和视觉机制。",
+  "error-ideas_first_batch_too_large": "首批最多 3 个主张，每个主张 2 种讲法，每种讲法 1 张广告。",
   "error-plan_review_unresolved": "确认前请先处理方案检查中的阻塞项，并回答引导问题。",
   "error-expression_details_required": "请为每种表达方式补充怎么讲、视觉机制和证据依据，然后重新确认方案。",
   "error-evidence_basis_required": "请引用一条支持事实，或说明证据缺口。",

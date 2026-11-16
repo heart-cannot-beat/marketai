@@ -2517,6 +2517,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/planning': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start Ideas Planning
+     * @description Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018, #190).
+     */
+    post: operations['start_marketing_ideas_planning'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/products/{product_id}/brand-kit': {
     parameters: {
       query?: never;
@@ -8277,6 +8297,23 @@ export interface components {
       competitor_snapshot_id?: string | null;
       guiding_questions?: components['schemas']['GuidingQuestion'][];
     };
+    /**
+     * @description A drafting call of ads-first ideas: the product understanding, then the ideas (#190).
+     *
+     *     The plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call.
+     */
+    IdeasCallSummary: {
+      id: string;
+      operation_id: string;
+      /** @enum {string} */
+      kind: 'understanding' | 'ideas';
+      state: string;
+      /** @enum {string} */
+      execution_mode: 'byok' | 'mock';
+      error_code?: string | null;
+      /** @default 0 */
+      maximum_cost: string;
+    };
     IdeasProjectDetail: {
       id: string;
       revision: number;
@@ -8287,7 +8324,7 @@ export interface components {
       ad_language: string;
       understanding: components['schemas']['Understanding'] | null;
       ideas: components['schemas']['Ideas'] | null;
-      latest_call: components['schemas']['PlanningCallSummary'] | null;
+      latest_call: components['schemas']['IdeasCallSummary'] | null;
       ads: components['schemas']['AdSummary'][];
       pending: components['schemas']['PendingAd'][];
     };
@@ -10681,6 +10718,20 @@ export interface components {
     };
     StartExperimentRequest: {
       expected_revision: number;
+    };
+    /** @description Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018). */
+    StartIdeasPlanning: {
+      /** @enum {string} */
+      kind: 'understanding' | 'ideas';
+      /**
+       * @default en-US
+       * @enum {string}
+       */
+      strategy_language: 'zh-CN' | 'en-US';
+      /** @enum {string} */
+      execution_mode: 'byok' | 'mock';
+      /** @default  */
+      quote_hash: string;
     };
     StartPreparationInput: {
       truth_resolution_policy_version_id: string;
@@ -16691,6 +16742,44 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  start_marketing_ideas_planning: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StartIdeasPlanning'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasCallSummary'];
         };
       };
       /** @description Validation Error */

@@ -3742,6 +3742,20 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'start_marketing_ideas_planning',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/planning',
+    fastapiPathTemplate: '/api/v1/marketing/ideas/{project_id}/planning',
+    pathParams: ['project_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.start_marketing_ideas_planning,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 8192,
+    maxResponseBytes: 524288,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'start_marketing_planning',
     method: 'POST',
     bffPattern:
