@@ -2877,6 +2877,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/rounds/{round_id}/reuse-candidates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Reuse Candidates
+     * @description Creatives this round can reuse, newest first: this test's, its product card's and the card's other tests' (#7).
+     */
+    get: operations['list_marketing_reuse_candidates'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/rounds/{round_id}/reviews': {
     parameters: {
       query?: never;
@@ -6560,6 +6580,10 @@ export interface components {
       original_model?: string | null;
       plan_hash?: string | null;
       combination?: components['schemas']['CreativeCombination'] | null;
+      relation?: ('this_test' | 'product_card' | 'other_test') | null;
+      source_project_id?: string | null;
+      card_product_id?: string | null;
+      facts_relation?: ('same' | 'differs') | null;
       source_asset_version_id?: string | null;
       source_sha256?: string | null;
       qc_review_id?: string | null;
@@ -10240,6 +10264,23 @@ export interface components {
       operation_id?: string | null;
       replayed: boolean;
     };
+    ReuseCandidate: {
+      asset_version_id: string;
+      asset_id: string;
+      created_at: string | null;
+      provider: string | null;
+      model: string | null;
+      aspect_ratio: string | null;
+      /** @enum {string} */
+      relation: 'this_test' | 'product_card' | 'other_test';
+      source_project_id?: string | null;
+      source_test_name?: string | null;
+      facts_relation?: ('same' | 'differs') | null;
+    };
+    ReuseCandidatePage: {
+      items: components['schemas']['ReuseCandidate'][];
+      next_cursor: string | null;
+    };
     ReuseCreative: {
       asset_version_id: string;
       combination_id: string;
@@ -11252,6 +11293,8 @@ export interface components {
       quality: components['schemas']['CreativeQuality'] | null;
       ready: boolean;
       mime_type: string;
+      /** @default true */
+      editable: boolean;
       ai_qc: components['schemas']['WorkflowAIQCCall'] | null;
       paired_ai_qc?: components['schemas']['WorkflowAIQCCall'] | null;
     };
@@ -16752,6 +16795,7 @@ export interface operations {
         include_board_thumbnails?: boolean;
         include_text_language?: boolean;
         include_qc_evidence?: boolean;
+        include_reuse_lineage?: boolean;
       };
       header?: never;
       path: {
@@ -16795,6 +16839,7 @@ export interface operations {
         include_board_thumbnails?: boolean;
         include_text_language?: boolean;
         include_qc_evidence?: boolean;
+        include_reuse_lineage?: boolean;
       };
       header?: never;
       path: {
@@ -17432,6 +17477,40 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ResourceEnvelope'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  list_marketing_reuse_candidates: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string | null;
+      };
+      header?: never;
+      path: {
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReuseCandidatePage'];
         };
       };
       /** @description Validation Error */

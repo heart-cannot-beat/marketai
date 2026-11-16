@@ -126,6 +126,21 @@ test('frozen history allows inspection but offers no edit action', async () => {
   ).toBeNull();
 });
 
+test('a creative reused from another test offers no edit action here (#7)', async () => {
+  show(true, [child, { ...source, editable: false }]);
+  await screen.findByAltText('Comparison result');
+  const rows = within(screen.getByRole('list')).getAllByRole('listitem');
+  expect(
+    within(rows[0]).queryByRole('button', {
+      name: 'Continue editing this version',
+    })
+  ).toBeNull();
+  expect(
+    within(rows[1]).getByRole('button', {
+      name: 'Continue editing this version',
+    })
+  ).toBeInTheDocument();
+});
 test('default comparison uses the newest result and never substitutes an unrelated missing parent', async () => {
   const unrelated = {
     ...source,

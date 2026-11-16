@@ -68,26 +68,12 @@ def _marketing_anchors(session, ctx: TenantContext) -> dict[str, str]:
     (``marketing.service.edit_project``). When the test started from a product
     card, that row is the same product in the test's own wording, not another
     product for the home page (J-32). A test whose source text was revised no
-    longer stands for its card (the same rule as its product photos).
+    longer stands for its card (the same rule as its product photos). Reuse
+    reads the same lineage (``app.marketing.card_lineage``, #7).
     """
-    from app.marketing.models import MarketingRevisionRecord as Revision
+    from app.marketing.card_lineage import card_tests
 
-    chosen = Revision.content_json["product_id"].as_string()
-    rows = session.execute(
-        select(Revision.project_id, Revision.revision, Revision.reason, chosen).where(
-            Revision.workspace_id == ctx.workspace_id,
-            Revision.reason.in_(("created", "confirm_understanding", "revise_source")),
-        )
-    ).all()
-    revised = {project for project, _, reason, _ in rows if reason == "revise_source"}
-    sources = {
-        project: product for project, revision, reason, product in rows
-        if reason == "created" and revision == 1 and product and project not in revised
-    }
-    return {
-        product: sources[project] for project, _, reason, product in rows
-        if reason == "confirm_understanding" and product and project in sources and product != sources[project]
-    }
+    return {anchor: test.source for test in card_tests(session, ctx).values() for anchor in test.anchors}
 
 
 def list_products(ctx: TenantContext) -> list[dict]:

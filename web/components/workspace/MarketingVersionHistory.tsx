@@ -207,7 +207,8 @@ export function MarketingVersionHistory({
               >
                 {t('image-history-compare')}
               </button>
-              {editable && (
+              {/* A creative reused from another test is edited there (#7). */}
+              {editable && asset.editable !== false && (
                 <button
                   type="button"
                   className="text-sm underline disabled:opacity-40"

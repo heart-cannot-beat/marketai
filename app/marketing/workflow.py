@@ -598,7 +598,7 @@ def close(session, ctx, row, body):
 
 def round_dict(session, ctx, row, *, include_image_edits=False, include_version_history=False, include_languages=False, include_plan_review=False,
                include_board=False, include_brand_style=False, include_execution_plan=False, include_qc_kinds=False,
-               include_text_language=False, include_qc_evidence=False):
+               include_text_language=False, include_qc_evidence=False, include_reuse_lineage=False):
     include_image_edits = include_image_edits or include_version_history
     from . import image_editing
     from .workflow_models import MarketingFeedbackDraftRecord
@@ -640,7 +640,11 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
         return projected[call.id] if call else None
     assets, executions = [], []
     from .product_references import appearance
+    from .reuse import editable
     appearances = {}
+    # A creative reused from another test or its card is revised or cropped in its own test only (#7).
+    project = get_project(session, ctx, row.project_id) if include_reuse_lineage and any(
+        r.canonical_json.get("reuse") for _, r, _ in creative_records) else None
     for version, recipe, combo in creative_records:
         qc, quality, fact = qcs.get(version.id), reviews.get(version.id, []), facts[version.id]
         frozen_references = recipe.canonical_json.get("selection", {}).get("product_references", [])
@@ -652,7 +656,8 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
             **({"asset_id": version.asset_id, "created_at": version.created_at.isoformat(), "edit_operation": operation_of(recipe)} if include_version_history else {}),
             "ai_qc": single, "paired_ai_qc": paired, "asset_version_id": version.id, "combination_id": combo["id"], "headline": combo["headline"],
             "body_copy": combo["body_copy"], "required_checks": required_checks(combo, row.snapshot_json["plan"]), "quality": qc.findings_json if qc else None,
-            "ready": fact["references_current"] and _quality_ready(qc, quality, fact["blocking"]), "mime_type": version.mime_type})
+            "ready": fact["references_current"] and _quality_ready(qc, quality, fact["blocking"]), "mime_type": version.mime_type,
+            **({"editable": project is None or editable(project, recipe)} if include_reuse_lineage else {})})
         executions.append({**fact, "ready": assets[-1]["ready"],
             **({"product_appearance": appearances[appearance_key]} if include_board else {}),
             **{key: {**c, "quality_suggestion": (c["result"] or {}).get("quality_suggestion")} if c else None
@@ -730,6 +735,8 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
             provenance = entry.get("provenance") or {}
             if provenance.get("combination"):
                 entry["provenance"] = {**provenance, "combination": {k: v for k, v in provenance["combination"].items() if k != "executions"}}
+    if not include_reuse_lineage:
+        legacy_reuse_projection(result)
     return result if include_image_edits else legacy_round_projection(result)
 
 
@@ -817,6 +824,19 @@ def legacy_qc_evidence_projection(result):
     return result
 
 
+#: Reuse provenance added by #7; strict readers from before it never see them.
+REUSE_LINEAGE_KEYS = frozenset({"relation", "source_project_id", "card_product_id", "facts_relation"})
+
+
+def legacy_reuse_projection(result):
+    """Readers that did not ask for ``include_reuse_lineage`` see the round as before #7."""
+    for entry in (result.get("handoff") or {}).get("entries", []):
+        provenance = entry.get("provenance") or {}
+        if REUSE_LINEAGE_KEYS & provenance.keys():
+            entry["provenance"] = {k: v for k, v in provenance.items() if k not in REUSE_LINEAGE_KEYS}
+    return result
+
+
 def legacy_round_projection(result):
     """Keep old strict BFF validators usable while the UI rolls forward."""
     result.pop("image_edits", None)
@@ -837,7 +857,7 @@ def legacy_round_projection(result):
 
 def workflow_dict(session, ctx, project_id, *, include_image_edits=False, include_version_history=False, include_languages=False, include_plan_review=False,
                   include_board=False, include_brand_style=False, include_execution_plan=False, include_qc_kinds=False, include_qc_evidence=False,
-                  include_text_language=False):
+                  include_text_language=False, include_reuse_lineage=False):
     from .workflow_models import MarketingImageEditRecord
     from .ai_qc_models import MarketingAIQCRecord
     get_project(session, ctx, project_id)
@@ -860,7 +880,8 @@ def workflow_dict(session, ctx, project_id, *, include_image_edits=False, includ
             select(MarketingAIQCRecord.id).where(
                 MarketingAIQCRecord.workspace_id == ctx.workspace_id, MarketingAIQCRecord.round_id == rounds[-1].id,
                 MarketingAIQCRecord.state.in_(('queued', 'running')))).limit(1)))
-    current = round_dict(session, ctx, rounds[-1], include_image_edits=include_image_edits, include_version_history=include_version_history, include_languages=include_languages, include_plan_review=include_plan_review, include_board=include_board, include_brand_style=include_brand_style, include_execution_plan=include_execution_plan, include_qc_kinds=include_qc_kinds, include_text_language=include_text_language, include_qc_evidence=include_qc_evidence) if rounds else None
+    current = round_dict(session, ctx, rounds[-1], include_image_edits=include_image_edits, include_version_history=include_version_history, include_languages=include_languages, include_plan_review=include_plan_review, include_board=include_board, include_brand_style=include_brand_style, include_execution_plan=include_execution_plan, include_qc_kinds=include_qc_kinds, include_text_language=include_text_language, include_qc_evidence=include_qc_evidence,
+                         include_reuse_lineage=include_reuse_lineage) if rounds else None
     if current:
         # The handoff and explanation states come from the projection itself, so they always agree with it.
         busy = bool(busy

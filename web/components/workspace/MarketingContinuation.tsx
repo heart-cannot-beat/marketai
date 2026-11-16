@@ -201,14 +201,21 @@ export function MarketingNextPlan({
   );
 }
 
+type ReuseCandidate = components['schemas']['ReuseCandidate'];
+
+/** Where a reusable creative comes from, in the order the picker groups them (#7). */
+const REUSE_GROUPS: ReuseCandidate['relation'][] = [
+  'this_test',
+  'other_test',
+  'product_card',
+];
+
 export function MarketingReusePicker({
   row,
-  productId,
   busy,
   onAttach,
 }: {
   row: MarketingRound;
-  productId: string | null;
   busy: boolean;
   onAttach: (body: components['schemas']['ReuseCreative']) => Promise<void>;
 }) {
@@ -224,30 +231,35 @@ export function MarketingReusePicker({
   );
   const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState('');
+  // The server lists only what `reuse` accepts: this test's creatives, the
+  // product card's and the card's other tests', in this round's mode.
   const page = useSWR(
-    open && productId
+    open
       ? [
-          'marketing-reuse-assets',
+          'marketing-reuse-candidates',
           current.workspaceId,
-          productId,
-          row.execution_mode,
+          row.id,
+          row.revision,
           cursor,
         ]
       : null,
     async () =>
       dataOf(
-        await gateway.listGenerationAssets({
+        await gateway.listMarketingReuseCandidates({
           workspaceSlug: current.slug,
-          productId: productId!,
-          executionMode: row.execution_mode,
+          roundId: row.id,
           cursor,
           limit: 20,
         })
       )
   );
   const options = (page.data?.items || []).filter(
-    (a) => !row.assets.some((existing) => existing.asset_version_id === a.id)
+    (a) =>
+      !row.assets.some(
+        (existing) => existing.asset_version_id === a.asset_version_id
+      )
   );
+  const chosen = options.find((a) => a.asset_version_id === selected);
   const previewFailure = t('marketing-reuse-preview-failed');
   useEffect(() => {
     setImageUrl('');
@@ -280,6 +292,18 @@ export function MarketingReusePicker({
       if (url) URL.revokeObjectURL(url);
     };
   }, [selected, current.slug, gateway, blobs, previewFailure]);
+  const label = (a: ReuseCandidate, index: number) => {
+    const option = t('marketing-reuse-option', {
+      number: index + 1,
+      date: a.created_at?.slice(0, 10) || '',
+      provider: a.provider,
+      model: a.model,
+      shape: a.aspect_ratio,
+    });
+    return a.relation === 'other_test' && a.source_test_name
+      ? t('marketing-reuse-option-from', { test: a.source_test_name, option })
+      : option;
+  };
   return (
     <details
       open={open}
@@ -300,19 +324,39 @@ export function MarketingReusePicker({
           onChange={(e) => setSelected(e.target.value)}
         >
           <option value="">{t('marketing-reuse-select')}</option>
-          {options.map((a, index) => (
-            <option key={a.id} value={a.id}>
-              {t('marketing-reuse-option', {
-                number: index + 1,
-                date: a.created_at?.slice(0, 10) || '',
-                provider: a.provider,
-                model: a.model,
-                shape: a.aspect_ratio,
-              })}
-            </option>
-          ))}
+          {REUSE_GROUPS.map((relation) => {
+            const group = options.filter((a) => a.relation === relation);
+            return group.length ? (
+              <optgroup
+                key={relation}
+                label={t(`marketing-reuse-group-${relation}`)}
+              >
+                {group.map((a) => (
+                  <option key={a.asset_version_id} value={a.asset_version_id}>
+                    {label(a, options.indexOf(a))}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null;
+          })}
         </select>
       </label>
+      {chosen && chosen.relation !== 'this_test' && (
+        <div className="space-y-1 text-sm" role="note">
+          {chosen.relation === 'other_test' && (
+            <>
+              <p>{t('marketing-reuse-other-review')}</p>
+              <p>{t('marketing-reuse-other-shared-review')}</p>
+            </>
+          )}
+          {chosen.facts_relation === 'differs' && (
+            <p className="text-amber-700">
+              {t('marketing-reuse-facts-differ')}
+            </p>
+          )}
+          <p className="text-gray-600">{t('marketing-reuse-not-editable')}</p>
+        </div>
+      )}
       {imageUrl && (
         // Private exact image uses the scoped blob transfer, not a public optimizer.
         // eslint-disable-next-line @next/next/no-img-element

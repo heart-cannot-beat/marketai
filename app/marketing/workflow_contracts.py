@@ -219,6 +219,8 @@ class WorkflowAsset(Document):
     quality: CreativeQuality | None
     ready: bool
     mime_type: str
+    #: False for a creative reused from another test or the product card: it cannot be revised or cropped here (#7).
+    editable: bool = True
     ai_qc: WorkflowAIQCCall | None
     # include_qc_kinds only: the newest paired-check attempt (a pre-split call answers both kinds).
     paired_ai_qc: WorkflowAIQCCall | None = None
@@ -242,6 +244,11 @@ class CreativeProvenance(Document):
     original_model: str | None = None
     plan_hash: str | None = None
     combination: CreativeCombination | None = None
+    # A reuse since #7: where the creative came from within its product card's lineage.
+    relation: Literal['this_test', 'product_card', 'other_test'] | None = None
+    source_project_id: str | None = None
+    card_product_id: str | None = None
+    facts_relation: Literal['same', 'differs'] | None = None
     source_asset_version_id: str | None = None
     source_sha256: str | None = None
     qc_review_id: str | None = None

@@ -1293,6 +1293,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'list_marketing_reuse_candidates',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/rounds/:round_id/reuse-candidates',
+    pathParams: ['round_id'],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'list_meta_bindings',
     method: 'GET',
     bffPattern:

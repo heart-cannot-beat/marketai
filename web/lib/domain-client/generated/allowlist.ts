@@ -1924,6 +1924,7 @@ export const DOMAIN_ALLOWLIST = [
         include_board_thumbnails: z.coerce.boolean().optional().default(false),
         include_text_language: z.coerce.boolean().optional().default(false),
         include_qc_evidence: z.coerce.boolean().optional().default(false),
+        include_reuse_lineage: z.coerce.boolean().optional().default(false),
       })
       .strict(),
     requestBodyValidator: null,
@@ -1954,6 +1955,7 @@ export const DOMAIN_ALLOWLIST = [
         include_board_thumbnails: z.coerce.boolean().optional().default(false),
         include_text_language: z.coerce.boolean().optional().default(false),
         include_qc_evidence: z.coerce.boolean().optional().default(false),
+        include_reuse_lineage: z.coerce.boolean().optional().default(false),
       })
       .strict(),
     requestBodyValidator: null,
@@ -2788,6 +2790,26 @@ export const DOMAIN_ALLOWLIST = [
         limit: z.coerce.number().int().min(1).max(100).optional().default(50),
         cursor: z.string().optional(),
         q: z.string().optional().default(''),
+      })
+      .strict(),
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 524288,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: false,
+  },
+  {
+    operationId: 'list_marketing_reuse_candidates',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/rounds/:round_id/reuse-candidates',
+    fastapiPathTemplate: '/api/v1/marketing/rounds/{round_id}/reuse-candidates',
+    pathParams: ['round_id'],
+    querySchema: z
+      .object({
+        limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+        cursor: z.string().optional(),
       })
       .strict(),
     requestBodyValidator: null,

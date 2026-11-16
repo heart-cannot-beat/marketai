@@ -800,6 +800,8 @@ export interface DomainGateway {
     includeTextLanguage?: boolean;
     /** #294/#295: the single-image transcription and copy diff, and why a QC output was refused. */
     includeQcEvidence?: boolean;
+    /** #7: which round creatives can be revised here, and where a reused one came from. */
+    includeReuseLineage?: boolean;
     /** #367: the frozen plan's review and style, as the project read returns the project's plan. */
     includePlanReview?: boolean;
     includeBrandStyle?: boolean;
@@ -822,6 +824,13 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'reuse_marketing_creative'> | ReconciliationRequired
   >;
+  /** #7: creatives this round can reuse -- this test's, its product card's and the card's other tests'. */
+  listMarketingReuseCandidates(params: {
+    workspaceSlug: string;
+    roundId: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<DomainResultFor<'list_marketing_reuse_candidates'>>;
   getMarketingEvidenceHandoff(params: {
     workspaceSlug: string;
     roundId: string;
@@ -955,6 +964,8 @@ export interface DomainGateway {
     includeTextLanguage?: boolean;
     /** #294/#295: the single-image transcription and copy diff, and why a QC output was refused. */
     includeQcEvidence?: boolean;
+    /** #7: which round creatives can be revised here, and where a reused one came from. */
+    includeReuseLineage?: boolean;
   }): Promise<DomainResultFor<'get_marketing_round'>>;
   getMarketingAIQCQuote(params: {
     workspaceSlug: string;
@@ -4135,6 +4146,8 @@ export class DefaultDomainGateway implements DomainGateway {
     includeTextLanguage?: boolean;
     /** #294/#295: the single-image transcription and copy diff, and why a QC output was refused. */
     includeQcEvidence?: boolean;
+    /** #7: which round creatives can be revised here, and where a reused one came from. */
+    includeReuseLineage?: boolean;
     /** #367: the frozen plan's review and style, as the project read returns the project's plan. */
     includePlanReview?: boolean;
     includeBrandStyle?: boolean;
@@ -4155,6 +4168,7 @@ export class DefaultDomainGateway implements DomainGateway {
           include_board_thumbnails: params.includeBoardThumbnails || undefined,
           include_text_language: params.includeTextLanguage || undefined,
           include_qc_evidence: params.includeQcEvidence || undefined,
+          include_reuse_lineage: params.includeReuseLineage || undefined,
           // The workflow route has no competitor review: a round never shows it (#273).
           include_plan_review: params.includePlanReview || undefined,
           include_brand_style: params.includeBrandStyle || undefined,
@@ -4183,6 +4197,24 @@ export class DefaultDomainGateway implements DomainGateway {
       201,
       'created',
       { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async listMarketingReuseCandidates(params: {
+    workspaceSlug: string;
+    roundId: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<DomainResultFor<'list_marketing_reuse_candidates'>> {
+    return this.sendSafe<'list_marketing_reuse_candidates'>(
+      buildBffPath('list_marketing_reuse_candidates', {
+        slug: params.workspaceSlug,
+        round_id: params.roundId,
+      }) +
+        this.buildQuery({
+          cursor: params.cursor,
+          limit: params.limit,
+        })
     );
   }
 
@@ -4543,6 +4575,8 @@ export class DefaultDomainGateway implements DomainGateway {
     includeTextLanguage?: boolean;
     /** #294/#295: the single-image transcription and copy diff, and why a QC output was refused. */
     includeQcEvidence?: boolean;
+    /** #7: which round creatives can be revised here, and where a reused one came from. */
+    includeReuseLineage?: boolean;
   }): Promise<DomainResultFor<'get_marketing_round'>> {
     return this.sendSafe<'get_marketing_round'>(
       buildBffPath('get_marketing_round', {
@@ -4559,6 +4593,7 @@ export class DefaultDomainGateway implements DomainGateway {
           include_board_thumbnails: params.includeBoardThumbnails || undefined,
           include_text_language: params.includeTextLanguage || undefined,
           include_qc_evidence: params.includeQcEvidence || undefined,
+          include_reuse_lineage: params.includeReuseLineage || undefined,
         })
     );
   }
