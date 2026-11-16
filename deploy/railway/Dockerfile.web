@@ -24,6 +24,9 @@ COPY web/ ./
 # build as build arguments, but a Dockerfile only sees the ones it declares.
 ARG NEXT_PUBLIC_MARKETAI_STORAGE_ORIGINS=""
 ENV NEXT_PUBLIC_MARKETAI_STORAGE_ORIGINS=${NEXT_PUBLIC_MARKETAI_STORAGE_ORIGINS}
+# The ads-first opening (ADR 0018); off unless set to "true".
+ARG NEXT_PUBLIC_MARKETAI_ADS_FIRST=""
+ENV NEXT_PUBLIC_MARKETAI_ADS_FIRST=${NEXT_PUBLIC_MARKETAI_ADS_FIRST}
 
 # Prisma generate must run before next build.
 RUN npx prisma generate \

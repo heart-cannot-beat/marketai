@@ -2,6 +2,7 @@ import type { GetServerSideProps, GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { getAuthenticatedSession } from '@/lib/requireSession';
 import { prisma } from '@/lib/prisma';
+import env from '@/lib/env';
 
 export type WorkspaceBootstrap = {
   workspaceId: string;
@@ -21,13 +22,27 @@ export type WorkspaceSummary = {
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 
 export function getWorkspacePageProps(
-  options: { ownerOnly?: boolean; namespaces?: string[] } = {}
+  options: {
+    ownerOnly?: boolean;
+    namespaces?: string[];
+    /** A page of the ads-first opening (ADR 0018): 404 while the switch is off. */
+    adsFirstOnly?: boolean;
+  } = {}
 ): GetServerSideProps<{ bootstrap: WorkspaceBootstrap }> {
-  const { ownerOnly = false, namespaces = ['common'] } = options;
+  const {
+    ownerOnly = false,
+    namespaces = ['common'],
+    adsFirstOnly = false,
+  } = options;
 
   return async (context: GetServerSidePropsContext) => {
     const { req, res, params, locale } = context;
     const slug = params?.slug as string | undefined;
+
+    // 0. The ads-first pages do not exist until the switch is on.
+    if (adsFirstOnly && !env.adsFirstEnabled) {
+      return { notFound: true };
+    }
 
     // 1. Session
     const session = await getAuthenticatedSession(req, res);

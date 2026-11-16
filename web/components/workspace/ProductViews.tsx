@@ -1,0 +1,116 @@
+import { useTranslation } from 'next-i18next';
+import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
+import { GuardedLink } from '@/components/workspace/GuardedLink';
+import type { WorkspaceProduct } from '@/lib/products/workspace-products';
+
+/**
+ * The bodies of a product's four views until their own slices fill them
+ * (ADR 0018, step-1 plan): S8 the ad ideas, S14 the product profile, step 2
+ * the tests and step 3 the results. The placeholders point at the page that
+ * holds the same thing today.
+ */
+
+function Placeholder({
+  text,
+  href,
+  label,
+  testId,
+}: {
+  text: string;
+  href: string;
+  label: string;
+  testId: string;
+}) {
+  return (
+    <div
+      className="space-y-3 rounded-xl border border-dashed border-base-300 p-5"
+      data-testid={testId}
+    >
+      <p className="max-w-prose text-sm text-base-content/80">{text}</p>
+      <GuardedLink href={href} className="btn btn-sm">
+        {label}
+      </GuardedLink>
+    </div>
+  );
+}
+
+export function ProductIdeasSummary({
+  product,
+}: {
+  product: WorkspaceProduct;
+}) {
+  const { t } = useTranslation('common');
+  const ideas = product.ideas;
+  return (
+    <p
+      className="text-sm text-base-content/80"
+      data-testid="product-ideas-summary"
+    >
+      {!ideas
+        ? t('product-ideas-none')
+        : ideas.adCount === 0
+          ? t('product-ideas-preparing')
+          : t('product-ideas-counts', {
+              count: ideas.adCount,
+              kept: ideas.keptCount,
+            })}
+    </p>
+  );
+}
+
+export function ProductTestsPlaceholder() {
+  const { t } = useTranslation('common');
+  const { current } = useWorkspace();
+  return (
+    <Placeholder
+      text={t('product-tests-placeholder')}
+      href={`/w/${current.slug}/experiments`}
+      label={t('product-open-earlier-tests')}
+      testId="product-tests-placeholder"
+    />
+  );
+}
+
+export function ProductResultsPlaceholder() {
+  const { t } = useTranslation('common');
+  const { current } = useWorkspace();
+  return (
+    <Placeholder
+      text={t('product-results-placeholder')}
+      href={`/w/${current.slug}/experiments`}
+      label={t('product-open-earlier-tests')}
+      testId="product-results-placeholder"
+    />
+  );
+}
+
+export function ProductProfilePlaceholder() {
+  const { t } = useTranslation('common');
+  const { current } = useWorkspace();
+  return (
+    <Placeholder
+      text={t('product-profile-placeholder')}
+      href={`/w/${current.slug}/products`}
+      label={t('product-open-products-page')}
+      testId="product-profile-placeholder"
+    />
+  );
+}
+
+export function CompetitorsPlaceholder() {
+  const { t } = useTranslation('common');
+  const { current } = useWorkspace();
+  return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold outline-none">
+        {t('competitors-page-title')}
+      </h1>
+      <Placeholder
+        text={t('competitors-page-placeholder')}
+        href={`/w/${current.slug}/experiments`}
+        label={t('product-open-earlier-tests')}
+        testId="competitors-placeholder"
+      />
+    </div>
+  );
+}

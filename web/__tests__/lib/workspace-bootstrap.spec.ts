@@ -1,3 +1,4 @@
+import env from '@/lib/env';
 import { getWorkspacePageProps } from '@/lib/workspace-bootstrap';
 
 const mockRequireSession = jest.fn();
@@ -151,5 +152,34 @@ describe('getWorkspacePageProps', () => {
     await expect(gssp(mockContext('acme'))).rejects.toThrow(
       'connection refused'
     );
+  });
+});
+
+describe('getWorkspacePageProps adsFirstOnly (#194)', () => {
+  beforeEach(() => jest.clearAllMocks());
+  afterEach(() => {
+    env.adsFirstEnabled = false;
+  });
+
+  it('answers 404 for an ads-first page while the switch is off', async () => {
+    env.adsFirstEnabled = false;
+    const gssp = getWorkspacePageProps({ adsFirstOnly: true });
+    await expect(gssp(mockContext('acme'))).resolves.toEqual({
+      notFound: true,
+    });
+    expect(mockRequireSession).not.toHaveBeenCalled();
+  });
+
+  it('serves it like any Workspace page while the switch is on', async () => {
+    env.adsFirstEnabled = true;
+    mockRequireSession.mockResolvedValue(null);
+    const gssp = getWorkspacePageProps({ adsFirstOnly: true });
+    const result = await gssp(mockContext('acme'));
+    expect(result).toEqual({
+      redirect: {
+        destination: expect.stringContaining('/auth/login'),
+        permanent: false,
+      },
+    });
   });
 });

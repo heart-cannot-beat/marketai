@@ -52,6 +52,7 @@ export type ReadOperationId =
   | 'get_library_reference_object'
   | 'get_product_intake'
   | 'list_products'
+  | 'list_marketing_ideas'
   | 'get_product_references'
   | 'get_product_brand_kit'
   | 'list_marketing_brand_kits'
@@ -383,6 +384,15 @@ function callReadOperation<K extends ReadOperationId>(
       return gateway.listProducts({ workspaceSlug }) as Promise<
         DomainResultFor<K>
       >;
+    case 'list_marketing_ideas': {
+      const p =
+        params as DomainOperationMap['list_marketing_ideas']['queryParams'];
+      return gateway.listMarketingIdeas({
+        workspaceSlug,
+        cursor: p?.cursor,
+        limit: p?.limit !== undefined ? Number(p.limit) : undefined,
+      }) as Promise<DomainResultFor<K>>;
+    }
     case 'list_test_plans': {
       const p = params as DomainOperationMap['list_test_plans']['queryParams'];
       return gateway.listTestPlans({
