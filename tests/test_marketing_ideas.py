@@ -263,3 +263,106 @@ class IdeasServiceTests(MarketingIdeasFixtures):
                               revision.content_json["ad_language"], revision.content_json["ideas"]),
                              (1, "ads_first", "United States", "en-US", None))
 
+
+class IdeasApiTests(MarketingIdeasFixtures):
+    def ideas_create(self, **overrides):
+        body = {"product_id": self.product(), "source_text": "Schedule charging from the Acme Charge app.",
+                "market": "United States", "ad_language": "en-US", **overrides}
+        return self.client.post("/api/v1/marketing/ideas", json=body, headers={"Idempotency-Key": uuid4().hex})
+
+    def keep(self, project_id, asset_version_id, kept=True):
+        return self.client.put(f"/api/v1/marketing/ideas/{project_id}/ads/{asset_version_id}/kept", json={"kept": kept},
+                               headers={"Idempotency-Key": uuid4().hex})
+
+    def test_create_then_read(self):
+        created = self.ideas_create()
+        self.assertEqual(created.status_code, 201, created.text)
+        body = created.json()
+        self.assertEqual((body["state"], body["ads"], body["pending"], body["ideas"], body["understanding"], body["latest_call"]),
+                         ("input", [], [], None, None, None))
+        self.assertEqual((body["market"], body["ad_language"]), ("United States", "en-US"))
+        read = self.client.get(f"/api/v1/marketing/ideas/{body['id']}")
+        self.assertEqual(read.status_code, 200, read.text)
+        self.assertEqual(read.json(), body)
+        self.assertEqual(read.headers["ETag"], '"1"')
+
+    def test_same_idempotency_key_returns_the_same_project(self):
+        key = uuid4().hex
+        body = {"product_id": self.product(), "source_text": "x", "market": "United States", "ad_language": "en-US"}
+        first = self.client.post("/api/v1/marketing/ideas", json=body, headers={"Idempotency-Key": key})
+        second = self.client.post("/api/v1/marketing/ideas", json=body, headers={"Idempotency-Key": key})
+        self.assertEqual((first.status_code, second.status_code), (201, 201), second.text)
+        self.assertEqual(first.json()["id"], second.json()["id"])
+
+    def test_creating_needs_a_product_of_this_workspace(self):
+        missing = self.ideas_create(product_id="prod_missing")
+        self.assertEqual((missing.status_code, missing.json()["code"]), (404, "product_not_found"))
+        unset = self.client.post("/api/v1/marketing/ideas", headers={"Idempotency-Key": uuid4().hex},
+                                 json={"source_text": "x", "market": "United States", "ad_language": "en-US"})
+        self.assertEqual(unset.status_code, 422, unset.text)
+
+    def test_old_endpoints_do_not_show_it(self):
+        body = self.ideas_create().json()
+        for path in ("/api/v1/marketing/projects", "/api/v1/marketing/projects?limit=100"):
+            listed = self.client.get(path).json()["items"]
+            self.assertNotIn(body["id"], [item["id"] for item in listed])
+        self.assertEqual(self.client.get(f"/api/v1/marketing/projects/{body['id']}").status_code, 404)
+        edit = self.client.patch(f"/api/v1/marketing/projects/{body['id']}", headers=self.headers(body["revision"]),
+                                 json={"command": "revise_source", "source_text": "Acme Charge"})
+        self.assertEqual(edit.status_code, 404, edit.text)
+
+    def test_new_endpoints_do_not_show_a_plan_first_project(self):
+        old = self.create()
+        self.assertEqual(self.client.get(f"/api/v1/marketing/ideas/{old['id']}").status_code, 404)
+        self.assertEqual(self.keep(old["id"], "av_missing").status_code, 404)
+
+    def test_list_shows_only_ads_first_projects_newest_first(self):
+        old = self.create()
+        first = self.ideas_create().json()
+        second = self.ideas_create().json()
+        page = self.client.get("/api/v1/marketing/ideas").json()
+        ids = [item["id"] for item in page["items"]]
+        self.assertEqual(ids[:2], [second["id"], first["id"]])
+        self.assertNotIn(old["id"], ids)
+        self.assertEqual(page["items"][0]["product_name"], "Test Product")
+        self.assertEqual((page["items"][0]["ad_count"], page["items"][0]["kept_count"]), (0, 0))
+        self.assertIsNone(page["next_cursor"])
+
+    def test_list_pages_with_a_cursor(self):
+        made = [self.ideas_create().json()["id"] for _ in range(3)]
+        first = self.client.get("/api/v1/marketing/ideas?limit=2").json()
+        self.assertEqual([item["id"] for item in first["items"]], made[::-1][:2])
+        rest = self.client.get(f"/api/v1/marketing/ideas?limit=2&cursor={first['next_cursor']}").json()
+        self.assertEqual([item["id"] for item in rest["items"]], made[:1])
+        broken = self.client.get("/api/v1/marketing/ideas?cursor=not-a-cursor")
+        self.assertEqual((broken.status_code, broken.json()["code"]), (400, "invalid_cursor"))
+
+    def test_keep_on_unknown_ad_is_404(self):
+        body = self.ideas_create().json()
+        response = self.keep(body["id"], "av_missing")
+        self.assertEqual((response.status_code, response.json()["code"]), (404, "ad_not_found"))
+
+    def test_keep_marks_the_ad_and_returns_the_ideas(self):
+        body = self.ideas_create().json()
+        ad = self.plant_ad(body["id"])
+        kept = self.keep(body["id"], ad)
+        self.assertEqual(kept.status_code, 200, kept.text)
+        self.assertEqual([(a["asset_version_id"], a["kept"]) for a in kept.json()["ads"]], [(ad, True)])
+        self.assertEqual(self.client.get("/api/v1/marketing/ideas").json()["items"][0]["kept_count"], 1)
+        dropped = self.keep(body["id"], ad, kept=False)
+        self.assertEqual([a["kept"] for a in dropped.json()["ads"]], [False])
+
+    def test_another_workspace_cannot_read_list_or_keep(self):
+        body = self.ideas_create().json()
+        ad = self.plant_ad(body["id"])
+        mine = self.context
+        self.context = self._make_context()
+        self.assertEqual(self.client.get(f"/api/v1/marketing/ideas/{body['id']}").status_code, 404)
+        self.assertEqual(self.client.get("/api/v1/marketing/ideas").json()["items"], [])
+        refused = self.keep(body["id"], ad)
+        self.assertEqual((refused.status_code, refused.json()["code"]), (404, "marketing_project_not_found"))
+        theirs = self.ideas_create(product_id=self.product(mine))
+        self.assertEqual((theirs.status_code, theirs.json()["code"]), (404, "product_not_found"))
+        self.context = mine
+        with tenant_session(self.context) as session:
+            self.assertIsNone(session.scalar(select(MarketingAdKeepRecord).where(MarketingAdKeepRecord.project_id == body["id"])))
