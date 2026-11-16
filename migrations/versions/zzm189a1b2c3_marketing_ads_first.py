@@ -66,6 +66,9 @@ def upgrade():
 
 def downgrade():
     bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        # Both tables FORCE RLS: without this a role that cannot bypass it counts no rows and the guard passes.
+        bind.execute(sa.text("SELECT set_config('row_security', 'off', true)"))
     if (bind.execute(sa.text("SELECT COUNT(*) FROM marketing_projects WHERE flow = 'ads_first'")).scalar()
             or bind.execute(sa.text("SELECT COUNT(*) FROM marketing_ad_keeps")).scalar()):
         raise RuntimeError("ads_first projects or keep marks exist; downgrading would show them to the plan-first endpoints")

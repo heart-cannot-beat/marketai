@@ -366,3 +366,92 @@ class IdeasApiTests(MarketingIdeasFixtures):
         self.context = mine
         with tenant_session(self.context) as session:
             self.assertIsNone(session.scalar(select(MarketingAdKeepRecord).where(MarketingAdKeepRecord.project_id == body["id"])))
+
+
+class IdeasReplayAndCostTests(MarketingIdeasFixtures):
+    ideas_create, keep = IdeasApiTests.ideas_create, IdeasApiTests.keep
+
+    def test_reusing_a_create_key_with_another_body_is_refused(self):
+        key = uuid4().hex
+        body = {"product_id": self.product(), "source_text": "x", "market": "United States", "ad_language": "en-US"}
+        self.assertEqual(self.client.post("/api/v1/marketing/ideas", json=body, headers={"Idempotency-Key": key}).status_code, 201)
+        reused = self.client.post("/api/v1/marketing/ideas", json={**body, "market": "Canada"}, headers={"Idempotency-Key": key})
+        self.assertEqual((reused.status_code, reused.json()["code"]), (409, "idempotency_key_reused"))
+        self.assertEqual(len(self.client.get("/api/v1/marketing/ideas").json()["items"]), 1)
+
+    def test_replaying_an_old_keep_does_not_undo_a_later_one(self):
+        body = self.ideas_create().json()
+        ad = self.plant_ad(body["id"])
+        first = uuid4().hex
+        path = f"/api/v1/marketing/ideas/{body['id']}/ads/{ad}/kept"
+        self.assertEqual(self.client.put(path, json={"kept": True}, headers={"Idempotency-Key": first}).status_code, 200)
+        self.assertEqual(self.keep(body["id"], ad, kept=False).status_code, 200)
+        replayed = self.client.put(path, json={"kept": True}, headers={"Idempotency-Key": first})
+        self.assertEqual(replayed.status_code, 200, replayed.text)
+        self.assertEqual([a["kept"] for a in replayed.json()["ads"]], [False])
+        with tenant_session(self.context) as session:
+            events = session.scalars(select(AuditEventRecord).where(AuditEventRecord.event_type == "marketing.ad_kept",
+                                                                    AuditEventRecord.resource_id == body["id"])).all()
+            self.assertEqual(len(events), 2)
+
+    def test_listing_costs_the_same_number_of_queries_for_one_or_many_projects(self):
+        from sqlalchemy import event
+        from app.adapters.persistence.database import engine
+
+        def statements():
+            seen = []
+            listener = lambda *args: seen.append(args[2])  # noqa: E731
+            event.listen(engine, "before_cursor_execute", listener)
+            try:
+                self.assertEqual(self.client.get("/api/v1/marketing/ideas").status_code, 200)
+            finally:
+                event.remove(engine, "before_cursor_execute", listener)
+            return len(seen)
+
+        first = self.ideas_create().json()
+        self.plant_ad(first["id"])
+        one = statements()
+        for _ in range(4):
+            self.plant_ad(self.ideas_create().json()["id"])
+        self.assertEqual(statements(), one)
+
+
+class AdsFirstMigrationDowngradeTests(unittest.TestCase):
+    """Dropping ``flow`` would hand ads-first projects to the plan-first endpoints, so downgrade refuses."""
+    ROOT = __import__("pathlib").Path(__file__).resolve().parents[1]
+
+    def setUp(self):
+        import tempfile
+        self.temp = tempfile.TemporaryDirectory(prefix="marketai-ads-first-migration-")
+        self.addCleanup(self.temp.cleanup)
+        self.database = f"{self.temp.name}/migration.db"
+        self.environment = {**__import__("os").environ, "MARKETAI_DATABASE_URL": f"sqlite:///{self.database}",
+                            "MARKETAI_DATA_DIR": f"{self.temp.name}/data"}
+        upgraded = self.alembic("upgrade", "head")
+        self.assertEqual(upgraded.returncode, 0, upgraded.stderr)
+
+    def alembic(self, *arguments):
+        import subprocess
+        import sys
+        return subprocess.run([sys.executable, "-m", "alembic", *arguments], cwd=self.ROOT, env=self.environment,
+                              capture_output=True, text=True, check=False)
+
+    def columns(self):
+        import sqlite3
+        with sqlite3.connect(self.database) as connection:
+            return {row[1] for row in connection.execute("PRAGMA table_info(marketing_projects)")}
+
+    def test_downgrade_without_ads_first_projects_drops_the_columns_and_table(self):
+        downgraded = self.alembic("downgrade", "zzl148a1b2c3")
+        self.assertEqual(downgraded.returncode, 0, downgraded.stderr)
+        self.assertFalse({"flow", "market", "ad_language", "ideas_json"} & self.columns())
+
+    def test_downgrade_refuses_while_an_ads_first_project_exists(self):
+        import sqlite3
+        with sqlite3.connect(self.database) as connection:
+            connection.execute("INSERT INTO marketing_projects (id, workspace_id, revision, state, source_text, flow, created_at, updated_at)"
+                               " VALUES ('mp_1', 'ws_1', 1, 'input', 'Acme Charge', 'ads_first', '2026-11-16', '2026-11-16')")
+        downgraded = self.alembic("downgrade", "zzl148a1b2c3")
+        self.assertNotEqual(downgraded.returncode, 0)
+        self.assertIn("ads_first projects or keep marks exist", downgraded.stderr)
+        self.assertIn("flow", self.columns())

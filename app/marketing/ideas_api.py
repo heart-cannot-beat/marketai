@@ -53,7 +53,7 @@ def list_ideas(ctx: TenantContext = Depends(request_tenant_context), limit: int 
                 raise service.MarketingError("invalid_cursor", "列表位置无效，请从第一页重新加载。", 400) from None
         rows = session.scalars(query.order_by(cls.created_at.desc(), cls.id.desc()).limit(limit + 1)).all()
         more, rows = len(rows) > limit, rows[:limit]
-        return {"items": [ideas.ideas_summary(session, ctx, row) for row in rows],
+        return {"items": ideas.ideas_summaries(session, ctx, rows),
                 "next_cursor": encode_cursor(ctx.workspace_id, filters, (rows[-1].created_at.isoformat(), rows[-1].id))
                 if more else None}
 

@@ -61,15 +61,24 @@ def get_ideas_project(session, ctx, project_id: str):
 
 def project_ads(session, ctx, row):
     """This project's ads, oldest first: images whose recipe intent names the project and the ads-first flow."""
+    return _ads_by_project(session, ctx, [row.id])[row.id]
+
+
+def _ads_by_project(session, ctx, project_ids):
+    """``project_ads`` of several projects in one query (the list reads every row's counts)."""
     records = session.execute(select(AssetVersionRecord, GenerationRecipeSnapshotRecord)
         .join(RunItemRecord, (RunItemRecord.id == AssetVersionRecord.producing_run_item_id) & (RunItemRecord.workspace_id == ctx.workspace_id))
         .join(GenerationRunRecord, (GenerationRunRecord.id == RunItemRecord.generation_run_id) & (GenerationRunRecord.workspace_id == ctx.workspace_id))
         .join(GenerationRecipeSnapshotRecord, (GenerationRecipeSnapshotRecord.id == GenerationRunRecord.recipe_snapshot_id) & (GenerationRecipeSnapshotRecord.workspace_id == ctx.workspace_id))
         .where(AssetVersionRecord.workspace_id == ctx.workspace_id)
-        .where(GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']['project_id'].as_string() == row.id)
-        .order_by(AssetVersionRecord.created_at, AssetVersionRecord.id)).all()
-    return [(version, recipe) for version, recipe in records
-            if (_intent(recipe).get("project_id"), _intent(recipe).get("flow")) == (row.id, FLOW)]
+        .where(GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']['project_id'].as_string().in_(project_ids))
+        .order_by(AssetVersionRecord.created_at, AssetVersionRecord.id)).all() if project_ids else []
+    ads = {project_id: [] for project_id in project_ids}
+    for version, recipe in records:
+        intent = _intent(recipe)
+        if intent.get("project_id") in ads and intent.get("flow") == FLOW:
+            ads[intent["project_id"]].append((version, recipe))
+    return ads
 
 
 def _intent(recipe):
@@ -77,8 +86,15 @@ def _intent(recipe):
 
 
 def _keeps(session, ctx, row):
-    return {k.asset_version_id: k.kept for k in session.scalars(select(MarketingAdKeepRecord).where(
-        MarketingAdKeepRecord.workspace_id == ctx.workspace_id, MarketingAdKeepRecord.project_id == row.id)).all()}
+    return _keeps_by_project(session, ctx, [row.id])[row.id]
+
+
+def _keeps_by_project(session, ctx, project_ids):
+    keeps = {project_id: {} for project_id in project_ids}
+    for mark in session.scalars(select(MarketingAdKeepRecord).where(MarketingAdKeepRecord.workspace_id == ctx.workspace_id,
+            MarketingAdKeepRecord.project_id.in_(project_ids))).all() if project_ids else []:
+        keeps[mark.project_id][mark.asset_version_id] = mark.kept
+    return keeps
 
 
 def set_kept(session, ctx, row, asset_version_id: str, kept: bool) -> None:
@@ -123,11 +139,21 @@ def ideas_dict(session, ctx, row) -> dict:
 
 def ideas_summary(session, ctx, row) -> dict:
     """The ``IdeasProjectSummary`` of an ads-first project."""
-    ads = {version.id for version, _ in project_ads(session, ctx, row)}
-    keeps = _keeps(session, ctx, row)
-    product = session.scalar(select(ProductRecord).where(ProductRecord.workspace_id == ctx.workspace_id,
-                                                         ProductRecord.id == row.product_id))
-    name = (product.name if product else "") or (row.understanding_json or {}).get("product_name") or row.source_text[:80]
-    return {"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
-            "product_name": name, "ad_count": len(ads), "kept_count": sum(1 for ad in ads if keeps.get(ad)),
-            "updated_at": row.updated_at.isoformat() if row.updated_at else ""}
+    return ideas_summaries(session, ctx, [row])[0]
+
+
+def ideas_summaries(session, ctx, rows) -> list[dict]:
+    """``ideas_summary`` of several projects with a fixed number of queries, in the order given."""
+    ids = [row.id for row in rows]
+    ads, keeps = _ads_by_project(session, ctx, ids), _keeps_by_project(session, ctx, ids)
+    product_ids = {row.product_id for row in rows}
+    names = {p.id: p.name for p in session.scalars(select(ProductRecord).where(ProductRecord.workspace_id == ctx.workspace_id,
+                                                                              ProductRecord.id.in_(product_ids))).all()} if rows else {}
+    result = []
+    for row in rows:
+        own = {version.id for version, _ in ads[row.id]}
+        name = names.get(row.product_id) or (row.understanding_json or {}).get("product_name") or row.source_text[:80]
+        result.append({"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
+                       "product_name": name, "ad_count": len(own), "kept_count": sum(1 for ad in own if keeps[row.id].get(ad)),
+                       "updated_at": row.updated_at.isoformat() if row.updated_at else ""})
+    return result
