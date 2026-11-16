@@ -88,7 +88,10 @@ Issue #26 交付：
 
 | Pages Router 文件 | 客户路由 | 行为 |
 |---|---|---|
-| `pages/w/[slug]/index.tsx` | `/w/{slug}` | 服务端重定向到 `products`（#162 起；此前为 `generate`） |
+| `pages/w/[slug]/index.tsx` | `/w/{slug}` | 服务端重定向到 `experiments`（更早为 `products`，#162；再早为 `generate`）；`NEXT_PUBLIC_MARKETAI_ADS_FIRST=true` 时重定向到 `overview`（ADR 0018，#194） |
+| `pages/w/[slug]/overview.tsx` | `/w/{slug}/overview` | 只在开关打开时存在，关着时 404：总览，每个产品一张卡、一件现在最该做的事、一个主要按钮（ADR 0018，#194） |
+| `pages/w/[slug]/p/[productId]/{ideas,tests,results,profile}.tsx` | `/w/{slug}/p/{productId}/…` | 只在开关打开时存在：一个产品的四个视图（广告想法、测试、结论、产品资料），产品名和视图标签由 `ProductFrame` 渲染；测试、结论、产品资料暂为占位，指向现有页面（#194） |
+| `pages/w/[slug]/competitors.tsx` | `/w/{slug}/competitors` | 只在开关打开时存在：左边栏「竞品」的落点，暂为占位，S15 换成独立的竞品页（#194） |
 | `pages/w/[slug]/products/index.tsx` | `/w/{slug}/products` | 产品首页（前台两项配置合同 §3.1，#162） |
 | `pages/w/[slug]/products/new.tsx` | `/w/{slug}/products/new` | 添加产品：粘贴 → 识别 → 产品卡确认（#162） |
 | `pages/w/[slug]/tests/index.tsx` | `/w/{slug}/tests` | #337 起只读：全部测试方案（新的在前），顶部提示去「营销测试」，不再折叠「生成默认值」（#181 起 `settings` 也不再显示）；此前为：全部测试方案（新的在前）；折叠的「生成默认值」（Member 只读，#165） |
@@ -119,6 +122,12 @@ Issue #26 交付：
 - `WorkspaceProvider`；
 - 桌面侧栏和移动抽屉；
 - 导航：产品 / 测试 / 素材在前；新建生成、创意库、投放实验、本地化、放量折叠在「高级工作台」组（ADR 0011，#165；组内区域激活时自动展开，显式展开状态按浏览器记住）；
+  `NEXT_PUBLIC_MARKETAI_ADS_FIRST=true` 时换成按产品组织的左边栏（ADR 0018，#194）：新产品、总览、产品列表（合并
+  `list_products` 和 `list_marketing_ideas`，每个产品一行状态）、素材库、竞品、折叠的「更多功能」（本地化、放量、
+  创意库、新建生成、投放实验（旧版）、旧版测试（只读）、改版前的测试；沿用同一个折叠组和同一个本地记忆）、设置、
+  成员（仅 Owner，仍在导航里）。「新产品」在开始页（S7）做好之前仍去 `/products/new`。开关关着时导航不变；
+- 手机宽度（`lg` 以下）：顶栏放账号菜单；开关打开时顶栏加菜单按钮，点开是和左边栏相同内容的模态面板（Escape、
+  关闭按钮、点面板外或跟随链接都会关上）；
 - Workspace 选择器；
 - 当前用户入口；
 - Owner-only 的 settings/members 入口；

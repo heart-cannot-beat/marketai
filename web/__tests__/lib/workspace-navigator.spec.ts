@@ -1,4 +1,56 @@
-import { computeTargetRoute } from '@/lib/workspace-navigator';
+import env from '@/lib/env';
+import {
+  computeTargetRoute,
+  newProductHref,
+  workspaceHome,
+} from '@/lib/workspace-navigator';
+import { getServerSideProps as workspaceIndex } from '../../pages/w/[slug]/index';
+
+describe('the Workspace home (#194)', () => {
+  const initial = env.adsFirstEnabled;
+  afterEach(() => {
+    env.adsFirstEnabled = initial;
+  });
+
+  it('is off unless NEXT_PUBLIC_MARKETAI_ADS_FIRST is "true"', () => {
+    expect(process.env.NEXT_PUBLIC_MARKETAI_ADS_FIRST).toBeUndefined();
+    expect(env.adsFirstEnabled).toBe(false);
+  });
+
+  it('/w/{slug} goes to /experiments while the switch is off', async () => {
+    env.adsFirstEnabled = false;
+    await expect(
+      workspaceIndex({ params: { slug: 'acme' } } as never)
+    ).resolves.toEqual({
+      redirect: { destination: '/w/acme/experiments', permanent: false },
+    });
+  });
+
+  it('/w/{slug} goes to the overview while the switch is on', async () => {
+    env.adsFirstEnabled = true;
+    await expect(
+      workspaceIndex({ params: { slug: 'acme' } } as never)
+    ).resolves.toEqual({
+      redirect: { destination: '/w/acme/overview', permanent: false },
+    });
+  });
+
+  it('switching Workspaces follows the switch when no flag is passed', () => {
+    env.adsFirstEnabled = true;
+    expect(
+      computeTargetRoute({
+        targetSlug: 'beta',
+        targetRole: 'OWNER',
+        currentPathname: '/w/alpha',
+      })
+    ).toBe('/w/beta/overview');
+    expect(workspaceHome('beta', false)).toBe('/w/beta/experiments');
+  });
+
+  it('"New product" goes to the product intake either way', () => {
+    expect(newProductHref('acme')).toBe('/w/acme/products/new');
+  });
+});
 
 describe('computeTargetRoute', () => {
   it('preserves feature area when switching workspaces', () => {
@@ -69,6 +121,61 @@ describe('computeTargetRoute', () => {
         currentPathname: '/teams/alpha/settings',
       })
     ).toBe('/w/beta/experiments');
+  });
+
+  it('lands on /experiments with the ads-first switch off (#194)', () => {
+    expect(
+      computeTargetRoute({
+        targetSlug: 'beta',
+        targetRole: 'OWNER',
+        currentPathname: '/w/alpha',
+        adsFirst: false,
+      })
+    ).toBe('/w/beta/experiments');
+    // The ads-first areas exist only while the switch is on.
+    expect(
+      computeTargetRoute({
+        targetSlug: 'beta',
+        targetRole: 'OWNER',
+        currentPathname: '/w/alpha/overview',
+        adsFirst: false,
+      })
+    ).toBe('/w/beta/experiments');
+  });
+
+  it('lands on the overview with the ads-first switch on (#194)', () => {
+    for (const currentPathname of [
+      '/w/alpha',
+      '/w/alpha/overview',
+      '/teams/alpha/settings',
+      // A product belongs to one Workspace: never carry its id across.
+      '/w/alpha/p/prod_1/ideas',
+    ]) {
+      expect(
+        computeTargetRoute({
+          targetSlug: 'beta',
+          targetRole: 'MEMBER',
+          currentPathname,
+          adsFirst: true,
+        })
+      ).toBe('/w/beta/overview');
+    }
+    expect(
+      computeTargetRoute({
+        targetSlug: 'beta',
+        targetRole: 'MEMBER',
+        currentPathname: '/w/alpha/competitors',
+        adsFirst: true,
+      })
+    ).toBe('/w/beta/competitors');
+    expect(
+      computeTargetRoute({
+        targetSlug: 'beta',
+        targetRole: 'MEMBER',
+        currentPathname: '/w/alpha/members',
+        adsFirst: true,
+      })
+    ).toBe('/w/beta/overview');
   });
 
   it('handles all six feature areas', () => {

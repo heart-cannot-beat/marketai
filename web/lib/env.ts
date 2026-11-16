@@ -109,6 +109,15 @@ const env = {
   darkModeEnabled: process.env.NEXT_PUBLIC_DARK_MODE !== 'false',
 
   /**
+   * The "ads first" opening (ADR 0018): the product sidebar, the overview,
+   * the product views and the phone menu. Off unless set to `true`; while it
+   * is off the marketing-test flow is the live behaviour and nothing a user
+   * sees changes. `next build` inlines `NEXT_PUBLIC_*`, so set it before
+   * building (the web Dockerfiles declare it as a build argument).
+   */
+  adsFirstEnabled: process.env.NEXT_PUBLIC_MARKETAI_ADS_FIRST === 'true',
+
+  /**
    * Beta entry policy. These are asserted server-side; they are not UI hints.
    *
    * Workspace deletion has no flag: the lifecycle

@@ -1,12 +1,16 @@
 import type { GetServerSidePropsContext } from 'next';
+import { workspaceHome } from '@/lib/workspace-navigator';
 
-/** `/w/{slug}` lands on the product home (front-flow contract §3.1, #162). */
+/**
+ * `/w/{slug}` lands on the marketing tests (front-flow contract §3.1, #162),
+ * or on the overview while the ads-first switch is on (ADR 0018).
+ */
 export async function getServerSideProps({
   params,
 }: GetServerSidePropsContext) {
   return {
     redirect: {
-      destination: `/w/${params?.slug}/experiments`,
+      destination: workspaceHome(params?.slug as string),
       permanent: false,
     },
   };
