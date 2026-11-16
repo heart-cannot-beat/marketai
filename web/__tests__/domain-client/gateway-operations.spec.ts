@@ -97,6 +97,7 @@ describe('DomainGateway operation coverage', () => {
     // 242 -> 246: ads-first ideas `create_marketing_ideas`,
     // `get_marketing_ideas`, `list_marketing_ideas` and
     // `set_marketing_ad_kept` (#189).
-    expect(DOMAIN_ALLOWLIST.length).toBe(246);
+    // 246 -> 247: `start_marketing_ideas_planning` (#190).
+    expect(DOMAIN_ALLOWLIST.length).toBe(247);
   });
 });

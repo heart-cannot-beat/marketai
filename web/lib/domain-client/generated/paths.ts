@@ -1733,6 +1733,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'start_marketing_ideas_planning',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/planning',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'start_marketing_planning',
     method: 'POST',
     bffPattern:

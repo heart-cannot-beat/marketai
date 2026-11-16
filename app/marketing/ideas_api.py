@@ -4,18 +4,19 @@ The plan-first endpoints in ``api.py`` never return these projects, and these ne
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy import and_, or_, select
 
 from app.adapters.persistence.database import tenant_session
 from app.generation.v1_router import _idempotency_key, _resource_command
-from app.platform.etag import set_etag
+from app.platform.etag import extract_if_match, set_etag
 from app.platform.http_identity import request_tenant_context
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 from . import ideas, service
-from .ideas_contracts import CreateIdeas, IdeasProjectDetail, IdeasProjectPage, SetKept
-from .models import MarketingProjectRecord
+from .ideas_contracts import (CreateIdeas, IdeasCallSummary, IdeasProjectDetail, IdeasProjectPage, SetKept,
+                              StartIdeasPlanning)
+from .models import MarketingProjectRecord, PlanningCallRecord
 
 router = APIRouter(prefix="/marketing/ideas", tags=["marketing"])
 
@@ -80,3 +81,23 @@ def set_ad_kept(project_id: str, asset_version_id: str, body: SetKept, request: 
                                 lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
         set_etag(response, row.revision)
         return ideas.ideas_dict(session, ctx, row)
+
+
+@router.post("/{project_id}/planning", operation_id="start_marketing_ideas_planning", response_model=IdeasCallSummary,
+             status_code=202, openapi_extra={"x-marketai-idempotent": True})
+def start_ideas_planning(project_id: str, body: StartIdeasPlanning, request: Request,
+                         ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                         if_match: str | None = Header(default=None, alias="If-Match")):
+    """Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018, #190)."""
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        def replay(s, resource):
+            call = s.scalar(select(PlanningCallRecord).where(PlanningCallRecord.id == resource,
+                                                           PlanningCallRecord.workspace_id == ctx.workspace_id))
+            if call is None:
+                raise service.MarketingError("planning_not_found", "找不到策划任务。", 404)
+            return call
+        call = _resource_command(session, ctx, request, key, "marketing.ideas.plan", body.model_dump(mode="json"),
+            lambda s: ideas.start_ideas_planning(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, body.kind,
+                                                 body.execution_mode, body.quote_hash, body.strategy_language), replay)
+        return service.call_dict(call, include_maximum_cost=True)

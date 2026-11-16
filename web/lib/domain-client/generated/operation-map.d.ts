@@ -1638,6 +1638,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['RequestExplanation'];
     successResponses: { 202: components['schemas']['ResourceEnvelope'] };
   };
+  start_marketing_ideas_planning: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['StartIdeasPlanning'];
+    successResponses: { 202: components['schemas']['IdeasCallSummary'] };
+  };
   start_marketing_planning: {
     pathParams: { project_id: string };
     queryParams: Record<string, never>;

@@ -1318,6 +1318,7 @@
   "error-small_round_budget_exceeds_media_budget": "The small-round budget cannot exceed the overall media budget.",
   "error-validation_error": "Review the highlighted fields and correct the test details.",
   "error-expressions_not_distinct": "Expressions under the same angle use the same visual mechanism. Give one a different way of telling and visual mechanism.",
+  "error-ideas_first_batch_too_large": "The first batch has at most 3 claims, 2 ways of telling each and 1 ad per way.",
   "error-plan_review_unresolved": "Handle the blocking plan checks and answer the guiding questions before confirming.",
   "error-expression_details_required": "Add how to tell, the visual mechanism and the evidence basis for every expression, then reconfirm the plan.",
   "error-evidence_basis_required": "Cite a supporting fact or describe the evidence gap.",

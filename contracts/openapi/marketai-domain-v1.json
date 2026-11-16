@@ -8523,6 +8523,81 @@
         }
       }
     },
+    "/api/v1/marketing/ideas/{project_id}/planning": {
+      "post": {
+        "operationId": "start_marketing_ideas_planning",
+        "summary": "Start Ideas Planning",
+        "description": "Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018, #190).",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartIdeasPlanning"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasCallSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/products/{product_id}/brand-kit": {
       "get": {
         "operationId": "get_product_brand_kit",
@@ -31687,6 +31762,57 @@
           "combinations"
         ]
       },
+      "IdeasCallSummary": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "understanding",
+              "ideas"
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "execution_mode": {
+            "type": "string",
+            "enum": [
+              "byok",
+              "mock"
+            ]
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maximum_cost": {
+            "type": "string",
+            "default": "0"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "operation_id",
+          "kind",
+          "state",
+          "execution_mode"
+        ],
+        "description": "A drafting call of ads-first ideas: the product understanding, then the ideas (#190).\n\nThe plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call."
+      },
       "IdeasProjectDetail": {
         "properties": {
           "id": {
@@ -31735,7 +31861,7 @@
           "latest_call": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PlanningCallSummary"
+                "$ref": "#/components/schemas/IdeasCallSummary"
               },
               {
                 "type": "null"
@@ -40947,6 +41073,44 @@
         "required": [
           "expected_revision"
         ]
+      },
+      "StartIdeasPlanning": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "understanding",
+              "ideas"
+            ]
+          },
+          "strategy_language": {
+            "type": "string",
+            "enum": [
+              "zh-CN",
+              "en-US"
+            ],
+            "default": "en-US"
+          },
+          "execution_mode": {
+            "type": "string",
+            "enum": [
+              "byok",
+              "mock"
+            ]
+          },
+          "quote_hash": {
+            "type": "string",
+            "maxLength": 64,
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "execution_mode"
+        ],
+        "description": "Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018)."
       },
       "StartPreparationInput": {
         "properties": {

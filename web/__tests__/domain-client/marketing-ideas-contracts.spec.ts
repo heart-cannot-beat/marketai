@@ -107,7 +107,77 @@ test('creating ideas needs a product, the market and an advertising language tag
   expect(REQUEST_VALIDATORS.set_marketing_ad_kept({})).toBe(false);
 });
 
+test('drafted ideas carry an ideas call; a plan call is not one of theirs (#190)', () => {
+  const validate = RESPONSE_VALIDATORS.get('get_marketing_ideas_200')!;
+  const latest = {
+    id: 'pc_1',
+    operation_id: 'op_1',
+    kind: 'ideas',
+    state: 'succeeded',
+    execution_mode: 'byok',
+    error_code: null,
+    maximum_cost: '0.10',
+  };
+  expect(
+    validate({ ...detail, state: 'ideas_ready', latest_call: latest })
+  ).toBe(true);
+  expect(
+    validate({ ...detail, latest_call: { ...latest, kind: 'plan' } })
+  ).toBe(false);
+  const accepted = RESPONSE_VALIDATORS.get(
+    'start_marketing_ideas_planning_202'
+  )!;
+  expect(accepted({ ...latest, state: 'queued' })).toBe(true);
+  expect(accepted({ ...latest, kind: 'plan' })).toBe(false);
+});
+
+test('drafting asks for the understanding or the ideas only', () => {
+  const start = REQUEST_VALIDATORS.start_marketing_ideas_planning;
+  expect(
+    start({ kind: 'ideas', execution_mode: 'byok', quote_hash: 'q' })
+  ).toBe(true);
+  expect(start({ kind: 'understanding', execution_mode: 'mock' })).toBe(true);
+  expect(start({ kind: 'plan', execution_mode: 'byok' })).toBe(false);
+  expect(start({ kind: 'ideas' })).toBe(false);
+});
+
 describe('ideas gateway', () => {
+  test('starts drafting with the revision as If-Match', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      reply(202, {
+        id: 'pc_1',
+        operation_id: 'op_1',
+        kind: 'ideas',
+        state: 'queued',
+        execution_mode: 'byok',
+        error_code: null,
+        maximum_cost: '0.10',
+      })
+    );
+    const body = {
+      kind: 'ideas' as const,
+      execution_mode: 'byok' as const,
+      strategy_language: 'en-US' as const,
+      quote_hash: 'q',
+    };
+    const result = await makeGateway(fetchMock).startMarketingIdeasPlanning({
+      workspaceSlug: 'acme',
+      actionInstanceId: 'ideas:plan:1',
+      expectedRevision: 3,
+      projectId: 'mp_1',
+      body,
+    });
+    expect(result).toMatchObject({ kind: 'accepted' });
+    expect(call(fetchMock)).toEqual({
+      method: 'POST',
+      pathname: '/api/domain/v1/w/acme/marketing/ideas/mp_1/planning',
+      query: {},
+      body,
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)['If-Match']).toBe('3');
+  });
+
   test('lists ideas with the page size and cursor', async () => {
     const fetchMock = jest
       .fn()

@@ -65,6 +65,13 @@ class PendingAd(Document):
     state: Literal["queued", "running", "failed"]
 
 
+class IdeasCallSummary(PlanningCallSummary):
+    """A drafting call of ads-first ideas: the product understanding, then the ideas (#190).
+
+    The plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call."""
+    kind: Literal["understanding", "ideas"]
+
+
 class IdeasProjectDetail(Document):
     id: str
     revision: int
@@ -74,7 +81,7 @@ class IdeasProjectDetail(Document):
     ad_language: str
     understanding: Understanding | None
     ideas: Ideas | None
-    latest_call: PlanningCallSummary | None
+    latest_call: IdeasCallSummary | None
     ads: list[AdSummary]
     pending: list[PendingAd]
 
@@ -104,3 +111,11 @@ class CreateIdeas(Document):
 
 class SetKept(Document):
     kept: bool
+
+
+class StartIdeasPlanning(Document):
+    """Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018)."""
+    kind: Literal["understanding", "ideas"]
+    strategy_language: Literal["zh-CN", "en-US"] = "en-US"
+    execution_mode: Literal["byok", "mock"]
+    quote_hash: str = Field(default="", max_length=64)

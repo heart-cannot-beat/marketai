@@ -7294,6 +7294,22 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['market', 'ad_language', 'angles', 'combinations'],
   },
+  IdeasCallSummary: {
+    properties: {
+      id: { type: 'string' },
+      operation_id: { type: 'string' },
+      kind: { type: 'string', enum: ['understanding', 'ideas'] },
+      state: { type: 'string' },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      error_code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      maximum_cost: { type: 'string', default: '0' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'operation_id', 'kind', 'state', 'execution_mode'],
+    description:
+      'A drafting call of ads-first ideas: the product understanding, then the ideas (#190).\n\nThe plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call.',
+  },
   IdeasProjectDetail: {
     properties: {
       id: { type: 'string' },
@@ -7316,7 +7332,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       },
       latest_call: {
         anyOf: [
-          { $ref: '#/components/schemas/PlanningCallSummary' },
+          { $ref: '#/components/schemas/IdeasCallSummary' },
           { type: 'null' },
         ],
       },
@@ -11510,6 +11526,23 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['expected_revision'],
   },
+  StartIdeasPlanning: {
+    properties: {
+      kind: { type: 'string', enum: ['understanding', 'ideas'] },
+      strategy_language: {
+        type: 'string',
+        enum: ['zh-CN', 'en-US'],
+        default: 'en-US',
+      },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      quote_hash: { type: 'string', maxLength: 64, default: '' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['kind', 'execution_mode'],
+    description:
+      'Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).',
+  },
   StartPreparationInput: {
     properties: {
       truth_resolution_policy_version_id: { type: 'string' },
@@ -15381,7 +15414,7 @@ const SCHEMAS: Record<string, object> = {
       },
       latest_call: {
         anyOf: [
-          { $ref: '#/components/schemas/PlanningCallSummary' },
+          { $ref: '#/components/schemas/IdeasCallSummary' },
           { type: 'null' },
         ],
       },
@@ -18128,7 +18161,7 @@ const SCHEMAS: Record<string, object> = {
       },
       latest_call: {
         anyOf: [
-          { $ref: '#/components/schemas/PlanningCallSummary' },
+          { $ref: '#/components/schemas/IdeasCallSummary' },
           { type: 'null' },
         ],
       },
@@ -21069,7 +21102,7 @@ const SCHEMAS: Record<string, object> = {
       },
       latest_call: {
         anyOf: [
-          { $ref: '#/components/schemas/PlanningCallSummary' },
+          { $ref: '#/components/schemas/IdeasCallSummary' },
           { type: 'null' },
         ],
       },
@@ -21255,6 +21288,39 @@ const SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['execution_mode'],
+  },
+  start_marketing_ideas_planning_202: {
+    properties: {
+      id: { type: 'string' },
+      operation_id: { type: 'string' },
+      kind: { type: 'string', enum: ['understanding', 'ideas'] },
+      state: { type: 'string' },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      error_code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      maximum_cost: { type: 'string', default: '0' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'operation_id', 'kind', 'state', 'execution_mode'],
+    description:
+      'A drafting call of ads-first ideas: the product understanding, then the ideas (#190).\n\nThe plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call.',
+  },
+  start_marketing_ideas_planning_request: {
+    properties: {
+      kind: { type: 'string', enum: ['understanding', 'ideas'] },
+      strategy_language: {
+        type: 'string',
+        enum: ['zh-CN', 'en-US'],
+        default: 'en-US',
+      },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      quote_hash: { type: 'string', maxLength: 64, default: '' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['kind', 'execution_mode'],
+    description:
+      'Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).',
   },
   start_marketing_planning_202: {
     properties: {
@@ -22945,6 +23011,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['start_marketing_explanation_request'],
     ],
     [
+      'start_marketing_ideas_planning_202',
+      VALIDATOR_FUNCTIONS['start_marketing_ideas_planning_202'],
+    ],
+    [
+      'start_marketing_ideas_planning_request',
+      VALIDATOR_FUNCTIONS['start_marketing_ideas_planning_request'],
+    ],
+    [
       'start_marketing_planning_202',
       VALIDATOR_FUNCTIONS['start_marketing_planning_202'],
     ],
@@ -23563,6 +23637,11 @@ export const REQUEST_VALIDATORS = {
     'start_marketing_explanation_request'
   ] as ValidateFunction<
     DomainOperationMap['start_marketing_explanation']['requestBody']
+  >,
+  start_marketing_ideas_planning: VALIDATOR_FUNCTIONS[
+    'start_marketing_ideas_planning_request'
+  ] as ValidateFunction<
+    DomainOperationMap['start_marketing_ideas_planning']['requestBody']
   >,
   start_marketing_planning: VALIDATOR_FUNCTIONS[
     'start_marketing_planning_request'

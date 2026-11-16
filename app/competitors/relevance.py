@@ -183,8 +183,10 @@ def batches_of(groups: Sequence[dict]) -> list[list[dict]]:
 
 def product_context(session, ctx: TenantContext, product_id: str) -> dict:
     """``product_name``, ``category_need`` and ``situations`` of the product's
-    latest confirmed understanding; the product record's name and description
-    when no marketing project understands it."""
+    latest understanding, checked by the user or not and of either flow; the
+    product record's name and description when no marketing project
+    understands it. An ads-first draft counts too (maintainer decision on #190):
+    relevance is a filtering hint, never evidence or ad copy (ADR 0014, ADR 0018)."""
     from app.marketing.models import MarketingProjectRecord
 
     projects = session.scalars(
