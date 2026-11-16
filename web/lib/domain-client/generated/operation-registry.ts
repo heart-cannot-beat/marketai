@@ -3504,6 +3504,7 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         'include_board_thumbnails',
         'include_text_language',
         'include_qc_evidence',
+        'include_reuse_lineage',
       ],
       requestMediaTypes: [],
       requiresIdempotency: false,
@@ -3544,6 +3545,7 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         'include_board_thumbnails',
         'include_text_language',
         'include_qc_evidence',
+        'include_reuse_lineage',
       ],
       requestMediaTypes: [],
       requiresIdempotency: false,
@@ -4850,6 +4852,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         200: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'list_marketing_projects_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'list_marketing_reuse_candidates',
+    {
+      operationId: 'list_marketing_reuse_candidates',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/rounds/{round_id}/reuse-candidates',
+      pathParams: ['round_id'],
+      queryParams: ['limit', 'cursor'],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'list_marketing_reuse_candidates_200' },
           locationShapes: [],
         },
         422: {

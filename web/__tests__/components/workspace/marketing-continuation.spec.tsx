@@ -31,7 +31,7 @@ jest.mock('@/components/workspace/WorkspaceProvider', () => ({
 }));
 const gateway = {
   getMarketingCapabilities: jest.fn(),
-  listGenerationAssets: jest.fn(),
+  listMarketingReuseCandidates: jest.fn(),
   createGenerationAssetVersionDownloadIntent: jest.fn(),
 };
 const blobs = { downloadBlob: jest.fn(async () => new Blob(['exact-image'])) };
@@ -69,16 +69,18 @@ beforeEach(() => {
       },
     },
   });
-  gateway.listGenerationAssets.mockResolvedValue({
+  gateway.listMarketingReuseCandidates.mockResolvedValue({
     kind: 'ok',
     data: {
       items: [
         {
-          id: 'old-version',
+          asset_version_id: 'old-version',
+          asset_id: 'old-asset',
           created_at: '2026-10-17',
           provider: 'openai',
           model: 'image-model',
           aspect_ratio: '4:5',
+          relation: 'this_test',
         },
       ],
       next_cursor: null,
@@ -218,21 +220,16 @@ test('existing creative is privately previewed and attached to an explicit combi
     void body;
   });
   const view = wrap(
-    <MarketingReusePicker
-      row={row}
-      productId="product"
-      busy={false}
-      onAttach={onAttach}
-    />
+    <MarketingReusePicker row={row} busy={false} onAttach={onAttach} />
   );
   fireEvent.click(screen.getByText('Use an existing creative in this round'));
   await screen.findByRole('option', { name: /Creative 1/ });
-  expect(gateway.listGenerationAssets).toHaveBeenCalledWith(
-    expect.objectContaining({
-      productId: 'product',
-      executionMode: row.execution_mode,
-    })
-  );
+  expect(gateway.listMarketingReuseCandidates).toHaveBeenCalledWith({
+    workspaceSlug: 'alpha',
+    roundId: row.id,
+    cursor: undefined,
+    limit: 20,
+  });
   const attach = screen.getByRole('button', {
     name: 'Add to this round for fresh review · No charge',
   });
@@ -244,6 +241,8 @@ test('existing creative is privately previewed and attached to an explicit combi
     'src',
     'blob:exact-history'
   );
+  // A creative of this test needs no cross-test notice.
+  expect(screen.queryByRole('note')).toBeNull();
   fireEvent.click(attach);
   await waitFor(() => expect(onAttach).toHaveBeenCalled());
   expect(onAttach.mock.calls[0][0]).toEqual({
@@ -253,42 +252,107 @@ test('existing creative is privately previewed and attached to an explicit combi
   view.unmount();
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:exact-history');
 });
-describe('reuse picker scope (#293)', () => {
+describe('reuse picker across the product card (#7)', () => {
   afterEach(() => {
     catalog = messages;
   });
+  const candidate = (id: string, relation: string, extra = {}) => ({
+    asset_version_id: id,
+    asset_id: `${id}-asset`,
+    created_at: '2026-11-10',
+    provider: 'mock',
+    model: 'mock-v1',
+    aspect_ratio: '1:1',
+    relation,
+    ...extra,
+  });
   test.each([
-    [
-      'en',
-      messages,
-      'Only creatives generated in this test are listed here.',
-      'This test has no other available creatives in this execution mode. Creatives from other tests of the same product cannot be used here yet.',
-    ],
-    [
-      'zh-CN',
-      zhMessages,
-      '这里只列出本测试生成的素材。',
-      '本测试在这种执行方式下没有其他可用素材。同一产品其他测试中的素材，目前不能在这里使用。',
-    ],
+    ['en', messages],
+    ['zh-CN', zhMessages],
   ])(
-    'in %s, an empty list says only this test’s creatives can be reused, and it is still read by this test’s product',
-    async (_, strings, boundary, empty) => {
+    'in %s, creatives are grouped by where they come from and a creative of another test says how it is reviewed',
+    async (_, strings) => {
       catalog = strings;
-      // A first round: every creative of this test is already in it, so nothing is left to offer.
-      gateway.listGenerationAssets.mockResolvedValue({
+      gateway.listMarketingReuseCandidates.mockResolvedValue({
         kind: 'ok',
         data: {
-          items: row.assets.map((a) => ({ id: a.asset_version_id })),
+          items: [
+            candidate('mine', 'this_test'),
+            candidate('theirs', 'other_test', {
+              source_project_id: 'mp_other',
+              source_test_name: 'Alpha travel charger',
+              facts_relation: 'differs',
+            }),
+            candidate('card', 'product_card'),
+          ],
           next_cursor: null,
         },
       });
       wrap(
-        <MarketingReusePicker
-          row={row}
-          productId="this-tests-product"
-          busy={false}
-          onAttach={jest.fn()}
-        />
+        <MarketingReusePicker row={row} busy={false} onAttach={jest.fn()} />
+      );
+      fireEvent.click(screen.getByText(strings['marketing-reuse-title']));
+      const select = screen.getByLabelText(strings['marketing-reuse-creative']);
+      await within(select).findByRole('option', {
+        name: /Alpha travel charger/,
+      });
+      const groups = within(select).getAllByRole('group');
+      expect(groups.map((g) => g.getAttribute('label'))).toEqual([
+        strings['marketing-reuse-group-this_test'],
+        strings['marketing-reuse-group-other_test'],
+        strings['marketing-reuse-group-product_card'],
+      ]);
+      expect(
+        within(groups[1])
+          .getByRole('option')
+          .textContent?.startsWith('Alpha travel charger · ')
+      ).toBe(true);
+      fireEvent.change(select, { target: { value: 'theirs' } });
+      const note = await screen.findByRole('note');
+      for (const key of [
+        'marketing-reuse-other-review',
+        'marketing-reuse-other-shared-review',
+        'marketing-reuse-facts-differ',
+        'marketing-reuse-not-editable',
+      ])
+        expect(within(note).getByText(strings[key])).toBeInTheDocument();
+      // A creative of the product card itself is not revised here either, but has no other test's review.
+      fireEvent.change(select, { target: { value: 'card' } });
+      expect(
+        within(screen.getByRole('note')).queryByText(
+          strings['marketing-reuse-other-shared-review']
+        )
+      ).toBeNull();
+      expect(
+        within(screen.getByRole('note')).getByText(
+          strings['marketing-reuse-not-editable']
+        )
+      ).toBeInTheDocument();
+    }
+  );
+  test.each([
+    [
+      'en',
+      messages,
+      'Creatives from this test, from other tests of the same product card and from the card itself are listed here.',
+      'No other creatives of this product are available in this execution mode.',
+    ],
+    [
+      'zh-CN',
+      zhMessages,
+      '这里列出本测试、同一产品卡片的其他测试，以及产品卡片本身生成的素材。',
+      '这个产品在这种执行方式下没有其他可用素材。',
+    ],
+  ])(
+    'in %s, the scope names every source and an empty list says nothing is left for this product',
+    async (_, strings, boundary, empty) => {
+      catalog = strings;
+      gateway.listMarketingReuseCandidates.mockResolvedValue({
+        kind: 'ok',
+        data: { items: [], next_cursor: null },
+      });
+      wrap(
+        <MarketingReusePicker row={row} busy={false} onAttach={jest.fn()} />
       );
       fireEvent.click(screen.getByText(strings['marketing-reuse-title']));
       expect(await screen.findByText(empty)).toBeInTheDocument();
@@ -300,13 +364,7 @@ describe('reuse picker scope (#293)', () => {
           screen.getByLabelText(strings['marketing-reuse-creative'])
         ).getAllByRole('option')
       ).toHaveLength(1);
-      expect(gateway.listGenerationAssets).toHaveBeenCalledTimes(1);
-      expect(gateway.listGenerationAssets).toHaveBeenCalledWith(
-        expect.objectContaining({
-          productId: 'this-tests-product',
-          executionMode: row.execution_mode,
-        })
-      );
+      expect(gateway.listMarketingReuseCandidates).toHaveBeenCalledTimes(1);
     }
   );
 });

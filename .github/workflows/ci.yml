@@ -557,6 +557,16 @@ jobs:
           DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
         run: python -m unittest tests.test_marketing_competitor_review_pg -v
 
+      # Cross-test reuse (#7): the API role reads the product card lineage and
+      # the reuse candidates under FORCE RLS, and reuses another test's creative.
+      - name: Reuse across one product card's tests holds under the API role
+        env:
+          MARKETAI_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_OWNER_DATABASE_URL: postgresql+psycopg://marketai_domain_owner:ci_domain_owner@localhost:5432/marketai_domain
+          DOMAIN_API_DATABASE_URL: postgresql+psycopg://marketai_domain_api:ci_domain_api@localhost:5432/marketai_domain
+          DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://marketai_domain_worker:ci_domain_worker@localhost:5432/marketai_domain
+        run: python -m unittest tests.test_marketing_reuse_pg -v
+
       # Competitor discovery (#276): the Worker answers discover:<i> reading the
       # product's competitors and decisions, the API appends Member and Owner
       # accepts and rejects (an accept adds the competitor), all append-only.

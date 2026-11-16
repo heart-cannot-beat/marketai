@@ -257,10 +257,10 @@ async def _sign_board_thumbnails(round_data, refs):
 
 
 @router.get("/projects/{project_id}/workflow", operation_id="get_marketing_workflow", response_model=WorkflowEnvelope, response_model_exclude_unset=True)
-async def get_workflow(project_id: str, ctx: TenantContext = Depends(request_tenant_context), include_polling: bool = False, include_image_edits: bool = False, include_version_history: bool = False, include_languages: bool = False, include_plan_review: bool = False, include_board: bool = False, include_brand_style: bool = False, include_execution_plan: bool = False, include_qc_kinds: bool = False, include_board_thumbnails: bool = False, include_text_language: bool = False, include_qc_evidence: bool = False):
+async def get_workflow(project_id: str, ctx: TenantContext = Depends(request_tenant_context), include_polling: bool = False, include_image_edits: bool = False, include_version_history: bool = False, include_languages: bool = False, include_plan_review: bool = False, include_board: bool = False, include_brand_style: bool = False, include_execution_plan: bool = False, include_qc_kinds: bool = False, include_board_thumbnails: bool = False, include_text_language: bool = False, include_qc_evidence: bool = False, include_reuse_lineage: bool = False):
     def load():
         with tenant_session(ctx) as session:
-            result = workflow.workflow_dict(session, ctx, project_id, include_image_edits=include_image_edits, include_version_history=include_version_history, include_languages=include_languages, include_plan_review=include_plan_review, include_board=include_board, include_brand_style=include_brand_style, include_execution_plan=include_execution_plan, include_qc_kinds=include_qc_kinds, include_text_language=include_text_language, include_qc_evidence=include_qc_evidence)
+            result = workflow.workflow_dict(session, ctx, project_id, include_image_edits=include_image_edits, include_version_history=include_version_history, include_languages=include_languages, include_plan_review=include_plan_review, include_board=include_board, include_brand_style=include_brand_style, include_execution_plan=include_execution_plan, include_qc_kinds=include_qc_kinds, include_text_language=include_text_language, include_qc_evidence=include_qc_evidence, include_reuse_lineage=include_reuse_lineage)
             return result, _board_thumbnail_refs(session, ctx, result["current"], include_board_thumbnails)
     result, refs = await run_in_threadpool(load)
     await _sign_board_thumbnails(result["current"], refs)
@@ -270,11 +270,11 @@ async def get_workflow(project_id: str, ctx: TenantContext = Depends(request_ten
 
 
 @router.get("/rounds/{round_id}", operation_id="get_marketing_round", response_model=ResourceEnvelope, response_model_exclude_unset=True)
-async def get_round(round_id: str, response: Response, include_image_edits: bool = False, include_version_history: bool = False, include_languages: bool = False, include_plan_review: bool = False, include_board: bool = False, include_brand_style: bool = False, include_execution_plan: bool = False, include_qc_kinds: bool = False, include_board_thumbnails: bool = False, include_text_language: bool = False, include_qc_evidence: bool = False, ctx: TenantContext = Depends(request_tenant_context)):
+async def get_round(round_id: str, response: Response, include_image_edits: bool = False, include_version_history: bool = False, include_languages: bool = False, include_plan_review: bool = False, include_board: bool = False, include_brand_style: bool = False, include_execution_plan: bool = False, include_qc_kinds: bool = False, include_board_thumbnails: bool = False, include_text_language: bool = False, include_qc_evidence: bool = False, include_reuse_lineage: bool = False, ctx: TenantContext = Depends(request_tenant_context)):
     def load():
         with tenant_session(ctx) as session:
             row = workflow.get_round(session, ctx, round_id)
-            data = workflow.round_dict(session, ctx, row, include_image_edits=include_image_edits, include_version_history=include_version_history, include_languages=include_languages, include_plan_review=include_plan_review, include_board=include_board, include_brand_style=include_brand_style, include_execution_plan=include_execution_plan, include_qc_kinds=include_qc_kinds, include_text_language=include_text_language, include_qc_evidence=include_qc_evidence)
+            data = workflow.round_dict(session, ctx, row, include_image_edits=include_image_edits, include_version_history=include_version_history, include_languages=include_languages, include_plan_review=include_plan_review, include_board=include_board, include_brand_style=include_brand_style, include_execution_plan=include_execution_plan, include_qc_kinds=include_qc_kinds, include_text_language=include_text_language, include_qc_evidence=include_qc_evidence, include_reuse_lineage=include_reuse_lineage)
             return row.id, row.revision, data, _board_thumbnail_refs(session, ctx, data, include_board_thumbnails)
     row_id, revision, data, refs = await run_in_threadpool(load)
     set_etag(response, revision)
@@ -343,6 +343,20 @@ def reuse_creative(round_id: str, body: ReuseCreative, request: Request, respons
                   ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
                   if_match: str | None = Header(default=None, alias="If-Match")):
     return execution_command(round_id, body, request, response, ctx, key, "marketing.reuse", attach_creative)
+
+
+from .reuse import ReuseCandidatePage, candidates as reuse_candidates
+
+
+@router.get("/rounds/{round_id}/reuse-candidates", operation_id="list_marketing_reuse_candidates",
+            response_model=ReuseCandidatePage, response_model_exclude_unset=True)
+def list_reuse_candidates(round_id: str, ctx: TenantContext = Depends(request_tenant_context),
+                          limit: int = Query(default=20, ge=1, le=50),
+                          cursor: str | None = Query(default=None, max_length=2048)):
+    """Creatives this round can reuse, newest first: this test's, its product card's and the card's other tests' (#7)."""
+    with tenant_session(ctx) as session:
+        row = workflow.get_round(session, ctx, round_id)
+        return reuse_candidates(session, ctx, row, cursor=cursor, limit=limit)
 
 
 @router.post("/rounds/{round_id}/reviews", operation_id="review_marketing_creative", response_model=ResourceEnvelope, response_model_exclude_unset=True,

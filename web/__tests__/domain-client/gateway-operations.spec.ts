@@ -93,6 +93,7 @@ describe('DomainGateway operation coverage', () => {
     // 238 -> 239: `get_library_data_source_connection_check` (#383).
     // 239 -> 241: `list_scale_observed_ads` and `create_scale_delivery_target`
     // (#129).
-    expect(DOMAIN_ALLOWLIST.length).toBe(241);
+    // 241 -> 242: `list_marketing_reuse_candidates` (#7).
+    expect(DOMAIN_ALLOWLIST.length).toBe(242);
   });
 });

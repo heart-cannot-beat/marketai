@@ -4082,6 +4082,20 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
           { type: 'null' },
         ],
       },
+      relation: {
+        anyOf: [
+          { type: 'string', enum: ['this_test', 'product_card', 'other_test'] },
+          { type: 'null' },
+        ],
+      },
+      source_project_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      card_product_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      facts_relation: {
+        anyOf: [
+          { type: 'string', enum: ['same', 'differs'] },
+          { type: 'null' },
+        ],
+      },
       source_asset_version_id: {
         anyOf: [{ type: 'string' }, { type: 'null' }],
       },
@@ -10817,6 +10831,51 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['item_id', 'attempt_number', 'replayed'],
   },
+  ReuseCandidate: {
+    properties: {
+      asset_version_id: { type: 'string' },
+      asset_id: { type: 'string' },
+      created_at: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      provider: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      model: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      aspect_ratio: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      relation: {
+        type: 'string',
+        enum: ['this_test', 'product_card', 'other_test'],
+      },
+      source_project_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      source_test_name: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      facts_relation: {
+        anyOf: [
+          { type: 'string', enum: ['same', 'differs'] },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'asset_version_id',
+      'asset_id',
+      'created_at',
+      'provider',
+      'model',
+      'aspect_ratio',
+      'relation',
+    ],
+  },
+  ReuseCandidatePage: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/ReuseCandidate' },
+        type: 'array',
+      },
+      next_cursor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items', 'next_cursor'],
+  },
   ReuseCreative: {
     properties: {
       asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
@@ -12618,6 +12677,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       },
       ready: { type: 'boolean' },
       mime_type: { type: 'string' },
+      editable: { type: 'boolean', default: true },
       ai_qc: {
         anyOf: [
           { $ref: '#/components/schemas/WorkflowAIQCCall' },
@@ -19002,6 +19062,18 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['items'],
   },
+  list_marketing_reuse_candidates_200: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/ReuseCandidate' },
+        type: 'array',
+      },
+      next_cursor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items', 'next_cursor'],
+  },
   list_meta_bindings_200: {},
   list_meta_connections_200: {},
   list_meta_contracts_200: {},
@@ -22173,6 +22245,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'list_marketing_projects_200',
       VALIDATOR_FUNCTIONS['list_marketing_projects_200'],
+    ],
+    [
+      'list_marketing_reuse_candidates_200',
+      VALIDATOR_FUNCTIONS['list_marketing_reuse_candidates_200'],
     ],
     ['list_meta_bindings_200', VALIDATOR_FUNCTIONS['list_meta_bindings_200']],
     [

@@ -9177,6 +9177,15 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "include_reuse_lineage",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -9308,6 +9317,15 @@
           },
           {
             "name": "include_qc_evidence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "include_reuse_lineage",
             "in": "query",
             "required": false,
             "schema": {
@@ -10486,6 +10504,72 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ResourceEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/rounds/{round_id}/reuse-candidates": {
+      "get": {
+        "operationId": "list_marketing_reuse_candidates",
+        "summary": "List Reuse Candidates",
+        "description": "Creatives this round can reuse, newest first: this test's, its product card's and the card's other tests' (#7).",
+        "parameters": [
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReuseCandidatePage"
                 }
               }
             }
@@ -24440,6 +24524,55 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CreativeCombination"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "this_test",
+                  "product_card",
+                  "other_test"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "card_product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "facts_relation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "same",
+                  "differs"
+                ]
               },
               {
                 "type": "null"
@@ -39219,6 +39352,135 @@
           "replayed"
         ]
       },
+      "ReuseCandidate": {
+        "properties": {
+          "asset_version_id": {
+            "type": "string"
+          },
+          "asset_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "aspect_ratio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relation": {
+            "type": "string",
+            "enum": [
+              "this_test",
+              "product_card",
+              "other_test"
+            ]
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_test_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "facts_relation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "same",
+                  "differs"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_version_id",
+          "asset_id",
+          "created_at",
+          "provider",
+          "model",
+          "aspect_ratio",
+          "relation"
+        ]
+      },
+      "ReuseCandidatePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReuseCandidate"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
       "ReuseCreative": {
         "properties": {
           "asset_version_id": {
@@ -43288,6 +43550,10 @@
           },
           "mime_type": {
             "type": "string"
+          },
+          "editable": {
+            "type": "boolean",
+            "default": true
           },
           "ai_qc": {
             "anyOf": [

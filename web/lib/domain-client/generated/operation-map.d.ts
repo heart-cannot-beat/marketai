@@ -855,6 +855,7 @@ export type DomainOperationMap = {
       include_board_thumbnails?: string;
       include_text_language?: string;
       include_qc_evidence?: string;
+      include_reuse_lineage?: string;
     };
     requestBody: never;
     successResponses: { 200: components['schemas']['ResourceEnvelope'] };
@@ -874,6 +875,7 @@ export type DomainOperationMap = {
       include_board_thumbnails?: string;
       include_text_language?: string;
       include_qc_evidence?: string;
+      include_reuse_lineage?: string;
     };
     requestBody: never;
     successResponses: { 200: components['schemas']['WorkflowEnvelope'] };
@@ -1241,6 +1243,12 @@ export type DomainOperationMap = {
     queryParams: { limit?: string; cursor?: string; q?: string };
     requestBody: never;
     successResponses: { 200: components['schemas']['MarketingProjectPage'] };
+  };
+  list_marketing_reuse_candidates: {
+    pathParams: { round_id: string };
+    queryParams: { limit?: string; cursor?: string };
+    requestBody: never;
+    successResponses: { 200: components['schemas']['ReuseCandidatePage'] };
   };
   list_meta_bindings: {
     pathParams: { connection_id: string };

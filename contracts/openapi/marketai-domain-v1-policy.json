@@ -1144,6 +1144,12 @@
     "maxResponseBytes": 8388608,
     "forwardConditionalHeaders": true
   },
+  "list_marketing_reuse_candidates": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/reuse-candidates",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
   "create_marketing_handoff": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/handoff",
     "maxRequestBytes": 8192,

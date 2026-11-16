@@ -229,6 +229,7 @@ export function MarketingExecution({
         await gateway.getMarketingWorkflow({
           includeLanguages: true,
           includeImageEdits: true,
+          includeReuseLineage: true,
           includeVersionHistory: true,
           includeBoard: true,
           includeExecutionPlan: true,
@@ -329,6 +330,7 @@ export function MarketingExecution({
             await gateway.getMarketingRound({
               includeLanguages: true,
               includeImageEdits: true,
+              includeReuseLineage: true,
               includeVersionHistory: true,
               includeBoard: true,
               includeExecutionPlan: true,
@@ -611,14 +613,23 @@ export function MarketingExecution({
         }
       />
     );
-    const revise = asset && (
-      <MarketingFeedbackForm
-        assetVersionId={asset.asset_version_id}
-        mode={round.execution_mode}
-        busy={busy}
-        onPrepare={prepareFeedback}
-      />
-    );
+    // A creative reused from another test or the product card is revised or
+    // cropped in its own test only (#7); the server refuses it here too.
+    const fixable = asset?.editable !== false;
+    const revise =
+      asset &&
+      (fixable ? (
+        <MarketingFeedbackForm
+          assetVersionId={asset.asset_version_id}
+          mode={round.execution_mode}
+          busy={busy}
+          onPrepare={prepareFeedback}
+        />
+      ) : (
+        <p className="text-sm text-gray-600">
+          {t('marketing-reuse-not-editable')}
+        </p>
+      ));
     const include = asset?.ready && includeInExport(asset.asset_version_id);
     // The drawer shows only the check this image needs next.
     const qcPanel = (only?: 'single' | 'paired') => (
@@ -680,31 +691,37 @@ export function MarketingExecution({
             {t('marketing-image-edit-derived')}
           </p>
         )}
-        <MarketingImageEdit
-          selected={editing.id === asset.asset_version_id ? editing.request : 0}
-          assetVersionId={asset.asset_version_id}
-          busy={busy}
-          edits={(round.image_edits || []).filter(
-            (e) => e.source_asset_version_id === asset.asset_version_id
-          )}
-          onCreate={(body) =>
-            run((actionInstanceId) =>
-              gateway.createMarketingImageEdit({
-                ...params,
-                actionInstanceId,
-                body,
-              })
-            )
-          }
-        />
+        {fixable && (
+          <MarketingImageEdit
+            selected={
+              editing.id === asset.asset_version_id ? editing.request : 0
+            }
+            assetVersionId={asset.asset_version_id}
+            busy={busy}
+            edits={(round.image_edits || []).filter(
+              (e) => e.source_asset_version_id === asset.asset_version_id
+            )}
+            onCreate={(body) =>
+              run((actionInstanceId) =>
+                gateway.createMarketingImageEdit({
+                  ...params,
+                  actionInstanceId,
+                  body,
+                })
+              )
+            }
+          />
+        )}
         {execution.next_action !== 'review' && review}
         {execution.next_action !== 'revise' && revise}
-        <MarketingImageTools
-          assetVersionId={asset.asset_version_id}
-          mode={round.execution_mode}
-          busy={busy}
-          onPrepare={prepareFeedback}
-        />
+        {fixable && (
+          <MarketingImageTools
+            assetVersionId={asset.asset_version_id}
+            mode={round.execution_mode}
+            busy={busy}
+            onPrepare={prepareFeedback}
+          />
+        )}
         {(round.feedback_drafts || [])
           .filter((f) => f.source_asset_version_id === asset.asset_version_id)
           .map((f, i) => (
@@ -795,6 +812,7 @@ export function MarketingExecution({
                   gateway.getMarketingRound({
                     includeLanguages: true,
                     includeImageEdits: true,
+                    includeReuseLineage: true,
                     includeVersionHistory: true,
                     includeBoard: true,
                     includeExecutionPlan: true,
@@ -928,7 +946,6 @@ export function MarketingExecution({
               )}
               <MarketingReusePicker
                 row={row}
-                productId={project.product_id}
                 busy={busy}
                 onAttach={(body) =>
                   run((actionInstanceId) =>
@@ -1172,6 +1189,7 @@ export function MarketingExecution({
                             await gateway.getMarketingRound({
                               includeLanguages: true,
                               includeImageEdits: true,
+                              includeReuseLineage: true,
                               includeVersionHistory: true,
                               includeBoard: true,
                               includeExecutionPlan: true,

@@ -1151,3 +1151,30 @@ test('CSV preflight issues are worded from their code and params (#255)', async 
     screen.getByText('Ad account: Match the Meta account and Ad IDs first.')
   ).toBeInTheDocument();
 });
+
+test.each([
+  ['its own creative keeps revise, crop and image tools', true],
+  ['a creative reused from another test offers none of them (#7)', false],
+])('%s', async (_, editable) => {
+  const round = checkedRound();
+  for (const asset of round.assets) asset.editable = editable;
+  serveIdle(round);
+  show();
+  const [tile] = await screen.findAllByRole('button', {
+    name: / · Execution \d/,
+  });
+  fireEvent.click(tile);
+  const drawer = await screen.findByRole('dialog', { name: 'Image details' });
+  const more = within(drawer).getByText('More actions').closest('details')!;
+  for (const title of [
+    'marketing-image-edit-title',
+    'marketing-image-tools-title',
+    'marketing-feedback-title',
+  ])
+    expect(within(more).queryAllByText(messages[title]).length > 0).toBe(
+      editable
+    );
+  expect(
+    within(drawer).queryByText(messages['marketing-reuse-not-editable'])
+  ).toEqual(editable ? null : expect.anything());
+});
