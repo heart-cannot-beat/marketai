@@ -45,6 +45,7 @@ CURRENT_AGGREGATE_TABLES = {
         "marketing_feedback_drafts",
         "marketing_image_edits",
         "product_brand_kits",
+        "marketing_ad_keeps",
     },
     "platform": {
         "workspaces",
@@ -355,6 +356,7 @@ def all_global_domain_tables() -> tuple[str, ...]:
 def all_protected_tables() -> tuple[str, ...]:
     from migrations.versions.zv7c8d9e0f1a_marketing_image_edits import NEW_WORKSPACE_OWNED as IMAGE_EDITS
     from migrations.versions.zw8d9e0f1a2b_product_brand_kits import NEW_WORKSPACE_OWNED as BRAND_KITS
+    from migrations.versions.zzm189a1b2c3_marketing_ads_first import NEW_WORKSPACE_OWNED as ADS_FIRST
     from migrations.versions.zn9a0b1c2d3e_marketing_planning import NEW_WORKSPACE_OWNED as MARKETING_0
     from migrations.versions.zo0b1c2d3e4f_marketing_delivery import NEW_WORKSPACE_OWNED as MARKETING_1
     from migrations.versions.zp1c2d3e4f5a_marketing_ai_qc import NEW_WORKSPACE_OWNED as MARKETING_2
@@ -449,6 +451,7 @@ def all_protected_tables() -> tuple[str, ...]:
         + MARKETING_4
         + IMAGE_EDITS
         + BRAND_KITS
+        + ADS_FIRST
         + NEW_WORKSPACE_OWNED
         + OPERATION_TABLES
         + IDEMPOTENCY_TABLES

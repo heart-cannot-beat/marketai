@@ -143,6 +143,28 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'created_at',
     ],
   },
+  AdSummary: {
+    properties: {
+      asset_version_id: { type: 'string' },
+      combination_id: { type: 'string' },
+      angle_id: { type: 'string' },
+      expression_id: { type: 'string' },
+      status: { type: 'string', enum: ['draft', 'exportable', 'needs_redo'] },
+      kept: { type: 'boolean' },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'asset_version_id',
+      'combination_id',
+      'angle_id',
+      'expression_id',
+      'status',
+      'kept',
+      'created_at',
+    ],
+  },
   AddExperimentEntryRequest: {
     properties: {
       asset_version_id: { type: 'string', minLength: 1 },
@@ -3852,6 +3874,22 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['asset_version_ids'],
   },
+  CreateIdeas: {
+    properties: {
+      product_id: { type: 'string', maxLength: 64, minLength: 1 },
+      source_text: { type: 'string', maxLength: 16000, minLength: 1 },
+      market: { type: 'string', maxLength: 80, minLength: 1 },
+      ad_language: {
+        type: 'string',
+        maxLength: 35,
+        minLength: 2,
+        pattern: '^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['product_id', 'source_text', 'market', 'ad_language'],
+  },
   CreateImageEdit: {
     properties: {
       asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
@@ -7204,6 +7242,141 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'recipe_hash',
     ],
   },
+  Ideas: {
+    properties: {
+      market: { type: 'string', maxLength: 2000, minLength: 1 },
+      ad_language: {
+        type: 'string',
+        maxLength: 35,
+        minLength: 2,
+        pattern: '^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$',
+      },
+      strategy_language: {
+        type: 'string',
+        enum: ['zh-CN', 'en-US'],
+        default: 'en-US',
+      },
+      angles: {
+        items: { $ref: '#/components/schemas/Angle' },
+        type: 'array',
+        maxItems: 8,
+        minItems: 2,
+      },
+      combinations: {
+        items: { $ref: '#/components/schemas/CreativeCombination' },
+        type: 'array',
+        maxItems: 30,
+        minItems: 2,
+      },
+      style_notes: { type: 'string', maxLength: 500, default: '' },
+      brand_kit: {
+        anyOf: [{ $ref: '#/components/schemas/BrandKitRef' }, { type: 'null' }],
+      },
+      competitor_snapshot_id: {
+        anyOf: [
+          {
+            type: 'string',
+            maxLength: 64,
+            minLength: 1,
+            pattern: '^[a-zA-Z0-9_-]+$',
+          },
+          { type: 'null' },
+        ],
+      },
+      guiding_questions: {
+        items: { $ref: '#/components/schemas/GuidingQuestion' },
+        type: 'array',
+        maxItems: 3,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['market', 'ad_language', 'angles', 'combinations'],
+  },
+  IdeasProjectDetail: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/PlanningCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  IdeasProjectPage: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/IdeasProjectSummary' },
+        type: 'array',
+      },
+      next_cursor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items'],
+  },
+  IdeasProjectSummary: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: { type: 'string' },
+      product_id: { type: 'string' },
+      product_name: { type: 'string' },
+      ad_count: { type: 'integer' },
+      kept_count: { type: 'integer' },
+      updated_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'product_name',
+      'ad_count',
+      'kept_count',
+      'updated_at',
+    ],
+  },
   IdentityProbeResponse: {
     properties: {
       workspace_id: { type: 'string' },
@@ -9508,6 +9681,15 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'An image whose paired check waits for usable images of these counterpart combinations.',
   },
+  PendingAd: {
+    properties: {
+      combination_id: { type: 'string' },
+      state: { type: 'string', enum: ['queued', 'running', 'failed'] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['combination_id', 'state'],
+  },
   PlanFailure: {
     properties: {
       code: { type: 'string' },
@@ -11278,6 +11460,12 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['kind', 'angle_id'],
+  },
+  SetKept: {
+    properties: { kept: { type: 'boolean' } },
+    additionalProperties: false,
+    type: 'object',
+    required: ['kept'],
   },
   StageCounts: {
     properties: {
@@ -15166,6 +15354,70 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['asset_version_ids'],
   },
+  create_marketing_ideas_201: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/PlanningCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  create_marketing_ideas_request: {
+    properties: {
+      product_id: { type: 'string', maxLength: 64, minLength: 1 },
+      source_text: { type: 'string', maxLength: 16000, minLength: 1 },
+      market: { type: 'string', maxLength: 80, minLength: 1 },
+      ad_language: {
+        type: 'string',
+        maxLength: 35,
+        minLength: 2,
+        pattern: '^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['product_id', 'source_text', 'market', 'ad_language'],
+  },
   create_marketing_image_edit_202: {
     properties: {
       id: { type: 'string' },
@@ -17849,6 +18101,54 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['id', 'data'],
   },
+  get_marketing_ideas_200: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/PlanningCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
   get_marketing_project_200: {
     properties: {
       id: { type: 'string' },
@@ -19045,6 +19345,18 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/BrandKitSummary' },
         type: 'array',
       },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items'],
+  },
+  list_marketing_ideas_200: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/IdeasProjectSummary' },
+        type: 'array',
+      },
+      next_cursor: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     },
     additionalProperties: false,
     type: 'object',
@@ -20727,6 +21039,60 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['fonts', 'palette'],
   },
+  set_marketing_ad_kept_200: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/PlanningCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  set_marketing_ad_kept_request: {
+    properties: { kept: { type: 'boolean' } },
+    additionalProperties: false,
+    type: 'object',
+    required: ['kept'],
+  },
   start_experiment_200: {
     properties: {
       id: { type: 'string' },
@@ -21738,6 +22104,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['create_marketing_handoff_request'],
     ],
     [
+      'create_marketing_ideas_201',
+      VALIDATOR_FUNCTIONS['create_marketing_ideas_201'],
+    ],
+    [
+      'create_marketing_ideas_request',
+      VALIDATOR_FUNCTIONS['create_marketing_ideas_request'],
+    ],
+    [
       'create_marketing_image_edit_202',
       VALIDATOR_FUNCTIONS['create_marketing_image_edit_202'],
     ],
@@ -22083,6 +22457,7 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       'get_marketing_evidence_handoff_200',
       VALIDATOR_FUNCTIONS['get_marketing_evidence_handoff_200'],
     ],
+    ['get_marketing_ideas_200', VALIDATOR_FUNCTIONS['get_marketing_ideas_200']],
     [
       'get_marketing_project_200',
       VALIDATOR_FUNCTIONS['get_marketing_project_200'],
@@ -22241,6 +22616,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'list_marketing_brand_kits_200',
       VALIDATOR_FUNCTIONS['list_marketing_brand_kits_200'],
+    ],
+    [
+      'list_marketing_ideas_200',
+      VALIDATOR_FUNCTIONS['list_marketing_ideas_200'],
     ],
     [
       'list_marketing_projects_200',
@@ -22519,6 +22898,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'save_product_brand_kit_request',
       VALIDATOR_FUNCTIONS['save_product_brand_kit_request'],
+    ],
+    [
+      'set_marketing_ad_kept_200',
+      VALIDATOR_FUNCTIONS['set_marketing_ad_kept_200'],
+    ],
+    [
+      'set_marketing_ad_kept_request',
+      VALIDATOR_FUNCTIONS['set_marketing_ad_kept_request'],
     ],
     ['start_experiment_200', VALIDATOR_FUNCTIONS['start_experiment_200']],
     [
@@ -22878,6 +23265,11 @@ export const REQUEST_VALIDATORS = {
   ] as ValidateFunction<
     DomainOperationMap['create_marketing_handoff']['requestBody']
   >,
+  create_marketing_ideas: VALIDATOR_FUNCTIONS[
+    'create_marketing_ideas_request'
+  ] as ValidateFunction<
+    DomainOperationMap['create_marketing_ideas']['requestBody']
+  >,
   create_marketing_image_edit: VALIDATOR_FUNCTIONS[
     'create_marketing_image_edit_request'
   ] as ValidateFunction<
@@ -23140,6 +23532,11 @@ export const REQUEST_VALIDATORS = {
     'save_product_brand_kit_request'
   ] as ValidateFunction<
     DomainOperationMap['save_product_brand_kit']['requestBody']
+  >,
+  set_marketing_ad_kept: VALIDATOR_FUNCTIONS[
+    'set_marketing_ad_kept_request'
+  ] as ValidateFunction<
+    DomainOperationMap['set_marketing_ad_kept']['requestBody']
   >,
   start_experiment: VALIDATOR_FUNCTIONS[
     'start_experiment_request'

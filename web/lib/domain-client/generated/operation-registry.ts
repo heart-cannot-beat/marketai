@@ -1576,6 +1576,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'create_marketing_ideas',
+    {
+      operationId: 'create_marketing_ideas',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas',
+      pathParams: [],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 65536,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'create_marketing_ideas_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'create_marketing_image_edit',
     {
       operationId: 'create_marketing_image_edit',
@@ -3452,6 +3479,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'get_marketing_ideas',
+    {
+      operationId: 'get_marketing_ideas',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'get_marketing_ideas_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'get_marketing_project',
     {
       operationId: 'get_marketing_project',
@@ -4830,6 +4884,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         200: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'list_marketing_brand_kits_200' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'list_marketing_ideas',
+    {
+      operationId: 'list_marketing_ideas',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/ideas',
+      pathParams: [],
+      queryParams: ['limit', 'cursor'],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'list_marketing_ideas_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
           locationShapes: [],
         },
       },
@@ -6243,6 +6324,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         200: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'save_product_brand_kit_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'set_marketing_ad_kept',
+    {
+      operationId: 'set_marketing_ad_kept',
+      method: 'PUT',
+      pathTemplate:
+        '/api/v1/marketing/ideas/{project_id}/ads/{asset_version_id}/kept',
+      pathParams: ['project_id', 'asset_version_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 1024,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'set_marketing_ad_kept_200' },
           locationShapes: [],
         },
         422: {

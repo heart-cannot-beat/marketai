@@ -1046,6 +1046,8 @@ v1_router.include_router(test_plans_v1_router)
 
 from .marketing.api import router as marketing_router, register_handlers as register_marketing_handlers
 v1_router.include_router(marketing_router)
+from .marketing.ideas_api import router as marketing_ideas_router
+v1_router.include_router(marketing_ideas_router)
 register_marketing_handlers(app)
 
 from .learnings.v1_router import router as learnings_v1_router

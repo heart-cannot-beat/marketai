@@ -1084,6 +1084,30 @@
     "maxResponseBytes": 524288,
     "forwardConditionalHeaders": false
   },
+  "list_marketing_ideas": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "get_marketing_ideas": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "create_marketing_ideas": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas",
+    "maxRequestBytes": 65536,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "set_marketing_ad_kept": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/ads/:asset_version_id/kept",
+    "maxRequestBytes": 1024,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
   "edit_marketing_project": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/projects/:project_id",
     "maxRequestBytes": 131072,

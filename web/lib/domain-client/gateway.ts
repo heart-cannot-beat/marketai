@@ -1036,6 +1036,32 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'edit_marketing_project'> | ReconciliationRequired
   >;
+  /** Ads-first ideas (ADR 0018): the plan-first project methods never return these projects. */
+  listMarketingIdeas(params: {
+    workspaceSlug: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<DomainResultFor<'list_marketing_ideas'>>;
+  getMarketingIdeas(params: {
+    workspaceSlug: string;
+    projectId: string;
+  }): Promise<DomainResultFor<'get_marketing_ideas'>>;
+  createMarketingIdeas(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['create_marketing_ideas']['requestBody'];
+  }): Promise<
+    DomainResultFor<'create_marketing_ideas'> | ReconciliationRequired
+  >;
+  setMarketingAdKept(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    assetVersionId: string;
+    body: DomainOperationMap['set_marketing_ad_kept']['requestBody'];
+  }): Promise<
+    DomainResultFor<'set_marketing_ad_kept'> | ReconciliationRequired
+  >;
   startMarketingPlanning(params: {
     workspaceSlug: string;
     actionInstanceId: string;
@@ -4782,6 +4808,71 @@ export class DefaultDomainGateway implements DomainGateway {
       200,
       'ok',
       { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async listMarketingIdeas(params: {
+    workspaceSlug: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<DomainResultFor<'list_marketing_ideas'>> {
+    return this.sendSafe<'list_marketing_ideas'>(
+      buildBffPath('list_marketing_ideas', { slug: params.workspaceSlug }) +
+        this.buildQuery({ limit: params.limit, cursor: params.cursor })
+    );
+  }
+
+  async getMarketingIdeas(params: {
+    workspaceSlug: string;
+    projectId: string;
+  }): Promise<DomainResultFor<'get_marketing_ideas'>> {
+    return this.sendSafe<'get_marketing_ideas'>(
+      buildBffPath('get_marketing_ideas', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      })
+    );
+  }
+
+  async createMarketingIdeas(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['create_marketing_ideas']['requestBody'];
+  }): Promise<
+    DomainResultFor<'create_marketing_ideas'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'create_marketing_ideas',
+      params.actionInstanceId,
+      buildBffPath('create_marketing_ideas', { slug: params.workspaceSlug }),
+      'POST',
+      params.body,
+      201,
+      'created'
+    );
+  }
+
+  async setMarketingAdKept(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    assetVersionId: string;
+    body: DomainOperationMap['set_marketing_ad_kept']['requestBody'];
+  }): Promise<
+    DomainResultFor<'set_marketing_ad_kept'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'set_marketing_ad_kept',
+      params.actionInstanceId,
+      buildBffPath('set_marketing_ad_kept', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+        asset_version_id: params.assetVersionId,
+      }),
+      'PUT',
+      params.body,
+      200,
+      'ok'
     );
   }
 

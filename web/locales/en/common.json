@@ -2035,6 +2035,7 @@
   "error-marketing_export_failed": "The export did not finish. Check the export package's status.",
   "error-marketing_expression_coverage_required": "Screening angles needs several expressions per angle; if the budget allows only one, note the limitation.",
   "error-marketing_expression_duplicate": "The same expression is listed twice under one angle.",
+  "error-marketing_expression_unused": "Every way of telling a claim needs at least one ad.",
   "error-marketing_fact_ids_duplicate": "Each fact and inference needs its own ID.",
   "error-marketing_generation_failed": "The generation did not finish. Check the task's status.",
   "error-marketing_group_membership_invalid": "Put every combination in exactly one test group.",

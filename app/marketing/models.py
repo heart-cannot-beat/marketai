@@ -1,7 +1,7 @@
 """Marketing planning aggregates and immutable revision history."""
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Index, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Index, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.adapters.persistence.database import Base
@@ -23,7 +23,30 @@ class MarketingProjectRecord(Base):
     source_text: Mapped[str] = mapped_column(Text, nullable=False)
     understanding_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     plan_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # ADR 0018: "plan_first" projects keep the plan-confirmed flow; "ads_first" projects hold
+    # ideas (market, ad language and the Ideas document) and never a plan in step 1.
+    flow: Mapped[str] = mapped_column(String(20), nullable=False, default="plan_first", server_default="plan_first")
+    market: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ad_language: Mapped[str | None] = mapped_column(String(35), nullable=True)
+    ideas_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class MarketingAdKeepRecord(Base):
+    """The user's current "keep" mark on one ad of an ads_first project; changes are audited."""
+    __tablename__ = "marketing_ad_keeps"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "project_id", "asset_version_id", name="uq_marketing_ad_keep"),
+        ForeignKeyConstraint(["workspace_id", "project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
+                             ondelete="RESTRICT"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    asset_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kept: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
