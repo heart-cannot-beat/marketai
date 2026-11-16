@@ -62,8 +62,8 @@ from app.platform.tenancy import TenantContext
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION, DOWN_REVISION = "zzk145a1b2c3", "zzj113a1b2c3"
-#: The current head: zzl148a1b2c3 (#148) follows the checks and changes nothing on SQLite.
-HEAD = "zzl148a1b2c3"
+#: The current head: zzl148a1b2c3 (#148) and zzm189a1b2c3 (#189) follow the checks and leave usage_events alone.
+HEAD = "zzm189a1b2c3"
 WORKSPACE = "ws_usage_checks"
 CTX = TenantContext(workspace_id=WORKSPACE, role="owner", initiator_id="owner_c",
                     request_id="req-checks", trace_id="trace-checks")

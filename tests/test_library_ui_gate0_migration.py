@@ -150,8 +150,9 @@ class Gate0MigrationTests(unittest.TestCase):
         # zzi132a1b2c3 (Beta default ScalePolicyVersion v2, #132 and #133) and
         # zzj113a1b2c3 (Advice superseded by a Target event, #113) and
 # zzk145a1b2c3 (CHECK constraints on usage_events, #145) and
-        # zzl148a1b2c3 (the Worker dispatches daily storage_bytes Usage, #148).
-        self.assertEqual(revision, "zzl148a1b2c3")
+        # zzl148a1b2c3 (the Worker dispatches daily storage_bytes Usage, #148) and
+        # zzm189a1b2c3 (ads-first ideas on marketing projects and the keep mark, #189).
+        self.assertEqual(revision, "zzm189a1b2c3")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as conn:
