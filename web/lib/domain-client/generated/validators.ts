@@ -7310,6 +7310,30 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'A drafting call of ads-first ideas: the product understanding, then the ideas (#190).\n\nThe plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call.',
   },
+  IdeasGenerationDraft: {
+    properties: {
+      combination_id: { type: 'string' },
+      draft_id: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['combination_id', 'draft_id'],
+  },
+  IdeasGenerationDrafts: {
+    properties: {
+      project_id: { type: 'string' },
+      revision: { type: 'integer' },
+      drafts: {
+        items: { $ref: '#/components/schemas/IdeasGenerationDraft' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['project_id', 'revision', 'drafts'],
+    description:
+      'The drafts prepared for these ideas at ``revision``; preview and submit each with the generation endpoints.',
+  },
   IdeasProjectDetail: {
     properties: {
       id: { type: 'string' },
@@ -9855,6 +9879,27 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['provider', 'model'],
+  },
+  PrepareIdeasGeneration: {
+    properties: {
+      provider: {
+        type: 'string',
+        enum: ['gemini', 'openai', 'seedream', 'mock'],
+      },
+      model: { type: 'string', maxLength: 200, minLength: 1 },
+      aspect_ratio: {
+        type: 'string',
+        enum: ['1:1', '4:5', '9:16', '16:9'],
+        default: '4:5',
+      },
+      image_size: { type: 'string', enum: ['1K', '2K'], default: '1K' },
+      variants: { type: 'integer', maximum: 4, minimum: 1, default: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['provider', 'model'],
+    description:
+      "Image settings for the ads of these ideas: one generation draft per combination (#191).\n\nThe product's verified photos are the appearance references; choosing photos comes later (S11).",
   },
   PreviewItemSummary: {
     properties: {
@@ -19722,6 +19767,42 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['provider', 'model'],
   },
+  prepare_marketing_ideas_generation_201: {
+    properties: {
+      project_id: { type: 'string' },
+      revision: { type: 'integer' },
+      drafts: {
+        items: { $ref: '#/components/schemas/IdeasGenerationDraft' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['project_id', 'revision', 'drafts'],
+    description:
+      'The drafts prepared for these ideas at ``revision``; preview and submit each with the generation endpoints.',
+  },
+  prepare_marketing_ideas_generation_request: {
+    properties: {
+      provider: {
+        type: 'string',
+        enum: ['gemini', 'openai', 'seedream', 'mock'],
+      },
+      model: { type: 'string', maxLength: 200, minLength: 1 },
+      aspect_ratio: {
+        type: 'string',
+        enum: ['1:1', '4:5', '9:16', '16:9'],
+        default: '4:5',
+      },
+      image_size: { type: 'string', enum: ['1K', '2K'], default: '1K' },
+      variants: { type: 'integer', maximum: 4, minimum: 1, default: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['provider', 'model'],
+    description:
+      "Image settings for the ads of these ideas: one generation draft per combination (#191).\n\nThe product's verified photos are the appearance references; choosing photos comes later (S11).",
+  },
   preview_competitor_scan_200: {
     properties: {
       kind: { type: 'string', enum: ['scan', 'resume'] },
@@ -22761,6 +22842,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['prepare_marketing_generation_request'],
     ],
     [
+      'prepare_marketing_ideas_generation_201',
+      VALIDATOR_FUNCTIONS['prepare_marketing_ideas_generation_201'],
+    ],
+    [
+      'prepare_marketing_ideas_generation_request',
+      VALIDATOR_FUNCTIONS['prepare_marketing_ideas_generation_request'],
+    ],
+    [
       'preview_competitor_scan_200',
       VALIDATOR_FUNCTIONS['preview_competitor_scan_200'],
     ],
@@ -23510,6 +23599,11 @@ export const REQUEST_VALIDATORS = {
     'prepare_marketing_generation_request'
   ] as ValidateFunction<
     DomainOperationMap['prepare_marketing_generation']['requestBody']
+  >,
+  prepare_marketing_ideas_generation: VALIDATOR_FUNCTIONS[
+    'prepare_marketing_ideas_generation_request'
+  ] as ValidateFunction<
+    DomainOperationMap['prepare_marketing_ideas_generation']['requestBody']
   >,
   preview_competitor_scan: VALIDATOR_FUNCTIONS[
     'preview_competitor_scan_request'

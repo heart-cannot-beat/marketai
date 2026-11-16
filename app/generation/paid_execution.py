@@ -161,7 +161,10 @@ def _prepare(session, ctx, job_id, item_id):
         from .selection import product_input
         product_input(session, ctx, frozen["product"]["id"])
         intent = frozen.get("marketing_intent")
-        if intent:
+        if intent and intent.get("flow") == "ads_first":
+            from app.marketing.ideas import check_intent
+            check_intent(session, ctx, intent)
+        elif intent:
             from app.marketing.service import get_project
             project = get_project(session, ctx, intent["project_id"])
             if project.state != "plan_confirmed" or project.revision != intent["plan_revision"]:

@@ -5380,6 +5380,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'prepare_marketing_ideas_generation',
+    {
+      operationId: 'prepare_marketing_ideas_generation',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/generation-drafts',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 8192,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'prepare_marketing_ideas_generation_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'preview_competitor_scan',
     {
       operationId: 'preview_competitor_scan',

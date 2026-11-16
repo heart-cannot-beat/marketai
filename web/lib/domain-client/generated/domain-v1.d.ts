@@ -2517,6 +2517,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/generation-drafts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Prepare Ideas Generation
+     * @description One generation draft per ad of these ideas; no fact or plan needs confirming first (ADR 0018, #191).
+     *
+     *     Preview and submit each draft with ``create_generation_preview`` and ``submit_generation_run``; the
+     *     images then appear under the ideas' ``ads`` (``pending`` while they are being made).
+     */
+    post: operations['prepare_marketing_ideas_generation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/planning': {
     parameters: {
       query?: never;
@@ -8314,6 +8337,16 @@ export interface components {
       /** @default 0 */
       maximum_cost: string;
     };
+    IdeasGenerationDraft: {
+      combination_id: string;
+      draft_id: string;
+    };
+    /** @description The drafts prepared for these ideas at ``revision``; preview and submit each with the generation endpoints. */
+    IdeasGenerationDrafts: {
+      project_id: string;
+      revision: number;
+      drafts: components['schemas']['IdeasGenerationDraft'][];
+    };
     IdeasProjectDetail: {
       id: string;
       revision: number;
@@ -9704,6 +9737,28 @@ export interface components {
        */
       image_size: '1K' | '2K';
       variants?: number | null;
+    };
+    /**
+     * @description Image settings for the ads of these ideas: one generation draft per combination (#191).
+     *
+     *     The product's verified photos are the appearance references; choosing photos comes later (S11).
+     */
+    PrepareIdeasGeneration: {
+      /** @enum {string} */
+      provider: 'gemini' | 'openai' | 'seedream' | 'mock';
+      model: string;
+      /**
+       * @default 4:5
+       * @enum {string}
+       */
+      aspect_ratio: '1:1' | '4:5' | '9:16' | '16:9';
+      /**
+       * @default 1K
+       * @enum {string}
+       */
+      image_size: '1K' | '2K';
+      /** @default 1 */
+      variants: number;
     };
     /**
      * @description Per-combination detail inside a resolved preview.
@@ -16742,6 +16797,44 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  prepare_marketing_ideas_generation: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrepareIdeasGeneration'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasGenerationDrafts'];
         };
       };
       /** @description Validation Error */

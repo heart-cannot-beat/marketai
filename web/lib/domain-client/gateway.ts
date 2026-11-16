@@ -1072,6 +1072,17 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'start_marketing_ideas_planning'> | ReconciliationRequired
   >;
+  /** One generation draft per ad of the ideas, with nothing confirmed first (ADR 0018, #191). */
+  prepareMarketingIdeasGeneration(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    body: DomainOperationMap['prepare_marketing_ideas_generation']['requestBody'];
+  }): Promise<
+    | DomainResultFor<'prepare_marketing_ideas_generation'>
+    | ReconciliationRequired
+  >;
   startMarketingPlanning(params: {
     workspaceSlug: string;
     actionInstanceId: string;
@@ -4906,6 +4917,31 @@ export class DefaultDomainGateway implements DomainGateway {
       params.body,
       202,
       'accepted',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async prepareMarketingIdeasGeneration(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    body: DomainOperationMap['prepare_marketing_ideas_generation']['requestBody'];
+  }): Promise<
+    | DomainResultFor<'prepare_marketing_ideas_generation'>
+    | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'prepare_marketing_ideas_generation',
+      params.actionInstanceId,
+      buildBffPath('prepare_marketing_ideas_generation', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created',
       { ifMatch: params.expectedRevision }
     );
   }

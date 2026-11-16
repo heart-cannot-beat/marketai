@@ -1,5 +1,5 @@
 /**
- * Ads-first ideas (ADR 0018, #189): the generated validators and the four gateway methods.
+ * Ads-first ideas (ADR 0018, #189-#191): the generated validators and the gateway methods.
  */
 import {
   RESPONSE_VALIDATORS,
@@ -141,7 +141,76 @@ test('drafting asks for the understanding or the ideas only', () => {
   expect(start({ kind: 'ideas' })).toBe(false);
 });
 
+test('preparing images takes the image settings and answers one draft per ad (#191)', () => {
+  const prepare = REQUEST_VALIDATORS.prepare_marketing_ideas_generation;
+  expect(prepare({ provider: 'openai', model: 'gpt-image-1' })).toBe(true);
+  expect(
+    prepare({ provider: 'mock', model: 'mock-v1', aspect_ratio: '1:1', variants: 2 })
+  ).toBe(true);
+  expect(prepare({ provider: 'openai', model: 'gpt-image-1', variants: 5 })).toBe(
+    false
+  );
+  expect(
+    prepare({ provider: 'openai', model: 'gpt-image-1', product_references: {} })
+  ).toBe(false);
+  const prepared = RESPONSE_VALIDATORS.get(
+    'prepare_marketing_ideas_generation_201'
+  )!;
+  const drafts = {
+    project_id: 'mp_1',
+    revision: 5,
+    drafts: [{ combination_id: 'c1_1', draft_id: 'gd_1' }],
+  };
+  expect(prepared(drafts)).toBe(true);
+  expect(prepared({ ...drafts, drafts: [{ combination_id: 'c1_1' }] })).toBe(
+    false
+  );
+});
+
+test('an image still being made is pending with its ad', () => {
+  const validate = RESPONSE_VALIDATORS.get('get_marketing_ideas_200')!;
+  const pending = [{ combination_id: 'c1_1', state: 'running' }];
+  expect(validate({ ...detail, state: 'ideas_ready', pending })).toBe(true);
+  expect(
+    validate({ ...detail, pending: [{ combination_id: 'c1_1', state: 'succeeded' }] })
+  ).toBe(false);
+});
+
 describe('ideas gateway', () => {
+  test('prepares images with the revision as If-Match', async () => {
+    const answer = {
+      project_id: 'mp_1',
+      revision: 5,
+      drafts: [{ combination_id: 'c1_1', draft_id: 'gd_1' }],
+    };
+    const fetchMock = jest.fn().mockResolvedValue(reply(201, answer));
+    const body = {
+      provider: 'openai' as const,
+      model: 'gpt-image-1',
+      aspect_ratio: '4:5' as const,
+      image_size: '1K' as const,
+      variants: 1,
+    };
+    const result = await makeGateway(
+      fetchMock
+    ).prepareMarketingIdeasGeneration({
+      workspaceSlug: 'acme',
+      actionInstanceId: 'ideas:prepare:1',
+      expectedRevision: 5,
+      projectId: 'mp_1',
+      body,
+    });
+    expect(result).toMatchObject({ kind: 'created' });
+    expect(call(fetchMock)).toEqual({
+      method: 'POST',
+      pathname: '/api/domain/v1/w/acme/marketing/ideas/mp_1/generation-drafts',
+      query: {},
+      body,
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)['If-Match']).toBe('5');
+  });
+
   test('starts drafting with the revision as If-Match', async () => {
     const fetchMock = jest.fn().mockResolvedValue(
       reply(202, {

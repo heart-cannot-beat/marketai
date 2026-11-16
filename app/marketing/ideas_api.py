@@ -14,8 +14,8 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 from . import ideas, service
-from .ideas_contracts import (CreateIdeas, IdeasCallSummary, IdeasProjectDetail, IdeasProjectPage, SetKept,
-                              StartIdeasPlanning)
+from .ideas_contracts import (CreateIdeas, IdeasCallSummary, IdeasGenerationDrafts, IdeasProjectDetail, IdeasProjectPage,
+                              PrepareIdeasGeneration, SetKept, StartIdeasPlanning)
 from .models import MarketingProjectRecord, PlanningCallRecord
 
 router = APIRouter(prefix="/marketing/ideas", tags=["marketing"])
@@ -101,3 +101,24 @@ def start_ideas_planning(project_id: str, body: StartIdeasPlanning, request: Req
             lambda s: ideas.start_ideas_planning(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, body.kind,
                                                  body.execution_mode, body.quote_hash, body.strategy_language), replay)
         return service.call_dict(call, include_maximum_cost=True)
+
+
+@router.post("/{project_id}/generation-drafts", operation_id="prepare_marketing_ideas_generation",
+             response_model=IdeasGenerationDrafts, status_code=201, openapi_extra={"x-marketai-idempotent": True})
+def prepare_ideas_generation(project_id: str, body: PrepareIdeasGeneration, request: Request,
+                             ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                             if_match: str | None = Header(default=None, alias="If-Match")):
+    """One generation draft per ad of these ideas; no fact or plan needs confirming first (ADR 0018, #191).
+
+    Preview and submit each draft with ``create_generation_preview`` and ``submit_generation_run``; the
+    images then appear under the ideas' ``ads`` (``pending`` while they are being made)."""
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        def prepare(s):
+            row = ideas.get_ideas_project(s, ctx, project_id)
+            ideas.generation_drafts(s, ctx, row, revision, body.provider, body.model,
+                                    {"aspect_ratio": body.aspect_ratio, "image_size": body.image_size, "variants": body.variants})
+            return row
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.prepare_generation", body.model_dump(mode="json"),
+                                prepare, lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        return {"project_id": row.id, "revision": revision, "drafts": ideas.prepared_drafts(session, ctx, row, revision)}

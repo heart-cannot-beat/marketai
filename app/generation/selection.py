@@ -279,20 +279,25 @@ def resolve_selection(session: Session, ctx: TenantContext, draft) -> dict:
     image_tool = None
     from app.marketing.feedback import resolve as resolve_feedback
     from app.marketing.models import MarketingGenerationLinkRecord
-    from app.marketing.service import get_project, creative_intent, MarketingError
+    from app.marketing.service import call_project, creative_intent, MarketingError
     link = session.scalar(select(MarketingGenerationLinkRecord).where(
         MarketingGenerationLinkRecord.workspace_id == ctx.workspace_id,
         MarketingGenerationLinkRecord.draft_id == draft.id))
     if link:
         try:
-            project = get_project(session, ctx, link.project_id)
+            # The link names the project the draft was prepared for; that project's own flow decides the rule.
+            project = call_project(session, ctx, link.project_id)
         except MarketingError:
             raise SelectionError("marketing_plan_unavailable", "找不到关联的测试方案。") from None
-        if project.state != "plan_confirmed" or project.revision != link.plan_revision:
-            raise SelectionError("marketing_plan_changed", "测试方案已变化，请从当前方案重新准备生成草稿。")
-        if project.product_id != draft.product_id:
-            raise SelectionError("marketing_product_changed", "这套素材的产品必须与测试方案一致。")
-        marketing_intent = creative_intent(project, link.combination_id)
+        if project.flow == "ads_first":
+            from app.marketing.ideas import selection_intent
+            marketing_intent = selection_intent(project, link, draft)
+        else:
+            if project.state != "plan_confirmed" or project.revision != link.plan_revision:
+                raise SelectionError("marketing_plan_changed", "测试方案已变化，请从当前方案重新准备生成草稿。")
+            if project.product_id != draft.product_id:
+                raise SelectionError("marketing_product_changed", "这套素材的产品必须与测试方案一致。")
+            marketing_intent = creative_intent(project, link.combination_id)
     try:
         feedback = resolve_feedback(session, ctx, draft)
         if feedback:
@@ -364,7 +369,10 @@ def check_frozen_selection(session: Session, ctx: TenantContext, recipe: dict):
         if not frozen.get("source_image") or frozen["format"]["image_size"] != "2K" or frozen["format"]["variants"] != 1:
             raise SelectionError("image_tool_format_changed", "编辑配方不完整，请重新准备草稿。")
     intent = frozen.get("marketing_intent")
-    if intent:
+    if intent and intent.get("flow") == "ads_first":
+        from app.marketing.ideas import check_intent
+        check_intent(session, ctx, intent)
+    elif intent:
         from app.marketing.service import get_project
         project = get_project(session, ctx, intent["project_id"])
         if project.state != "plan_confirmed" or project.revision != intent["plan_revision"]:

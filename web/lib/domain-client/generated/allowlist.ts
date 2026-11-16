@@ -3143,6 +3143,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'prepare_marketing_ideas_generation',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/generation-drafts',
+    fastapiPathTemplate:
+      '/api/v1/marketing/ideas/{project_id}/generation-drafts',
+    pathParams: ['project_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.prepare_marketing_ideas_generation,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 8192,
+    maxResponseBytes: 524288,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'preview_competitor_scan',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/competitor-scans/preview',

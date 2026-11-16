@@ -8523,6 +8523,81 @@
         }
       }
     },
+    "/api/v1/marketing/ideas/{project_id}/generation-drafts": {
+      "post": {
+        "operationId": "prepare_marketing_ideas_generation",
+        "summary": "Prepare Ideas Generation",
+        "description": "One generation draft per ad of these ideas; no fact or plan needs confirming first (ADR 0018, #191).\n\nPreview and submit each draft with ``create_generation_preview`` and ``submit_generation_run``; the\nimages then appear under the ideas' ``ads`` (``pending`` while they are being made).",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareIdeasGeneration"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasGenerationDrafts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/ideas/{project_id}/planning": {
       "post": {
         "operationId": "start_marketing_ideas_planning",
@@ -31813,6 +31888,46 @@
         ],
         "description": "A drafting call of ads-first ideas: the product understanding, then the ideas (#190).\n\nThe plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call."
       },
+      "IdeasGenerationDraft": {
+        "properties": {
+          "combination_id": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "combination_id",
+          "draft_id"
+        ]
+      },
+      "IdeasGenerationDrafts": {
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/IdeasGenerationDraft"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "project_id",
+          "revision",
+          "drafts"
+        ],
+        "description": "The drafts prepared for these ideas at ``revision``; preview and submit each with the generation endpoints."
+      },
       "IdeasProjectDetail": {
         "properties": {
           "id": {
@@ -37328,6 +37443,55 @@
           "provider",
           "model"
         ]
+      },
+      "PrepareIdeasGeneration": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "gemini",
+              "openai",
+              "seedream",
+              "mock"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "4:5",
+              "9:16",
+              "16:9"
+            ],
+            "default": "4:5"
+          },
+          "image_size": {
+            "type": "string",
+            "enum": [
+              "1K",
+              "2K"
+            ],
+            "default": "1K"
+          },
+          "variants": {
+            "type": "integer",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "model"
+        ],
+        "description": "Image settings for the ads of these ideas: one generation draft per combination (#191).\n\nThe product's verified photos are the appearance references; choosing photos comes later (S11)."
       },
       "PreviewItemSummary": {
         "properties": {

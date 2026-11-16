@@ -98,6 +98,7 @@ describe('DomainGateway operation coverage', () => {
     // `get_marketing_ideas`, `list_marketing_ideas` and
     // `set_marketing_ad_kept` (#189).
     // 246 -> 247: `start_marketing_ideas_planning` (#190).
-    expect(DOMAIN_ALLOWLIST.length).toBe(247);
+    // 247 -> 248: `prepare_marketing_ideas_generation` (#191).
+    expect(DOMAIN_ALLOWLIST.length).toBe(248);
   });
 });
