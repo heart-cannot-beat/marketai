@@ -1,16 +1,15 @@
 """Prepare exact-image AI suggestions, then let the human confirm or refine."""
 from __future__ import annotations
 import difflib
-import os
 import re
 import unicodedata
 from dataclasses import asdict
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from sqlalchemy import or_, select
 
 from app.adapters.persistence.models import new_id
 from app.generation.paid_execution import asset_blob_ref
-from app.generation.selection import authorize_paid, check_budget, credential_binding, SelectionError
+from app.generation.selection import authorize_paid, check_budget, SelectionError
 from app.entitlements.quote_engine import CostQuoteEngine
 from app.entitlements.reservation_book import ReservationBook
 from app.entitlements.types import BillableCallSpec, ReservationPlan
@@ -138,21 +137,16 @@ def latest(session, ctx, row, asset_id, kind):
 def capability(session, ctx, row):
     if row.execution_mode == "mock":
         return {"provider": "mock", "model": "marketing-qc-example-v1", "unit_maximum": "0", "reason": None}
-    provider = os.getenv("MARKETAI_MARKETING_QC_PROVIDER", "gemini").strip()
-    model = os.getenv("MARKETAI_MARKETING_QC_MODEL", "").strip()
-    maximum = os.getenv("MARKETAI_MARKETING_QC_MAX_COST_USD", "").strip()
-    reason = None
-    try:
-        amount = Decimal(maximum)
-        if provider not in ("gemini", "openai") or not model or not amount.is_finite() or not Decimal("0") < amount <= Decimal("10"):
-            raise ValueError()
-        if not credential_binding(session, ctx, provider):
-            raise SelectionError("credential_required", "请配置工作区视觉检查凭据。")
-        authorize_paid(session, ctx)
-    except SelectionError as exc:
-        reason = exc.code
-    except (InvalidOperation, ValueError):
-        reason = "qc_not_configured"
+    # An OpenAI key stands in for the deployment provider's, as for planning (#192).
+    from .provider_choice import choose
+    choice = choose(session, ctx, "MARKETAI_MARKETING_QC")
+    provider, model, maximum = choice.provider, choice.model, choice.maximum
+    reason = "qc_not_configured" if choice.reason == "not_configured" else choice.reason
+    if reason is None:
+        try:
+            authorize_paid(session, ctx)
+        except SelectionError as exc:
+            reason = exc.code
     return {"provider": provider, "model": model, "unit_maximum": maximum if reason is None else "0", "reason": reason}
 
 
