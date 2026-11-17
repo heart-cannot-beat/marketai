@@ -90,7 +90,13 @@ const READ = {
   project_id: 'mp_secret',
 };
 
-function intake(input = { url: 'https://acmecharge.example/products/home', text_chars: 0, upload_count: 0 }) {
+function intake(
+  input = {
+    url: 'https://acmecharge.example/products/home',
+    text_chars: 0,
+    upload_count: 0,
+  }
+) {
   return ok({
     intake_id: 'pi_secret',
     status: 'ready',
@@ -156,7 +162,10 @@ describe('ReadingPage (#195)', () => {
   it('shows the progress while reading, and that the page can be closed', async () => {
     await renderPage(batch());
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Reading Acme Charge Home' })
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Reading Acme Charge Home',
+      })
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -194,7 +203,9 @@ describe('ReadingPage (#195)', () => {
         "None of these is checked yet. That doesn't hold anything up; you check them once before downloading."
       )
     ).toBeInTheDocument();
-    expect(screen.getByText('Plug in at night and forget about it')).toBeInTheDocument();
+    expect(
+      screen.getByText('Plug in at night and forget about it')
+    ).toBeInTheDocument();
     expect(stepStates()).toEqual(['done', 'done', 'active', 'pending']);
     // The new product is put in the sidebar as soon as it exists.
     await waitFor(() => expect(mockRefreshProducts).toHaveBeenCalled());
@@ -214,14 +225,10 @@ describe('ReadingPage (#195)', () => {
 
   it('counts the ads by what was planned, never a fixed six', async () => {
     const detail = ideasDetail();
-    await renderPage(
-      batch({ ...READ, state: 'generating', ads_planned: 4 })
-    );
+    await renderPage(batch({ ...READ, state: 'generating', ads_planned: 4 }));
     await screen.findByTestId('reading-facts');
     expect(
-      await screen.findByText(
-        `Make the ads (${detail.ads.length} of 4)`
-      )
+      await screen.findByText(`Make the ads (${detail.ads.length} of 4)`)
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'See the ads made so far' })
@@ -313,8 +320,12 @@ describe('ReadingPage (#195)', () => {
     expect(
       await within(stop).findByRole('button', { name: 'Start · up to $0.87' })
     ).toBeInTheDocument();
-    expect(within(stop).queryByRole('button', { name: /^Continue/ })).toBeNull();
-    expect(within(stop).queryByRole('button', { name: /^Try again/ })).toBeNull();
+    expect(
+      within(stop).queryByRole('button', { name: /^Continue/ })
+    ).toBeNull();
+    expect(
+      within(stop).queryByRole('button', { name: /^Try again/ })
+    ).toBeNull();
   });
 
   it('too little to go on: add material and continue, the extra cost on the button', async () => {
@@ -390,24 +401,43 @@ describe('ReadingPage (#195)', () => {
   });
 
   it.each([
-    ['over_budget', 'The next step would go over your maximum', 'Continue · up to $0.09 more'],
-    ['ideas_refused', "The claims didn't pass our checks twice", 'Continue · up to $0.09 more'],
-    ['step_failed', '“Think of claims to try” didn\'t work', 'Try again · up to $0.09 more'],
-  ] as const)('%s: says what stopped and offers to continue', async (reason, title, action) => {
-    await renderPage(
-      batch({
-        ...READ,
-        state: 'needs_attention',
-        needs_attention: true,
-        attention: { reason, step: 'ideas', resumable: true },
-        resume: RESUME,
-      })
-    );
-    const stop = screen.getByTestId('reading-stop');
-    expect(within(stop).getByRole('heading', { name: title })).toBeInTheDocument();
-    expect(within(stop).getByRole('button', { name: action })).toBeEnabled();
-    expect(within(stop).getByText('Everything done so far is kept.')).toBeInTheDocument();
-  });
+    [
+      'over_budget',
+      'The next step would go over your maximum',
+      'Continue · up to $0.09 more',
+    ],
+    [
+      'ideas_refused',
+      "The claims didn't pass our checks twice",
+      'Continue · up to $0.09 more',
+    ],
+    [
+      'step_failed',
+      "“Think of claims to try” didn't work",
+      'Try again · up to $0.09 more',
+    ],
+  ] as const)(
+    '%s: says what stopped and offers to continue',
+    async (reason, title, action) => {
+      await renderPage(
+        batch({
+          ...READ,
+          state: 'needs_attention',
+          needs_attention: true,
+          attention: { reason, step: 'ideas', resumable: true },
+          resume: RESUME,
+        })
+      );
+      const stop = screen.getByTestId('reading-stop');
+      expect(
+        within(stop).getByRole('heading', { name: title })
+      ).toBeInTheDocument();
+      expect(within(stop).getByRole('button', { name: action })).toBeEnabled();
+      expect(
+        within(stop).getByText('Everything done so far is kept.')
+      ).toBeInTheDocument();
+    }
+  );
 
   it('an uncertain call offers no retry until it has been checked', async () => {
     await renderPage(
@@ -427,7 +457,9 @@ describe('ReadingPage (#195)', () => {
     ).toBeInTheDocument();
     expect(within(stop).queryByRole('button')).toBeNull();
     expect(
-      within(stop).getByText('Waiting for the check. This page updates by itself.')
+      within(stop).getByText(
+        'Waiting for the check. This page updates by itself.'
+      )
     ).toBeInTheDocument();
   });
 

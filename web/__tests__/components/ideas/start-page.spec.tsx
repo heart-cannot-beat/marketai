@@ -273,7 +273,7 @@ describe('StartPage (#195)', () => {
   it.each([
     [
       problem(422, 'provider_key_rejected', { reason: 'key_invalid' }),
-      "OpenAI says this key is not valid, so it was not saved. Check that you copied all of it.",
+      'OpenAI says this key is not valid, so it was not saved. Check that you copied all of it.',
     ],
     [
       problem(422, 'provider_key_rejected', { reason: 'quota_exhausted' }),
@@ -395,9 +395,7 @@ describe('StartPage (#195)', () => {
     const images = within(examples).getAllByRole('img');
     expect(images).toHaveLength(6);
     for (const image of images)
-      expect(image.getAttribute('src')).toMatch(
-        /^\/examples\/acme-charge\/ad-\d\.svg$/
-      );
+      expect(image.getAttribute('src')).toMatch(/^\/example-ad-[1-6]\.svg$/);
     expect(within(examples).getAllByText('Example')).toHaveLength(6);
     expect(
       within(examples).getByText('Plug in at night and forget about it')

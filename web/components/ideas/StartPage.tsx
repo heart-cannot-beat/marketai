@@ -10,15 +10,15 @@ import { StartForm } from './StartForm';
 export const EXAMPLES = [
   {
     claim: 'start-example-claim-1',
-    ads: ['/examples/acme-charge/ad-1.svg', '/examples/acme-charge/ad-2.svg'],
+    ads: ['/example-ad-1.svg', '/example-ad-2.svg'],
   },
   {
     claim: 'start-example-claim-2',
-    ads: ['/examples/acme-charge/ad-3.svg', '/examples/acme-charge/ad-4.svg'],
+    ads: ['/example-ad-3.svg', '/example-ad-4.svg'],
   },
   {
     claim: 'start-example-claim-3',
-    ads: ['/examples/acme-charge/ad-5.svg', '/examples/acme-charge/ad-6.svg'],
+    ads: ['/example-ad-5.svg', '/example-ad-6.svg'],
   },
 ] as const;
 
@@ -55,7 +55,9 @@ function Examples() {
         <h2 id="start-examples-title" className="text-lg font-bold">
           {t('start-examples-title')}
         </h2>
-        <p className="text-sm text-base-content/70">{t('start-examples-note')}</p>
+        <p className="text-sm text-base-content/70">
+          {t('start-examples-note')}
+        </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         {EXAMPLES.map((group) => (

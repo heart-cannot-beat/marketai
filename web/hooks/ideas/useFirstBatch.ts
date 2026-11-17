@@ -238,8 +238,7 @@ export function useFirstBatch(batchId: string | null) {
   const { mutate } = query;
   const resume = useCallback(
     async (input: ResumeInput): Promise<ResumeOutcome> => {
-      if (!batchId)
-        return { kind: 'refused', problem: null, uncertain: false };
+      if (!batchId) return { kind: 'refused', problem: null, uncertain: false };
       const identity = JSON.stringify([batchId, input]);
       const action = actions.current.get(identity) ?? newActionId();
       actions.current.set(identity, action);
@@ -259,7 +258,10 @@ export function useFirstBatch(batchId: string | null) {
       });
       if (result.kind === 'ok') {
         actions.current.delete(identity);
-        await mutate({ batch: result.data as FirstBatch }, { revalidate: false });
+        await mutate(
+          { batch: result.data as FirstBatch },
+          { revalidate: false }
+        );
         return { kind: 'resumed' };
       }
       if (result.kind === 'problem') {
@@ -295,7 +297,9 @@ export function useFirstBatchIntake(intakeId: string | null, reading: boolean) {
   const { current } = useWorkspace();
   const gateway = useDomainGateway();
   const query = useSWR(
-    intakeId ? ['marketing-first-batch-intake', current.workspaceId, intakeId] : null,
+    intakeId
+      ? ['marketing-first-batch-intake', current.workspaceId, intakeId]
+      : null,
     async () => {
       const result = await gateway.getProductIntake({
         workspaceSlug: current.slug,

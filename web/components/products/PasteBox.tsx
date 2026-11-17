@@ -162,7 +162,10 @@ export function PasteBox({
       }
     >
       {busy && (
-        <span className="loading loading-spinner loading-xs" aria-hidden="true" />
+        <span
+          className="loading loading-spinner loading-xs"
+          aria-hidden="true"
+        />
       )}
       {busy && busyLabel ? busyLabel : submitLabel}
     </button>

@@ -77,8 +77,11 @@ export function StartForm({
   const reasonId = `${ids}-reason`;
   const isOwner = current.role === 'OWNER';
 
-  const { quote, failed: quoteFailed, refresh: refreshQuote } =
-    useFirstBatchQuote();
+  const {
+    quote,
+    failed: quoteFailed,
+    refresh: refreshQuote,
+  } = useFirstBatchQuote();
   const { start, phase, uploadProgress } = useStartFirstBatch();
   const saveKey = useSaveOpenAIKey();
 
@@ -138,7 +141,10 @@ export function StartForm({
       return;
     }
     const code = outcome.problem.code;
-    if (code === 'first_batch_quote_changed' || code === 'first_batch_unavailable')
+    if (
+      code === 'first_batch_quote_changed' ||
+      code === 'first_batch_unavailable'
+    )
       void refreshQuote();
     setNotice({ tone: 'error', text: startProblemText(outcome.problem) });
   }
@@ -178,11 +184,21 @@ export function StartForm({
         };
       }
       case 'provider_key_check_unavailable':
-        return { tone: 'error' as const, text: t('start-key-check-unavailable') };
+        return {
+          tone: 'error' as const,
+          text: t('start-key-check-unavailable'),
+        };
       case 'provider_key_check_unsupported':
-        return { tone: 'error' as const, text: t('start-key-check-unsupported') };
+        return {
+          tone: 'error' as const,
+          text: t('start-key-check-unsupported'),
+        };
       case 'credential_key_active':
-        return { tone: 'error' as const, text: t('start-key-exists'), settings: true };
+        return {
+          tone: 'error' as const,
+          text: t('start-key-exists'),
+          settings: true,
+        };
       default:
         return { tone: 'error' as const, text: errorMessage(t, problem) };
     }
@@ -216,11 +232,7 @@ export function StartForm({
     const next = await refreshQuote();
     // Start only on the number the click confirmed: the new maximum may not
     // be more than what the button said. Otherwise the button now says it.
-    if (
-      shown &&
-      next?.available &&
-      Number(next.maximum_cost) <= Number(shown)
-    )
+    if (shown && next?.available && Number(next.maximum_cost) <= Number(shown))
       await begin(next.quote_hash);
   }
 
@@ -255,7 +267,9 @@ export function StartForm({
         <fieldset className="mt-4 grid gap-3 sm:grid-cols-2">
           <legend className="sr-only">{t('start-target')}</legend>
           <label className="form-control">
-            <span className="mb-1 text-sm font-medium">{t('start-market')}</span>
+            <span className="mb-1 text-sm font-medium">
+              {t('start-market')}
+            </span>
             <select
               className="select select-bordered min-h-11 w-full"
               value={market}
@@ -367,7 +381,9 @@ export function StartForm({
       )}
 
       {state.kind === 'ready' && (
-        <p className="mt-4 text-xs text-base-content/70">{t('start-cost-note')}</p>
+        <p className="mt-4 text-xs text-base-content/70">
+          {t('start-cost-note')}
+        </p>
       )}
     </PasteBox>
   );

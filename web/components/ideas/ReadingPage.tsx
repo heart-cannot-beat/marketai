@@ -91,7 +91,11 @@ export function ReadingPage({ batchId }: { batchId: string }) {
     );
 
   return batch.project_id ? (
-    <ProjectReading batch={batch} projectId={batch.project_id} resume={resume} />
+    <ProjectReading
+      batch={batch}
+      projectId={batch.project_id}
+      resume={resume}
+    />
   ) : (
     <Reading batch={batch} detail={undefined} resume={resume} />
   );
@@ -165,9 +169,7 @@ function Reading({
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold">
-          {name
-            ? t('reading-title', { name })
-            : t('reading-title-unnamed')}
+          {name ? t('reading-title', { name }) : t('reading-title-unnamed')}
         </h1>
         {running && (
           <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -228,7 +230,8 @@ function Progress({ batch, made }: { batch: FirstBatch; made: number }) {
             className={classNames(
               'flex items-center gap-3 text-sm',
               step.state === 'pending' && 'text-gray-500 dark:text-gray-400',
-              step.state === 'stopped' && 'font-semibold text-red-800 dark:text-red-300'
+              step.state === 'stopped' &&
+                'font-semibold text-red-800 dark:text-red-300'
             )}
           >
             <span
@@ -283,14 +286,16 @@ function ReadFacts({
           <li key={fact.id} className="space-y-1">
             <p className="text-sm">
               <span aria-hidden="true" className="mr-2 text-emerald-700">
-                ✓
+                {STEP_MARK.done}
               </span>
               {fact.statement}
             </p>
             {fact.source_quote && (
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {imagesOnly
-                  ? t('reading-fact-source-images', { quote: fact.source_quote })
+                  ? t('reading-fact-source-images', {
+                      quote: fact.source_quote,
+                    })
                   : t('reading-fact-source', { quote: fact.source_quote })}
               </p>
             )}
@@ -364,15 +369,21 @@ function StopPanel({
   const imagesFailed = view.reason === 'step_failed' && view.step === 'images';
   const title =
     view.kind === 'start_again'
-      ? t(`stop-${view.reason === 'page_unreadable' ? 'page_unreadable' : 'reading_failed'}-title`)
+      ? t(
+          `stop-${view.reason === 'page_unreadable' ? 'page_unreadable' : 'reading_failed'}-title`
+        )
       : imagesFailed
         ? t('stop-images-failed-title', { count: view.failedAds })
         : view.reason === 'step_failed'
-          ? t('stop-step_failed-title', { step: t(`reading-step-${view.step}`) })
+          ? t('stop-step_failed-title', {
+              step: t(`reading-step-${view.step}`),
+            })
           : t(`stop-${view.reason}-title`);
   const body =
     view.kind === 'start_again'
-      ? t(`stop-${view.reason === 'page_unreadable' ? 'page_unreadable' : 'reading_failed'}-body`)
+      ? t(
+          `stop-${view.reason === 'page_unreadable' ? 'page_unreadable' : 'reading_failed'}-body`
+        )
       : imagesFailed
         ? t('stop-images-failed-body')
         : view.reason === 'over_budget'
@@ -393,7 +404,10 @@ function StopPanel({
       onClick={onClick}
     >
       {busy && (
-        <span className="loading loading-spinner loading-xs" aria-hidden="true" />
+        <span
+          className="loading loading-spinner loading-xs"
+          aria-hidden="true"
+        />
       )}
       {busy ? t('stop-busy') : withCost(label)}
     </button>

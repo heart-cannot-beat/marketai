@@ -285,12 +285,12 @@ describe('IdeasPage (#196)', () => {
     ).toBeInTheDocument();
   });
 
-  it('tries the first batch\'s failed ads again, the extra cost on the button (#195)', async () => {
+  it("tries the first batch's failed ads again, the extra cost on the button (#195)", async () => {
     const stopped = {
       id: 'mfb_1',
       state: 'needs_attention' as const,
       needs_attention: true,
-      reason: 'step_failed',
+      reason: 'step_failed' as const,
     };
     mockGateway.getMarketingFirstBatch.mockResolvedValue(
       ok({

@@ -99,7 +99,9 @@ function IdeasProject({
   const notice = firstBatch && firstBatch.state !== 'done' && (
     <FirstBatchNotice
       href={firstBatchHref(current.slug, firstBatch.id)}
-      stopped={firstBatch.state === 'needs_attention' || firstBatch.state === 'failed'}
+      stopped={
+        firstBatch.state === 'needs_attention' || firstBatch.state === 'failed'
+      }
       retriesTogether={retryOffer !== null}
     />
   );

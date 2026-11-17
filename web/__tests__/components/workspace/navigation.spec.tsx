@@ -196,9 +196,10 @@ describe('WorkspaceNavigation with the ads-first switch on (#194)', () => {
       'Settings',
       'Members',
     ]);
+    // The start page while the switch is on (#195).
     expect(screen.getByRole('link', { name: 'New product' })).toHaveAttribute(
       'href',
-      '/w/acme/products/new'
+      '/w/acme/start'
     );
     expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute(
       'href',
