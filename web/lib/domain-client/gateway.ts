@@ -1083,6 +1083,32 @@ export interface DomainGateway {
     | DomainResultFor<'prepare_marketing_ideas_generation'>
     | ReconciliationRequired
   >;
+  /** The start button's maximum for the ads-first first batch (#193). */
+  getMarketingFirstBatchQuote(params: {
+    workspaceSlug: string;
+    executionMode?: 'byok' | 'mock';
+  }): Promise<DomainResultFor<'get_marketing_first_batch_quote'>>;
+  /** Start reading a product, drafting and making the first ads under one confirmed maximum (#193). */
+  startMarketingFirstBatch(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['start_marketing_first_batch']['requestBody'];
+  }): Promise<
+    DomainResultFor<'start_marketing_first_batch'> | ReconciliationRequired
+  >;
+  getMarketingFirstBatch(params: {
+    workspaceSlug: string;
+    firstBatchId: string;
+  }): Promise<DomainResultFor<'get_marketing_first_batch'>>;
+  /** Continue a stopped first batch, confirming the maximum its `resume` offers (#193). */
+  resumeMarketingFirstBatch(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    firstBatchId: string;
+    body: DomainOperationMap['resume_marketing_first_batch']['requestBody'];
+  }): Promise<
+    DomainResultFor<'resume_marketing_first_batch'> | ReconciliationRequired
+  >;
   startMarketingPlanning(params: {
     workspaceSlug: string;
     actionInstanceId: string;
@@ -4943,6 +4969,71 @@ export class DefaultDomainGateway implements DomainGateway {
       201,
       'created',
       { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async getMarketingFirstBatchQuote(params: {
+    workspaceSlug: string;
+    executionMode?: 'byok' | 'mock';
+  }): Promise<DomainResultFor<'get_marketing_first_batch_quote'>> {
+    return this.sendSafe<'get_marketing_first_batch_quote'>(
+      buildBffPath('get_marketing_first_batch_quote', {
+        slug: params.workspaceSlug,
+      }) + this.buildQuery({ execution_mode: params.executionMode })
+    );
+  }
+
+  async startMarketingFirstBatch(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    body: DomainOperationMap['start_marketing_first_batch']['requestBody'];
+  }): Promise<
+    DomainResultFor<'start_marketing_first_batch'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'start_marketing_first_batch',
+      params.actionInstanceId,
+      buildBffPath('start_marketing_first_batch', {
+        slug: params.workspaceSlug,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created'
+    );
+  }
+
+  async getMarketingFirstBatch(params: {
+    workspaceSlug: string;
+    firstBatchId: string;
+  }): Promise<DomainResultFor<'get_marketing_first_batch'>> {
+    return this.sendSafe<'get_marketing_first_batch'>(
+      buildBffPath('get_marketing_first_batch', {
+        slug: params.workspaceSlug,
+        first_batch_id: params.firstBatchId,
+      })
+    );
+  }
+
+  async resumeMarketingFirstBatch(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    firstBatchId: string;
+    body: DomainOperationMap['resume_marketing_first_batch']['requestBody'];
+  }): Promise<
+    DomainResultFor<'resume_marketing_first_batch'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'resume_marketing_first_batch',
+      params.actionInstanceId,
+      buildBffPath('resume_marketing_first_batch', {
+        slug: params.workspaceSlug,
+        first_batch_id: params.firstBatchId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok'
     );
   }
 

@@ -938,6 +938,20 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'get_marketing_first_batch',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/first-batch/:first_batch_id',
+    pathParams: ['first_batch_id'],
+    requiresIdempotency: false,
+  },
+  {
+    operationId: 'get_marketing_first_batch_quote',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/first-batch-quote',
+    pathParams: [],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'get_marketing_ideas',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id',
@@ -1613,6 +1627,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'resume_marketing_first_batch',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/first-batch/:first_batch_id/resume',
+    pathParams: ['first_batch_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'resume_scale_enrollment',
     method: 'PUT',
     bffPattern:
@@ -1738,6 +1760,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/marketing/rounds/:round_id/explanation',
     pathParams: ['round_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'start_marketing_first_batch',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/first-batch',
+    pathParams: [],
     requiresIdempotency: true,
   },
   {

@@ -6420,6 +6420,220 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'See the note on `UploadIntentResponse` -- the handler returns a\n`JSONResponse` directly.',
   },
+  FirstBatchAttention: {
+    properties: {
+      reason: {
+        type: 'string',
+        enum: [
+          'several_models',
+          'page_unreadable',
+          'reading_failed',
+          'too_few_claims',
+          'over_budget',
+          'ideas_refused',
+          'step_failed',
+          'uncertain',
+        ],
+      },
+      step: {
+        type: 'string',
+        enum: ['reading', 'understanding', 'ideas', 'images'],
+      },
+      code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      variants: { items: { type: 'string' }, type: 'array' },
+      combination_ids: { items: { type: 'string' }, type: 'array' },
+      needed: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      call_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      resumable: { type: 'boolean' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['reason', 'step', 'resumable'],
+  },
+  FirstBatchDetail: {
+    properties: {
+      id: { type: 'string' },
+      operation_id: { type: 'string' },
+      state: {
+        type: 'string',
+        enum: [
+          'reading',
+          'understanding',
+          'ideas',
+          'generating',
+          'done',
+          'needs_attention',
+          'failed',
+        ],
+      },
+      needs_attention: { type: 'boolean' },
+      attention: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchAttention' },
+          { type: 'null' },
+        ],
+      },
+      resume: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchResume' },
+          { type: 'null' },
+        ],
+      },
+      intake_id: { type: 'string' },
+      product_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      project_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      strategy_language: { type: 'string', enum: ['zh-CN', 'en-US'] },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      selected_variant: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      confirmed_max_cost: { type: 'string' },
+      reserved_total: { type: 'string' },
+      currency: { type: 'string', const: 'USD' },
+      image_provider: { type: 'string' },
+      image_model: { type: 'string' },
+      ads_planned: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+      updated_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'operation_id',
+      'state',
+      'needs_attention',
+      'attention',
+      'resume',
+      'intake_id',
+      'product_id',
+      'project_id',
+      'market',
+      'ad_language',
+      'strategy_language',
+      'execution_mode',
+      'selected_variant',
+      'confirmed_max_cost',
+      'reserved_total',
+      'currency',
+      'image_provider',
+      'image_model',
+      'ads_planned',
+      'created_at',
+      'updated_at',
+    ],
+  },
+  FirstBatchQuote: {
+    properties: {
+      available: { type: 'boolean' },
+      unavailable_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      maximum_cost: { type: 'string' },
+      currency: { type: 'string', const: 'USD' },
+      quote_hash: { type: 'string' },
+      image_provider: { type: 'string' },
+      image_model: { type: 'string' },
+      steps: {
+        items: { $ref: '#/components/schemas/FirstBatchQuoteStep' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'available',
+      'execution_mode',
+      'maximum_cost',
+      'currency',
+      'quote_hash',
+      'image_provider',
+      'image_model',
+      'steps',
+    ],
+    description:
+      "The start button's maximum (#193): every step's maximum plus one more drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.",
+  },
+  FirstBatchQuoteStep: {
+    properties: {
+      step: {
+        type: 'string',
+        enum: ['reading', 'understanding', 'ideas', 'ideas_retry', 'images'],
+      },
+      quantity: { type: 'integer' },
+      unit_maximum: { type: 'string' },
+      maximum_cost: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['step', 'quantity', 'unit_maximum', 'maximum_cost'],
+  },
+  FirstBatchResume: {
+    properties: {
+      maximum_cost: { type: 'string' },
+      additional_cost: { type: 'string' },
+      currency: { type: 'string', const: 'USD' },
+      quote_hash: { type: 'string' },
+      requires: {
+        items: {
+          type: 'string',
+          enum: ['selected_variant', 'additional_text'],
+        },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'maximum_cost',
+      'additional_cost',
+      'currency',
+      'quote_hash',
+      'requires',
+    ],
+    description:
+      'What continuing from a stop needs and costs at most; continuing confirms it like the start button.',
+  },
+  FirstBatchSummary: {
+    properties: {
+      id: { type: 'string' },
+      state: {
+        type: 'string',
+        enum: [
+          'reading',
+          'understanding',
+          'ideas',
+          'generating',
+          'done',
+          'needs_attention',
+          'failed',
+        ],
+      },
+      needs_attention: { type: 'boolean' },
+      reason: {
+        anyOf: [
+          {
+            type: 'string',
+            enum: [
+              'several_models',
+              'page_unreadable',
+              'reading_failed',
+              'too_few_claims',
+              'over_budget',
+              'ideas_refused',
+              'step_failed',
+              'uncertain',
+            ],
+          },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'state', 'needs_attention'],
+    description:
+      "The product's first batch as the overview reads it: whether it stopped and waits for the user.",
+  },
   ForkInput: {
     properties: {
       display_name: { type: 'string', maxLength: 300, minLength: 1 },
@@ -7365,6 +7579,12 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/PendingAd' },
         type: 'array',
       },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -7404,6 +7624,12 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       ad_count: { type: 'integer' },
       kept_count: { type: 'integer' },
       updated_at: { type: 'string' },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -11030,6 +11256,28 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'The CSV template: ``columns`` in order and one row per image of the\nproduct (code + what it shows); the browser writes the file.',
   },
+  ResumeFirstBatch: {
+    properties: {
+      quote_hash: { type: 'string', maxLength: 64, minLength: 1 },
+      selected_variant: {
+        anyOf: [
+          { type: 'string', maxLength: 200, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+      additional_text: {
+        anyOf: [
+          { type: 'string', maxLength: 16000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['quote_hash'],
+    description:
+      'Continue a stopped first batch, confirming the maximum its ``resume`` offers.',
+  },
   ResumeItemResult: {
     properties: {
       item_id: { type: 'string' },
@@ -11570,6 +11818,40 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     properties: { expected_revision: { type: 'integer', minimum: 1 } },
     type: 'object',
     required: ['expected_revision'],
+  },
+  StartFirstBatch: {
+    properties: {
+      url: { anyOf: [{ type: 'string', maxLength: 2048 }, { type: 'null' }] },
+      text: { anyOf: [{ type: 'string', maxLength: 20000 }, { type: 'null' }] },
+      upload_intent_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 12,
+      },
+      market: { type: 'string', maxLength: 80, minLength: 1 },
+      ad_language: {
+        type: 'string',
+        maxLength: 35,
+        minLength: 2,
+        pattern: '^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$',
+      },
+      strategy_language: {
+        type: 'string',
+        enum: ['zh-CN', 'en-US'],
+        default: 'en-US',
+      },
+      execution_mode: {
+        type: 'string',
+        enum: ['byok', 'mock'],
+        default: 'byok',
+      },
+      quote_hash: { type: 'string', maxLength: 64, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['market', 'ad_language', 'quote_hash'],
+    description:
+      'Paste a link, images or text and start: read, draft and make the first ads under one confirmed maximum.',
   },
   StartIdeasPlanning: {
     properties: {
@@ -15468,6 +15750,12 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/PendingAd' },
         type: 'array',
       },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -18184,6 +18472,109 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['id', 'data'],
   },
+  get_marketing_first_batch_200: {
+    properties: {
+      id: { type: 'string' },
+      operation_id: { type: 'string' },
+      state: {
+        type: 'string',
+        enum: [
+          'reading',
+          'understanding',
+          'ideas',
+          'generating',
+          'done',
+          'needs_attention',
+          'failed',
+        ],
+      },
+      needs_attention: { type: 'boolean' },
+      attention: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchAttention' },
+          { type: 'null' },
+        ],
+      },
+      resume: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchResume' },
+          { type: 'null' },
+        ],
+      },
+      intake_id: { type: 'string' },
+      product_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      project_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      strategy_language: { type: 'string', enum: ['zh-CN', 'en-US'] },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      selected_variant: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      confirmed_max_cost: { type: 'string' },
+      reserved_total: { type: 'string' },
+      currency: { type: 'string', const: 'USD' },
+      image_provider: { type: 'string' },
+      image_model: { type: 'string' },
+      ads_planned: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+      updated_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'operation_id',
+      'state',
+      'needs_attention',
+      'attention',
+      'resume',
+      'intake_id',
+      'product_id',
+      'project_id',
+      'market',
+      'ad_language',
+      'strategy_language',
+      'execution_mode',
+      'selected_variant',
+      'confirmed_max_cost',
+      'reserved_total',
+      'currency',
+      'image_provider',
+      'image_model',
+      'ads_planned',
+      'created_at',
+      'updated_at',
+    ],
+  },
+  get_marketing_first_batch_quote_200: {
+    properties: {
+      available: { type: 'boolean' },
+      unavailable_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      maximum_cost: { type: 'string' },
+      currency: { type: 'string', const: 'USD' },
+      quote_hash: { type: 'string' },
+      image_provider: { type: 'string' },
+      image_model: { type: 'string' },
+      steps: {
+        items: { $ref: '#/components/schemas/FirstBatchQuoteStep' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'available',
+      'execution_mode',
+      'maximum_cost',
+      'currency',
+      'quote_hash',
+      'image_provider',
+      'image_model',
+      'steps',
+    ],
+    description:
+      "The start button's maximum (#193): every step's maximum plus one more drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.",
+  },
   get_marketing_ideas_200: {
     properties: {
       id: { type: 'string' },
@@ -18214,6 +18605,12 @@ const SCHEMAS: Record<string, object> = {
       pending: {
         items: { $ref: '#/components/schemas/PendingAd' },
         type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
       },
     },
     additionalProperties: false,
@@ -20781,6 +21178,101 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['item_id', 'state', 'replayed'],
   },
+  resume_marketing_first_batch_200: {
+    properties: {
+      id: { type: 'string' },
+      operation_id: { type: 'string' },
+      state: {
+        type: 'string',
+        enum: [
+          'reading',
+          'understanding',
+          'ideas',
+          'generating',
+          'done',
+          'needs_attention',
+          'failed',
+        ],
+      },
+      needs_attention: { type: 'boolean' },
+      attention: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchAttention' },
+          { type: 'null' },
+        ],
+      },
+      resume: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchResume' },
+          { type: 'null' },
+        ],
+      },
+      intake_id: { type: 'string' },
+      product_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      project_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      strategy_language: { type: 'string', enum: ['zh-CN', 'en-US'] },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      selected_variant: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      confirmed_max_cost: { type: 'string' },
+      reserved_total: { type: 'string' },
+      currency: { type: 'string', const: 'USD' },
+      image_provider: { type: 'string' },
+      image_model: { type: 'string' },
+      ads_planned: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+      updated_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'operation_id',
+      'state',
+      'needs_attention',
+      'attention',
+      'resume',
+      'intake_id',
+      'product_id',
+      'project_id',
+      'market',
+      'ad_language',
+      'strategy_language',
+      'execution_mode',
+      'selected_variant',
+      'confirmed_max_cost',
+      'reserved_total',
+      'currency',
+      'image_provider',
+      'image_model',
+      'ads_planned',
+      'created_at',
+      'updated_at',
+    ],
+  },
+  resume_marketing_first_batch_request: {
+    properties: {
+      quote_hash: { type: 'string', maxLength: 64, minLength: 1 },
+      selected_variant: {
+        anyOf: [
+          { type: 'string', maxLength: 200, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+      additional_text: {
+        anyOf: [
+          { type: 'string', maxLength: 16000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['quote_hash'],
+    description:
+      'Continue a stopped first batch, confirming the maximum its ``resume`` offers.',
+  },
   resume_scale_enrollment_200: {
     properties: {
       id: { type: 'string' },
@@ -21192,6 +21684,12 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/PendingAd' },
         type: 'array',
       },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -21369,6 +21867,113 @@ const SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['execution_mode'],
+  },
+  start_marketing_first_batch_201: {
+    properties: {
+      id: { type: 'string' },
+      operation_id: { type: 'string' },
+      state: {
+        type: 'string',
+        enum: [
+          'reading',
+          'understanding',
+          'ideas',
+          'generating',
+          'done',
+          'needs_attention',
+          'failed',
+        ],
+      },
+      needs_attention: { type: 'boolean' },
+      attention: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchAttention' },
+          { type: 'null' },
+        ],
+      },
+      resume: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchResume' },
+          { type: 'null' },
+        ],
+      },
+      intake_id: { type: 'string' },
+      product_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      project_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      strategy_language: { type: 'string', enum: ['zh-CN', 'en-US'] },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      selected_variant: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      confirmed_max_cost: { type: 'string' },
+      reserved_total: { type: 'string' },
+      currency: { type: 'string', const: 'USD' },
+      image_provider: { type: 'string' },
+      image_model: { type: 'string' },
+      ads_planned: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+      updated_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'operation_id',
+      'state',
+      'needs_attention',
+      'attention',
+      'resume',
+      'intake_id',
+      'product_id',
+      'project_id',
+      'market',
+      'ad_language',
+      'strategy_language',
+      'execution_mode',
+      'selected_variant',
+      'confirmed_max_cost',
+      'reserved_total',
+      'currency',
+      'image_provider',
+      'image_model',
+      'ads_planned',
+      'created_at',
+      'updated_at',
+    ],
+  },
+  start_marketing_first_batch_request: {
+    properties: {
+      url: { anyOf: [{ type: 'string', maxLength: 2048 }, { type: 'null' }] },
+      text: { anyOf: [{ type: 'string', maxLength: 20000 }, { type: 'null' }] },
+      upload_intent_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 12,
+      },
+      market: { type: 'string', maxLength: 80, minLength: 1 },
+      ad_language: {
+        type: 'string',
+        maxLength: 35,
+        minLength: 2,
+        pattern: '^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$',
+      },
+      strategy_language: {
+        type: 'string',
+        enum: ['zh-CN', 'en-US'],
+        default: 'en-US',
+      },
+      execution_mode: {
+        type: 'string',
+        enum: ['byok', 'mock'],
+        default: 'byok',
+      },
+      quote_hash: { type: 'string', maxLength: 64, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['market', 'ad_language', 'quote_hash'],
+    description:
+      'Paste a link, images or text and start: read, draft and make the first ads under one confirmed maximum.',
   },
   start_marketing_ideas_planning_202: {
     properties: {
@@ -22612,6 +23217,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       'get_marketing_evidence_handoff_200',
       VALIDATOR_FUNCTIONS['get_marketing_evidence_handoff_200'],
     ],
+    [
+      'get_marketing_first_batch_200',
+      VALIDATOR_FUNCTIONS['get_marketing_first_batch_200'],
+    ],
+    [
+      'get_marketing_first_batch_quote_200',
+      VALIDATOR_FUNCTIONS['get_marketing_first_batch_quote_200'],
+    ],
     ['get_marketing_ideas_200', VALIDATOR_FUNCTIONS['get_marketing_ideas_200']],
     [
       'get_marketing_project_200',
@@ -22987,6 +23600,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['resume_localization_item_200'],
     ],
     [
+      'resume_marketing_first_batch_200',
+      VALIDATOR_FUNCTIONS['resume_marketing_first_batch_200'],
+    ],
+    [
+      'resume_marketing_first_batch_request',
+      VALIDATOR_FUNCTIONS['resume_marketing_first_batch_request'],
+    ],
+    [
       'resume_scale_enrollment_200',
       VALIDATOR_FUNCTIONS['resume_scale_enrollment_200'],
     ],
@@ -23098,6 +23719,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'start_marketing_explanation_request',
       VALIDATOR_FUNCTIONS['start_marketing_explanation_request'],
+    ],
+    [
+      'start_marketing_first_batch_201',
+      VALIDATOR_FUNCTIONS['start_marketing_first_batch_201'],
+    ],
+    [
+      'start_marketing_first_batch_request',
+      VALIDATOR_FUNCTIONS['start_marketing_first_batch_request'],
     ],
     [
       'start_marketing_ideas_planning_202',
@@ -23665,6 +24294,11 @@ export const REQUEST_VALIDATORS = {
   ] as ValidateFunction<
     DomainOperationMap['resume_generation_run_paused_items']['requestBody']
   >,
+  resume_marketing_first_batch: VALIDATOR_FUNCTIONS[
+    'resume_marketing_first_batch_request'
+  ] as ValidateFunction<
+    DomainOperationMap['resume_marketing_first_batch']['requestBody']
+  >,
   resume_scale_enrollment: VALIDATOR_FUNCTIONS[
     'resume_scale_enrollment_request'
   ] as ValidateFunction<
@@ -23731,6 +24365,11 @@ export const REQUEST_VALIDATORS = {
     'start_marketing_explanation_request'
   ] as ValidateFunction<
     DomainOperationMap['start_marketing_explanation']['requestBody']
+  >,
+  start_marketing_first_batch: VALIDATOR_FUNCTIONS[
+    'start_marketing_first_batch_request'
+  ] as ValidateFunction<
+    DomainOperationMap['start_marketing_first_batch']['requestBody']
   >,
   start_marketing_ideas_planning: VALIDATOR_FUNCTIONS[
     'start_marketing_ideas_planning_request'

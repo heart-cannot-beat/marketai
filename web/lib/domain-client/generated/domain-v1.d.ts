@@ -2456,6 +2456,83 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/first-batch': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start
+     * @description Start the first batch; the same input started again within 24 hours returns the same batch.
+     */
+    post: operations['start_marketing_first_batch'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/first-batch-quote': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Quote
+     * @description The start button's maximum: read, understand, draft the ideas (and once more if refused), six images.
+     */
+    get: operations['get_marketing_first_batch_quote'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/first-batch/{first_batch_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Batch */
+    get: operations['get_marketing_first_batch'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/first-batch/{first_batch_id}/resume': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Resume
+     * @description Continue after a stop: choose the model, add material, or accept the new maximum.
+     */
+    post: operations['resume_marketing_first_batch'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas': {
     parameters: {
       query?: never;
@@ -7887,6 +7964,121 @@ export interface components {
         | 'cancelled'
         | 'uncertain';
     };
+    FirstBatchAttention: {
+      /** @enum {string} */
+      reason:
+        | 'several_models'
+        | 'page_unreadable'
+        | 'reading_failed'
+        | 'too_few_claims'
+        | 'over_budget'
+        | 'ideas_refused'
+        | 'step_failed'
+        | 'uncertain';
+      /** @enum {string} */
+      step: 'reading' | 'understanding' | 'ideas' | 'images';
+      code?: string | null;
+      variants?: string[];
+      combination_ids?: string[];
+      needed?: string | null;
+      call_id?: string | null;
+      resumable: boolean;
+    };
+    FirstBatchDetail: {
+      id: string;
+      operation_id: string;
+      /** @enum {string} */
+      state:
+        | 'reading'
+        | 'understanding'
+        | 'ideas'
+        | 'generating'
+        | 'done'
+        | 'needs_attention'
+        | 'failed';
+      needs_attention: boolean;
+      attention: components['schemas']['FirstBatchAttention'] | null;
+      resume: components['schemas']['FirstBatchResume'] | null;
+      intake_id: string;
+      product_id: string | null;
+      project_id: string | null;
+      market: string;
+      ad_language: string;
+      /** @enum {string} */
+      strategy_language: 'zh-CN' | 'en-US';
+      /** @enum {string} */
+      execution_mode: 'byok' | 'mock';
+      selected_variant: string | null;
+      confirmed_max_cost: string;
+      reserved_total: string;
+      /** @constant */
+      currency: 'USD';
+      image_provider: string;
+      image_model: string;
+      ads_planned: number | null;
+      created_at: string;
+      updated_at: string;
+    };
+    /**
+     * @description The start button's maximum (#193): every step's maximum plus one more drafting of the ideas.
+     *
+     *     Step 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.
+     */
+    FirstBatchQuote: {
+      available: boolean;
+      unavailable_reason?: string | null;
+      /** @enum {string} */
+      execution_mode: 'byok' | 'mock';
+      maximum_cost: string;
+      /** @constant */
+      currency: 'USD';
+      quote_hash: string;
+      image_provider: string;
+      image_model: string;
+      steps: components['schemas']['FirstBatchQuoteStep'][];
+    };
+    FirstBatchQuoteStep: {
+      /** @enum {string} */
+      step: 'reading' | 'understanding' | 'ideas' | 'ideas_retry' | 'images';
+      quantity: number;
+      unit_maximum: string;
+      maximum_cost: string;
+    };
+    /** @description What continuing from a stop needs and costs at most; continuing confirms it like the start button. */
+    FirstBatchResume: {
+      maximum_cost: string;
+      additional_cost: string;
+      /** @constant */
+      currency: 'USD';
+      quote_hash: string;
+      requires: ('selected_variant' | 'additional_text')[];
+    };
+    /** @description The product's first batch as the overview reads it: whether it stopped and waits for the user. */
+    FirstBatchSummary: {
+      id: string;
+      /** @enum {string} */
+      state:
+        | 'reading'
+        | 'understanding'
+        | 'ideas'
+        | 'generating'
+        | 'done'
+        | 'needs_attention'
+        | 'failed';
+      needs_attention: boolean;
+      reason?:
+        | (
+            | 'several_models'
+            | 'page_unreadable'
+            | 'reading_failed'
+            | 'too_few_claims'
+            | 'over_budget'
+            | 'ideas_refused'
+            | 'step_failed'
+            | 'uncertain'
+          )
+        | null;
+    };
     ForkInput: {
       display_name: string;
     };
@@ -8360,6 +8552,7 @@ export interface components {
       latest_call: components['schemas']['IdeasCallSummary'] | null;
       ads: components['schemas']['AdSummary'][];
       pending: components['schemas']['PendingAd'][];
+      first_batch?: components['schemas']['FirstBatchSummary'] | null;
     };
     IdeasProjectPage: {
       items: components['schemas']['IdeasProjectSummary'][];
@@ -8374,6 +8567,7 @@ export interface components {
       ad_count: number;
       kept_count: number;
       updated_at: string;
+      first_batch?: components['schemas']['FirstBatchSummary'] | null;
     };
     /**
      * @description The verified TenantContext, echoed back for the tracer round trip.
@@ -10459,6 +10653,12 @@ export interface components {
       currency?: string | null;
       rows?: components['schemas']['TemplateRow'][];
     };
+    /** @description Continue a stopped first batch, confirming the maximum its ``resume`` offers. */
+    ResumeFirstBatch: {
+      quote_hash: string;
+      selected_variant?: string | null;
+      additional_text?: string | null;
+    };
     ResumeItemResult: {
       item_id: string;
       state: string;
@@ -10773,6 +10973,25 @@ export interface components {
     };
     StartExperimentRequest: {
       expected_revision: number;
+    };
+    /** @description Paste a link, images or text and start: read, draft and make the first ads under one confirmed maximum. */
+    StartFirstBatch: {
+      url?: string | null;
+      text?: string | null;
+      upload_intent_ids?: string[];
+      market: string;
+      ad_language: string;
+      /**
+       * @default en-US
+       * @enum {string}
+       */
+      strategy_language: 'zh-CN' | 'en-US';
+      /**
+       * @default byok
+       * @enum {string}
+       */
+      execution_mode: 'byok' | 'mock';
+      quote_hash: string;
     };
     /** @description Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018). */
     StartIdeasPlanning: {
@@ -16661,6 +16880,140 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PlannerCapabilities'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  start_marketing_first_batch: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StartFirstBatch'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FirstBatchDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_marketing_first_batch_quote: {
+    parameters: {
+      query?: {
+        execution_mode?: 'byok' | 'mock';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FirstBatchQuote'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_marketing_first_batch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        first_batch_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FirstBatchDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  resume_marketing_first_batch: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        first_batch_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResumeFirstBatch'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FirstBatchDetail'];
         };
       };
       /** @description Validation Error */
