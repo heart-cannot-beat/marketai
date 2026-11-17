@@ -6560,7 +6560,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'steps',
     ],
     description:
-      "The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one\nmore drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.",
+      "The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one\nmore drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``. When\nthat key is all that is missing, ``maximum_cost`` and the steps still say what starting will cost once\nit is saved (#216); with anything else in the way too, ``maximum_cost`` is ``\"0\"``.",
   },
   FirstBatchQuoteStep: {
     properties: {
@@ -18749,7 +18749,7 @@ const SCHEMAS: Record<string, object> = {
       'steps',
     ],
     description:
-      "The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one\nmore drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.",
+      "The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one\nmore drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``. When\nthat key is all that is missing, ``maximum_cost`` and the steps still say what starting will cost once\nit is saved (#216); with anything else in the way too, ``maximum_cost`` is ``\"0\"``.",
   },
   get_marketing_ideas_200: {
     properties: {

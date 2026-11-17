@@ -88,16 +88,18 @@ def configured(prefix: str) -> tuple[str, dict[str, ProviderChoice]]:
     return provider, entries
 
 
-def choose(session, ctx, prefix: str) -> ProviderChoice:
+def choose(session, ctx, prefix: str, *, assuming: tuple[str, ...] = ()) -> ProviderChoice:
     """The deployment provider when this Workspace has its key, else OpenAI when it has that key.
 
     Unavailable, it names the first provider with usable settings (``credential_required``), or the deployment
     provider when neither has any (``not_configured``). Entitlement and budget checks stay with the caller.
+    ``assuming`` names providers taken to have a key already: a quote prices the call a Workspace could make
+    once it saves that key (#216). Nothing is admitted on an assumed key.
     """
     provider, entries = configured(prefix)
     usable = [entry for entry in entries.values() if entry.reason is None]
     for entry in usable:
-        if credential_binding(session, ctx, entry.provider):
+        if entry.provider in assuming or credential_binding(session, ctx, entry.provider):
             return entry
     if usable:
         first = usable[0]

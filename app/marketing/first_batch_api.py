@@ -6,7 +6,7 @@ Member may do all four, as for the product intake they build on.
 """
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.adapters.persistence.database import tenant_session
 from app.generation.v1_router import _idempotency_key, _resource_command
@@ -37,7 +37,7 @@ def get_quote(ctx: TenantContext = Depends(request_tenant_context),
 
 @router.post("", operation_id="start_marketing_first_batch", response_model=FirstBatchDetail, status_code=201,
              openapi_extra={"x-marketai-idempotent": True})
-def start(body: StartFirstBatch, request: Request, response: Response,
+def start(body: StartFirstBatch, request: Request,
           ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key)):
     """Start the first batch; the same input started again within 24 hours returns the same batch."""
     _member(ctx)
@@ -48,7 +48,8 @@ def start(body: StartFirstBatch, request: Request, response: Response,
                                         strategy_language=body.strategy_language, execution_mode=body.execution_mode,
                                         quote_hash=body.quote_hash),
             lambda s, resource: first_batch.get(s, ctx, resource))
-        response.headers["Location"] = f"/api/v1/marketing/first-batch/{batch.id}"
+        # No Location header: the web proxy answers 502 to one its contract policy does not declare, and
+        # the body already carries the batch id (#216).
         return first_batch.detail(session, ctx, batch)
 
 

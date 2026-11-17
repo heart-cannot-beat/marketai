@@ -323,10 +323,12 @@ def edit_project(session, ctx, row, revision, command, understanding=None, plan=
     return row
 
 
-def planner_capability(session, ctx):
-    """Planning and result interpretation; an OpenAI key stands in for the deployment provider's (#192)."""
+def planner_capability(session, ctx, *, assuming: tuple[str, ...] = ()):
+    """Planning and result interpretation; an OpenAI key stands in for the deployment provider's (#192).
+
+    ``assuming``: providers taken to have a key, for a quote made before the key is saved (``provider_choice.choose``)."""
     from .provider_choice import choose
-    choice = choose(session, ctx, "MARKETAI_PLANNING")
+    choice = choose(session, ctx, "MARKETAI_PLANNING", assuming=assuming)
     provider, model, maximum = choice.provider, choice.model, choice.maximum
     reason = "planner_not_configured" if choice.reason == "not_configured" else choice.reason
     if reason is None:

@@ -9,6 +9,7 @@ import json
 from contextlib import ExitStack
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -55,6 +56,8 @@ IMAGE_PRICES = json.dumps({"openai": {config.OPENAI_IMAGE_MODEL: {"1K": "0.05"}}
 #: The image checks' deployment settings for BYOK (#197).
 QC_ENV = {"MARKETAI_MARKETING_QC_PROVIDER": "openai", "MARKETAI_MARKETING_QC_MODEL": "vision-test",
           "MARKETAI_MARKETING_QC_MAX_COST_USD": "0.05"}
+#: What the web proxy accepts from each endpoint; a ``Location`` it does not declare makes the whole answer a 502.
+POLICY = Path(__file__).resolve().parents[1] / "contracts" / "openapi" / "marketai-domain-v1-policy.json"
 
 
 def check_report(inputs, **changes):
@@ -347,6 +350,16 @@ class FirstBatchFlowTests(FirstBatchFixtures):
         with tenant_session(self.context) as session:
             self.assertEqual(session.get(OperationRecord, done["operation_id"]).state, "succeeded")
 
+    def test_starting_sends_a_location_only_when_the_web_proxy_declares_one(self):
+        # The proxy refuses an undeclared Location with a 502 (#216): the page then says the start failed
+        # although the batch exists and its maximum is confirmed.
+        declared = json.loads(POLICY.read_text())["start_marketing_first_batch"].get("locationShapes", {})
+        response = self.client.post("/api/v1/marketing/first-batch", headers=self.headers(), json={
+            "url": LINK, "market": "United States", "ad_language": "en-US", "execution_mode": "mock",
+            "quote_hash": self.quote()["quote_hash"]})
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual("location" in response.headers, "201" in declared)
+
     def test_the_reading_becomes_an_unpublished_product_draft_and_the_ideas_source(self):
         done = self.started_and_drained()
         with tenant_session(self.context) as session:
@@ -625,26 +638,70 @@ class FirstBatchPaidTests(FirstBatchFixtures):
 
 
 class FirstBatchKeyTests(FirstBatchFixtures):
-    def test_a_gemini_key_alone_asks_for_an_openai_key(self):
+    def spend_limit(self, limit="5"):
+        """A paid entitlement and a spend limit, and no key of any provider."""
         from app.entitlements.cost_models import SpendGuardrailRecord
         from app.entitlements.models import EntitlementProjectionRecord
         with tenant_session(self.context) as session:
-            admin = CredentialAdmin(CredentialProtector.local_only())
-            credential = admin.create(session, self.owner_ctx(self.context), credential_key="gemini",
-                                      provider="gemini", plaintext=b"gemini-test-key")
-            admin.bind(session, self.owner_ctx(self.context), binding_scope="generation", provider="gemini",
-                       credential_version_id=credential.credential_version_id)
             session.merge(EntitlementProjectionRecord(workspace_id=self.context.workspace_id, entitlement_version=1,
                 lease_sequence=1, semantic_hash="first-batch-test", issued_at=utcnow(), valid_until=utcnow() + timedelta(days=1),
                 resolved_entitlements_json={"controlled_mock": True, "storage.bytes.max": 10 * 1024 ** 3}))
             session.add(SpendGuardrailRecord(workspace_id=self.context.workspace_id, budget_currency="USD",
-                per_operation_limit=Decimal("1"), rolling_24h_limit=Decimal("5"), period_limit=Decimal("5"),
-                outstanding_exposure_limit=Decimal("5"), created_at=utcnow(), updated_at=utcnow(), updated_by="owner"))
+                per_operation_limit=Decimal(limit), rolling_24h_limit=Decimal(limit), period_limit=Decimal(limit),
+                outstanding_exposure_limit=Decimal(limit), created_at=utcnow(), updated_at=utcnow(), updated_by="owner"))
+
+    def save_key(self, provider):
+        with tenant_session(self.context) as session:
+            admin = CredentialAdmin(CredentialProtector.local_only())
+            credential = admin.create(session, self.owner_ctx(self.context), credential_key=provider,
+                                      provider=provider, plaintext=f"{provider}-test-key".encode())
+            admin.bind(session, self.owner_ctx(self.context), binding_scope="generation", provider=provider,
+                       credential_version_id=credential.credential_version_id)
+
+    def test_a_gemini_key_alone_asks_for_an_openai_key(self):
+        self.spend_limit()
+        self.save_key("gemini")
         with patch.dict("os.environ", PLANNING_ENV), patch.object(config, "GENERATION_MAX_COSTS_JSON", IMAGE_PRICES):
             quoted = self.quote("byok")
             self.assertEqual((quoted["available"], quoted["unavailable_reason"]), (False, "openai_key_required"))
             refused = self.start("byok", quote_hash=quoted["quote_hash"], expect=409)
         self.assertEqual((refused["code"], refused["params"]["reason"]), ("first_batch_unavailable", "openai_key_required"))
+
+    def test_missing_only_the_key_the_quote_names_what_the_key_will_let_start(self):
+        # The start page writes this number on "save the key and start" (design doc §5.1, #216).
+        self.spend_limit()
+        with patch.dict("os.environ", {**PLANNING_ENV, **QC_ENV}), patch.object(config, "GENERATION_MAX_COSTS_JSON", IMAGE_PRICES):
+            quoted = self.quote("byok")
+            self.assertEqual((quoted["available"], quoted["unavailable_reason"]), (False, "openai_key_required"))
+            reading = first_batch._reading_maximum()
+            self.assertEqual({step["step"]: Decimal(step["maximum_cost"]) for step in quoted["steps"]},
+                             {"reading": reading, "understanding": Decimal("0.1"), "ideas": Decimal("0.1"),
+                              "ideas_retry": Decimal("0.1"), "images": Decimal("0.3"), "checks": Decimal("0.3")})
+            self.assertEqual(Decimal(quoted["maximum_cost"]), reading + Decimal("0.9"))
+            # Naming the number starts nothing: without the key the start is still refused.
+            refused = self.start("byok", quote_hash=quoted["quote_hash"], expect=409)
+            self.assertEqual(refused["params"]["reason"], "openai_key_required")
+            # With the key saved, the same number is what starting confirms.
+            self.save_key("openai")
+            ready = self.quote("byok")
+        self.assertTrue(ready["available"], ready)
+        self.assertEqual(ready["maximum_cost"], quoted["maximum_cost"])
+
+    def test_missing_the_key_and_an_image_price_the_quote_names_no_maximum(self):
+        # Saving the key would not let it start, so there is no number to write on the button.
+        self.spend_limit()
+        with patch.dict("os.environ", {**PLANNING_ENV, **QC_ENV}), patch.object(config, "GENERATION_MAX_COSTS_JSON", "{}"):
+            quoted = self.quote("byok")
+        self.assertEqual((quoted["available"], quoted["unavailable_reason"], quoted["maximum_cost"]),
+                         (False, "openai_key_required", "0"))
+
+    def test_missing_the_key_a_total_over_the_spend_limit_names_no_maximum(self):
+        # The whole batch is about 0.95; a limit of 0.5 per operation would refuse it once the key is saved.
+        self.spend_limit("0.5")
+        with patch.dict("os.environ", {**PLANNING_ENV, **QC_ENV}), patch.object(config, "GENERATION_MAX_COSTS_JSON", IMAGE_PRICES):
+            quoted = self.quote("byok")
+        self.assertEqual((quoted["available"], quoted["unavailable_reason"], quoted["maximum_cost"]),
+                         (False, "openai_key_required", "0"))
 
 
 class FirstBatchTenantTests(FirstBatchFixtures):
