@@ -33,7 +33,7 @@ from app.library.contracts import PRODUCT_SOURCE_URL_MAX
 from app.platform.audit import append_event
 from . import ideas, ideas_checks, service
 from .contracts import Understanding
-from .models import MarketingIdeasExportRecord as Record
+from .models import MarketingIdeasExportRecord as Record, MarketingProjectRecord
 from .product_references import references_current
 from .service import MarketingError, digest
 
@@ -79,6 +79,29 @@ def _settled_by_appearance(finding) -> bool:
     return finding["check_id"] == "product_fidelity" and finding["status"] == "unknown"
 
 
+def _photo_rejected(session, ctx, references, sets) -> bool:
+    """Whether a photo frozen from the product's own photo set is no longer a checked photo there.
+
+    Such a photo counts as checked only while the product's published set still lists it as a verified
+    photo of the real product. Marking it unverified, or taking it off the product, rejects it (design
+    doc §5.3) although the file and its rights are untouched. ``sets`` caches each product's set."""
+    from app.products.reference_sets import published
+    from .product_references import SET_POLICY
+    for reference in references:
+        if reference.get("selection_policy") != SET_POLICY:
+            continue
+        product_id = reference.get("product_id")
+        if product_id not in sets:
+            product = session.scalar(select(ProductRecord).where(ProductRecord.workspace_id == ctx.workspace_id,
+                                                                 ProductRecord.id == product_id))
+            current = published(session, ctx, product) if product is not None else None
+            sets[product_id] = {item["reference_version_id"] for item in (current or {}).get("items", [])
+                                if item.get("identity_status") == "verified_physical"}
+        if reference.get("reference_version_id") not in sets[product_id]:
+            return True
+    return False
+
+
 def statuses(session, ctx, row, ads=None, calls=None) -> dict:
     """Each ad's status, why it is not exportable, the facts it stands on and whether its look is confirmed."""
     ads = ideas.project_ads(session, ctx, row) if ads is None else ads
@@ -88,7 +111,7 @@ def statuses(session, ctx, row, ads=None, calls=None) -> dict:
     items = dict(session.execute(select(RunItemRecord.id, RunItemRecord.state).where(
         RunItemRecord.workspace_id == ctx.workspace_id, RunItemRecord.id.in_(item_ids))).all()) if item_ids else {}
     facts = {fact["id"]: fact for fact in (row.understanding_json or {}).get("facts", [])}
-    current = {}
+    current, photo_sets = {}, {}
 
     def now(combination_id):
         """The content the ideas hold for this combination now, and every fact id its claim cites."""
@@ -111,17 +134,20 @@ def statuses(session, ctx, row, ads=None, calls=None) -> dict:
             reasons.append(_reason("ideas_changed"))
         snapshot = {fact["id"]: fact for fact in (intent.get("understanding") or {}).get("facts", [])}
         cited = list(intent.get("cited_fact_ids") or [])
-        removed = [fid for fid in cited if fid not in facts]
-        if same:  # a claim that still cites a removed fact stays unusable for images made after the removal
-            removed += sorted(fid for fid in held[1] if fid not in facts and fid not in removed)
+        # What the claim cites now but this image was not made on: a removed fact the claim still names (an
+        # image made after the removal froze one citation fewer), an id reused for another fact, an
+        # inference pointed at another fact, ideas redrafted in the same words on other facts.
+        unseen = sorted(fid for fid in held[1] if fid not in cited) if same else []
+        removed = [fid for fid in cited if fid not in facts] + [fid for fid in unseen if fid not in facts]
         changed = [fid for fid in cited if fid in facts and (fid not in snapshot or _text(facts[fid]) != _text(snapshot[fid]))]
+        changed += [fid for fid in unseen if fid in facts]
         unverified = [fid for fid in cited if fid in facts and fid not in changed and facts[fid].get("confirmation") != "confirmed"]
         for name, ids in (("facts_changed", changed), ("facts_removed", removed), ("facts_unverified", unverified)):
             if ids:
                 reasons.append(_reason(name, fact_ids=ids))
         references = _references(recipe)
         if references:
-            if not references_current(session, ctx, references):
+            if not references_current(session, ctx, references) or _photo_rejected(session, ctx, references, photo_sets):
                 reasons.append(_reason("photo_unavailable"))
             elif any(reference.get("attestation") not in VERIFIED_PHOTOS for reference in references):
                 reasons.append(_reason("photo_unverified"))
@@ -211,24 +237,27 @@ def edit_understanding(session, ctx, row, revision, understanding: Understanding
     return row
 
 
-def verified_content(row, name: str, source_url, confirmed: list) -> dict:
+def verified_content(name: str, source_url, statements: list, markets: list) -> dict:
     """The product version a verification publishes: nothing the user did not check or choose.
 
     The checked facts are its description and selling points. A product version must name an audience
     (creative-library contract §5.1), and the only audience the user has chosen is the market on the
     start page; the AI's guess about the buyers stays a proposal in the library Draft. The name is the
     product's own, and ``source_url`` the link the user pasted."""
-    statements = [fact["statement"] for fact in confirmed]
     content = {"name": name, "description": "\n".join(statements) or name, "selling_points": statements,
-               "audience": row.market}
+               "audience": ", ".join(markets)}
     if (isinstance(source_url, str) and source_url.strip().lower().startswith(("http://", "https://"))
             and len(source_url) <= PRODUCT_SOURCE_URL_MAX):
         content["source_url"] = source_url.strip()
     return content
 
 
-def publish_verified(session, ctx, row) -> str | None:
+def publish_verified(session, ctx, row, *, excluding: str | None = None) -> str | None:
     """Publish what the user has checked as the product's creative-library version; its id, or ``None``.
+
+    The version holds the facts checked in every ads-first project of the product, oldest project first,
+    so one project's edit never drops what another has checked. ``excluding`` leaves one project's facts
+    out: its understanding is about to be drafted again and will come back unchecked.
 
     Only the checked facts go in (``verified_content``): the library Draft keeps the AI's whole proposal
     and is not touched. Nothing is published while nothing is checked, for a product without a library
@@ -240,14 +269,26 @@ def publish_verified(session, ctx, row) -> str | None:
                                                          ProductRecord.id == row.product_id))
     entry = session.scalar(select(LibraryEntryRecord).where(LibraryEntryRecord.workspace_id == ctx.workspace_id,
         LibraryEntryRecord.id == product.product_profile_entry_id)) if product and product.product_profile_entry_id else None
-    if entry is None or entry.lifecycle != "active" or not row.market:
+    if entry is None or entry.lifecycle != "active":
         return None
-    confirmed = [fact for fact in (row.understanding_json or {}).get("facts", []) if fact.get("confirmation") == "confirmed"]
-    if not confirmed and not entry.current_version_id:
+    statements, markets = [], []
+    for project in session.scalars(select(MarketingProjectRecord).where(
+            MarketingProjectRecord.workspace_id == ctx.workspace_id, MarketingProjectRecord.product_id == row.product_id,
+            MarketingProjectRecord.flow == ideas.FLOW).order_by(MarketingProjectRecord.created_at, MarketingProjectRecord.id)).all():
+        checked = [fact["statement"] for fact in (project.understanding_json or {}).get("facts", [])
+                   if fact.get("confirmation") == "confirmed"] if project.id != excluding else []
+        statements += [statement for statement in dict.fromkeys(checked) if statement not in statements]
+        # The audience is the market of each project that has something checked: a project's market is the
+        # user's choice, but it joins the published version only together with that project's checked facts.
+        if checked and project.market and project.market not in markets:
+            markets.append(project.market)
+    markets = markets or ([row.market] if row.market else [])
+    if not markets or (not statements and not entry.current_version_id):
         return None
     draft = session.scalar(select(LibraryDraftRecord).where(LibraryDraftRecord.workspace_id == ctx.workspace_id,
                                                             LibraryDraftRecord.entry_id == entry.id))
-    content = verified_content(row, entry.display_name, ((draft.content_json if draft else None) or {}).get("source_url"), confirmed)
+    content = verified_content(entry.display_name, ((draft.content_json if draft else None) or {}).get("source_url"),
+                               statements, markets)
     try:
         version = library.publish_content_in_transaction(
             session, ctx, entry.id, content, origin_command=library.COMMAND_IDEAS_VERIFICATION,

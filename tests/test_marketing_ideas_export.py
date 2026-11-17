@@ -30,6 +30,8 @@ from app.marketing.ideas_contracts import IdeasDownload, IdeasProjectDetail
 from app.marketing.models import MarketingIdeasExportRecord, MarketingProjectRecord, MarketingRevisionRecord
 from tests.test_marketing_first_batch import EXAMPLE, check_report
 from tests.test_marketing_ideas_checks import IdeasChecksFixtures
+from tests.test_marketing_ideas_generation import IdeasGenerationFixtures
+from tests.test_marketing_product_references import ProductPhotoFixtures
 from tests.test_marketing_ideas_planning import SOURCE
 
 EXAMPLE_RESULT = planner.example_result
@@ -334,6 +336,46 @@ class FactChangeTests(IdeasExportFixtures):
         ad = self.ads(project)["c2_1"]
         self.assertEqual(ad["status"], "needs_redo")
         self.assertIn(("facts_removed", ["f2"]), [(r["code"], r["fact_ids"]) for r in ad["reasons"]])
+        # The id comes back as another fact: the claim cites it, this image was never made on it.
+
+        def another_f2(understanding):
+            understanding["facts"].append({"id": "f2", "statement": "It is a wall charger for electric cars.",
+                                           "source_quote": FACTS[3]["source_quote"]})
+        self.edit_facts(project, another_f2)
+        self.verify(project, fact_ids=["f2"])
+        ad = self.ads(project)["c2_1"]
+        self.assertEqual(ad["status"], "needs_redo")
+        self.assertIn(("facts_changed", ["f2"]), [(r["code"], r["fact_ids"]) for r in ad["reasons"]])
+        self.assertNotIn("facts_unverified", self.reasons(ad))
+        self.download(project, ["c2_1"], expect=409)
+
+    def test_an_inference_pointed_at_another_fact_makes_the_ads_that_cite_it_need_redoing(self):
+        project = self.checked_ads()
+        self.verify_everything(project)
+
+        def onto_f4(understanding):
+            understanding["inferences"][0]["fact_ids"] = ["f4"]
+        self.edit_facts(project, onto_f4)
+        ads = self.ads(project)
+        # The third claim now rests on f4, which its images were not made on and nobody checked.
+        self.assertEqual((ads["c3_1"]["status"], [(r["code"], r["fact_ids"]) for r in ads["c3_1"]["reasons"]]),
+                         ("needs_redo", [("facts_changed", ["f4"])]))
+        self.assertEqual((ads["c1_1"]["status"], ads["c2_1"]["status"]), ("exportable", "exportable"))
+
+    def test_a_claim_moved_onto_other_facts_in_the_same_words_makes_its_ads_need_redoing(self):
+        """An ad's content does not include which facts its claim cites, so redrafted ideas can keep the
+        words and change the facts; the images made before stand on other facts."""
+        project = self.checked_ads()
+        self.verify_everything(project)
+        with tenant_session(self.context) as session:
+            row = session.get(MarketingProjectRecord, project["id"])
+            doc = deepcopy(row.ideas_json)
+            doc["angles"][0]["fact_ids"] = ["f1", "f4"]
+            row.ideas_json = doc
+        ads = self.ads(project)
+        self.assertEqual((ads["c1_1"]["status"], [(r["code"], r["fact_ids"]) for r in ads["c1_1"]["reasons"]]),
+                         ("needs_redo", [("facts_changed", ["f4"])]))
+        self.assertEqual(ads["c2_1"]["status"], "exportable")
 
     def test_editing_never_checks_a_fact(self):
         project = self.checked_ads()
@@ -513,6 +555,64 @@ class PhotoTests(IdeasExportFixtures):
         self.assertEqual(self.statuses(project)["c1_2"], "exportable")
 
 
+class ProductPhotoSetTests(IdeasGenerationFixtures, ProductPhotoFixtures):
+    """An ad made with the product's own checked photos (real photo set, real generation), not a planted recipe."""
+    MODEL = "Acme Charge 65W"
+
+    def setUp(self):
+        super().setUp()
+        _, hero = self._reference_version(self.context, name="Legacy hero")
+        _, group = self._group_version(self.context, hero["id"])
+        self.entry_id, _ = self._publish(self.context, ENTRY_PRODUCT, "Acme Charge", self._product_content(
+            hero["id"], group["id"], model_variants=[{"label": self.MODEL, "specs": {}}]))
+        with tenant_session(self.context) as session:
+            self.product_id = session.scalar(select(ProductRecord.id).where(ProductRecord.product_profile_entry_id == self.entry_id))
+
+    def references(self, method, body, item_id=None):
+        path = f"/api/v1/products/{self.product_id}/references"
+        response = self.client.request(method, f"{path}/{item_id}" if item_id else path, json=body, headers={
+            "Idempotency-Key": new_id("key"), "If-Match": str(self.client.get(path).json()["revision"])})
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def ad_with_photo(self):
+        photo, _ = self.photo()
+        bound = self.references("POST", {"reference_version_id": photo, "model_variant": self.MODEL, "role": "primary",
+                                         "identity_status": "verified_physical", "note": "Studio photo of the exact unit"})
+        item = next(i for i in bound["items"] if i["reference_version_id"] == photo)
+        response = self.client.post("/api/v1/marketing/ideas", headers=self.headers(), json={
+            "product_id": self.entry_id, "source_text": SOURCE, "market": "United States", "ad_language": "en-US"})
+        self.assertEqual(response.status_code, 201, response.text)
+        project = response.json()
+        self.execute(self.drafted_call(project, "understanding"))
+        self.execute(self.drafted_call(self.read_ideas(project), "ideas"))
+        project = self.read_ideas(project)
+        self.execute_items(self.submitted(self.prepared(project)["drafts"][0]["draft_id"]))
+        return project, item
+
+    def reasons(self, project):
+        (ad,) = self.read_ideas(project)["ads"]
+        return ad, [reason["code"] for reason in ad["reasons"]]
+
+    def test_a_checked_photo_satisfies_the_photo_condition_until_the_user_rejects_it(self):
+        project, item = self.ad_with_photo()
+        ad, reasons = self.reasons(project)
+        self.assertTrue(ad["used_product_photo"])
+        # No look to confirm and nothing wrong with the photo: only the facts and the check are left.
+        self.assertEqual((ad["status"], reasons), ("draft", ["facts_unverified", "check_missing"]))
+        # The user marks the photo as not a verified photo of the real product: the file is untouched,
+        # the ad that used it has to be made again.
+        self.references("PATCH", {"identity_status": "unverified"}, item["item_id"])
+        ad, reasons = self.reasons(project)
+        self.assertEqual((ad["status"], reasons), ("needs_redo", ["facts_unverified", "photo_unavailable", "check_missing"]))
+
+    def test_taking_the_photo_off_the_product_rejects_it_too(self):
+        project, item = self.ad_with_photo()
+        self.references("DELETE", None, item["item_id"])
+        ad, reasons = self.reasons(project)
+        self.assertEqual((ad["status"], "photo_unavailable" in reasons), ("needs_redo", True))
+
+
 class ProductVersionTests(IdeasExportFixtures):
     def test_only_what_the_user_checked_is_published_as_the_product_version(self):
         project = self.checked_ads()
@@ -565,6 +665,42 @@ class ProductVersionTests(IdeasExportFixtures):
         # The facts are checked all the same.
         facts = {f["id"]: f["confirmation"] for f in self.read_ideas(project)["understanding"]["facts"]}
         self.assertEqual((facts["f1"], facts["f2"]), ("confirmed", "confirmed"))
+
+    def test_another_project_of_the_product_never_drops_what_this_one_checked(self):
+        project = self.checked_ads()
+        self.verify(project, fact_ids=["f1", "f2"])
+        (first,), _ = self.product_versions(project)
+        response = self.client.post("/api/v1/marketing/ideas", headers=self.headers(), json={
+            "product_id": project["product_id"], "source_text": SOURCE, "market": "Germany", "ad_language": "de-DE"})
+        self.assertEqual(response.status_code, 201, response.text)
+        other = response.json()
+        self.execute(self.drafted_call(other, "understanding"))
+        other = self.read_ideas(other)
+        (fact,) = other["understanding"]["facts"]
+        # Editing a fact there, with nothing checked there, leaves the product's version as it is.
+        self.edit_facts(other, lambda understanding: understanding.update(audience="Drivers with a garage"))
+        (still,), _ = self.product_versions(project)
+        self.assertEqual((still.id, still.state), (first.id, "effective"))
+        # Checking a fact there adds it: the version holds what both projects checked, and both markets.
+        self.verify(other, fact_ids=[fact["id"]])
+        versions, _ = self.product_versions(project)
+        self.assertEqual(versions[-1].content_json["selling_points"],
+                         [FACTS[0]["statement"], FACTS[1]["statement"], fact["statement"]])
+        self.assertEqual(versions[-1].content_json["audience"], "United States, Germany")
+
+    def test_asking_for_a_new_understanding_takes_this_projects_facts_out_of_the_version(self):
+        """A new understanding comes back unchecked; the published version must not keep saying otherwise."""
+        project = self.checked_ads()
+        self.verify(project, fact_ids=["f1", "f2"])
+        call = self.drafted_call(self.read_ideas(project), "understanding")
+        versions, _ = self.product_versions(project)
+        self.assertEqual([v.state for v in versions], ["superseded", "effective"])
+        self.assertEqual((versions[-1].content_json["selling_points"], versions[-1].content_json["description"]),
+                         ([], "Acme Charge Home"))
+        self.execute(call)
+        after = self.read_ideas(project)
+        self.assertTrue(all(fact["confirmation"] == "unconfirmed" for fact in after["understanding"]["facts"]))
+        self.assertEqual(len(self.product_versions(project)[0]), 2)
 
     def test_confirming_only_looks_and_findings_publishes_nothing(self):
         project = self.checked_ads()

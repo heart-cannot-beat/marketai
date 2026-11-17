@@ -430,8 +430,15 @@ def start_ideas_planning(session, ctx, row, revision, kind, mode, quote_hash, st
     claims; the ideas need a drafted understanding. Both are ordinary paid planning calls: one job, one
     reservation, settled by the Worker, and an explicit retry carries the last rejected draft."""
     if kind == "understanding":
-        return service.start_planning(session, ctx, row, revision, "understanding", mode, quote_hash,
+        call = service.start_planning(session, ctx, row, revision, "understanding", mode, quote_hash,
                                       ad_language=row.ad_language, strategy_language=strategy_language)
+        # The new understanding comes back unchecked, so what this project had checked leaves the product's
+        # published version now, when the user asks for it (#198). A call that fails leaves the facts
+        # checked here and the version one step behind until the next check: never ahead of the facts.
+        if any(fact.get("confirmation") == "confirmed" for fact in (row.understanding_json or {}).get("facts", [])):
+            from . import ideas_export
+            ideas_export.publish_verified(session, ctx, row, excluding=row.id)
+        return call
     if row.state not in DRAFTABLE or not row.understanding_json:
         raise service.MarketingError("understanding_required", "请先生成或完善产品理解。")
     cap = service.planner_capability(session, ctx)
