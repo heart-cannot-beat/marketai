@@ -84,12 +84,31 @@ test('a kept ad is a draft in step 1 and carries its combination', () => {
     expression_id: 'e1',
     status: 'draft',
     kept: true,
+    used_product_photo: true,
     created_at: '2026-11-16T00:00:00+00:00',
   };
   expect(validate({ ...detail, ads: [ad] })).toBe(true);
   expect(validate({ ...detail, ads: [{ ...ad, status: 'approved' }] })).toBe(
     false
   );
+});
+
+test('an ad says whether its image request sent a product photo (#196)', () => {
+  const validate = RESPONSE_VALIDATORS.get('get_marketing_ideas_200')!;
+  const ad = {
+    asset_version_id: 'av_1',
+    combination_id: 'c1',
+    angle_id: 'a1',
+    expression_id: 'e1',
+    status: 'draft',
+    kept: false,
+    used_product_photo: false,
+    created_at: '2026-11-16T00:00:00+00:00',
+  };
+  expect(validate({ ...detail, ads: [ad] })).toBe(true);
+  const withoutTheMark: Partial<typeof ad> = { ...ad };
+  delete withoutTheMark.used_product_photo;
+  expect(validate({ ...detail, ads: [withoutTheMark] })).toBe(false);
 });
 
 test('creating ideas needs a product, the market and an advertising language tag', () => {

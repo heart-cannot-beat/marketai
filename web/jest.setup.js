@@ -14,6 +14,7 @@ import experiments from './locales/en/experiments.json';
 import localization from './locales/en/localization.json';
 import settings from './locales/en/settings.json';
 import competitors from './locales/en/competitors.json';
+import ideas from './locales/en/ideas.json';
 
 // Component tests exercise the same translated accessibility and status text
 // as production. A synchronous in-memory instance keeps those assertions
@@ -31,6 +32,7 @@ i18next.use(initReactI18next).init({
     'localization',
     'settings',
     'competitors',
+    'ideas',
   ],
   defaultNS: 'common',
   resources: {
@@ -44,6 +46,7 @@ i18next.use(initReactI18next).init({
       localization,
       settings,
       competitors,
+      ideas,
     },
   },
   interpolation: { escapeValue: false },
