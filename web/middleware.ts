@@ -370,6 +370,6 @@ export default async function middleware(req: NextRequest) {
  */
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|api/auth/session|logo\\.png|logowhite\\.png|user-default-profile\\.jpeg).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|api/auth/session|logo\\.png|logowhite\\.png|user-default-profile\\.jpeg|example-ad-[1-6]\\.svg).*)',
   ],
 };

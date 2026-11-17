@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" role="img" aria-label="Example ad: Rain or shine.">
+  <!-- Fictional example for the start page (#195). Acme Charge is not a real brand. -->
+  <rect width="400" height="500" fill="#334155"/>
+  <g stroke="#94a3b8" stroke-width="3" stroke-linecap="round" opacity="0.7">
+    <line x1="40" y1="140" x2="30" y2="164"/><line x1="96" y1="190" x2="86" y2="214"/>
+    <line x1="300" y1="150" x2="290" y2="174"/><line x1="356" y1="220" x2="346" y2="244"/>
+    <line x1="250" y1="250" x2="240" y2="274"/><line x1="60" y1="290" x2="50" y2="314"/>
+    <line x1="340" y1="330" x2="330" y2="354"/><line x1="120" y1="350" x2="110" y2="374"/>
+  </g>
+  <text x="32" y="80" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="42" font-weight="700">Rain or shine.</text>
+  <rect x="150" y="190" width="100" height="160" rx="20" fill="#0f766e"/>
+  <rect x="170" y="214" width="60" height="16" rx="8" fill="#a3e635"/>
+  <circle cx="200" cy="292" r="22" fill="#115e59" stroke="#99f6e4" stroke-width="4"/>
+  <rect x="232" y="176" width="64" height="30" rx="15" fill="#fef3c7"/>
+  <text x="246" y="197" fill="#78350f" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700">IP55</text>
+  <text x="32" y="410" fill="#e2e8f0" font-family="Helvetica, Arial, sans-serif" font-size="17">An enclosure built for the driveway.</text>
+  <text x="32" y="458" fill="#a3e635" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700">Acme Charge Home</text>
+  <text x="32" y="482" fill="#cbd5e1" font-family="Helvetica, Arial, sans-serif" font-size="14">acmecharge.example</text>
+</svg>

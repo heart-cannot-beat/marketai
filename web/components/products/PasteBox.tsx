@@ -6,6 +6,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
   type FormEvent,
+  type ReactNode,
 } from 'react';
 import { useTranslation } from 'next-i18next';
 import classNames from 'classnames';
@@ -32,6 +33,17 @@ export interface PasteBoxProps {
   /** Smaller variant used inside the failure panel. */
   compact?: boolean;
   autoFocus?: boolean;
+  /**
+   * The start page (#195): the submit button goes below the drop zone, full
+   * width, after `children` (the market and the key row). Off by default, so
+   * the product intake keeps its button inside the box.
+   */
+  submitBelow?: boolean;
+  /** Keeps the submit button disabled for a reason the caller shows. */
+  submitDisabled?: boolean;
+  /** Id of the text that says why the submit button is disabled. */
+  submitDescribedBy?: string;
+  children?: ReactNode;
 }
 
 function FileChip({ file, onRemove }: { file: File; onRemove: () => void }) {
@@ -89,6 +101,10 @@ export function PasteBox({
   busyLabel,
   compact = false,
   autoFocus = false,
+  submitBelow = false,
+  submitDisabled = false,
+  submitDescribedBy,
+  children,
 }: PasteBoxProps) {
   const { t } = useTranslation('products');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -127,9 +143,33 @@ export function PasteBox({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isEmpty || busy) return;
+    if (isEmpty || busy || submitDisabled) return;
     onSubmit();
   }
+
+  const submitButton = (
+    <button
+      type="submit"
+      className={classNames(
+        'btn btn-primary',
+        submitBelow ? 'mt-4 min-h-12 w-full sm:w-auto' : 'btn-sm'
+      )}
+      disabled={isEmpty || busy || submitDisabled}
+      aria-describedby={
+        [isEmpty ? `${id}-empty-hint` : null, submitDescribedBy]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
+    >
+      {busy && (
+        <span
+          className="loading loading-spinner loading-xs"
+          aria-hidden="true"
+        />
+      )}
+      {busy && busyLabel ? busyLabel : submitLabel}
+    </button>
+  );
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -212,20 +252,7 @@ export function PasteBox({
                 ? t('paste-link-detected', { host })
                 : t('paste-drop-hint')}
           </span>
-          <button
-            type="submit"
-            className="btn btn-primary btn-sm"
-            disabled={isEmpty || busy}
-            aria-describedby={isEmpty ? `${id}-empty-hint` : undefined}
-          >
-            {busy && (
-              <span
-                className="loading loading-spinner loading-xs"
-                aria-hidden="true"
-              />
-            )}
-            {busy && busyLabel ? busyLabel : submitLabel}
-          </button>
+          {!submitBelow && submitButton}
         </div>
       </div>
       {isEmpty && (
@@ -244,6 +271,8 @@ export function PasteBox({
           ))}
         </ul>
       )}
+      {children}
+      {submitBelow && submitButton}
     </form>
   );
 }

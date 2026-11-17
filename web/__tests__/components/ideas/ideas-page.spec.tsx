@@ -29,6 +29,8 @@ jest.mock('@/components/workspace/WorkspaceProvider', () => ({
 const mockGateway = {
   getMarketingIdeas: jest.fn(),
   setMarketingAdKept: jest.fn(),
+  getMarketingFirstBatch: jest.fn(),
+  resumeMarketingFirstBatch: jest.fn(),
 };
 jest.mock('@/lib/domain-client/gateway-provider', () => ({
   useDomainGateway: () => mockGateway,
@@ -270,8 +272,8 @@ describe('IdeasPage (#196)', () => {
       within(failed).getByText("This one didn't come out.")
     ).toBeInTheDocument();
     const retry = within(failed).getByRole('button', { name: 'Try again' });
-    // Retrying needs the first batch's image settings (#193); until that is
-    // wired the entry is there but says it is not available yet.
+    // Only a first batch's images are tried again from here (#193, #195);
+    // without one the entry is there but says it is not available.
     expect(retry).toBeDisabled();
     expect(retry).toHaveAccessibleDescription(
       "Trying again from here isn't available yet."
@@ -281,6 +283,102 @@ describe('IdeasPage (#196)', () => {
         '1 more ad is being made. It appears here when it is ready.'
       )
     ).toBeInTheDocument();
+  });
+
+  it("tries the first batch's failed ads again, the extra cost on the button (#195)", async () => {
+    const stopped = {
+      id: 'mfb_1',
+      state: 'needs_attention' as const,
+      needs_attention: true,
+      reason: 'step_failed' as const,
+    };
+    mockGateway.getMarketingFirstBatch.mockResolvedValue(
+      ok({
+        id: 'mfb_1',
+        state: 'needs_attention',
+        attention: {
+          reason: 'step_failed',
+          step: 'images',
+          combination_ids: ['c6'],
+          resumable: true,
+        },
+        resume: {
+          maximum_cost: '0.95',
+          additional_cost: '0.04',
+          currency: 'USD',
+          quote_hash: 'rq_1',
+          requires: [],
+        },
+        confirmed_max_cost: '0.91',
+      })
+    );
+    mockGateway.resumeMarketingFirstBatch.mockResolvedValue(
+      ok({ id: 'mfb_1', state: 'generating', attention: null, resume: null })
+    );
+    await renderPage(ideasDetail({ first_batch: stopped }));
+
+    expect(
+      screen.getByRole('link', { name: 'See what to do' })
+    ).toHaveAttribute('href', '/w/acme/start/mfb_1');
+    const [, failed] = within(claim(3)).getAllByTestId('ad-card');
+    const retry = await within(failed).findByRole('button', {
+      name: 'Try again · up to $0.04 more',
+    });
+    expect(retry).toBeEnabled();
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(mockGateway.resumeMarketingFirstBatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceSlug: 'acme',
+          firstBatchId: 'mfb_1',
+          actionInstanceId: expect.any(String),
+          body: { quote_hash: 'rq_1' },
+        })
+      )
+    );
+    // The page and the product list ask again, so the new attempt shows.
+    await waitFor(() =>
+      expect(mockGateway.getMarketingIdeas).toHaveBeenCalledTimes(2)
+    );
+    expect(mockRefreshProducts).toHaveBeenCalled();
+  });
+
+  it('says nothing about the first batch once its ads are made and being checked (S9, #197)', async () => {
+    await renderPage(
+      ideasDetail({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'checking' as unknown as 'done',
+          needs_attention: false,
+          reason: null,
+        },
+      })
+    );
+    expect(screen.queryByTestId('ideas-first-batch')).toBeNull();
+    expect(
+      screen.queryByText('The first ads are still being made.')
+    ).toBeNull();
+  });
+
+  it('points back to the progress while the first batch is still running (#195)', async () => {
+    await renderPage(
+      ideasDetail({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'generating',
+          needs_attention: false,
+          reason: null,
+        },
+      })
+    );
+    expect(
+      screen.getByText('The first ads are still being made.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See progress' })).toHaveAttribute(
+      'href',
+      '/w/acme/start/mfb_1'
+    );
+    expect(mockGateway.getMarketingFirstBatch).not.toHaveBeenCalled();
   });
 
   it('asks again while images are being made, and stops when they are done', async () => {
@@ -450,6 +548,45 @@ describe('IdeasPage (#196)', () => {
         name: 'What the AI read about the product',
       })
     ).toBeInTheDocument();
+  });
+
+  it('before there are ideas, a stopped first batch says it waits for the user, not that ideas are coming (#195)', async () => {
+    mockGateway.getMarketingIdeas.mockResolvedValue(
+      ok(
+        ideasDetail({
+          state: 'understanding_draft',
+          ideas: null,
+          ads: [],
+          pending: [],
+          first_batch: {
+            id: 'mfb_1',
+            state: 'needs_attention',
+            needs_attention: true,
+            reason: 'too_few_claims',
+          },
+        })
+      )
+    );
+    render(
+      <Fresh>
+        <IdeasPage product={product()} />
+      </Fresh>
+    );
+    expect(
+      await screen.findByText(
+        'Making the first ads stopped and is waiting for you.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'See what to do' })
+    ).toHaveAttribute('href', '/w/acme/start/mfb_1');
+    expect(
+      screen.queryByText(
+        'The ad ideas are still being prepared. They appear here when they are ready.'
+      )
+    ).toBeNull();
+    // Not a failed images stop: the batch itself is not read here.
+    expect(mockGateway.getMarketingFirstBatch).not.toHaveBeenCalled();
   });
 
   it('offers to try again when the ideas could not be loaded', async () => {

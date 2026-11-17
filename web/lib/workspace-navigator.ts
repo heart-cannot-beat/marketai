@@ -12,7 +12,7 @@ const FEATURE_AREAS = new Set([
   'library',
 ]);
 /** Areas of the ads-first opening (ADR 0018); they exist only while it is on. */
-const ADS_FIRST_AREAS = new Set(['overview', 'competitors']);
+const ADS_FIRST_AREAS = new Set(['overview', 'competitors', 'start']);
 /** Every member's, though a Member sees only part of it (#126). */
 const MEMBER_AREAS = new Set(['settings']);
 const OWNER_ONLY_AREAS = new Set(['members']);
@@ -29,12 +29,20 @@ export function workspaceHome(
 }
 
 /**
- * Where "New product" goes. The product intake stays the destination until
- * the start page exists (S7 of the ads-first opening points it there while
- * the switch is on); with the switch off it never changes.
+ * Where "New product" goes: the start page while the ads-first switch is on
+ * (ADR 0018, design §5.1, #195), the product intake otherwise -- with the
+ * switch off it never changes.
  */
-export function newProductHref(slug: string): string {
-  return `/w/${slug}/products/new`;
+export function newProductHref(
+  slug: string,
+  adsFirst: boolean = env.adsFirstEnabled
+): string {
+  return adsFirst ? `/w/${slug}/start` : `/w/${slug}/products/new`;
+}
+
+/** The reading page of one first batch: its progress, and what to do if it stops. */
+export function firstBatchHref(slug: string, firstBatchId: string): string {
+  return `/w/${slug}/start/${encodeURIComponent(firstBatchId)}`;
 }
 
 export function computeTargetRoute(params: {

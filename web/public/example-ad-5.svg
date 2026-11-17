@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" role="img" aria-label="Example ad: Dryer on? It eases off.">
+  <!-- Fictional example for the start page (#195). Acme Charge is not a real brand. -->
+  <rect width="400" height="500" fill="#0f766e"/>
+  <text x="32" y="78" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="700">Dryer on?</text>
+  <text x="32" y="122" fill="#a3e635" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="700">It eases off.</text>
+  <rect x="32" y="160" width="336" height="220" rx="20" fill="#115e59"/>
+  <text x="56" y="196" fill="#ccfbf1" font-family="Helvetica, Arial, sans-serif" font-size="14">Your home's power</text>
+  <rect x="56" y="210" width="288" height="28" rx="8" fill="#134e4a"/>
+  <rect x="56" y="210" width="150" height="28" rx="8" fill="#fde68a"/>
+  <text x="66" y="229" fill="#78350f" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="700">Dryer</text>
+  <rect x="210" y="210" width="96" height="28" rx="8" fill="#a3e635"/>
+  <text x="220" y="229" fill="#1a2e05" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="700">Charger</text>
+  <rect x="56" y="262" width="288" height="28" rx="8" fill="#134e4a"/>
+  <rect x="56" y="262" width="240" height="28" rx="8" fill="#a3e635"/>
+  <text x="66" y="281" fill="#1a2e05" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="700">Charger, dryer off</text>
+  <text x="56" y="336" fill="#ccfbf1" font-family="Helvetica, Arial, sans-serif" font-size="15">Load balancing shares power</text>
+  <text x="56" y="358" fill="#ccfbf1" font-family="Helvetica, Arial, sans-serif" font-size="15">with the rest of your home.</text>
+  <text x="32" y="446" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700">Acme Charge Home</text>
+  <text x="32" y="472" fill="#ccfbf1" font-family="Helvetica, Arial, sans-serif" font-size="14">acmecharge.example</text>
+</svg>

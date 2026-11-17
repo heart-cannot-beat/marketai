@@ -19,11 +19,13 @@ interface AdCardProps {
   busy?: boolean;
   onToggleKept?: (item: IdeasAd) => void;
   /**
-   * Makes a failed image again. The first batch's image settings come with
-   * #193 (`resume_marketing_first_batch`); until a caller wires this, the
-   * entry shows but says it is not available yet.
+   * Makes a failed image again: the first batch's failed images, through
+   * `resume_marketing_first_batch` (#193, #195). Without it the entry shows
+   * but says it is not available.
    */
   onRetry?: () => void;
+  /** The retry button's text when it says what trying again costs. */
+  retryLabel?: string;
 }
 
 /**
@@ -31,7 +33,13 @@ interface AdCardProps {
  * of telling, its status mark and the keep button; or, while there is no
  * image, why not -- being made, failed, or not asked for yet.
  */
-export function AdCard({ slot, busy, onToggleKept, onRetry }: AdCardProps) {
+export function AdCard({
+  slot,
+  busy,
+  onToggleKept,
+  onRetry,
+  retryLabel,
+}: AdCardProps) {
   const { t } = useTranslation('ideas');
   return (
     <article className="flex min-w-0 flex-col gap-2" data-testid="ad-card">
@@ -41,7 +49,7 @@ export function AdCard({ slot, busy, onToggleKept, onRetry }: AdCardProps) {
           alt={slot.headline ?? t('ideas-ad-image')}
         />
       ) : (
-        <EmptyFrame slot={slot} onRetry={onRetry} />
+        <EmptyFrame slot={slot} onRetry={onRetry} retryLabel={retryLabel} />
       )}
       <div className="min-w-0 space-y-1">
         <p className="text-sm font-semibold">
@@ -121,9 +129,11 @@ function AdImage({ versionId, alt }: { versionId: string; alt: string }) {
 function EmptyFrame({
   slot,
   onRetry,
+  retryLabel,
 }: {
   slot: Exclude<IdeaSlot, { kind: 'ad' }>;
   onRetry?: () => void;
+  retryLabel?: string;
 }) {
   const { t } = useTranslation('ideas');
   const hint = useId();
@@ -154,7 +164,7 @@ function EmptyFrame({
           aria-describedby={onRetry ? undefined : hint}
           onClick={onRetry}
         >
-          {t('ideas-ad-retry')}
+          {retryLabel ?? t('ideas-ad-retry')}
         </button>
         {!onRetry && (
           <span

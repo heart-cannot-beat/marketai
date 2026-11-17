@@ -176,16 +176,47 @@ describe('mergeWorkspaceProducts (#194): list_products + list_marketing_ideas', 
     expect(merged.name).toBeNull();
   });
 
-  it('nothing reports errors, missing reports or unseen results yet', () => {
+  it('nothing reports missing reports or unseen results yet, nor an error without a stopped first batch', () => {
     const [merged] = mergeWorkspaceProducts(
       [product('prod_home', 'Acme Charge Home', '2026-11-01T00:00:00Z')],
-      [ideas('mp_1', 'prod_home', 6, 2, '2026-11-15T00:00:00Z')]
+      [
+        {
+          ...ideas('mp_1', 'prod_home', 6, 2, '2026-11-15T00:00:00Z'),
+          first_batch: {
+            id: 'mfb_1',
+            state: 'done',
+            needs_attention: false,
+            reason: null,
+          },
+        },
+      ]
     );
     expect(merged.signals).toMatchObject({
       needsAttention: false,
       reportMissing: false,
       conclusionUnseen: false,
     });
+  });
+
+  it('a first batch that stopped and waits for the user puts the product first in line (#195)', () => {
+    const [merged] = mergeWorkspaceProducts(
+      [product('prod_home', 'Acme Charge Home', '2026-11-01T00:00:00Z')],
+      [
+        ideas('mp_old', 'prod_home', 2, 1, '2026-11-10T00:00:00Z'),
+        {
+          ...ideas('mp_1', 'prod_home', 4, 0, '2026-11-15T00:00:00Z'),
+          first_batch: {
+            id: 'mfb_1',
+            state: 'needs_attention',
+            needs_attention: true,
+            reason: 'step_failed',
+          },
+        },
+      ]
+    );
+    expect(merged.signals.needsAttention).toBe(true);
+    expect(merged.step).toBe('attention');
+    expect(stepView(merged.step)).toBe('ideas');
   });
 });
 
