@@ -1432,6 +1432,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'prepare_marketing_ideas_generation',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/generation-drafts',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'preview_competitor_scan',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/competitor-scans/preview',

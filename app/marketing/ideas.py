@@ -133,6 +133,50 @@ def _ad(version, recipe, keeps):
             "created_at": version.created_at.isoformat() if version.created_at else ""}
 
 
+#: Run item states of an image not made yet, as ``PendingAd.state``; a succeeded, reused or cancelled item is not pending.
+PENDING_STATES = {"pending": "queued", "queued": "queued", "paused": "queued",
+                  "running": "running", "qc_pending": "running", "uncertain": "running", "failed": "failed"}
+
+
+def pending_ads(session, ctx, row) -> list[dict]:
+    """Images of the current ideas still being made, oldest first, and the ads whose latest attempt failed.
+
+    An attempt that produced an image is an ad (``project_ads``), never pending, even while the image is
+    being checked or after a check stopped it. A failed attempt is reported only while it is the newest
+    attempt at its ad: trying the ad again replaces it. Attempts at content the ideas no longer hold are
+    left out: redrafted ideas reuse combination ids, and nothing was made for the new content yet."""
+    produced = (select(AssetVersionRecord.id).where(AssetVersionRecord.workspace_id == ctx.workspace_id,
+                                                     AssetVersionRecord.producing_run_item_id == RunItemRecord.id)
+                .exists().label("produced"))
+    records = session.execute(select(RunItemRecord.state, produced, GenerationRecipeSnapshotRecord)
+        .join(GenerationRunRecord, (GenerationRunRecord.id == RunItemRecord.generation_run_id) & (GenerationRunRecord.workspace_id == ctx.workspace_id))
+        .join(GenerationRecipeSnapshotRecord, (GenerationRecipeSnapshotRecord.id == GenerationRunRecord.recipe_snapshot_id) & (GenerationRecipeSnapshotRecord.workspace_id == ctx.workspace_id))
+        .where(RunItemRecord.workspace_id == ctx.workspace_id)
+        .where(GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']['project_id'].as_string() == row.id)
+        .order_by(RunItemRecord.created_at, RunItemRecord.id)).all()
+    current = {}
+
+    def still_current(intent, combination_id):
+        if combination_id not in current:
+            try:
+                current[combination_id] = _content(ideas_intent(row, combination_id))
+            except LookupError:
+                current[combination_id] = None
+        return current[combination_id] is not None and current[combination_id] == _content(intent)
+
+    pending, latest = [], {}
+    for state, made, recipe in records:
+        intent = _intent(recipe)
+        combination_id = (intent.get("combination") or {}).get("id", "")
+        if intent.get("flow") != FLOW or not still_current(intent, combination_id):
+            continue
+        state = "succeeded" if made else state
+        latest[combination_id] = state
+        if PENDING_STATES.get(state) in ("queued", "running"):
+            pending.append({"combination_id": combination_id, "state": PENDING_STATES[state]})
+    return pending + [{"combination_id": cid, "state": "failed"} for cid, state in latest.items() if state == "failed"]
+
+
 def ideas_dict(session, ctx, row) -> dict:
     """The ``IdeasProjectDetail`` of an ads-first project."""
     call = service.latest_call(session, ctx, row.id)
@@ -142,7 +186,155 @@ def ideas_dict(session, ctx, row) -> dict:
             "ideas": row.ideas_json,
             "latest_call": service.call_dict(call, include_maximum_cost=True) if call else None,
             "ads": [_ad(version, recipe, keeps) for version, recipe in project_ads(session, ctx, row)],
-            "pending": []}
+            "pending": pending_ads(session, ctx, row)}
+
+
+#: The parts of an intent that come from the ideas and shaped the draft's image prompt: an ads-first draft
+#: stays valid while these equal the current ideas, whatever else changed (#191).
+CONTENT_KEYS = ("combination", "proposition", "expression", "ad_language", "style_variation", "style", "brand_kit")
+
+
+def ideas_intent(row, combination_id: str) -> dict:
+    """The ``marketing_intent`` of one ad of these ideas (design D5): what it says and what it stands on.
+
+    It records the product understanding as it is now, with each fact's checking status, and the facts
+    the ad's claim and way of telling cite -- directly, or through a cited inference -- so S10 can tell
+    whether the ad may be exported. Raises ``LookupError`` when the ideas have no such combination."""
+    from .contracts import Understanding
+    from .ideas_contracts import Ideas
+    if row.state != "ideas_ready" or not row.ideas_json:
+        raise LookupError(combination_id)
+    doc = Ideas.model_validate(row.ideas_json)
+    combo = next((c for c in doc.combinations if c.id == combination_id), None)
+    if combo is None:
+        raise LookupError(combination_id)
+    angle = next(a for a in doc.angles if a.id == combo.angle_id)
+    expression = next(e for e in angle.expressions if e.id == combo.expression_id)
+    understanding = Understanding.model_validate(row.understanding_json)
+    inferences = {i.id: i for i in understanding.inferences}
+    cited = {*angle.fact_ids, *expression.evidence_basis.fact_ids,
+             *(fact for iid in angle.inference_ids if iid in inferences for fact in inferences[iid].fact_ids)}
+    return {"schema_version": 2, "flow": FLOW, "project_id": row.id, "plan_revision": row.revision,
+            "ideas_hash": service.digest(row.ideas_json),
+            "ad_language": doc.ad_language, "strategy_language": doc.strategy_language,
+            # One visual style for every ad of the ideas: nothing about the style is being tested here.
+            **({"style_variation": "held", "style": doc.style_notes} if doc.style_notes else {}),
+            "brand_kit": doc.brand_kit.model_dump(mode="json") if doc.brand_kit else None,
+            "combination": combo.model_dump(mode="json", exclude_unset=True), "proposition": angle.proposition,
+            "expression": expression.model_dump(mode="json", exclude_none=True),
+            "understanding": understanding.model_dump(mode="json"),
+            "cited_fact_ids": [fact.id for fact in understanding.facts if fact.id in cited]}
+
+
+def _content(intent) -> dict:
+    return {key: intent.get(key) for key in CONTENT_KEYS}
+
+
+def _current_intent(project, intent):
+    """The intent ``intent``'s ad has in ``project`` now, or ``SelectionError`` when its content changed."""
+    try:
+        current = ideas_intent(project, (intent.get("combination") or {}).get("id", ""))
+    except LookupError:
+        current = None
+    if current is None or _content(current) != _content(intent):
+        raise SelectionError("ideas_changed", "广告想法已变化，请按当前的主张重新准备这张广告。")
+    return current
+
+
+def selection_intent(project, link, draft) -> dict:
+    """The intent a preview freezes for a draft prepared from these ideas (``resolve_selection``).
+
+    The draft is valid while its ad's content still equals the ideas, not while the project revision
+    stays the same: checking a fact or adding a claim later leaves it usable (#191)."""
+    stored = (draft.selectors_json or {}).get("marketing_intent") or {}
+    # A draft edited to another product or another ad no longer matches the ideas: prepare it again.
+    if project.product_id != draft.product_id or (stored.get("combination") or {}).get("id") != link.combination_id:
+        raise SelectionError("ideas_changed", "广告想法已变化，请按当前的主张重新准备这张广告。")
+    return _current_intent(project, stored)
+
+
+def check_intent(session, ctx, intent):
+    """A frozen ads-first intent at submission and execution: its project exists in this workspace, is
+    ads-first, and its ad's content still equals the ideas. A plan-first project never matches."""
+    try:
+        project = get_ideas_project(session, ctx, intent.get("project_id", ""))
+    except service.MarketingError:
+        raise SelectionError("ideas_unavailable", "找不到关联的广告想法。") from None
+    _current_intent(project, intent)
+    return project
+
+
+def generation_drafts(session, ctx, row, revision, provider, model, format_config):
+    """One generation draft per combination of the ideas, with nothing confirmed first (ADR 0018 §1, #191).
+
+    Each draft carries its ad's ``ideas_intent`` and is linked to the project and combination, so its
+    preview and submission go through the existing generation endpoints. Preparing again at the same
+    revision returns the same drafts. The product's verified photos are the appearance references;
+    unchecked photos come with S11."""
+    service.ensure_active(session, ctx)
+    call = service.latest_call(session, ctx, row.id)
+    if call and call.state in ("queued", "running", "uncertain"):
+        raise service.MarketingError("planning_in_progress", "请先等待起草完成或核对不确定调用。", 409)
+    if row.revision != revision:
+        raise service.MarketingError("stale_marketing_revision", "内容已更新，请刷新后重试。", 409)
+    if row.state != "ideas_ready" or not row.ideas_json:
+        raise service.MarketingError("ideas_not_ready", "请先起草广告主张。", 409)
+    from app.generation.draft import create_draft
+    from app.generation.models import GenerationDraftRecord
+    from app.providers.router import get_provider
+    from . import brand_kits
+    from .ideas_contracts import Ideas
+    from .models import MarketingGenerationLinkRecord
+    from .product_references import REFERENCE_BRIEF, from_product_set
+    if model not in get_provider(provider).models:
+        raise service.MarketingError("model_unavailable", "该供应商不支持所选模型。")
+    doc = Ideas.model_validate(row.ideas_json)
+    references = from_product_set(session, ctx, row)
+    kit = brand_kits.resolve_ref(session, ctx, doc.brand_kit) if doc.brand_kit else None
+    logo = brand_kits.logo_input(session, ctx, kit.content_json["logo"]) if kit and kit.content_json.get("logo") else None
+    drafts = []
+    for combo in doc.combinations:
+        link = session.scalar(select(MarketingGenerationLinkRecord).where(
+            MarketingGenerationLinkRecord.workspace_id == ctx.workspace_id, MarketingGenerationLinkRecord.project_id == row.id,
+            MarketingGenerationLinkRecord.plan_revision == revision, MarketingGenerationLinkRecord.combination_id == combo.id))
+        if link:
+            # Only the settings the client chose can conflict. The photos and logo are the application's
+            # choice: one checked or replaced since keeps the existing drafts, whose frozen references the
+            # preview checks again, rather than blocking this revision for good.
+            existing = session.get(GenerationDraftRecord, link.draft_id)
+            if (existing.provider, existing.model, existing.format_json) != (provider, model, format_config):
+                raise service.MarketingError("ideas_drafts_already_prepared",
+                                             "这些广告已按其他出图设置准备过；请用相同的设置，或重新起草主张后再准备。", 409)
+            drafts.append({"combination_id": combo.id, "draft_id": link.draft_id})
+            continue
+        if combo.image_brief is None:  # drafted ideas always have one (``checked_ideas``)
+            raise service.MarketingError("image_brief_language_mismatch", "Write the English image brief for every ad.")
+        intent = ideas_intent(row, combo.id)
+        brand = brand_kits.brief_lines(kit.content_json, logo_supplied=bool(logo)) if kit else ()
+        prompt = service.image_brief(combo, intent, brand=brand) + ("\n" + REFERENCE_BRIEF if references else "")
+        if len(prompt) > 4000:
+            raise service.MarketingError("ad_brief_too_long", "这张广告的画面说明太长，请重新起草主张。")
+        draft = create_draft(session, ctx, product_id=row.product_id, provider=provider, model=model,
+            execution_mode="mock" if provider == "mock" else "byok", combination_strategy={"mode": "single"},
+            format_config=format_config, selectors={"prompt": prompt, "marketing_intent": intent,
+                "product_references": references, "reference_actor_id": ctx.initiator_id or ctx.executor,
+                **({"brand_logo": logo} if logo else {})})
+        session.add(MarketingGenerationLinkRecord(id=new_id("mgl"), workspace_id=ctx.workspace_id, project_id=row.id,
+                                                  plan_revision=revision, combination_id=combo.id, draft_id=draft.id))
+        drafts.append({"combination_id": combo.id, "draft_id": draft.id})
+    session.flush()
+    return drafts
+
+
+def prepared_drafts(session, ctx, row, revision) -> list[dict]:
+    """The drafts prepared for these ideas at ``revision``, in the order of the ideas' combinations."""
+    from .models import MarketingGenerationLinkRecord
+    links = {link.combination_id: link.draft_id for link in session.scalars(select(MarketingGenerationLinkRecord).where(
+        MarketingGenerationLinkRecord.workspace_id == ctx.workspace_id, MarketingGenerationLinkRecord.project_id == row.id,
+        MarketingGenerationLinkRecord.plan_revision == revision)).all()}
+    order = [c["id"] for c in (row.ideas_json or {}).get("combinations", [])]
+    ordered = [cid for cid in order if cid in links] + sorted(cid for cid in links if cid not in order)
+    return [{"combination_id": cid, "draft_id": links[cid]} for cid in ordered]
 
 
 def ideas_summary(session, ctx, row) -> dict:

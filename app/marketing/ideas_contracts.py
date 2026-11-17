@@ -113,6 +113,30 @@ class SetKept(Document):
     kept: bool
 
 
+class PrepareIdeasGeneration(Document):
+    """Image settings for the ads of these ideas: one generation draft per combination (#191).
+
+    The product's verified photos are the appearance references; choosing photos comes later (S11)."""
+    provider: Literal["gemini", "openai", "seedream", "mock"]
+    model: str = Field(min_length=1, max_length=200)
+    aspect_ratio: Literal["1:1", "4:5", "9:16", "16:9"] = "4:5"
+    image_size: Literal["1K", "2K"] = "1K"
+    # Images per way of telling; the first batch makes one (step-1 plan, Global Constraints).
+    variants: int = Field(default=1, ge=1, le=4)
+
+
+class IdeasGenerationDraft(Document):
+    combination_id: str
+    draft_id: str
+
+
+class IdeasGenerationDrafts(Document):
+    """The drafts prepared for these ideas at ``revision``; preview and submit each with the generation endpoints."""
+    project_id: str
+    revision: int
+    drafts: list[IdeasGenerationDraft]
+
+
 class StartIdeasPlanning(Document):
     """Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018)."""
     kind: Literal["understanding", "ideas"]

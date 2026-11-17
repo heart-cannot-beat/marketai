@@ -1385,6 +1385,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['PrepareGeneration'];
     successResponses: { 201: components['schemas']['MarketingProjectDetail'] };
   };
+  prepare_marketing_ideas_generation: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['PrepareIdeasGeneration'];
+    successResponses: { 201: components['schemas']['IdeasGenerationDrafts'] };
+  };
   preview_competitor_scan: {
     pathParams: Record<string, never>;
     queryParams: Record<string, never>;
