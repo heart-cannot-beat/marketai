@@ -245,6 +245,15 @@ Beta 默认 Workspace Guardrail，以 Workspace 预算币种计：
 
 并发命令必须争抢同一数据库保护的额度，不能分别查询后各自通过。页面展示的剩余额度只是投影，服务端拒绝结果才是最终裁决。
 
+付费工作一般由 API 的命令受理，Worker 只执行和结算。唯一的例外是新开头的首批（[ADR 0018](../adr/0018-ads-before-test-setup.md)，维护者 2026-11-17 在 #193 决定）：用户点开始时确认一次总价，之后首批的推进任务（`marketing.first_batch`）在 Worker 里受理它自己的后续步骤，用户关掉页面也继续。范围只限这些步骤：读完产品后建产品草稿和广告想法项目、策划调用、出图草稿、预览和出图任务。条件：
+
+- 每一步仍按上面第 1–5 步受理：在同一领域事务中检查全部 Guardrail、创建 Reservation、Operation 和 Job；每一步单独预留、单独结算。
+- 受理前检查“已预留的最高费用加这一步的最高费用不超过用户确认的总价”，超过就停下来等用户重新确认。
+- RLS 不变，Worker 只能写当前任务所属的 Workspace。
+- Worker 仍不能新建或修改 Spend Guardrail，只能读取和加锁它；也不能写凭据。
+
+这些条件对应的数据库权限写在 `deploy/postgres/domain-tenant-roles.sql` 和迁移 `zzn193a1b2c3`，`tests/test_postgres_runtime_wiring.py` 检查 Worker 仍做不到最后一条。别的功能要让 Worker 受理付费工作，需要另行决定，不能援引这一条。
+
 ## 12. 客户可见性与通知
 
 - Member 可以查看当前功能权益、Usage、剩余资源、Spend Guardrail 空间及成本证据类型，但不能修改设置或查看付款方式、发票和凭据。

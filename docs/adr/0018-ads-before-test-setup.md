@@ -42,4 +42,6 @@
 
 分块和依赖见 #187，逐步计划见[第 1 步实施计划](../superpowers/plans/2026-11-16-ads-first-step-1.md)。
 
+首批确认一次总价之后，由 Worker 受理它自己的后续步骤；这是费用合同里唯一的这类例外，范围和条件见[费用合同 §11](../architecture/subscription-entitlement-usage-cost-ownership.md#11-spend-guardrail)“一次副作用命令的固定顺序”之后的一段（#193）。
+
 新界面由一个环境开关 `NEXT_PUBLIC_MARKETAI_ADS_FIRST` 控制。**开关打开之前，现行界面和现行规格原文仍是线上行为**；被本 ADR 修订的各节已加注说明。每一块合并时，把它实际改变的细节写回对应的合同。

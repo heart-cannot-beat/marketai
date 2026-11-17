@@ -346,8 +346,11 @@ def reserve_llm_chat(
 ) -> LlmChatReservation:
     """Reserve one ``llm_chat`` call's maximum cost in the caller's transaction.
 
-    Called by the command that creates ``job_id`` (the API role creates
-    reservations; the Worker only settles them). The input side of the quote
+    Called by the command that creates ``job_id``, in the API role; the
+    Worker settles the reservation. (The one place the Worker admits paid
+    steps itself is the ads-first first batch's advance, which reserves
+    through the planning and generation admissions, not here: cost contract
+    §11, #193.) The input side of the quote
     is ``request``'s own ceiling when the request is already known, otherwise
     ``input_token_budget`` -- an upper bound the Worker then enforces (a
     request whose ceiling exceeds what was reserved is refused, unbilled).
