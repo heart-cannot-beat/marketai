@@ -57,6 +57,8 @@ class AdSummary(Document):
     # Step 1 only ever reports "draft"; S10 derives "exportable" and "needs_redo" (ADR 0018 §3).
     status: Literal["draft", "exportable", "needs_redo"]
     kept: bool
+    # Whether the image request sent a product photo; the ideas page marks one made without (#196).
+    used_product_photo: bool
     created_at: str
 
 

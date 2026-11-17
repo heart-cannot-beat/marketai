@@ -1,13 +1,12 @@
 import { useTranslation } from 'next-i18next';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { GuardedLink } from '@/components/workspace/GuardedLink';
-import type { WorkspaceProduct } from '@/lib/products/workspace-products';
 
 /**
- * The bodies of a product's four views until their own slices fill them
- * (ADR 0018, step-1 plan): S8 the ad ideas, S14 the product profile, step 2
- * the tests and step 3 the results. The placeholders point at the page that
- * holds the same thing today.
+ * The bodies of a product's views until their own slices fill them (ADR
+ * 0018, step-1 plan): S14 the product profile, step 2 the tests and step 3
+ * the results. The ad ideas have their own page (`components/ideas`, #196).
+ * The placeholders point at the page that holds the same thing today.
  */
 
 function Placeholder({
@@ -31,30 +30,6 @@ function Placeholder({
         {label}
       </GuardedLink>
     </div>
-  );
-}
-
-export function ProductIdeasSummary({
-  product,
-}: {
-  product: WorkspaceProduct;
-}) {
-  const { t } = useTranslation('common');
-  const ideas = product.ideas;
-  return (
-    <p
-      className="text-sm text-base-content/80"
-      data-testid="product-ideas-summary"
-    >
-      {!ideas
-        ? t('product-ideas-none')
-        : ideas.adCount === 0
-          ? t('product-ideas-preparing')
-          : t('product-ideas-counts', {
-              count: ideas.adCount,
-              kept: ideas.keptCount,
-            })}
-    </p>
   );
 }
 
