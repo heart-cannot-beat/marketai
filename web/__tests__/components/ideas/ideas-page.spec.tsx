@@ -533,6 +533,45 @@ describe('IdeasPage (#196)', () => {
     ).toBeInTheDocument();
   });
 
+  it('before there are ideas, a stopped first batch says it waits for the user, not that ideas are coming (#195)', async () => {
+    mockGateway.getMarketingIdeas.mockResolvedValue(
+      ok(
+        ideasDetail({
+          state: 'understanding_draft',
+          ideas: null,
+          ads: [],
+          pending: [],
+          first_batch: {
+            id: 'mfb_1',
+            state: 'needs_attention',
+            needs_attention: true,
+            reason: 'too_few_claims',
+          },
+        })
+      )
+    );
+    render(
+      <Fresh>
+        <IdeasPage product={product()} />
+      </Fresh>
+    );
+    expect(
+      await screen.findByText(
+        'Making the first ads stopped and is waiting for you.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'See what to do' })
+    ).toHaveAttribute('href', '/w/acme/start/mfb_1');
+    expect(
+      screen.queryByText(
+        'The ad ideas are still being prepared. They appear here when they are ready.'
+      )
+    ).toBeNull();
+    // Not a failed images stop: the batch itself is not read here.
+    expect(mockGateway.getMarketingFirstBatch).not.toHaveBeenCalled();
+  });
+
   it('offers to try again when the ideas could not be loaded', async () => {
     mockGateway.getMarketingIdeas.mockResolvedValueOnce({
       kind: 'problem',

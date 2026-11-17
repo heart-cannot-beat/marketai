@@ -96,12 +96,12 @@ function IdeasProject({
       setRetrying(false);
     }
   }
+  const batchStopped =
+    firstBatch?.state === 'needs_attention' || firstBatch?.state === 'failed';
   const notice = firstBatch && firstBatch.state !== 'done' && (
     <FirstBatchNotice
       href={firstBatchHref(current.slug, firstBatch.id)}
-      stopped={
-        firstBatch.state === 'needs_attention' || firstBatch.state === 'failed'
-      }
+      stopped={batchStopped}
       retriesTogether={retryOffer !== null}
     />
   );
@@ -133,9 +133,17 @@ function IdeasProject({
       <div className="space-y-6">
         {notice}
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <p className="text-sm text-gray-600 dark:text-gray-400" role="status">
-            {t('ideas-preparing')}
-          </p>
+          {/* A stopped first batch is not preparing anything: the notice says what waits. */}
+          {batchStopped ? (
+            <div />
+          ) : (
+            <p
+              className="text-sm text-gray-600 dark:text-gray-400"
+              role="status"
+            >
+              {t('ideas-preparing')}
+            </p>
+          )}
           <ProductPanel understanding={detail.understanding} />
         </div>
       </div>
