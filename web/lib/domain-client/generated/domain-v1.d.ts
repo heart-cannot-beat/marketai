@@ -8185,7 +8185,9 @@ export interface components {
      * @description The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one
      *     more drafting of the ideas.
      *
-     *     Step 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.
+     *     Step 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``. When
+     *     that key is all that is missing, ``maximum_cost`` and the steps still say what starting will cost once
+     *     it is saved (#216); with anything else in the way too, ``maximum_cost`` is ``"0"``.
      */
     FirstBatchQuote: {
       available: boolean;

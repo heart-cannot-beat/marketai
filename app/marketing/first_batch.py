@@ -88,20 +88,22 @@ def _image_unit(image: dict) -> Decimal:
     return maximum_unit_cost(image["provider"], image["model"], image["format"]["image_size"]) * image["format"]["variants"]
 
 
-def _planning(session, ctx, mode: str) -> tuple[Decimal, str, str | None]:
-    """One planning call's maximum, its quote hash, and why planning is unavailable (or ``None``)."""
+def _planning(session, ctx, mode: str, assuming: tuple[str, ...] = ()) -> tuple[Decimal, str, str | None]:
+    """One planning call's maximum, its quote hash, and why planning is unavailable (or ``None``).
+
+    ``assuming``: providers taken to have a key, for the quote of a Workspace that has not saved it yet."""
     if mode == "mock":
         return Decimal("0"), "", None
-    cap = service.planner_capability(session, ctx)
+    cap = service.planner_capability(session, ctx, assuming=assuming)
     if not cap["available"]:
         return Decimal("0"), cap["quote_hash"], cap["unavailable_reason"]
     return Decimal(cap["maximum_cost"]), cap["quote_hash"], None
 
 
-def _check_unit(session, ctx, mode: str) -> tuple[Decimal, dict]:
+def _check_unit(session, ctx, mode: str, assuming: tuple[str, ...] = ()) -> tuple[Decimal, dict]:
     """One image check's maximum and who checks (``ai_qc.mode_capability``); its ``reason`` when none can run."""
     from . import ai_qc
-    cap = ai_qc.mode_capability(session, ctx, mode)
+    cap = ai_qc.mode_capability(session, ctx, mode, assuming=assuming)
     return (Decimal("0") if cap["reason"] else Decimal(cap["unit_maximum"])), cap
 
 
@@ -109,37 +111,42 @@ def quote(session, ctx, execution_mode: str = "byok") -> dict:
     """The start button's maximum: reading, understanding, ideas, one more ideas draft, the images and their checks.
 
     Step 1 runs on one OpenAI key (design D8): without an active OpenAI key -- for instance with a
-    Gemini key only -- the quote says ``openai_key_required`` before anything is started."""
+    Gemini key only -- the quote says ``openai_key_required`` before anything is started.
+
+    When that key is all that is missing, the quote still names the maximum, priced as the steps will be
+    once the key is saved, so the start page can write it on "save the key and start" (design doc §5.1,
+    #216). With anything else in the way -- no price, no planner, a total over the spend limit -- there
+    is no number yet (``"0"``). Either way nothing starts without the key."""
     from app.generation.credential_binding import resolve_generation_credential
-    reason = None
     image = _image(execution_mode)
-    if execution_mode == "byok" and not resolve_generation_credential(session, ctx, "openai").get("active"):
-        reason = "openai_key_required"
+    missing_key = execution_mode == "byok" and not resolve_generation_credential(session, ctx, "openai").get("active")
+    assuming = ("openai",) if missing_key else ()
     reading = Decimal("0") if execution_mode == "mock" else _reading_maximum()
-    planning, planning_hash, planning_reason = _planning(session, ctx, execution_mode)
-    reason = reason or planning_reason
+    # ``obstacle``: what keeps the batch from starting besides the key.
+    planning, planning_hash, obstacle = _planning(session, ctx, execution_mode, assuming)
     try:
         unit = _image_unit(image)
     except SelectionError as exc:
-        unit, reason = Decimal("0"), reason or exc.code
-    check, check_cap = _check_unit(session, ctx, execution_mode)
-    reason = reason or check_cap["reason"]
+        unit, obstacle = Decimal("0"), obstacle or exc.code
+    check, check_cap = _check_unit(session, ctx, execution_mode, assuming)
+    obstacle = obstacle or check_cap["reason"]
     planned = (("reading", 1, reading), ("understanding", 1, planning), ("ideas", 1, planning),
                ("ideas_retry", IDEAS_RETRIES, planning), ("images", ADS, unit), ("checks", ADS, check))
     total = sum((unit_cost * quantity for _, quantity, unit_cost in planned), Decimal("0"))
-    if reason is None and execution_mode == "byok":
+    if obstacle is None and execution_mode == "byok":
         from app.generation.selection import authorize_paid, check_budget
         try:
             authorize_paid(session, ctx)
             check_budget(session, ctx, total)
         except SelectionError as exc:
-            reason = exc.code
+            obstacle = exc.code
+    reason = "openai_key_required" if missing_key else obstacle
     quote_hash = service.digest([QUOTE_VERSION, execution_mode, str(reading), planning_hash, str(planning),
                                  image, str(unit), ADS, IDEAS_RETRIES,
                                  [check_cap["provider"], check_cap["model"], str(check)]])
     return {"available": reason is None, "unavailable_reason": reason, "execution_mode": execution_mode,
-            "maximum_cost": _money(total) if reason is None else "0", "currency": "USD", "quote_hash": quote_hash,
-            "image_provider": image["provider"], "image_model": image["model"],
+            "maximum_cost": _money(total) if obstacle is None else "0", "currency": "USD",
+            "quote_hash": quote_hash, "image_provider": image["provider"], "image_model": image["model"],
             "steps": [{"step": step, "quantity": quantity, "unit_maximum": _money(unit_cost),
                        "maximum_cost": _money(unit_cost * quantity)} for step, quantity, unit_cost in planned]}
 

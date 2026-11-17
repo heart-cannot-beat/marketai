@@ -96,8 +96,9 @@ export function StartForm({
 
   const state = quoteFailed ? { kind: 'failed' as const } : quoteState(quote);
   const keyRow = state.kind === 'key_required' && isOwner;
-  // A quote that names a maximum even without a key lets saving the key start
-  // straight away; one that does not (today's) shows the maximum first.
+  // When the key is all that is missing the quote names the maximum (#216), so
+  // saving the key starts straight away. With something else in the way too it
+  // names none, and the button shows the maximum once the key is saved.
   const keyMaximum =
     state.kind === 'key_required' && costsMore(quote?.maximum_cost)
       ? quote!.maximum_cost

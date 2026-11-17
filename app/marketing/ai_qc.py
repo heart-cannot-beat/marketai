@@ -138,15 +138,16 @@ def capability(session, ctx, row):
     return mode_capability(session, ctx, row.execution_mode)
 
 
-def mode_capability(session, ctx, execution_mode):
+def mode_capability(session, ctx, execution_mode, *, assuming: tuple[str, ...] = ()):
     """Who checks in this execution mode, at what maximum per image, or why no check can be admitted.
 
-    Mock is the explicit controlled example; BYOK without the workspace's key is ``credential_required``."""
+    Mock is the explicit controlled example; BYOK without the workspace's key is ``credential_required``.
+    ``assuming``: providers taken to have a key, for a quote made before the key is saved (``provider_choice.choose``)."""
     if execution_mode == "mock":
         return {"provider": "mock", "model": "marketing-qc-example-v1", "unit_maximum": "0", "reason": None}
     # An OpenAI key stands in for the deployment provider's, as for planning (#192).
     from .provider_choice import choose
-    choice = choose(session, ctx, "MARKETAI_MARKETING_QC")
+    choice = choose(session, ctx, "MARKETAI_MARKETING_QC", assuming=assuming)
     provider, model, maximum = choice.provider, choice.model, choice.maximum
     reason = "qc_not_configured" if choice.reason == "not_configured" else choice.reason
     if reason is None:
