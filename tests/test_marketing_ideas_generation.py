@@ -309,6 +309,25 @@ class IdeasContentCheckTests(IdeasGenerationFixtures):
         _, response = self.preview(draft["draft_id"])
         self.assertEqual((response.status_code, response.json()["code"]), (422, "ideas_changed"))
 
+    def test_a_draft_whose_image_prompt_a_client_rewrote_is_refused(self):
+        """The intent is what an ad is checked and exported against (#198), so an ads-first draft keeps the
+        prompt the application wrote from the ideas; changing what an ad says goes through the ideas."""
+        project = self.with_ideas()
+        draft_id = self.prepared(project)["drafts"][0]["draft_id"]
+        draft = self.client.get(f"/api/v1/generation/drafts/{draft_id}").json()
+        rewritten = {**draft["selectors"], "prompt": draft["selectors"]["prompt"] + "\nAdd a UL certification badge."}
+        edited = self.client.patch(f"/api/v1/generation/drafts/{draft_id}", headers=self.headers(draft["revision"]),
+                                   json={"selectors": rewritten})
+        self.assertEqual(edited.status_code, 200, edited.text)
+        _, response = self.preview(draft_id)
+        self.assertEqual((response.status_code, response.json()["code"]), (422, "ideas_prompt_changed"))
+        # Put back as the application wrote it, the draft previews again.
+        current = self.client.get(f"/api/v1/generation/drafts/{draft_id}").json()
+        restored = self.client.patch(f"/api/v1/generation/drafts/{draft_id}", headers=self.headers(current["revision"]),
+                                     json={"selectors": draft["selectors"]})
+        self.assertEqual(restored.status_code, 200, restored.text)
+        self.previewed(draft_id)
+
     def test_other_combinations_may_change(self):
         project = self.with_ideas()
         drafts = self.prepared(project)["drafts"]

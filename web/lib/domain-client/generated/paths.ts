@@ -625,6 +625,22 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'download_marketing_ideas',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/download-intent',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'edit_marketing_ideas_understanding',
+    method: 'PATCH',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/understanding',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'edit_marketing_project',
     method: 'PATCH',
     bffPattern: '/api/domain/v1/w/:slug/marketing/projects/:project_id',
@@ -1872,6 +1888,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/library/entries/:entry_id/validate',
     pathParams: ['entry_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'verify_marketing_ideas',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/verification',
+    pathParams: ['project_id'],
     requiresIdempotency: true,
   },
   {

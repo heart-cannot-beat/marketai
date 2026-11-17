@@ -837,6 +837,13 @@ BEGIN
     EXECUTE 'GRANT SELECT, UPDATE ON public.marketing_first_batches TO marketai_domain_worker';
     EXECUTE 'GRANT SELECT ON public.marketing_first_batches TO marketai_domain_readonly';
   END IF;
+  -- Ads-first verification and download records (#198): append-only. The API records what the user
+  -- checked and what was downloaded and reads it to derive each ad's status; readonly reads it; the
+  -- Worker gets nothing, because no Job reads or writes a verification or a download.
+  IF to_regclass('public.marketing_ideas_export_records') IS NOT NULL THEN
+    EXECUTE 'GRANT SELECT, INSERT ON public.marketing_ideas_export_records TO marketai_domain_api';
+    EXECUTE 'GRANT SELECT ON public.marketing_ideas_export_records TO marketai_domain_readonly';
+  END IF;
   -- The Worker admits a first batch's next step once the current one finished (#193): the product
   -- draft and its ideas after the reading, a planning call, the image drafts, previews and runs, each
   -- with its own reservation in the same transaction. Before #193 only the API admitted paid work.

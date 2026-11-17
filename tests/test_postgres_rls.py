@@ -47,6 +47,7 @@ CURRENT_AGGREGATE_TABLES = {
         "product_brand_kits",
         "marketing_ad_keeps",
         "marketing_first_batches",
+        "marketing_ideas_export_records",
     },
     "platform": {
         "workspaces",
@@ -359,6 +360,7 @@ def all_protected_tables() -> tuple[str, ...]:
     from migrations.versions.zw8d9e0f1a2b_product_brand_kits import NEW_WORKSPACE_OWNED as BRAND_KITS
     from migrations.versions.zzm189a1b2c3_marketing_ads_first import NEW_WORKSPACE_OWNED as ADS_FIRST
     from migrations.versions.zzn193a1b2c3_marketing_first_batches import NEW_WORKSPACE_OWNED as FIRST_BATCH
+    from migrations.versions.zzp198a1b2c3_marketing_ideas_export_records import NEW_WORKSPACE_OWNED as IDEAS_EXPORT
     from migrations.versions.zn9a0b1c2d3e_marketing_planning import NEW_WORKSPACE_OWNED as MARKETING_0
     from migrations.versions.zo0b1c2d3e4f_marketing_delivery import NEW_WORKSPACE_OWNED as MARKETING_1
     from migrations.versions.zp1c2d3e4f5a_marketing_ai_qc import NEW_WORKSPACE_OWNED as MARKETING_2
@@ -455,6 +457,7 @@ def all_protected_tables() -> tuple[str, ...]:
         + BRAND_KITS
         + ADS_FIRST
         + FIRST_BATCH
+        + IDEAS_EXPORT
         + NEW_WORKSPACE_OWNED
         + OPERATION_TABLES
         + IDEMPOTENCY_TABLES
@@ -1051,6 +1054,68 @@ class RowLevelSecurityTests(unittest.TestCase):
             "UPDATE marketing_ai_qc_calls SET state = 'failed' WHERE workspace_id = :ws AND project_id IS NOT NULL"),
             {"ws": self.beta})
         self.assertEqual(result.rowcount, 0)
+
+    def test_an_ideas_export_record_stays_in_its_workspace_and_is_never_rewritten(self):
+        """Ads-first verification and download records (#198): bound to the ideas by a Workspace-composite
+        key; the API can add one only in its own Workspace and can never change or remove one; the Worker
+        has no access at all."""
+        from sqlalchemy.exc import ProgrammingError
+
+        with self.owner.connect() as conn:
+            definitions = dict(conn.execute(self.text(
+                "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                " WHERE conrelid = 'public.marketing_ideas_export_records'::regclass AND contype IN ('f', 'c')")).all())
+        self.assertEqual(
+            definitions["fk_marketing_ideas_export_record_project"],
+            "FOREIGN KEY (workspace_id, project_id) REFERENCES marketing_projects(workspace_id, id) ON DELETE RESTRICT")
+        self.assertIn("'verification'", definitions["ck_marketing_ideas_export_records_record_kind"])
+        self.assertIn("'download'", definitions["ck_marketing_ideas_export_records_record_kind"])
+
+        insert = ("INSERT INTO marketing_ideas_export_records (id, workspace_id, project_id, kind, project_revision,"
+                  " content_json, content_hash, created_at) VALUES (:id, :ws, :project, 'verification', 2, '{}', :hash, now())")
+        project, record = f"mp_{uuid.uuid4().hex[:8]}", f"mie_{uuid.uuid4().hex[:8]}"
+        with self.owner.begin() as conn:
+            conn.execute(self.text(
+                "INSERT INTO marketing_projects (id, workspace_id, revision, state, source_text, flow, created_at, updated_at)"
+                " VALUES (:id, :ws, 1, 'ideas_ready', 'Acme Charge Home', 'ads_first', now(), now())"),
+                {"id": project, "ws": self.alpha})
+            conn.execute(self.text(insert), {"id": record, "ws": self.alpha, "project": project, "hash": "d" * 64})
+
+        def remove():
+            with self.owner.begin() as conn:
+                conn.execute(self.text("DELETE FROM marketing_ideas_export_records WHERE project_id = :id"), {"id": project})
+                conn.execute(self.text("DELETE FROM marketing_projects WHERE id = :id"), {"id": project})
+        self.addCleanup(remove)
+
+        api = self.scoped_connection(self.engine(API_URL), self.alpha)
+        # The API adds a record in its own Workspace, and only there.
+        api.execute(self.text(insert), {"id": f"mie_{uuid.uuid4().hex[:8]}", "ws": self.alpha, "project": project,
+                                        "hash": "e" * 64})
+        with self.assertRaises(ProgrammingError) as smuggled:
+            with api.begin_nested():
+                api.execute(self.text(insert), {"id": f"mie_{uuid.uuid4().hex[:8]}", "ws": self.beta,
+                                                "project": project, "hash": "f" * 64})
+        self.assertIn("row-level security", str(smuggled.exception))
+        # Append-only: it can neither change nor remove one.
+        for statement in ("UPDATE marketing_ideas_export_records SET content_hash = 'x' WHERE id = :id",
+                          "DELETE FROM marketing_ideas_export_records WHERE id = :id"):
+            with self.assertRaises(ProgrammingError) as refused:
+                with api.begin_nested():
+                    api.execute(self.text(statement), {"id": record})
+            self.assertIn("permission denied", str(refused.exception))
+
+        # Another Workspace's API session sees none of it; the Worker has no access; readonly reads its own.
+        other = self.scoped_connection(self.engine(API_URL), self.beta)
+        self.assertEqual(other.execute(self.text("SELECT COUNT(*) FROM marketing_ideas_export_records")).scalar(), 0)
+        worker = self.scoped_connection(self.engine(WORKER_URL), self.alpha)
+        with self.assertRaises(ProgrammingError) as denied:
+            worker.execute(self.text("SELECT COUNT(*) FROM marketing_ideas_export_records"))
+        self.assertIn("permission denied", str(denied.exception))
+        readonly = self.scoped_connection(self.engine(READONLY_URL), self.alpha)
+        self.assertEqual(readonly.execute(self.text(
+            "SELECT COUNT(*) FROM marketing_ideas_export_records WHERE id = :id"), {"id": record}).scalar(), 1)
+        self.assertEqual(self.scoped_connection(self.engine(READONLY_URL), self.beta).execute(self.text(
+            "SELECT COUNT(*) FROM marketing_ideas_export_records")).scalar(), 0)
 
     # ------------------------------------------------------ child tables ----
 

@@ -8829,6 +8829,66 @@
         }
       }
     },
+    "/api/v1/marketing/ideas/{project_id}/download-intent": {
+      "post": {
+        "operationId": "download_marketing_ideas",
+        "summary": "Download Ideas",
+        "description": "Download exactly the ads named, each through its own short-lived signed link (#198).\n\nEvery one must be ``exportable``; otherwise nothing is handed out and 409 ``ads_not_exportable`` lists\neach refused ad's status and reasons in ``params.ads``. The same key returns the same download.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadIdeas"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasDownload"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/ideas/{project_id}/generation-drafts": {
       "post": {
         "operationId": "prepare_marketing_ideas_generation",
@@ -8962,6 +9022,156 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/IdeasCallSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/ideas/{project_id}/understanding": {
+      "patch": {
+        "operationId": "edit_marketing_ideas_understanding",
+        "summary": "Edit Ideas Understanding",
+        "description": "Change, add or remove what the AI read about the product; the ideas and their images stay (#198).\n\nA fact is checked only by ``verify_marketing_ideas``: a changed or new fact is unchecked, whatever the\ndocument says. An ad that cites a changed or removed fact becomes ``needs_redo``; other ads are untouched.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditIdeasUnderstanding"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasProjectDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/ideas/{project_id}/verification": {
+      "post": {
+        "operationId": "verify_marketing_ideas",
+        "summary": "Verify Ideas",
+        "description": "Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made\nwithout a product photo, and check findings accepted as they are.\n\nOnly what is named here becomes confirmed; the checked facts are published as the product's version.\nAds whose three conditions now hold become ``exportable``.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyIdeas"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasProjectDetail"
                 }
               }
             }
@@ -15320,6 +15530,38 @@
           "asset_version_ids"
         ]
       },
+      "AcceptedFindings": {
+        "properties": {
+          "asset_version_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          },
+          "check_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          },
+          "finding_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 40,
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_version_id",
+          "check_id",
+          "finding_ids"
+        ],
+        "description": "Findings of one ad's check the user accepts as they are (\"this is fine\")."
+      },
       "ActionEligibility": {
         "properties": {
           "action": {
@@ -15465,6 +15707,47 @@
           "created_at"
         ]
       },
+      "AdReason": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "ideas_changed",
+              "facts_changed",
+              "facts_removed",
+              "photo_unavailable",
+              "image_blocked",
+              "facts_unverified",
+              "photo_unverified",
+              "appearance_unconfirmed",
+              "image_check_in_progress",
+              "check_missing",
+              "check_in_progress",
+              "check_failed",
+              "check_uncertain",
+              "findings_open",
+              "check_outdated"
+            ]
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ]
+      },
       "AdSummary": {
         "properties": {
           "asset_version_id": {
@@ -15486,6 +15769,22 @@
               "exportable",
               "needs_redo"
             ]
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/AdReason"
+            },
+            "type": "array"
+          },
+          "cited_fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "appearance_confirmed": {
+            "type": "boolean",
+            "default": false
           },
           "kept": {
             "type": "boolean"
@@ -26380,6 +26679,26 @@
           "content_disposition"
         ]
       },
+      "DownloadIdeas": {
+        "properties": {
+          "asset_version_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 60,
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_version_ids"
+        ],
+        "description": "The ads to download: every one must be exportable, and only these are handed out."
+      },
       "DraftSummary": {
         "properties": {
           "id": {
@@ -26551,6 +26870,30 @@
           "asset_version_id",
           "display_label"
         ]
+      },
+      "EditIdeasUnderstanding": {
+        "properties": {
+          "understanding": {
+            "$ref": "#/components/schemas/Understanding"
+          },
+          "source_addition": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "understanding"
+        ],
+        "description": "Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product's source."
       },
       "EditProject": {
         "properties": {
@@ -32673,6 +33016,38 @@
         ],
         "description": "The newest automatic check of one ad (#197): a suggestion, never a quality approval.\n\nIt was made against the product understanding as it was when the image was made (``understanding_hash``)\nand the facts the ad cites (``fact_ids``); whether that still holds after the user checks the facts is\nfor the ad's status to say."
       },
+      "IdeasAdDownload": {
+        "properties": {
+          "asset_version_id": {
+            "type": "string"
+          },
+          "combination_id": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "intent_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "download_grant": {
+            "$ref": "#/components/schemas/DownloadGrant"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_version_id",
+          "combination_id",
+          "filename",
+          "intent_id",
+          "expires_at",
+          "download_grant"
+        ]
+      },
       "IdeasCallSummary": {
         "properties": {
           "id": {
@@ -32885,6 +33260,30 @@
           "code"
         ],
         "description": "An ad that cannot be checked as it was made, and why (e.g. ``product_reference_changed``)."
+      },
+      "IdeasDownload": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "downloads": {
+            "items": {
+              "$ref": "#/components/schemas/IdeasAdDownload"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "downloads"
+        ],
+        "description": "One download of ads-first ads: a short-lived signed link per requested ad, in the order asked."
       },
       "IdeasGenerationDraft": {
         "properties": {
@@ -45290,6 +45689,39 @@
           "cpa"
         ],
         "description": "A factor value: headline ``verdict`` on ``verdict_metric`` and the\none-line ``sentence``; both metrics in full."
+      },
+      "VerifyIdeas": {
+        "properties": {
+          "fact_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "type": "array",
+            "maxItems": 30
+          },
+          "appearance_confirmed": {
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 60
+          },
+          "accepted_findings": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptedFindings"
+            },
+            "type": "array",
+            "maxItems": 60
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "description": "One \"check before download\" (design doc §5.3): what the user confirms, and nothing they did not see."
       },
       "Vocabulary": {
         "properties": {

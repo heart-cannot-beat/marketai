@@ -206,8 +206,10 @@ class IdeasServiceTests(MarketingIdeasFixtures):
                 ideas.set_kept(session, self.context, ideas.get_ideas_project(session, self.context, project_id), ad, kept)
         with tenant_session(self.context) as session:
             row = ideas.get_ideas_project(session, self.context, project_id)
+            # The planted image belongs to no claim (these ideas have none yet), so the status #198 derives
+            # for it is "make it again"; keeping it is recorded all the same.
             self.assertEqual([(a["asset_version_id"], a["combination_id"], a["status"], a["kept"])
-                              for a in ideas.ideas_dict(session, self.context, row)["ads"]], [(ad, "c1", "draft", True)])
+                              for a in ideas.ideas_dict(session, self.context, row)["ads"]], [(ad, "c1", "needs_redo", True)])
             summary = ideas.ideas_summary(session, self.context, row)
             self.assertEqual((summary["ad_count"], summary["kept_count"]), (1, 1))
             self.assertEqual(len(session.scalars(select(MarketingAdKeepRecord).where(

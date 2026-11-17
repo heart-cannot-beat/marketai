@@ -153,8 +153,9 @@ class Gate0MigrationTests(unittest.TestCase):
         # zzl148a1b2c3 (the Worker dispatches daily storage_bytes Usage, #148) and
         # zzm189a1b2c3 (ads-first ideas on marketing projects and the keep mark, #189) and
         # zzn193a1b2c3 (the ads-first first batch, #193) and
-        # zzo197a1b2c3 (ads-first ideas checks without a round, #197).
-        self.assertEqual(revision, "zzo197a1b2c3")
+        # zzo197a1b2c3 (ads-first ideas checks without a round, #197) and
+        # zzp198a1b2c3 (ads-first verification and download records, #198).
+        self.assertEqual(revision, "zzp198a1b2c3")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as conn:

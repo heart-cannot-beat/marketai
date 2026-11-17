@@ -79,6 +79,23 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'asset_version_ids',
     ],
   },
+  AcceptedFindings: {
+    properties: {
+      asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
+      check_id: { type: 'string', maxLength: 64, minLength: 1 },
+      finding_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 40,
+        minItems: 1,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_id', 'check_id', 'finding_ids'],
+    description:
+      'Findings of one ad\'s check the user accepts as they are ("this is fine").',
+  },
   ActionEligibility: {
     properties: {
       action: { type: 'string' },
@@ -143,6 +160,35 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'created_at',
     ],
   },
+  AdReason: {
+    properties: {
+      code: {
+        type: 'string',
+        enum: [
+          'ideas_changed',
+          'facts_changed',
+          'facts_removed',
+          'photo_unavailable',
+          'image_blocked',
+          'facts_unverified',
+          'photo_unverified',
+          'appearance_unconfirmed',
+          'image_check_in_progress',
+          'check_missing',
+          'check_in_progress',
+          'check_failed',
+          'check_uncertain',
+          'findings_open',
+          'check_outdated',
+        ],
+      },
+      fact_ids: { items: { type: 'string' }, type: 'array' },
+      finding_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['code'],
+  },
   AdSummary: {
     properties: {
       asset_version_id: { type: 'string' },
@@ -150,6 +196,12 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       angle_id: { type: 'string' },
       expression_id: { type: 'string' },
       status: { type: 'string', enum: ['draft', 'exportable', 'needs_redo'] },
+      reasons: {
+        items: { $ref: '#/components/schemas/AdReason' },
+        type: 'array',
+      },
+      cited_fact_ids: { items: { type: 'string' }, type: 'array' },
+      appearance_confirmed: { type: 'boolean', default: false },
       kept: { type: 'boolean' },
       used_product_photo: { type: 'boolean' },
       created_at: { type: 'string' },
@@ -4612,6 +4664,21 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['url', 'expires_at', 'content_disposition'],
   },
+  DownloadIdeas: {
+    properties: {
+      asset_version_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 60,
+        minItems: 1,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_ids'],
+    description:
+      'The ads to download: every one must be exportable, and only these are handed out.',
+  },
   DraftSummary: {
     properties: {
       id: { type: 'string' },
@@ -4696,6 +4763,19 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'asset_version_id',
       'display_label',
     ],
+  },
+  EditIdeasUnderstanding: {
+    properties: {
+      understanding: { $ref: '#/components/schemas/Understanding' },
+      source_addition: {
+        anyOf: [{ type: 'string', maxLength: 8000 }, { type: 'null' }],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['understanding'],
+    description:
+      "Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product's source.",
   },
   EditProject: {
     properties: {
@@ -7575,6 +7655,26 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       "The newest automatic check of one ad (#197): a suggestion, never a quality approval.\n\nIt was made against the product understanding as it was when the image was made (``understanding_hash``)\nand the facts the ad cites (``fact_ids``); whether that still holds after the user checks the facts is\nfor the ad's status to say.",
   },
+  IdeasAdDownload: {
+    properties: {
+      asset_version_id: { type: 'string' },
+      combination_id: { type: 'string' },
+      filename: { type: 'string' },
+      intent_id: { type: 'string' },
+      expires_at: { type: 'string' },
+      download_grant: { $ref: '#/components/schemas/DownloadGrant' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'asset_version_id',
+      'combination_id',
+      'filename',
+      'intent_id',
+      'expires_at',
+      'download_grant',
+    ],
+  },
   IdeasCallSummary: {
     properties: {
       id: { type: 'string' },
@@ -7666,6 +7766,21 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     required: ['asset_version_id', 'code'],
     description:
       'An ad that cannot be checked as it was made, and why (e.g. ``product_reference_changed``).',
+  },
+  IdeasDownload: {
+    properties: {
+      id: { type: 'string' },
+      project_id: { type: 'string' },
+      downloads: {
+        items: { $ref: '#/components/schemas/IdeasAdDownload' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'project_id', 'downloads'],
+    description:
+      'One download of ads-first ads: a short-lived signed link per requested ad, in the order asked.',
   },
   IdeasGenerationDraft: {
     properties: {
@@ -13248,6 +13363,34 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'A factor value: headline ``verdict`` on ``verdict_metric`` and the\none-line ``sentence``; both metrics in full.',
   },
+  VerifyIdeas: {
+    properties: {
+      fact_ids: {
+        items: {
+          type: 'string',
+          maxLength: 64,
+          minLength: 1,
+          pattern: '^[a-zA-Z0-9_-]+$',
+        },
+        type: 'array',
+        maxItems: 30,
+      },
+      appearance_confirmed: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 60,
+      },
+      accepted_findings: {
+        items: { $ref: '#/components/schemas/AcceptedFindings' },
+        type: 'array',
+        maxItems: 60,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    description:
+      'One "check before download" (design doc §5.3): what the user confirms, and nothing they did not see.',
+  },
   Vocabulary: {
     properties: {
       factors: {
@@ -16977,6 +17120,103 @@ const SCHEMAS: Record<string, object> = {
     required: ['intent_id'],
     description:
       'Shared shape for asset-version/export download-intent results.\n\n``download_grant`` is optional because the export-package route\n(``create_generation_export_download_intent``) does not yet issue one\n(Issue #49 Task 9 wires that); the asset-version route always populates\nit.',
+  },
+  download_marketing_ideas_201: {
+    properties: {
+      id: { type: 'string' },
+      project_id: { type: 'string' },
+      downloads: {
+        items: { $ref: '#/components/schemas/IdeasAdDownload' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'project_id', 'downloads'],
+    description:
+      'One download of ads-first ads: a short-lived signed link per requested ad, in the order asked.',
+  },
+  download_marketing_ideas_request: {
+    properties: {
+      asset_version_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 60,
+        minItems: 1,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_ids'],
+    description:
+      'The ads to download: every one must be exportable, and only these are handed out.',
+  },
+  edit_marketing_ideas_understanding_200: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  edit_marketing_ideas_understanding_request: {
+    properties: {
+      understanding: { $ref: '#/components/schemas/Understanding' },
+      source_addition: {
+        anyOf: [{ type: 'string', maxLength: 8000 }, { type: 'null' }],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['understanding'],
+    description:
+      "Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product's source.",
   },
   edit_marketing_project_200: {
     properties: {
@@ -22664,6 +22904,88 @@ const SCHEMAS: Record<string, object> = {
     description:
       '``POST /library/entries/{id}/validate`` result (contracts.ValidationReport.as_dict).',
   },
+  verify_marketing_ideas_200: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  verify_marketing_ideas_request: {
+    properties: {
+      fact_ids: {
+        items: {
+          type: 'string',
+          maxLength: 64,
+          minLength: 1,
+          pattern: '^[a-zA-Z0-9_-]+$',
+        },
+        type: 'array',
+        maxItems: 30,
+      },
+      appearance_confirmed: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 60,
+      },
+      accepted_findings: {
+        items: { $ref: '#/components/schemas/AcceptedFindings' },
+        type: 'array',
+        maxItems: 60,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    description:
+      'One "check before download" (design doc §5.3): what the user confirms, and nothing they did not see.',
+  },
   withdraw_library_version_200: {
     properties: {
       version_id: { type: 'string' },
@@ -23325,6 +23647,22 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'download_marketing_handoff_201',
       VALIDATOR_FUNCTIONS['download_marketing_handoff_201'],
+    ],
+    [
+      'download_marketing_ideas_201',
+      VALIDATOR_FUNCTIONS['download_marketing_ideas_201'],
+    ],
+    [
+      'download_marketing_ideas_request',
+      VALIDATOR_FUNCTIONS['download_marketing_ideas_request'],
+    ],
+    [
+      'edit_marketing_ideas_understanding_200',
+      VALIDATOR_FUNCTIONS['edit_marketing_ideas_understanding_200'],
+    ],
+    [
+      'edit_marketing_ideas_understanding_request',
+      VALIDATOR_FUNCTIONS['edit_marketing_ideas_understanding_request'],
     ],
     [
       'edit_marketing_project_200',
@@ -24108,6 +24446,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['validate_library_draft_200'],
     ],
     [
+      'verify_marketing_ideas_200',
+      VALIDATOR_FUNCTIONS['verify_marketing_ideas_200'],
+    ],
+    [
+      'verify_marketing_ideas_request',
+      VALIDATOR_FUNCTIONS['verify_marketing_ideas_request'],
+    ],
+    [
       'withdraw_library_version_200',
       VALIDATOR_FUNCTIONS['withdraw_library_version_200'],
     ],
@@ -24465,6 +24811,16 @@ export const REQUEST_VALIDATORS = {
   ] as ValidateFunction<
     DomainOperationMap['decide_competitor_discovery']['requestBody']
   >,
+  download_marketing_ideas: VALIDATOR_FUNCTIONS[
+    'download_marketing_ideas_request'
+  ] as ValidateFunction<
+    DomainOperationMap['download_marketing_ideas']['requestBody']
+  >,
+  edit_marketing_ideas_understanding: VALIDATOR_FUNCTIONS[
+    'edit_marketing_ideas_understanding_request'
+  ] as ValidateFunction<
+    DomainOperationMap['edit_marketing_ideas_understanding']['requestBody']
+  >,
   edit_marketing_project: VALIDATOR_FUNCTIONS[
     'edit_marketing_project_request'
   ] as ValidateFunction<
@@ -24717,6 +25073,11 @@ export const REQUEST_VALIDATORS = {
     'update_product_reference_request'
   ] as ValidateFunction<
     DomainOperationMap['update_product_reference']['requestBody']
+  >,
+  verify_marketing_ideas: VALIDATOR_FUNCTIONS[
+    'verify_marketing_ideas_request'
+  ] as ValidateFunction<
+    DomainOperationMap['verify_marketing_ideas']['requestBody']
   >,
   withdraw_library_version: VALIDATOR_FUNCTIONS[
     'withdraw_library_version_request'
