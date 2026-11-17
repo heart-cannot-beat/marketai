@@ -168,6 +168,9 @@ describe('IdeasPage (#196)', () => {
 
   it('suggests no photo when every ad used one', async () => {
     await renderPage(ideasDetail({ ads: [ad('av_1', 'c1')], pending: [] }));
+    expect(
+      screen.getByRole('heading', { level: 2, name: '3 claims, 1 ad' })
+    ).toBeInTheDocument();
     expect(screen.queryByText('No product photo used')).toBeNull();
     expect(
       screen.queryByRole('link', { name: 'Add a product photo' })

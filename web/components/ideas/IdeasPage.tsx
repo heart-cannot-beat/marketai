@@ -167,10 +167,12 @@ function IdeasProject({
           {view.earlier.length > 0 && (
             <EarlierSection slots={view.earlier} card={card} />
           )}
-          <KeptBar keptCount={view.keptCount} problem={keepProblem} />
         </div>
         <ProductPanel understanding={detail.understanding} />
       </div>
+      {/* Last on the page, so it stays at the bottom of the screen past the
+          facts too, where a phone shows them (design §5.8). */}
+      <KeptBar keptCount={view.keptCount} problem={keepProblem} />
     </div>
   );
 }
