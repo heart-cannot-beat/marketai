@@ -1,6 +1,7 @@
 import env from '@/lib/env';
 import {
   computeTargetRoute,
+  firstBatchHref,
   newProductHref,
   workspaceHome,
 } from '@/lib/workspace-navigator';
@@ -47,8 +48,20 @@ describe('the Workspace home (#194)', () => {
     expect(workspaceHome('beta', false)).toBe('/w/beta/experiments');
   });
 
-  it('"New product" goes to the product intake either way', () => {
+  it('"New product" goes to the product intake while the switch is off', () => {
+    env.adsFirstEnabled = false;
     expect(newProductHref('acme')).toBe('/w/acme/products/new');
+    expect(newProductHref('acme', false)).toBe('/w/acme/products/new');
+  });
+
+  it('"New product" goes to the start page while the switch is on (#195)', () => {
+    env.adsFirstEnabled = true;
+    expect(newProductHref('acme')).toBe('/w/acme/start');
+    expect(newProductHref('acme', true)).toBe('/w/acme/start');
+  });
+
+  it('a first batch reads at its own page under the start page (#195)', () => {
+    expect(firstBatchHref('acme', 'mfb_1')).toBe('/w/acme/start/mfb_1');
   });
 });
 
@@ -176,6 +189,24 @@ describe('computeTargetRoute', () => {
         adsFirst: true,
       })
     ).toBe('/w/beta/overview');
+    // The start page carries across; a first batch's own page does not.
+    for (const currentPathname of ['/w/alpha/start', '/w/alpha/start/mfb_1'])
+      expect(
+        computeTargetRoute({
+          targetSlug: 'beta',
+          targetRole: 'MEMBER',
+          currentPathname,
+          adsFirst: true,
+        })
+      ).toBe('/w/beta/start');
+    expect(
+      computeTargetRoute({
+        targetSlug: 'beta',
+        targetRole: 'MEMBER',
+        currentPathname: '/w/alpha/start',
+        adsFirst: false,
+      })
+    ).toBe('/w/beta/experiments');
   });
 
   it('handles all six feature areas', () => {

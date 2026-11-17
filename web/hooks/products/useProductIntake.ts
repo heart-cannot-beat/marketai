@@ -73,7 +73,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForOperation(
+/** Waits for an upload's operation to finish; also used by the start page (#195). */
+export async function waitForOperation(
   gateway: DomainGateway,
   workspaceSlug: string,
   operationId: string,

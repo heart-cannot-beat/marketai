@@ -11,6 +11,7 @@ import {
 import { useWorkspace } from './WorkspaceProvider';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
 import { errorMessage } from '@/lib/i18n/domain-errors';
+import { utf8ToBase64 } from '@/lib/credentials/plaintext';
 
 /**
  * Settings → Provider credentials: the Owner's BYOK keys.
@@ -159,15 +160,7 @@ function isCredentialMetadata(value: unknown): value is CredentialMetadata {
   );
 }
 
-/** Standard base64 of the UTF-8 bytes — what `plaintext_b64` carries. No
- * `TextEncoder` so the same code runs under jsdom. */
-export function utf8ToBase64(value: string): string {
-  const bytes = encodeURIComponent(value).replace(
-    /%([0-9A-F]{2})/g,
-    (_match, hex: string) => String.fromCharCode(parseInt(hex, 16))
-  );
-  return btoa(bytes);
-}
+export { utf8ToBase64 };
 
 /** The new version's id from a `create_credential` / `rotate_credential`
  * success body (typed `null` by the generated contract, so read as data). */

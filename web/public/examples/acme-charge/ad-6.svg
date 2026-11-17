@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" role="img" aria-label="Example ad: Will it trip my breaker?">
+  <!-- Fictional example for the start page (#195). Acme Charge is not a real brand. -->
+  <rect width="400" height="500" fill="#f1f5f9"/>
+  <text x="32" y="76" fill="#0f172a" font-family="Helvetica, Arial, sans-serif" font-size="32" font-weight="700">Will it trip</text>
+  <text x="32" y="114" fill="#0f172a" font-family="Helvetica, Arial, sans-serif" font-size="32" font-weight="700">my breaker?</text>
+  <rect x="120" y="148" width="160" height="210" rx="14" fill="#cbd5e1" stroke="#94a3b8" stroke-width="3"/>
+  <g fill="#ffffff" stroke="#94a3b8" stroke-width="2">
+    <rect x="140" y="170" width="54" height="34" rx="6"/><rect x="206" y="170" width="54" height="34" rx="6"/>
+    <rect x="140" y="216" width="54" height="34" rx="6"/><rect x="206" y="216" width="54" height="34" rx="6"/>
+    <rect x="140" y="262" width="54" height="34" rx="6"/><rect x="206" y="262" width="54" height="34" rx="6"/>
+  </g>
+  <g fill="#0f766e">
+    <rect x="158" y="178" width="18" height="18" rx="3"/><rect x="224" y="178" width="18" height="18" rx="3"/>
+    <rect x="158" y="224" width="18" height="18" rx="3"/><rect x="224" y="224" width="18" height="18" rx="3"/>
+    <rect x="158" y="270" width="18" height="18" rx="3"/><rect x="224" y="270" width="18" height="18" rx="3"/>
+  </g>
+  <rect x="140" y="310" width="120" height="30" rx="15" fill="#a3e635"/>
+  <text x="168" y="331" fill="#1a2e05" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700">All on</text>
+  <text x="32" y="398" fill="#0f172a" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700">No. It shares power</text>
+  <text x="32" y="426" fill="#0f172a" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700">with your home.</text>
+  <text x="32" y="462" fill="#0f766e" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700">Acme Charge Home</text>
+  <text x="32" y="484" fill="#475569" font-family="Helvetica, Arial, sans-serif" font-size="14">acmecharge.example</text>
+</svg>

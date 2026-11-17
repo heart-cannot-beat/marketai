@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" role="img" aria-label="Example ad: Plug in. Go to bed.">
+  <!-- Fictional example for the start page (#195). Acme Charge is not a real brand. -->
+  <rect width="400" height="500" fill="#0b1b3a"/>
+  <circle cx="318" cy="92" r="34" fill="#fef3c7"/>
+  <circle cx="332" cy="82" r="30" fill="#0b1b3a"/>
+  <g fill="#fef9c3" opacity="0.8">
+    <circle cx="60" cy="70" r="2"/><circle cx="140" cy="40" r="1.6"/><circle cx="230" cy="74" r="1.8"/>
+    <circle cx="96" cy="128" r="1.4"/><circle cx="262" cy="134" r="1.6"/>
+  </g>
+  <text x="32" y="196" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="40" font-weight="700">Plug in.</text>
+  <text x="32" y="242" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="40" font-weight="700">Go to bed.</text>
+  <rect x="0" y="380" width="400" height="120" fill="#13274d"/>
+  <rect x="58" y="290" width="44" height="72" rx="10" fill="#0f766e"/>
+  <rect x="68" y="304" width="24" height="8" rx="4" fill="#a3e635"/>
+  <path d="M80 362 C 80 400, 160 392, 190 372" stroke="#e2e8f0" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M180 380 h150 a18 18 0 0 0 -18 -30 h-90 a26 26 0 0 0 -24 16 z" fill="#cbd5e1"/>
+  <circle cx="214" cy="384" r="14" fill="#1e293b"/><circle cx="300" cy="384" r="14" fill="#1e293b"/>
+  <text x="32" y="446" fill="#a3e635" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700">Acme Charge Home</text>
+  <text x="32" y="472" fill="#cbd5e1" font-family="Helvetica, Arial, sans-serif" font-size="14">acmecharge.example</text>
+</svg>
