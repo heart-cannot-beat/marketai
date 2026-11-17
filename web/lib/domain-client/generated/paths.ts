@@ -959,6 +959,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'get_marketing_ideas_checks_quote',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/checks/quote',
+    pathParams: ['project_id'],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'get_marketing_project',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/projects/:project_id',
@@ -1767,6 +1775,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/marketing/first-batch',
     pathParams: [],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'start_marketing_ideas_checks',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/checks',
+    pathParams: ['project_id'],
     requiresIdempotency: true,
   },
   {

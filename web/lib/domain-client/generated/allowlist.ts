@@ -1943,6 +1943,25 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'get_marketing_ideas_checks_quote',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/checks/quote',
+    fastapiPathTemplate: '/api/v1/marketing/ideas/{project_id}/checks/quote',
+    pathParams: ['project_id'],
+    querySchema: z
+      .object({
+        execution_mode: z.enum(['byok', 'mock']).optional().default('byok'),
+      })
+      .strict(),
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 65536,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: false,
+  },
+  {
     operationId: 'get_marketing_project',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/projects/:project_id',
@@ -3816,6 +3835,20 @@ export const DOMAIN_ALLOWLIST = [
     requestMediaTypes: ['application/json'],
     maxRequestBytes: 131072,
     maxResponseBytes: 16384,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: false,
+  },
+  {
+    operationId: 'start_marketing_ideas_checks',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/checks',
+    fastapiPathTemplate: '/api/v1/marketing/ideas/{project_id}/checks',
+    pathParams: ['project_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.start_marketing_ideas_checks,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 1024,
+    maxResponseBytes: 524288,
     requiresIdempotency: true,
     forwardConditionalHeaders: false,
   },

@@ -1190,6 +1190,8 @@
   "error-asset_not_in_round": "Select an asset from this round’s frozen plan.",
   "error-qc_input_too_large": "Shorten the check intent and product evidence, then reconfirm the plan.",
   "error-qc_quote_changed": "The check inputs, quote or permissions changed. Refresh the preview and retry.",
+  "error-checks_unavailable": "These ads can't be checked yet. Deal with what the page points out first.",
+  "error-checks_quote_changed": "The ads to check or the cost changed. Refresh and confirm the new maximum.",
   "error-ai_qc_not_found": "The AI check for this asset could not be found.",
   "error-ai_qc_not_current": "The AI check is unfinished or outdated. Review the current result first.",
   "error-ai_qc_kind_mismatch": "This result is not the single-image or comparison check the review needs.",

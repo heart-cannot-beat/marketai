@@ -1190,6 +1190,8 @@
   "error-asset_not_in_round": "请从本轮冻结的方案中选择素材。",
   "error-qc_input_too_large": "请缩短检查意图和产品证据，然后重新确认方案。",
   "error-qc_quote_changed": "检查的输入、报价或权限已变化。请刷新预览后重试。",
+  "error-checks_unavailable": "现在还不能检查这些广告，请先处理页面上提示的问题。",
+  "error-checks_quote_changed": "要检查的广告或费用已变化，请刷新后确认新的最高费用。",
   "error-ai_qc_not_found": "找不到这条素材的 AI 检查。",
   "error-ai_qc_not_current": "AI 检查尚未完成或已过时，请先查看当前结果。",
   "error-ai_qc_kind_mismatch": "这个结果不是审核所需的单图检查或对照检查。",

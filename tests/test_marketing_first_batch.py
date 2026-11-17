@@ -1,7 +1,8 @@
 """The ads-first first batch (#193): read, understand, draft the ideas and make the ads under one confirmed maximum.
 
 Everything runs through the real endpoints and the real Worker loop, with a fake web page, a fake model
-(the Controlled Mock fixtures, or a fake OpenAI answer for BYOK) and a fake image provider: no paid call.
+(the Controlled Mock fixtures, or a fake OpenAI answer for BYOK), a fake image provider and, for BYOK
+checks (#197), a fake vision model: no paid call.
 """
 import asyncio
 import json
@@ -25,6 +26,7 @@ from app.entitlements.credential_admin import CredentialAdmin
 from app.entitlements.credential_protector import CredentialProtector
 from app.generation.models import RunItemRecord
 from app.marketing import first_batch, ideas
+from app.marketing.ai_qc_worker import execute_ai_qc
 from app.marketing.ideas_contracts import FirstBatchDetail, FirstBatchQuote, IdeasProjectDetail
 from app.marketing.models import MarketingFirstBatchRecord, MarketingGenerationLinkRecord, MarketingProjectRecord, PlanningCallRecord
 from app.marketing.planner import example_result, execute_planning
@@ -50,6 +52,27 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>Acme Charge Ho
 #: The Controlled Mock ideas, kept before a test patches ``ideas.example`` with a variation of them.
 EXAMPLE = ideas.example
 IMAGE_PRICES = json.dumps({"openai": {config.OPENAI_IMAGE_MODEL: {"1K": "0.05"}}})
+#: The image checks' deployment settings for BYOK (#197).
+QC_ENV = {"MARKETAI_MARKETING_QC_PROVIDER": "openai", "MARKETAI_MARKETING_QC_MODEL": "vision-test",
+          "MARKETAI_MARKETING_QC_MAX_COST_USD": "0.05"}
+
+
+def check_report(inputs, **changes):
+    """A faithful answer of the fake vision model to an ideas check: every check passes, the copy is
+    rendered exactly as written. ``changes`` alters one finding (by check id) or the ``rendered_text``."""
+    findings = [{"check_id": key, "status": "pass", "confidence": "high",
+                 "visual_evidence": "The charger and the headline are clearly visible in the driveway scene.",
+                 "rationale": "Matches the ad's claim, way of telling and copy.", "suggested_fix": "",
+                 "fact_ids": inputs["evidence_fact_ids"][:1] if key == "facts_supported" else []}
+                for key in inputs["required_checks"]]
+    answer = {"rendered_text": {field: inputs["combination"][field] for field in ("headline", "body_copy")},
+              "summary": "The ad shows its claim clearly.", "findings": findings}
+    for check_id, values in changes.items():
+        if check_id == "rendered_text":
+            answer["rendered_text"].update(values)
+        else:
+            next(f for f in findings if f["check_id"] == check_id).update(values)
+    return answer
 
 
 def card(variants=()):
@@ -136,6 +159,7 @@ class FirstBatchFixtures(IdeasPlanningFixtures):
                                         signing_secret=b"test-only")
         self.llm_client = None
         self.complete = None
+        self.qc_complete = None
         self.reading(card())
         self.addCleanup(register_llm_mock_fixture, extraction.SEMANTIC, extraction._mock_product_intake)
 
@@ -191,6 +215,15 @@ class FirstBatchFixtures(IdeasPlanningFixtures):
                     await execute_planning(job.context, str(job.payload["call_id"]), complete=complete)
                     jobs.succeed(job.context, job.id, runtime_self.owner)
                 stack.enter_context(patch.object(WorkerRuntime, "_marketing_plan", paid_planning))
+            if self.qc_complete is not None:
+                qc_complete = self.qc_complete
+
+                async def paid_check(runtime_self, job):
+                    jobs.mark_running(job.context, job.id, runtime_self.owner)
+                    await execute_ai_qc(job.context, str(job.payload["call_id"]), runtime_self.blob_store,
+                                        complete=qc_complete)
+                    jobs.succeed(job.context, job.id, runtime_self.owner)
+                stack.enter_context(patch.object(WorkerRuntime, "_marketing_ai_qc", paid_check))
             for _ in range(rounds):
                 if not asyncio.run(runtime.run_once(job_types=job_types)):
                     break
@@ -233,9 +266,9 @@ class FirstBatchFixtures(IdeasPlanningFixtures):
     # -- BYOK ------------------------------------------------------------------------------------
 
     def byok(self, planning=None):
-        """An OpenAI key, a spend limit and a priced image model; every answer comes from a fake model."""
+        """An OpenAI key, a spend limit, a priced image model and image checks; every answer comes from a fake model."""
         self.paid_setup()
-        for name, value in PLANNING_ENV.items():
+        for name, value in {**PLANNING_ENV, **QC_ENV}.items():
             patcher = patch.dict("os.environ", {name: value})
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -273,6 +306,7 @@ class FirstBatchFixtures(IdeasPlanningFixtures):
                 return json.dumps(draft(inputs))
             return json.dumps(example_result("understanding", inputs))
         self.complete = AsyncMock(side_effect=complete)
+        self.qc_complete = AsyncMock(side_effect=lambda provider, model, credential, inputs, images: check_report(inputs))
 
     def reserved(self, batch):
         """Every reservation the batch's steps hold or held, by maximum."""
@@ -518,7 +552,9 @@ class FirstBatchPaidTests(FirstBatchFixtures):
         self.assertEqual([Decimal(steps[s]["maximum_cost"]) for s in ("understanding", "ideas", "ideas_retry")],
                          [Decimal("0.1")] * 3)
         self.assertEqual((steps["images"]["quantity"], Decimal(steps["images"]["unit_maximum"])), (6, Decimal("0.05")))
-        self.assertEqual(Decimal(quoted["maximum_cost"]), reading + Decimal("0.3") + Decimal("0.3"))
+        # Each image's check is in the confirmed total too (#197).
+        self.assertEqual((steps["checks"]["quantity"], Decimal(steps["checks"]["unit_maximum"])), (6, Decimal("0.05")))
+        self.assertEqual(Decimal(quoted["maximum_cost"]), reading + Decimal("0.3") + Decimal("0.3") + Decimal("0.3"))
         self.assertEqual((quoted["image_provider"], quoted["image_model"]), ("openai", config.OPENAI_IMAGE_MODEL))
 
     def test_a_retried_draft_finishes_within_the_confirmed_total(self):
@@ -558,8 +594,9 @@ class FirstBatchPaidTests(FirstBatchFixtures):
     def test_a_step_past_the_confirmed_total_stops(self):
         batch = self.start("byok")
         self.drain(job_types=("products.intake",))
-        # The planning price went up after the user confirmed the start button's maximum.
-        with patch.dict("os.environ", {"MARKETAI_PLANNING_MAX_COST_USD": "0.70"}):
+        # The planning price went up after the user confirmed the start button's maximum (which includes the
+        # image checks, #197, so the new price must pass it on the first planning call).
+        with patch.dict("os.environ", {"MARKETAI_PLANNING_MAX_COST_USD": "0.95"}):
             self.drain()
             stopped = self.batch(batch["id"])
             self.assertEqual((stopped["state"], stopped["attention"]["reason"], stopped["attention"]["step"]),

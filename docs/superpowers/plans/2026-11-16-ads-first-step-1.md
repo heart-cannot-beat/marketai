@@ -88,7 +88,7 @@
 - **D6 广告清单。** 一个项目的广告通过出图配方里的 `marketing_intent.project_id` 找，不依赖小轮。查询写在 `app/marketing/ideas.py::project_ads`，S1 提供，后面各块共用。
 - **D7 费用。** 首批总价是各步最高费用之和，再加一次策划调用的最高费用，确认一次。多出的一次只用于应用拒收主张草稿时重新起草一次（#193 维护者决定）。每一步仍然单独预留、单独结算，没用上的不收费。预留总额不超过确认的数字，超过就停下来。
 - **D8 供应商。** 第 1 步保证只有 OpenAI Key 时全程能跑。只有 Gemini Key 时，在开始之前提示“目前需要 OpenAI 的 Key”。
-- **D9 新接口一览。** 全部做完后接口数从 242 变成 256。
+- **D9 新接口一览。** 全部做完后接口数从 242 变成 257（S9 多一个检查报价接口，#197）。
 
 | 块 | operation_id | 路径 |
 | --- | --- | --- |
@@ -102,6 +102,7 @@
 | S4 | `start_marketing_first_batch` | `POST /marketing/first-batch` |
 | S4 | `get_marketing_first_batch` | `GET /marketing/first-batch/{first_batch_id}` |
 | S4 | `resume_marketing_first_batch` | `POST /marketing/first-batch/{first_batch_id}/resume` |
+| S9 | `get_marketing_ideas_checks_quote` | `GET /marketing/ideas/{project_id}/checks/quote`（按钮上写的最高费用从这里来，和小轮检查、首批一样先报价再确认） |
 | S9 | `start_marketing_ideas_checks` | `POST /marketing/ideas/{project_id}/checks` |
 | S10 | `edit_marketing_ideas_understanding` | `PATCH /marketing/ideas/{project_id}/understanding` |
 | S10 | `verify_marketing_ideas` | `POST /marketing/ideas/{project_id}/verification` |
@@ -514,6 +515,7 @@ class IdeasApiTests(MarketingIdeasFixtures):
 - **规则：** 只做单图检查；对照检查留到第 2 步冻结小轮之后。检查结果是建议，不产生质量通过记录。检查对照的是出图时的事实；事实核对后变了，检查要重做（S10 判断）。
 - **测试要点：** 图里的字和文案不一致时给出发现；引用了没有依据的说法时给出发现；没有 Key 时不受理；结算记录正确；小轮上的检查行为不变（回归）。
 - **开工前先确认：** 改现有表还是新建表，哪个对已有的 RLS、授权和查询影响小。
+- **做成的样子（#197）：** 改现有的 `marketing_ai_qc_calls`（迁移 `zzo197a1b2c3`）：`round_id` 改为可空、加 `project_id`，二者必有且只有一个，项目上的调用只能是单图检查。这张表已有强制 RLS 和整表授权，恢复、对账、用量证据都按调用编号走，所以 Worker 不加权限、小轮的查询不变；新建表反而要重做这一套。输入取这张图的出图意图：组合、主张、讲法、出图时的理解快照（记下 `understanding_hash`）和引用的事实（`evidence_fact_ids`，没核对也算依据，只有它们能支持图里的说法）。结果放在 `get_marketing_ideas` 每张广告的 `check` 里，只列 `fail` 和 `unknown`。一张图检查成功后不再计费重查；Mock 图只用 Mock 检查。接口由 API 受理。首批出完图后进入 `checking`，由推进任务在 Worker 里受理这一批图的检查并计入确认的总价（维护者在 #197 上决定，合同 §11 的范围已加上；Worker 只多了 `marketing_ai_qc_calls` 的 INSERT）；检查失败、超出总价、结果不确定都停下，`resume` 只重查没查成的图。
 
 ### S10 后端：核对、草稿状态、下载
 

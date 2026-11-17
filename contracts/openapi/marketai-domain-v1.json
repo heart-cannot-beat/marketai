@@ -8717,6 +8717,118 @@
         }
       }
     },
+    "/api/v1/marketing/ideas/{project_id}/checks": {
+      "post": {
+        "operationId": "start_marketing_ideas_checks",
+        "summary": "Start Ideas Checks",
+        "description": "Check the ads the quote counted, against the intent each image was made from (#197).\n\nThe result is a suggestion on each ad (``ads[].check``), never a quality approval; no round is needed.\nWithout the workspace's key nothing is admitted (409 ``checks_unavailable``).",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartIdeasChecks"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasProjectDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/ideas/{project_id}/checks/quote": {
+      "get": {
+        "operationId": "get_marketing_ideas_checks_quote",
+        "summary": "Get Ideas Checks Quote",
+        "description": "What checking the unchecked ads of these ideas costs at most: one single-image check per image (#197).",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "execution_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "byok",
+                "mock"
+              ],
+              "type": "string",
+              "default": "byok"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasChecksQuote"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/ideas/{project_id}/generation-drafts": {
       "post": {
         "operationId": "prepare_marketing_ideas_generation",
@@ -15383,6 +15495,16 @@
           },
           "created_at": {
             "type": "string"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IdeasAdCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -30305,7 +30427,8 @@
               "reading",
               "understanding",
               "ideas",
-              "images"
+              "images",
+              "checks"
             ]
           },
           "code": {
@@ -30377,6 +30500,7 @@
               "understanding",
               "ideas",
               "generating",
+              "checking",
               "done",
               "needs_attention",
               "failed"
@@ -30575,7 +30699,7 @@
           "image_model",
           "steps"
         ],
-        "description": "The start button's maximum (#193): every step's maximum plus one more drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``."
+        "description": "The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one\nmore drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``."
       },
       "FirstBatchQuoteStep": {
         "properties": {
@@ -30586,7 +30710,8 @@
               "understanding",
               "ideas",
               "ideas_retry",
-              "images"
+              "images",
+              "checks"
             ]
           },
           "quantity": {
@@ -30657,6 +30782,7 @@
               "understanding",
               "ideas",
               "generating",
+              "checking",
               "done",
               "needs_attention",
               "failed"
@@ -32446,6 +32572,107 @@
           "combinations"
         ]
       },
+      "IdeasAdCheck": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "uncertain"
+            ]
+          },
+          "execution_mode": {
+            "type": "string",
+            "enum": [
+              "byok",
+              "mock"
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ai_visual_suggestion",
+                  "controlled_mock"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "needs_changes",
+                  "needs_confirmation",
+                  "ready_to_confirm"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/IdeasCheckFinding"
+            },
+            "type": "array"
+          },
+          "understanding_hash": {
+            "type": "string"
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "language": {
+            "type": "string"
+          },
+          "maximum_cost": {
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "execution_mode",
+          "findings",
+          "understanding_hash",
+          "fact_ids",
+          "language",
+          "maximum_cost",
+          "created_at"
+        ],
+        "description": "The newest automatic check of one ad (#197): a suggestion, never a quality approval.\n\nIt was made against the product understanding as it was when the image was made (``understanding_hash``)\nand the facts the ad cites (``fact_ids``); whether that still holds after the user checks the facts is\nfor the ad's status to say."
+      },
       "IdeasCallSummary": {
         "properties": {
           "id": {
@@ -32496,6 +32723,168 @@
           "execution_mode"
         ],
         "description": "A drafting call of ads-first ideas: the product understanding, then the ideas (#190).\n\nThe plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call."
+      },
+      "IdeasCheckFinding": {
+        "properties": {
+          "check_id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "fail",
+              "unknown"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "gate_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visual_evidence": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "suggested_fix": {
+            "type": "string"
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "unsupported_claims": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rendered_text_diff": {
+            "items": {
+              "$ref": "#/components/schemas/RenderedCopyDifference"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "check_id",
+          "description",
+          "status",
+          "confidence",
+          "visual_evidence",
+          "rationale",
+          "suggested_fix",
+          "fact_ids"
+        ],
+        "description": "A check that needs attention: ``fail``, or ``unknown`` when the image alone cannot settle it. Passes are left out."
+      },
+      "IdeasChecksQuote": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution_mode": {
+            "type": "string",
+            "enum": [
+              "byok",
+              "mock"
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "maximum_cost": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "default": "USD"
+          },
+          "quote_hash": {
+            "type": "string"
+          },
+          "asset_version_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/IdeasChecksSkipped"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "available",
+          "execution_mode",
+          "provider",
+          "model",
+          "quantity",
+          "maximum_cost",
+          "quote_hash",
+          "asset_version_ids",
+          "skipped"
+        ],
+        "description": "What checking these ideas' unchecked ads costs at most (#197): one single-image check per image.\n\nOnly images made in ``execution_mode`` are counted: a Mock image gets the Mock check, a real one a real\ncheck. An image with a check queued, running or uncertain, or with a finished one, is not counted again."
+      },
+      "IdeasChecksSkipped": {
+        "properties": {
+          "asset_version_id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_version_id",
+          "code"
+        ],
+        "description": "An ad that cannot be checked as it was made, and why (e.g. ``product_reference_changed``)."
       },
       "IdeasGenerationDraft": {
         "properties": {
@@ -40079,6 +40468,54 @@
           "concept_key_name"
         ]
       },
+      "RenderedCopyChange": {
+        "properties": {
+          "expected": {
+            "type": "string"
+          },
+          "rendered": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected",
+          "rendered"
+        ]
+      },
+      "RenderedCopyDifference": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "headline",
+              "body_copy"
+            ]
+          },
+          "expected": {
+            "type": "string"
+          },
+          "rendered": {
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/RenderedCopyChange"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "expected",
+          "rendered",
+          "changes"
+        ],
+        "description": "A headline or body text the image renders differently from the ad's copy (empty ``rendered``: not readable)."
+      },
       "RenderedText": {
         "properties": {
           "headline": {
@@ -41980,6 +42417,29 @@
           "quote_hash"
         ],
         "description": "Paste a link, images or text and start: read, draft and make the first ads under one confirmed maximum."
+      },
+      "StartIdeasChecks": {
+        "properties": {
+          "execution_mode": {
+            "type": "string",
+            "enum": [
+              "byok",
+              "mock"
+            ]
+          },
+          "quote_hash": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 64
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "execution_mode",
+          "quote_hash"
+        ],
+        "description": "Check the ads the quote counted, confirming its maximum."
       },
       "StartIdeasPlanning": {
         "properties": {

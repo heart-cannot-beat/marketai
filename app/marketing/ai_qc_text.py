@@ -97,6 +97,30 @@ SENTENCES = {
         "zh-CN": "先填写 rendered_text：按图中实际渲染的样子逐字转写标题与正文，包括错字、漏字、多字和错词；"
             "不要改正，也不要从输入中复制。Logo、产品标签和小字不属于标题或正文。图中没有或看不清的文字用空字符串。"
             "服务端会把 rendered_text 与已确认的 headline 和 body_copy 比对，二者任何一个词不同，copy_consistent 都必须 fail。"},
+    # Ads-first ideas checks (#197): an ad draft is checked against the facts it was drafted on, which the user has
+    # not checked yet; only those facts count as evidence, and the copy is the ad's own.
+    "role_ideas": {
+        "en-US": "You are MarketAI's visual marketing quality checker. This is a single-image check of an ad draft: first observe this "
+            "one actual image, then compare it with the product facts the ad was drafted on, its buying proposition, expression, "
+            "accompanying copy and brand baseline. The user has not checked these facts yet; judge only against them, never against "
+            "general knowledge.",
+        "zh-CN": "你是 MarketAI 的视觉营销质量检查员。这是对一张广告草稿的单图检查：先观察这一张实际图片，"
+            "再对照这张广告起草时依据的产品事实、广告主张、表达、配套文案和品牌底线。这些事实用户还没有核对；只按它们判断，不要按常识补充。"},
+    "facts_ideas": {
+        "en-US": "facts_supported cites only fact_ids listed in evidence_fact_ids, the facts this ad was drafted on; other facts, "
+            "inferences and speculation cannot support a factual claim, and never invent certifications, prices, performance or "
+            "compatibility. A claim in the image or copy that these facts do not support must fail.",
+        "zh-CN": "facts_supported 只能引用 evidence_fact_ids 中列出的事实，即这张广告起草时依据的事实；其他事实、推测和猜想都不能支持事实性声明，"
+            "不得捏造认证、价格、性能或兼容性。图片或文案中有这些事实不支持的说法时必须 fail。"},
+    "transcribe_ideas": {
+        "en-US": "Fill rendered_text first: transcribe the headline and the body text exactly as the image renders them, character by "
+            "character, including misspellings, missing or extra letters and wrong words; never correct them or copy them from the input. "
+            "Logos, product labels and small print are not headline or body text. Use an empty string for text the image does not show "
+            "or you cannot read. The server compares rendered_text with the ad's headline and body_copy, and copy_consistent must "
+            "fail when they differ in any word.",
+        "zh-CN": "先填写 rendered_text：按图中实际渲染的样子逐字转写标题与正文，包括错字、漏字、多字和错词；"
+            "不要改正，也不要从输入中复制。Logo、产品标签和小字不属于标题或正文。图中没有或看不清的文字用空字符串。"
+            "服务端会把 rendered_text 与这张广告的 headline 和 body_copy 比对，二者任何一个词不同，copy_consistent 都必须 fail。"},
     "role_paired": {
         "en-US": "You are MarketAI's visual marketing comparison checker. This is a paired check: the first image (target) is the exact "
             "version under review, each comparison is the exact version of a counterpart the plan names, and every image in the input "
@@ -167,6 +191,14 @@ def single_prompt(checks, language, schema, transcribe=False):
         *(("brand_single", "readable") if "brand_style" in checks else ()),
         "role_single", "untrusted", "target_single", *PRODUCT, *OUTPUT, "no_reference", "facts", "semantic",
         *(("transcribe",) if transcribe else ()), *CLOSING], language, schema)
+
+
+def ideas_single_prompt(checks, language, schema):
+    """An ads-first ad draft (#197): the single-image check against the facts it was drafted on, not confirmed facts."""
+    return _join([*(("language",) if "language_correct" in checks else ()),
+        *(("brand_single", "readable") if "brand_style" in checks else ()),
+        "role_ideas", "untrusted", "target_single", *PRODUCT, *OUTPUT, "no_reference", "facts_ideas", "semantic",
+        "transcribe_ideas", *CLOSING], language, schema)
 
 
 def paired_prompt(language, schema):

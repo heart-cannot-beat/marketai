@@ -49,6 +49,58 @@ class Ideas(Document):
         return self
 
 
+class RenderedCopyChange(Document):
+    expected: str
+    rendered: str
+
+
+class RenderedCopyDifference(Document):
+    """A headline or body text the image renders differently from the ad's copy (empty ``rendered``: not readable)."""
+    field: Literal["headline", "body_copy"]
+    expected: str
+    rendered: str
+    changes: list[RenderedCopyChange]
+
+
+class IdeasCheckFinding(Document):
+    """A check that needs attention: ``fail``, or ``unknown`` when the image alone cannot settle it. Passes are left out."""
+    check_id: str
+    # What the check asks, as the call was given it (``intent_n`` checks come from the ad's own checklist).
+    description: str
+    status: Literal["fail", "unknown"]
+    confidence: Literal["high", "medium", "low"]
+    # Set when the server, not the model, held the result back or failed it (e.g. ``rendered_text_mismatch``,
+    # ``claim_evidence_missing``).
+    gate_reason: str | None = None
+    visual_evidence: str
+    rationale: str
+    suggested_fix: str
+    fact_ids: list[str]
+    unsupported_claims: list[str] = Field(default_factory=list)
+    rendered_text_diff: list[RenderedCopyDifference] = Field(default_factory=list)
+
+
+class IdeasAdCheck(Document):
+    """The newest automatic check of one ad (#197): a suggestion, never a quality approval.
+
+    It was made against the product understanding as it was when the image was made (``understanding_hash``)
+    and the facts the ad cites (``fact_ids``); whether that still holds after the user checks the facts is
+    for the ad's status to say."""
+    id: str
+    state: Literal["queued", "running", "succeeded", "failed", "uncertain"]
+    execution_mode: Literal["byok", "mock"]
+    # ``controlled_mock`` for the explicit example, ``ai_visual_suggestion`` for a real check; set once succeeded.
+    source: Literal["ai_visual_suggestion", "controlled_mock"] | None = None
+    suggestion: Literal["needs_changes", "needs_confirmation", "ready_to_confirm"] | None = None
+    findings: list[IdeasCheckFinding]
+    understanding_hash: str
+    fact_ids: list[str]
+    language: str
+    maximum_cost: str
+    error_code: str | None = None
+    created_at: str
+
+
 class AdSummary(Document):
     asset_version_id: str
     combination_id: str
@@ -60,6 +112,8 @@ class AdSummary(Document):
     # Whether the image request sent a product photo; the ideas page marks one made without (#196).
     used_product_photo: bool
     created_at: str
+    # The newest automatic check of this image, if one was started (#197).
+    check: IdeasAdCheck | None = None
 
 
 class PendingAd(Document):
@@ -74,8 +128,9 @@ class IdeasCallSummary(PlanningCallSummary):
     kind: Literal["understanding", "ideas"]
 
 
-FirstBatchState = Literal["reading", "understanding", "ideas", "generating", "done", "needs_attention", "failed"]
-FirstBatchStep = Literal["reading", "understanding", "ideas", "images"]
+#: ``checking``: every image is made (they are on the ideas page) and each is being checked (#197).
+FirstBatchState = Literal["reading", "understanding", "ideas", "generating", "checking", "done", "needs_attention", "failed"]
+FirstBatchStep = Literal["reading", "understanding", "ideas", "images", "checks"]
 #: Why a first batch stopped (#193). ``page_unreadable`` and ``reading_failed`` end it; the others wait for the user.
 FirstBatchStopReason = Literal["several_models", "page_unreadable", "reading_failed", "too_few_claims", "over_budget",
                                "ideas_refused", "step_failed", "uncertain"]
@@ -165,15 +220,46 @@ class StartIdeasPlanning(Document):
     quote_hash: str = Field(default="", max_length=64)
 
 
+class IdeasChecksSkipped(Document):
+    """An ad that cannot be checked as it was made, and why (e.g. ``product_reference_changed``)."""
+    asset_version_id: str
+    code: str
+
+
+class IdeasChecksQuote(Document):
+    """What checking these ideas' unchecked ads costs at most (#197): one single-image check per image.
+
+    Only images made in ``execution_mode`` are counted: a Mock image gets the Mock check, a real one a real
+    check. An image with a check queued, running or uncertain, or with a finished one, is not counted again."""
+    available: bool
+    unavailable_reason: str | None = None
+    execution_mode: Literal["byok", "mock"]
+    provider: str
+    model: str
+    quantity: int
+    maximum_cost: str
+    currency: Literal["USD"] = "USD"
+    quote_hash: str
+    asset_version_ids: list[str]
+    skipped: list[IdeasChecksSkipped]
+
+
+class StartIdeasChecks(Document):
+    """Check the ads the quote counted, confirming its maximum."""
+    execution_mode: Literal["byok", "mock"]
+    quote_hash: str = Field(min_length=64, max_length=64)
+
+
 class FirstBatchQuoteStep(Document):
-    step: Literal["reading", "understanding", "ideas", "ideas_retry", "images"]
+    step: Literal["reading", "understanding", "ideas", "ideas_retry", "images", "checks"]
     quantity: int
     unit_maximum: str
     maximum_cost: str
 
 
 class FirstBatchQuote(Document):
-    """The start button's maximum (#193): every step's maximum plus one more drafting of the ideas.
+    """The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one
+    more drafting of the ideas.
 
     Step 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``."""
     available: bool
@@ -206,7 +292,7 @@ class FirstBatchAttention(Document):
     code: str | None = None
     # ``several_models``: the models the page lists, one to choose.
     variants: list[str] = Field(default_factory=list)
-    # ``step_failed`` or ``uncertain`` while making images: the ads concerned.
+    # ``step_failed`` or ``uncertain`` while making or checking images, ``over_budget`` while checking: the ads concerned.
     combination_ids: list[str] = Field(default_factory=list)
     # ``over_budget``: what the reserved total would have become.
     needed: str | None = None

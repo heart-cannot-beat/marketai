@@ -1120,6 +1120,18 @@
     "maxResponseBytes": 524288,
     "forwardConditionalHeaders": true
   },
+  "get_marketing_ideas_checks_quote": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/checks/quote",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": false
+  },
+  "start_marketing_ideas_checks": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/checks",
+    "maxRequestBytes": 1024,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
   "get_marketing_first_batch_quote": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/first-batch-quote",
     "maxRequestBytes": 0,

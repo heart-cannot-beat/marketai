@@ -1083,6 +1083,21 @@ export interface DomainGateway {
     | DomainResultFor<'prepare_marketing_ideas_generation'>
     | ReconciliationRequired
   >;
+  /** What checking the unchecked ads of these ideas costs at most (#197). */
+  getMarketingIdeasChecksQuote(params: {
+    workspaceSlug: string;
+    projectId: string;
+    executionMode?: 'byok' | 'mock';
+  }): Promise<DomainResultFor<'get_marketing_ideas_checks_quote'>>;
+  /** Check the ads the quote counted; each result is a suggestion on its ad (#197). */
+  startMarketingIdeasChecks(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['start_marketing_ideas_checks']['requestBody'];
+  }): Promise<
+    DomainResultFor<'start_marketing_ideas_checks'> | ReconciliationRequired
+  >;
   /** The start button's maximum for the ads-first first batch (#193). */
   getMarketingFirstBatchQuote(params: {
     workspaceSlug: string;
@@ -4969,6 +4984,41 @@ export class DefaultDomainGateway implements DomainGateway {
       201,
       'created',
       { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async getMarketingIdeasChecksQuote(params: {
+    workspaceSlug: string;
+    projectId: string;
+    executionMode?: 'byok' | 'mock';
+  }): Promise<DomainResultFor<'get_marketing_ideas_checks_quote'>> {
+    return this.sendSafe<'get_marketing_ideas_checks_quote'>(
+      buildBffPath('get_marketing_ideas_checks_quote', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }) + this.buildQuery({ execution_mode: params.executionMode })
+    );
+  }
+
+  async startMarketingIdeasChecks(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['start_marketing_ideas_checks']['requestBody'];
+  }): Promise<
+    DomainResultFor<'start_marketing_ideas_checks'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'start_marketing_ideas_checks',
+      params.actionInstanceId,
+      buildBffPath('start_marketing_ideas_checks', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      202,
+      'accepted'
     );
   }
 

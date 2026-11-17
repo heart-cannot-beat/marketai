@@ -153,6 +153,12 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       kept: { type: 'boolean' },
       used_product_photo: { type: 'boolean' },
       created_at: { type: 'string' },
+      check: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasAdCheck' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -6439,7 +6445,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       },
       step: {
         type: 'string',
-        enum: ['reading', 'understanding', 'ideas', 'images'],
+        enum: ['reading', 'understanding', 'ideas', 'images', 'checks'],
       },
       code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       variants: { items: { type: 'string' }, type: 'array' },
@@ -6463,6 +6469,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
           'understanding',
           'ideas',
           'generating',
+          'checking',
           'done',
           'needs_attention',
           'failed',
@@ -6553,13 +6560,20 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'steps',
     ],
     description:
-      "The start button's maximum (#193): every step's maximum plus one more drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.",
+      "The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one\nmore drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.",
   },
   FirstBatchQuoteStep: {
     properties: {
       step: {
         type: 'string',
-        enum: ['reading', 'understanding', 'ideas', 'ideas_retry', 'images'],
+        enum: [
+          'reading',
+          'understanding',
+          'ideas',
+          'ideas_retry',
+          'images',
+          'checks',
+        ],
       },
       quantity: { type: 'integer' },
       unit_maximum: { type: 'string' },
@@ -6605,6 +6619,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
           'understanding',
           'ideas',
           'generating',
+          'checking',
           'done',
           'needs_attention',
           'failed',
@@ -7510,6 +7525,56 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['market', 'ad_language', 'angles', 'combinations'],
   },
+  IdeasAdCheck: {
+    properties: {
+      id: { type: 'string' },
+      state: {
+        type: 'string',
+        enum: ['queued', 'running', 'succeeded', 'failed', 'uncertain'],
+      },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      source: {
+        anyOf: [
+          { type: 'string', enum: ['ai_visual_suggestion', 'controlled_mock'] },
+          { type: 'null' },
+        ],
+      },
+      suggestion: {
+        anyOf: [
+          {
+            type: 'string',
+            enum: ['needs_changes', 'needs_confirmation', 'ready_to_confirm'],
+          },
+          { type: 'null' },
+        ],
+      },
+      findings: {
+        items: { $ref: '#/components/schemas/IdeasCheckFinding' },
+        type: 'array',
+      },
+      understanding_hash: { type: 'string' },
+      fact_ids: { items: { type: 'string' }, type: 'array' },
+      language: { type: 'string' },
+      maximum_cost: { type: 'string' },
+      error_code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'state',
+      'execution_mode',
+      'findings',
+      'understanding_hash',
+      'fact_ids',
+      'language',
+      'maximum_cost',
+      'created_at',
+    ],
+    description:
+      "The newest automatic check of one ad (#197): a suggestion, never a quality approval.\n\nIt was made against the product understanding as it was when the image was made (``understanding_hash``)\nand the facts the ad cites (``fact_ids``); whether that still holds after the user checks the facts is\nfor the ad's status to say.",
+  },
   IdeasCallSummary: {
     properties: {
       id: { type: 'string' },
@@ -7525,6 +7590,82 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     required: ['id', 'operation_id', 'kind', 'state', 'execution_mode'],
     description:
       'A drafting call of ads-first ideas: the product understanding, then the ideas (#190).\n\nThe plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call.',
+  },
+  IdeasCheckFinding: {
+    properties: {
+      check_id: { type: 'string' },
+      description: { type: 'string' },
+      status: { type: 'string', enum: ['fail', 'unknown'] },
+      confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+      gate_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      visual_evidence: { type: 'string' },
+      rationale: { type: 'string' },
+      suggested_fix: { type: 'string' },
+      fact_ids: { items: { type: 'string' }, type: 'array' },
+      unsupported_claims: { items: { type: 'string' }, type: 'array' },
+      rendered_text_diff: {
+        items: { $ref: '#/components/schemas/RenderedCopyDifference' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'check_id',
+      'description',
+      'status',
+      'confidence',
+      'visual_evidence',
+      'rationale',
+      'suggested_fix',
+      'fact_ids',
+    ],
+    description:
+      'A check that needs attention: ``fail``, or ``unknown`` when the image alone cannot settle it. Passes are left out.',
+  },
+  IdeasChecksQuote: {
+    properties: {
+      available: { type: 'boolean' },
+      unavailable_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      provider: { type: 'string' },
+      model: { type: 'string' },
+      quantity: { type: 'integer' },
+      maximum_cost: { type: 'string' },
+      currency: { type: 'string', const: 'USD', default: 'USD' },
+      quote_hash: { type: 'string' },
+      asset_version_ids: { items: { type: 'string' }, type: 'array' },
+      skipped: {
+        items: { $ref: '#/components/schemas/IdeasChecksSkipped' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'available',
+      'execution_mode',
+      'provider',
+      'model',
+      'quantity',
+      'maximum_cost',
+      'quote_hash',
+      'asset_version_ids',
+      'skipped',
+    ],
+    description:
+      "What checking these ideas' unchecked ads costs at most (#197): one single-image check per image.\n\nOnly images made in ``execution_mode`` are counted: a Mock image gets the Mock check, a real one a real\ncheck. An image with a check queued, running or uncertain, or with a finished one, is not counted again.",
+  },
+  IdeasChecksSkipped: {
+    properties: {
+      asset_version_id: { type: 'string' },
+      code: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_id', 'code'],
+    description:
+      'An ad that cannot be checked as it was made, and why (e.g. ``product_reference_changed``).',
   },
   IdeasGenerationDraft: {
     properties: {
@@ -11024,6 +11165,28 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['concept_key_id', 'concept_key_name'],
   },
+  RenderedCopyChange: {
+    properties: { expected: { type: 'string' }, rendered: { type: 'string' } },
+    additionalProperties: false,
+    type: 'object',
+    required: ['expected', 'rendered'],
+  },
+  RenderedCopyDifference: {
+    properties: {
+      field: { type: 'string', enum: ['headline', 'body_copy'] },
+      expected: { type: 'string' },
+      rendered: { type: 'string' },
+      changes: {
+        items: { $ref: '#/components/schemas/RenderedCopyChange' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['field', 'expected', 'rendered', 'changes'],
+    description:
+      "A headline or body text the image renders differently from the ad's copy (empty ``rendered``: not readable).",
+  },
   RenderedText: {
     properties: {
       headline: { type: 'string', maxLength: 2000 },
@@ -11854,6 +12017,16 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     required: ['market', 'ad_language', 'quote_hash'],
     description:
       'Paste a link, images or text and start: read, draft and make the first ads under one confirmed maximum.',
+  },
+  StartIdeasChecks: {
+    properties: {
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      quote_hash: { type: 'string', maxLength: 64, minLength: 64 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['execution_mode', 'quote_hash'],
+    description: 'Check the ads the quote counted, confirming its maximum.',
   },
   StartIdeasPlanning: {
     properties: {
@@ -18485,6 +18658,7 @@ const SCHEMAS: Record<string, object> = {
           'understanding',
           'ideas',
           'generating',
+          'checking',
           'done',
           'needs_attention',
           'failed',
@@ -18575,7 +18749,7 @@ const SCHEMAS: Record<string, object> = {
       'steps',
     ],
     description:
-      "The start button's maximum (#193): every step's maximum plus one more drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.",
+      "The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one\nmore drafting of the ideas.\n\nStep 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.",
   },
   get_marketing_ideas_200: {
     properties: {
@@ -18630,6 +18804,39 @@ const SCHEMAS: Record<string, object> = {
       'ads',
       'pending',
     ],
+  },
+  get_marketing_ideas_checks_quote_200: {
+    properties: {
+      available: { type: 'boolean' },
+      unavailable_reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      provider: { type: 'string' },
+      model: { type: 'string' },
+      quantity: { type: 'integer' },
+      maximum_cost: { type: 'string' },
+      currency: { type: 'string', const: 'USD', default: 'USD' },
+      quote_hash: { type: 'string' },
+      asset_version_ids: { items: { type: 'string' }, type: 'array' },
+      skipped: {
+        items: { $ref: '#/components/schemas/IdeasChecksSkipped' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'available',
+      'execution_mode',
+      'provider',
+      'model',
+      'quantity',
+      'maximum_cost',
+      'quote_hash',
+      'asset_version_ids',
+      'skipped',
+    ],
+    description:
+      "What checking these ideas' unchecked ads costs at most (#197): one single-image check per image.\n\nOnly images made in ``execution_mode`` are counted: a Mock image gets the Mock check, a real one a real\ncheck. An image with a check queued, running or uncertain, or with a finished one, is not counted again.",
   },
   get_marketing_project_200: {
     properties: {
@@ -21191,6 +21398,7 @@ const SCHEMAS: Record<string, object> = {
           'understanding',
           'ideas',
           'generating',
+          'checking',
           'done',
           'needs_attention',
           'failed',
@@ -21881,6 +22089,7 @@ const SCHEMAS: Record<string, object> = {
           'understanding',
           'ideas',
           'generating',
+          'checking',
           'done',
           'needs_attention',
           'failed',
@@ -21976,6 +22185,70 @@ const SCHEMAS: Record<string, object> = {
     required: ['market', 'ad_language', 'quote_hash'],
     description:
       'Paste a link, images or text and start: read, draft and make the first ads under one confirmed maximum.',
+  },
+  start_marketing_ideas_checks_202: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  start_marketing_ideas_checks_request: {
+    properties: {
+      execution_mode: { type: 'string', enum: ['byok', 'mock'] },
+      quote_hash: { type: 'string', maxLength: 64, minLength: 64 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['execution_mode', 'quote_hash'],
+    description: 'Check the ads the quote counted, confirming its maximum.',
   },
   start_marketing_ideas_planning_202: {
     properties: {
@@ -23229,6 +23502,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     ],
     ['get_marketing_ideas_200', VALIDATOR_FUNCTIONS['get_marketing_ideas_200']],
     [
+      'get_marketing_ideas_checks_quote_200',
+      VALIDATOR_FUNCTIONS['get_marketing_ideas_checks_quote_200'],
+    ],
+    [
       'get_marketing_project_200',
       VALIDATOR_FUNCTIONS['get_marketing_project_200'],
     ],
@@ -23729,6 +24006,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'start_marketing_first_batch_request',
       VALIDATOR_FUNCTIONS['start_marketing_first_batch_request'],
+    ],
+    [
+      'start_marketing_ideas_checks_202',
+      VALIDATOR_FUNCTIONS['start_marketing_ideas_checks_202'],
+    ],
+    [
+      'start_marketing_ideas_checks_request',
+      VALIDATOR_FUNCTIONS['start_marketing_ideas_checks_request'],
     ],
     [
       'start_marketing_ideas_planning_202',
@@ -24372,6 +24657,11 @@ export const REQUEST_VALIDATORS = {
     'start_marketing_first_batch_request'
   ] as ValidateFunction<
     DomainOperationMap['start_marketing_first_batch']['requestBody']
+  >,
+  start_marketing_ideas_checks: VALIDATOR_FUNCTIONS[
+    'start_marketing_ideas_checks_request'
+  ] as ValidateFunction<
+    DomainOperationMap['start_marketing_ideas_checks']['requestBody']
   >,
   start_marketing_ideas_planning: VALIDATOR_FUNCTIONS[
     'start_marketing_ideas_planning_request'

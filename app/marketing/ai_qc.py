@@ -135,7 +135,14 @@ def latest(session, ctx, row, asset_id, kind):
 
 
 def capability(session, ctx, row):
-    if row.execution_mode == "mock":
+    return mode_capability(session, ctx, row.execution_mode)
+
+
+def mode_capability(session, ctx, execution_mode):
+    """Who checks in this execution mode, at what maximum per image, or why no check can be admitted.
+
+    Mock is the explicit controlled example; BYOK without the workspace's key is ``credential_required``."""
+    if execution_mode == "mock":
         return {"provider": "mock", "model": "marketing-qc-example-v1", "unit_maximum": "0", "reason": None}
     # An OpenAI key stands in for the deployment provider's, as for planning (#192).
     from .provider_choice import choose
@@ -287,11 +294,16 @@ def brand_style_input(session, ctx, plan, group_id):
 
     A reused older creative is checked against this round's baseline too. A logo that
     lost its file/rights gates is not sent; brand_style then cannot pass on the logo."""
+    return brand_input(session, ctx, style_rule(plan, group_id), plan.get("brand_kit"))
+
+
+def brand_input(session, ctx, rule, brand_ref):
+    """The style rule with the frozen brand kit ``brand_ref`` names, and its logo when that is still usable."""
     from . import brand_kits
-    result = style_rule(plan, group_id)
+    result = dict(rule)
     logos = []
-    if plan.get("brand_kit"):
-        kit = brand_kits.resolve_ref(session, ctx, plan["brand_kit"])
+    if brand_ref:
+        kit = brand_kits.resolve_ref(session, ctx, brand_ref)
         result["brand_kit"] = brand_kits.qc_summary(kit)
         if kit.content_json.get("logo"):
             try:
@@ -398,28 +410,34 @@ def start(session, ctx, row, body):
     quoted, inputs, cap = quote_and_inputs(session, ctx, row, kind, body.strategy_language)
     if not quoted["available"] or quoted["quote_hash"] != body.quote_hash:
         raise MarketingError("qc_quote_changed", "检查对象、报价或权限已变化，请刷新预览后重试。", 409)
-    records = []
-    for item in inputs:
-        call_id = new_id("maqc")
-        op = create_operation(session, command_type="marketing.ai_qc")
-        job = enqueue_in_session(session, context=ctx, job_type="marketing.ai_qc", payload={"call_id": call_id},
-            idempotency_key=call_id, resource_type="marketing_ai_qc", resource_id=call_id,
-            safe_to_retry_after_crash=True, max_attempts=1)
-        record = Call(id=call_id, workspace_id=ctx.workspace_id, round_id=row.id, asset_version_id=item["asset_version_id"], kind=kind,
-            operation_id=op.id, job_id=job.id, retry_of_id=item["retry_of_id"], sequence=item["sequence"], state="queued",
-            execution_mode=row.execution_mode, provider=cap["provider"], model=cap["model"], maximum_cost=cap["unit_maximum"],
-            policy_version=policy, input_hash=item["input_hash"],
-            request_hash=digest([item["input_hash"], item["retry_of_id"], cap["provider"], cap["model"], policy]), input_json=item["input"])
-        session.add(record)
-        session.flush()
-        if row.execution_mode == "byok":
-            entitlement = authorize_paid(session, ctx)
-            bundle = CostQuoteEngine({record.provider: {record.model: Decimal(record.maximum_cost)}}, policy).bundle(
-                [BillableCallSpec(record.id, record.provider, record.model, 1)], execution_mode="byok", budget_currency="USD")
-            ReservationBook().reserve(session, ctx, ReservationPlan(bundle, (), entitlement, op.id, {record.id: job.id}))
-        records.append(record)
+    records = [admit_call(session, ctx, item, cap, kind=kind, policy=policy, execution_mode=row.execution_mode, round_id=row.id)
+               for item in inputs]
     workflow.audit(session, row, "ai_qc_requested", {"kind": kind, "call_ids": [r.id for r in records],
         "quote_hash": quoted["quote_hash"], "maximum_cost": quoted["maximum_cost"]})
+
+
+def admit_call(session, ctx, item, cap, *, kind, policy, execution_mode, round_id=None, project_id=None):
+    """One queued call: its Operation, its single-attempt Job and, in BYOK, the reservation of its maximum,
+    all in the caller's transaction. The call checks an image of a round or of ads-first ideas (#197)."""
+    call_id = new_id("maqc")
+    op = create_operation(session, command_type="marketing.ai_qc")
+    job = enqueue_in_session(session, context=ctx, job_type="marketing.ai_qc", payload={"call_id": call_id},
+        idempotency_key=call_id, resource_type="marketing_ai_qc", resource_id=call_id,
+        safe_to_retry_after_crash=True, max_attempts=1)
+    record = Call(id=call_id, workspace_id=ctx.workspace_id, round_id=round_id, project_id=project_id,
+        asset_version_id=item["asset_version_id"], kind=kind,
+        operation_id=op.id, job_id=job.id, retry_of_id=item["retry_of_id"], sequence=item["sequence"], state="queued",
+        execution_mode=execution_mode, provider=cap["provider"], model=cap["model"], maximum_cost=cap["unit_maximum"],
+        policy_version=policy, input_hash=item["input_hash"],
+        request_hash=digest([item["input_hash"], item["retry_of_id"], cap["provider"], cap["model"], policy]), input_json=item["input"])
+    session.add(record)
+    session.flush()
+    if execution_mode == "byok":
+        entitlement = authorize_paid(session, ctx)
+        bundle = CostQuoteEngine({record.provider: {record.model: Decimal(record.maximum_cost)}}, policy).bundle(
+            [BillableCallSpec(record.id, record.provider, record.model, 1)], execution_mode="byok", budget_currency="USD")
+        ReservationBook().reserve(session, ctx, ReservationPlan(bundle, (), entitlement, op.id, {record.id: job.id}))
+    return record
 
 
 def normalize_report(data, inputs):
@@ -427,7 +445,12 @@ def normalize_report(data, inputs):
     ids = [f.check_id for f in report.findings]
     if len(ids) != len(set(ids)) or set(ids) != set(inputs["required_checks"]):
         raise QCOutputError("qc_check_coverage_invalid", "findings")
-    confirmed_facts = {f["id"] for f in inputs["understanding"]["facts"] if f["confirmation"] == "confirmed"}
+    if "evidence_fact_ids" in inputs:
+        # An ideas check (#197): the facts the ad was drafted on, as they were when its image was made, checked
+        # by the user or not. A round's check takes only the facts the user confirmed before it was frozen.
+        confirmed_facts = set(inputs["evidence_fact_ids"])
+    else:
+        confirmed_facts = {f["id"] for f in inputs["understanding"]["facts"] if f["confirmation"] == "confirmed"}
     from .contracts import Fact
     facts = {f["id"]: Fact.model_validate(f) for f in inputs["understanding"]["facts"] if f["id"] in confirmed_facts}
     fix = text.GATE_FIX[text.record_language(inputs)]
@@ -523,3 +546,68 @@ def confirm(session, ctx, row, body):
             checks=findings, note=body.note.strip() or text.CONFIRM_NOTE[text.record_language(single.input_json)] + single.result_json["summary"][:1800],
             compared_asset_version_ids=[i["asset_version_id"] for i in paired.input_json["images"] if i["role"] == "comparison"],
             ai_qc_id=single.id, paired_ai_qc_id=paired.id if paired.id != single.id else None, override_note=body.note))
+
+
+# --------------------------------------------------------------------------- ads-first ideas (#197)
+
+#: Single-image checks of an ads-first ad: against the ad's own generation intent, transcribing its copy.
+IDEAS_POLICY = "marketing-ideas-qc-single-v1"
+
+
+def ideas_required_checks(intent):
+    """What a round's single-image check asks of an image (``workflow.required_checks``), from the ad's own intent.
+
+    Nothing is compared with other ads: the comparison checks wait for a frozen round (ADR 0018, step 2)."""
+    combo = intent["combination"]
+    skip = set(workflow.PAIRED_CHECKS)
+    if not combo.get("image_brief"):
+        skip.add("language_correct")
+    if "style_variation" not in intent:
+        skip.update(workflow.STYLE_CHECKS)
+    checks = {k: v for k, v in workflow.CHECKS.items() if k not in skip}
+    return {**checks, **{f"intent_{index + 1}": item for index, item in enumerate(combo.get("checks") or [])}}
+
+
+def ideas_input(session, ctx, project, version, recipe, *, policy=IDEAS_POLICY):
+    """The exact, hashed input of one check of an ads-first ad (#197), in place of a round's snapshot.
+
+    The image is checked against the intent it was made from (design D5): the ideas' combination, claim and
+    way of telling, the product understanding as it was when the image was made (``understanding_hash``
+    names that snapshot) and the facts the ad cites (``evidence_fact_ids``), checked by the user or not.
+    The product photos and brand kit are the ones the recipe froze. ``MarketingError`` or ``SelectionError``
+    when the image is not an ad of these ideas or cannot be sent as it was made."""
+    from .ideas import FLOW, intent_of
+    from .product_references import assert_current, for_asset
+    intent = intent_of(recipe)
+    if intent.get("flow") != FLOW or intent.get("project_id") != project.id or not intent.get("understanding") \
+            or not intent.get("combination"):
+        raise MarketingError("ad_not_found", "这张广告不属于这些广告想法。", 404)
+    blob = asset_blob_ref(session, ctx, version.id, version=version)
+    if blob is None:
+        raise SelectionError('output_unavailable', '该历史素材暂无可下载文件。')
+    combo = intent["combination"]
+    language = intent.get("strategy_language") or "en-US"
+    required = ideas_required_checks(intent)
+    target = {"asset_version_id": version.id, "role": "target", "content_sha256": version.content_sha256,
+        "recipe_hash": recipe.recipe_hash, "provenance": recipe.canonical_json.get("reuse", {"kind": "generated_for_ideas"}),
+        "blob": asdict(blob), "combination": combo}
+    references = recipe.canonical_json.get("selection", {}).get("product_references", [])
+    references = references or for_asset(session, ctx, version)
+    assert_current(session, ctx, references)
+    brand, logos = brand_input(session, ctx, {"style_variation": intent["style_variation"], "style": intent.get("style", "")},
+        intent.get("brand_kit")) if "brand_style" in required else ({}, [])
+    inputs = {"policy_version": policy, "kind": "single", "strategy_language": language, "project_id": project.id,
+        "asset_version_id": version.id, "ideas_hash": intent.get("ideas_hash"), "recipe_hash": recipe.recipe_hash,
+        "understanding": intent["understanding"], "understanding_hash": digest(intent["understanding"]),
+        "evidence_fact_ids": list(intent.get("cited_fact_ids") or []), "proposition": intent["proposition"],
+        "expression": intent["expression"], "combination": combo, "required_checks": required,
+        "images": [target, *references, *logos], "product_reference_available": bool(references), **brand}
+    if "language_correct" in required:
+        inputs["ad_language"] = intent["ad_language"]
+    from .ai_qc_provider import public_input, output_schema
+    inputs["output_schema"] = output_schema(inputs)
+    inputs["system_prompt"] = text.ideas_single_prompt(required, language, inputs["output_schema"])
+    import json
+    if len((inputs["system_prompt"] + json.dumps(public_input(inputs), ensure_ascii=False)).encode()) > MAX_TEXT_BYTES:
+        raise MarketingError("qc_input_too_large", "检查意图与产品依据过长。")
+    return inputs

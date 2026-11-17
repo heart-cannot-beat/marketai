@@ -1,4 +1,8 @@
-"""Exact-image, exact-intent AI QC attempts and their paid dispatch fences."""
+"""Exact-image, exact-intent AI QC attempts and their paid dispatch fences.
+
+A call checks an image of a round (plan-first) or of ads-first ideas (#197): exactly one of ``round_id``
+and ``project_id`` is set. An ideas check is a single-image check only; comparisons wait for a round.
+"""
 from datetime import datetime
 from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -11,16 +15,23 @@ class MarketingAIQCRecord(Base):
     __table_args__ = (
         UniqueConstraint("workspace_id", "id", name="uq_marketing_ai_qc_workspace_id"),
         UniqueConstraint("workspace_id", "round_id", "asset_version_id", "request_hash", name="uq_marketing_ai_qc_request"),
+        UniqueConstraint("workspace_id", "project_id", "asset_version_id", "request_hash", name="uq_marketing_ai_qc_project_request"),
         ForeignKeyConstraint(["workspace_id", "round_id"], ["marketing_rounds.workspace_id", "marketing_rounds.id"], ondelete="RESTRICT"),
+        ForeignKeyConstraint(["workspace_id", "project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"], ondelete="RESTRICT"),
         ForeignKeyConstraint(["workspace_id", "asset_version_id"], ["asset_versions.workspace_id", "asset_versions.id"], ondelete="RESTRICT"),
         ForeignKeyConstraint(["workspace_id", "operation_id"], ["operation_records.workspace_id", "operation_records.id"], ondelete="RESTRICT"),
         ForeignKeyConstraint(["workspace_id", "job_id"], ["jobs.workspace_id", "jobs.id"], ondelete="RESTRICT"),
         ForeignKeyConstraint(["workspace_id", "retry_of_id"], ["marketing_ai_qc_calls.workspace_id", "marketing_ai_qc_calls.id"], ondelete="RESTRICT"),
         CheckConstraint("kind IS NULL OR kind IN ('single', 'paired')", name="ai_qc_kind"),
+        CheckConstraint("(round_id IS NULL) <> (project_id IS NULL)", name="ai_qc_subject"),
+        CheckConstraint("project_id IS NULL OR kind = 'single'", name="ai_qc_project_single"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
-    round_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The round whose frozen plan the image is checked against; NULL for an ads-first ideas check.
+    round_id: Mapped[str | None] = mapped_column(String(64))
+    # The ads-first ideas whose ad this is (#197); the check is against the ad's own generation intent.
+    project_id: Mapped[str | None] = mapped_column(String(64))
     asset_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     # single | paired; NULL is a call from before the split that checked everything at once.
     kind: Mapped[str | None] = mapped_column(String(16))

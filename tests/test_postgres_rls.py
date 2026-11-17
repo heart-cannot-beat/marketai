@@ -1013,6 +1013,45 @@ class RowLevelSecurityTests(unittest.TestCase):
                 {"id": self.beta_product},
             )
 
+    def test_an_ideas_check_names_only_its_own_workspaces_ideas(self):
+        """An ads-first ideas check (#197) is a ``marketing_ai_qc_calls`` row with ``project_id``: bound to the
+        ideas by a Workspace-composite key, naming a round or ideas but never both, single-image only."""
+        with self.owner.connect() as conn:
+            definitions = dict(conn.execute(self.text(
+                "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                " WHERE conrelid = 'public.marketing_ai_qc_calls'::regclass AND contype IN ('f', 'c', 'u')")).all())
+        self.assertEqual(
+            definitions["fk_marketing_ai_qc_calls_workspace_id_marketing_projects"],
+            "FOREIGN KEY (workspace_id, project_id) REFERENCES marketing_projects(workspace_id, id) ON DELETE RESTRICT")
+        self.assertIn("round_id IS NULL", definitions["ck_marketing_ai_qc_calls_ai_qc_subject"])
+        self.assertIn("project_id IS NULL", definitions["ck_marketing_ai_qc_calls_ai_qc_subject"])
+        self.assertIn("'single'", definitions["ck_marketing_ai_qc_calls_ai_qc_project_single"])
+        self.assertEqual(definitions["uq_marketing_ai_qc_project_request"],
+                         "UNIQUE (workspace_id, project_id, asset_version_id, request_hash)")
+
+    def test_an_ideas_check_cannot_be_written_into_another_workspace(self):
+        """The API admits ideas checks (#197): scoped to one Workspace it cannot place one in another,
+        and the Worker that settles them cannot reach another Workspace's checks."""
+        from sqlalchemy.exc import ProgrammingError
+
+        conn = self.scoped_connection(self.engine(API_URL), self.alpha)
+        with self.assertRaises(ProgrammingError) as raised:
+            conn.execute(self.text(
+                "INSERT INTO marketing_ai_qc_calls (id, workspace_id, round_id, project_id, asset_version_id, kind,"
+                " operation_id, job_id, sequence, state, execution_mode, provider, model, maximum_cost,"
+                " policy_version, input_hash, request_hash, input_json, created_at) VALUES (:id, :ws, NULL, :project,"
+                " 'av_x', 'single', 'op_x', 'job_x', 1, 'queued', 'byok', 'openai', 'vision-test', '0.10',"
+                " 'marketing-ideas-qc-single-v1', :hash, :hash, '{}', now())"),
+                {"id": f"maqc_{uuid.uuid4().hex[:8]}", "ws": self.beta, "project": f"mp_{uuid.uuid4().hex[:8]}",
+                 "hash": "c" * 64})
+        self.assertIn("row-level security", str(raised.exception))
+
+        worker = self.scoped_connection(self.engine(WORKER_URL), self.alpha)
+        result = worker.execute(self.text(
+            "UPDATE marketing_ai_qc_calls SET state = 'failed' WHERE workspace_id = :ws AND project_id IS NOT NULL"),
+            {"ws": self.beta})
+        self.assertEqual(result.rowcount, 0)
+
     # ------------------------------------------------------ child tables ----
 
     def test_a_child_row_is_visible_only_through_its_parent(self):

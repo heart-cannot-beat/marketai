@@ -33,7 +33,8 @@ class AICheckTranscribedReport(Document):
 
 
 # Single-image policies whose output carries `rendered_text`; earlier calls keep the report they were asked for.
-TRANSCRIBED_POLICIES = frozenset({"marketing-vision-qc-single-v3"})
+# The ads-first ideas check (#197) transcribes too.
+TRANSCRIBED_POLICIES = frozenset({"marketing-vision-qc-single-v3", "marketing-ideas-qc-single-v1"})
 
 
 def report_model(inputs):
