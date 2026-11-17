@@ -834,6 +834,18 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['EvidenceHandoffEnvelope'] };
   };
+  get_marketing_first_batch: {
+    pathParams: { first_batch_id: string };
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: { 200: components['schemas']['FirstBatchDetail'] };
+  };
+  get_marketing_first_batch_quote: {
+    pathParams: Record<string, never>;
+    queryParams: { execution_mode?: string };
+    requestBody: never;
+    successResponses: { 200: components['schemas']['FirstBatchQuote'] };
+  };
   get_marketing_ideas: {
     pathParams: { project_id: string };
     queryParams: Record<string, never>;
@@ -1542,6 +1554,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['ResumeItemResult'] };
   };
+  resume_marketing_first_batch: {
+    pathParams: { first_batch_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['ResumeFirstBatch'];
+    successResponses: { 200: components['schemas']['FirstBatchDetail'] };
+  };
   resume_scale_enrollment: {
     pathParams: { meta_mode: string; enrollment_id: string };
     queryParams: Record<string, never>;
@@ -1643,6 +1661,12 @@ export type DomainOperationMap = {
     queryParams: Record<string, never>;
     requestBody: components['schemas']['RequestExplanation'];
     successResponses: { 202: components['schemas']['ResourceEnvelope'] };
+  };
+  start_marketing_first_batch: {
+    pathParams: Record<string, never>;
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['StartFirstBatch'];
+    successResponses: { 201: components['schemas']['FirstBatchDetail'] };
   };
   start_marketing_ideas_planning: {
     pathParams: { project_id: string };

@@ -455,8 +455,10 @@ BEGIN
   -- ---- SELECT: Worker ----
   -- credential_versions and credential_bindings for envelope access and
   -- binding lookup at execution time.
-  -- No spend_guardrails, provider_cost_ledger, usage_events,
-  -- customer_notification_outbox, or guardrail_notification_states.
+  -- No spend_guardrails (except reading and locking it to admit a first
+  -- batch's next step, #193, granted with the marketing tables below),
+  -- provider_cost_ledger, usage_events, customer_notification_outbox, or
+  -- guardrail_notification_states.
   FOREACH relation_name IN ARRAY ARRAY[
     'workspaces', 'products', 'generation_runs', 'generation_drafts',
     'resolution_previews', 'resolution_preview_confirmations',
@@ -825,6 +827,33 @@ BEGIN
   IF to_regclass('public.marketing_ad_keeps') IS NOT NULL THEN
     EXECUTE 'GRANT SELECT, INSERT, UPDATE ON public.marketing_ad_keeps TO marketai_domain_api';
     EXECUTE 'GRANT SELECT ON public.marketing_ad_keeps TO marketai_domain_worker, marketai_domain_readonly';
+  END IF;
+  -- Ads-first first batch (#193): the API starts and continues a batch; the Worker advances it.
+  IF to_regclass('public.marketing_first_batches') IS NOT NULL THEN
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE ON public.marketing_first_batches TO marketai_domain_api';
+    EXECUTE 'GRANT SELECT, UPDATE ON public.marketing_first_batches TO marketai_domain_worker';
+    EXECUTE 'GRANT SELECT ON public.marketing_first_batches TO marketai_domain_readonly';
+  END IF;
+  -- The Worker admits a first batch's next step once the current one finished (#193): the product
+  -- draft and its ideas after the reading, a planning call, the image drafts, previews and runs, each
+  -- with its own reservation in the same transaction. Before #193 only the API admitted paid work.
+  -- spend_guardrails gets SELECT and UPDATE (workspace_id), its key: enough to read and lock the row
+  -- the reservation book checks, never to change a limit (forced RLS keeps the key in the Workspace). Forced RLS still scopes every row to the Job's Workspace.
+  FOREACH relation_name IN ARRAY ARRAY[
+    'products', 'marketing_projects', 'marketing_planning_calls', 'marketing_generation_links',
+    'generation_drafts', 'resolution_previews', 'resolution_preview_confirmations',
+    'generation_recipe_snapshots', 'plans', 'generation_runs', 'run_items', 'generation_run_commands',
+    'idempotency_records'
+  ] LOOP
+    IF to_regclass(format('public.%I', relation_name)) IS NOT NULL THEN
+      EXECUTE format('GRANT INSERT ON TABLE public.%I TO marketai_domain_worker', relation_name);
+    END IF;
+  END LOOP;
+  IF to_regclass('public.resolution_previews') IS NOT NULL THEN
+    EXECUTE 'GRANT UPDATE (submitted_at, submitted_run_id) ON public.resolution_previews TO marketai_domain_worker';
+  END IF;
+  IF to_regclass('public.spend_guardrails') IS NOT NULL THEN
+    EXECUTE 'GRANT SELECT, UPDATE (workspace_id) ON public.spend_guardrails TO marketai_domain_worker';
   END IF;
   IF to_regclass('public.workspace_provider_bindings') IS NOT NULL THEN
     EXECUTE 'GRANT SELECT ON public.workspace_provider_bindings TO marketai_domain_api';

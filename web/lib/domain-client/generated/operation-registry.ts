@@ -3479,6 +3479,60 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'get_marketing_first_batch',
+    {
+      operationId: 'get_marketing_first_batch',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/first-batch/{first_batch_id}',
+      pathParams: ['first_batch_id'],
+      queryParams: [],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 16384,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'get_marketing_first_batch_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'get_marketing_first_batch_quote',
+    {
+      operationId: 'get_marketing_first_batch_quote',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/first-batch-quote',
+      pathParams: [],
+      queryParams: ['execution_mode'],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 16384,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'get_marketing_first_batch_quote_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'get_marketing_ideas',
     {
       operationId: 'get_marketing_ideas',
@@ -6031,6 +6085,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'resume_marketing_first_batch',
+    {
+      operationId: 'resume_marketing_first_batch',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/first-batch/{first_batch_id}/resume',
+      pathParams: ['first_batch_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 65536,
+      maxResponseBytes: 16384,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'resume_marketing_first_batch_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'resume_scale_enrollment',
     {
       operationId: 'resume_scale_enrollment',
@@ -6487,6 +6568,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         202: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'start_marketing_explanation_202' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'start_marketing_first_batch',
+    {
+      operationId: 'start_marketing_first_batch',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/first-batch',
+      pathParams: [],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 131072,
+      maxResponseBytes: 16384,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'start_marketing_first_batch_201' },
           locationShapes: [],
         },
         422: {

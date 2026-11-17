@@ -22,7 +22,7 @@ from app.entitlements.quote_engine import CostQuoteEngine
 from app.entitlements.reservation_book import ReservationBook
 from app.entitlements.types import BillableCallSpec, ReservationPlan, GenerationReservationContext
 from app.entitlements.usage import record_provider_call
-from app.generation.models import GenerationRecipeSnapshotRecord, ProviderAttemptEventRecord, RunItemAssetVersionBindingRecord
+from app.generation.models import GenerationRecipeSnapshotRecord, ProviderAttemptEventRecord, RunItemAssetVersionBindingRecord, RunItemRecord
 from app.generation.provider_attempt import prepare_attempt, append_event
 from app.generation.selection import authorize_paid, credential_binding, SelectionError
 from app.generation.worker import _get_run_item, _transition_item, _persist_output, _sync_run_state_best_effort
@@ -71,10 +71,25 @@ def _settle(session, reservation, attempt_id, *, called: bool):
         reservation.released_at = utcnow()
 
 
+def _notify_first_batch(session, ctx, run):
+    """Every exit of a selected-recipe image passes ``_sync_operation``: an ads-first first batch that
+    admitted it takes its next step once all of its images are settled (#193)."""
+    snapshot = session.get(GenerationRecipeSnapshotRecord, run.recipe_snapshot_id)
+    intent = ((snapshot.canonical_json if snapshot else {}).get("selection") or {}).get("marketing_intent") or {}
+    if intent.get("flow") != "ads_first":
+        return
+    from app.marketing.first_batch import notify
+    states = ",".join(state for state in session.scalars(select(RunItemRecord.state).where(
+        RunItemRecord.workspace_id == ctx.workspace_id, RunItemRecord.generation_run_id == run.id)
+        .order_by(RunItemRecord.ordinal)).all())
+    notify(session, ctx, project_id=intent.get("project_id"), event=f"run:{run.id}:{states}")
+
+
 def _sync_operation(session, ctx, run_id):
     _sync_run_state_best_effort(session, ctx, run_id)
     session.expire_all()
     run = session.get(GenerationRunRecord, run_id)
+    _notify_first_batch(session, ctx, run)
     operation = get_operation(session, run.creation_operation_id)
     if operation.state in ("succeeded", "failed", "cancelled", "partially_succeeded"):
         return

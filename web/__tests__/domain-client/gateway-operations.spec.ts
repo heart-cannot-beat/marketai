@@ -99,6 +99,9 @@ describe('DomainGateway operation coverage', () => {
     // `set_marketing_ad_kept` (#189).
     // 246 -> 247: `start_marketing_ideas_planning` (#190).
     // 247 -> 248: `prepare_marketing_ideas_generation` (#191).
-    expect(DOMAIN_ALLOWLIST.length).toBe(248);
+    // 248 -> 252: the ads-first first batch `get_marketing_first_batch_quote`,
+    // `start_marketing_first_batch`, `get_marketing_first_batch` and
+    // `resume_marketing_first_batch` (#193).
+    expect(DOMAIN_ALLOWLIST.length).toBe(252);
   });
 });

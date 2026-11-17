@@ -1897,6 +1897,38 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'get_marketing_first_batch',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/first-batch/:first_batch_id',
+    fastapiPathTemplate: '/api/v1/marketing/first-batch/{first_batch_id}',
+    pathParams: ['first_batch_id'],
+    querySchema: null,
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 16384,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: false,
+  },
+  {
+    operationId: 'get_marketing_first_batch_quote',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/first-batch-quote',
+    fastapiPathTemplate: '/api/v1/marketing/first-batch-quote',
+    pathParams: [],
+    querySchema: z
+      .object({
+        execution_mode: z.enum(['byok', 'mock']).optional().default('byok'),
+      })
+      .strict(),
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 16384,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: false,
+  },
+  {
     operationId: 'get_marketing_ideas',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id',
@@ -3507,6 +3539,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'resume_marketing_first_batch',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/first-batch/:first_batch_id/resume',
+    fastapiPathTemplate:
+      '/api/v1/marketing/first-batch/{first_batch_id}/resume',
+    pathParams: ['first_batch_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.resume_marketing_first_batch,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 65536,
+    maxResponseBytes: 16384,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: false,
+  },
+  {
     operationId: 'resume_scale_enrollment',
     method: 'PUT',
     bffPattern:
@@ -3756,6 +3804,20 @@ export const DOMAIN_ALLOWLIST = [
     maxResponseBytes: 8388608,
     requiresIdempotency: true,
     forwardConditionalHeaders: true,
+  },
+  {
+    operationId: 'start_marketing_first_batch',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/first-batch',
+    fastapiPathTemplate: '/api/v1/marketing/first-batch',
+    pathParams: [],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.start_marketing_first_batch,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 131072,
+    maxResponseBytes: 16384,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: false,
   },
   {
     operationId: 'start_marketing_ideas_planning',

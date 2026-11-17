@@ -123,8 +123,9 @@ class TestLocalizationMigration(unittest.TestCase):
             # zzj113a1b2c3 (Advice superseded by a Target event, #113) and
 # zzk145a1b2c3 (CHECK constraints on usage_events, #145) and
             # zzl148a1b2c3 (the Worker dispatches daily storage_bytes Usage, #148) and
-            # zzm189a1b2c3 (ads-first ideas on marketing projects and the keep mark, #189).
-            self.assertIn("zzm189a1b2c3", revisions)
+            # zzm189a1b2c3 (ads-first ideas on marketing projects and the keep mark, #189) and
+            # zzn193a1b2c3 (the ads-first first batch, #193).
+            self.assertIn("zzn193a1b2c3", revisions)
 
     def test_downgrade_and_upgrade(self):
         up = self._alembic("upgrade", "head")

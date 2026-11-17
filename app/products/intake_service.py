@@ -228,6 +228,25 @@ def create_intake(
 ) -> dict:
     """Admit an intake: row + Operation + Job + LLM reservation, one transaction."""
     _require_member(ctx)
+    inputs = normalized_inputs(ctx, url=url, upload_intent_ids=upload_intent_ids, text_input=text_input)
+    with tenant_session(ctx) as session:
+        record, replayed = admit_intake(session, ctx, inputs, idempotency_key=idempotency_key)
+        return {**intake_view(session, ctx, record), "replayed": replayed}
+
+
+@dataclass(frozen=True)
+class IntakeInputs:
+    """What the user pasted, normalized: the link, the upload ids in order, and the text."""
+
+    url: str | None
+    upload_intent_ids: list[str]
+    text: str
+
+
+def normalized_inputs(
+    ctx: TenantContext, *, url: str | None, upload_intent_ids: list[str] | None, text_input: str | None,
+) -> IntakeInputs:
+    """The link, uploads and text an intake reads, checked for presence and size."""
     normalized_url = _normalize_url(url, ctx)
     uploads_requested = list(dict.fromkeys(i.strip() for i in (upload_intent_ids or []) if i and i.strip()))
     user_text = (text_input or "").strip()
@@ -237,156 +256,180 @@ def create_intake(
         raise IntakeProblem(422, "too_many_images", f"最多上传 {MAX_UPLOADS} 张图片", params={"limit": MAX_UPLOADS})
     if len(user_text) > MAX_TEXT_CHARS:
         raise IntakeProblem(422, "text_too_long", f"介绍最多 {MAX_TEXT_CHARS} 个字符", params={"limit": MAX_TEXT_CHARS})
+    return IntakeInputs(normalized_url, uploads_requested, user_text)
 
+
+def input_fingerprint(session, ctx: TenantContext, inputs: IntakeInputs) -> tuple[str, list[dict]]:
+    """The fingerprint the same pasted input shares however it was sent, and the checked uploads.
+
+    Taking it also serializes concurrent admissions of the same input (PostgreSQL advisory lock)."""
+    uploads = _upload_inputs(session, ctx, inputs.upload_intent_ids)
+    fingerprint = _sha({
+        "url": inputs.url,
+        "images": sorted(item["sha256"] for item in uploads),
+        "text_sha256": hashlib.sha256(inputs.text.encode("utf-8")).hexdigest() if inputs.text else None,
+    })
+    _lock_fingerprint(session, ctx, fingerprint)
+    return fingerprint, uploads
+
+
+def admit_intake(
+    session,
+    ctx: TenantContext,
+    inputs: IntakeInputs,
+    *,
+    idempotency_key: str,
+    execution_mode: str | None = None,
+    reuse_recent: bool = True,
+) -> tuple[ProductIntakeRecord, bool]:
+    """Admit an intake in the caller's transaction; ``(record, replayed)``.
+
+    ``create_intake`` reuses the same input's intake from the last 24 hours (``reuse_recent``); the
+    ads-first first batch (#193) decides reuse itself, one batch per intake, and passes the execution
+    mode its confirmed price was quoted for."""
     key_hash = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
     request_fingerprint = _sha({
-        "url": normalized_url, "uploads": sorted(uploads_requested), "text": user_text,
+        "url": inputs.url, "uploads": sorted(inputs.upload_intent_ids), "text": inputs.text,
     })
-    with tenant_session(ctx) as session:
-        by_key = session.scalars(
-            select(ProductIntakeRecord).where(
-                ProductIntakeRecord.workspace_id == ctx.workspace_id,
-                ProductIntakeRecord.idempotency_key_hash == key_hash,
-            )
-        ).one_or_none()
-        if by_key is not None:
-            if by_key.request_fingerprint != request_fingerprint:
-                raise IntakeProblem(409, "idempotency_key_reused", "Idempotency-Key 已用于另一次识别请求")
-            return {**intake_view(session, ctx, by_key), "replayed": True}
+    by_key = session.scalars(
+        select(ProductIntakeRecord).where(
+            ProductIntakeRecord.workspace_id == ctx.workspace_id,
+            ProductIntakeRecord.idempotency_key_hash == key_hash,
+        )
+    ).one_or_none()
+    if by_key is not None:
+        if by_key.request_fingerprint != request_fingerprint:
+            raise IntakeProblem(409, "idempotency_key_reused", "Idempotency-Key 已用于另一次识别请求")
+        return by_key, True
 
-        uploads = _upload_inputs(session, ctx, uploads_requested)
-        input_fingerprint = _sha({
-            "url": normalized_url,
-            "images": sorted(item["sha256"] for item in uploads),
-            "text_sha256": hashlib.sha256(user_text.encode("utf-8")).hexdigest() if user_text else None,
-        })
-        _lock_fingerprint(session, ctx, input_fingerprint)
-        recent = session.scalars(
-            select(ProductIntakeRecord)
-            .where(
-                ProductIntakeRecord.workspace_id == ctx.workspace_id,
-                ProductIntakeRecord.input_fingerprint == input_fingerprint,
-                ProductIntakeRecord.created_at >= utcnow() - REPLAY_WINDOW,
-                ProductIntakeRecord.status.in_(sorted(REPLAYABLE_STATUSES)),
-            )
-            .order_by(ProductIntakeRecord.created_at.desc())
-        ).first()
-        if recent is not None:
-            audit.append_event(
-                session, event_type="product_intake.replayed", resource_type=RESOURCE_TYPE,
-                resource_id=recent.id, details={"input_fingerprint": input_fingerprint},
-            )
-            return {**intake_view(session, ctx, recent), "replayed": True}
-
-        mode = resolve_llm_execution_mode(session, ctx)
-        intake_id = new_id("pin")
-        candidates = [
-            {
-                "image_id": f"img_{index}",
-                "source": "upload",
-                **{key: value for key, value in upload.items()},
-            }
-            for index, upload in enumerate(uploads, start=1)
-        ]
-        now = utcnow()
-        record = ProductIntakeRecord(
-            id=intake_id,
-            workspace_id=ctx.workspace_id,
-            status="queued",
-            input_fingerprint=input_fingerprint,
-            request_fingerprint=request_fingerprint,
-            idempotency_key_hash=key_hash,
-            source_url=normalized_url,
-            input_text=user_text or None,
-            upload_intent_ids=[item["upload_intent_id"] for item in uploads],
-            inputs_json={
-                "url": normalized_url,
-                "text_chars": len(user_text),
-                "text_sha256": hashlib.sha256(user_text.encode("utf-8")).hexdigest() if user_text else None,
-                "uploads": uploads,
-            },
-            execution_mode=mode,
-            evidence_json={},
-            images_json=candidates,
-            initiator_id=ctx.initiator_id,
-            created_at=now,
-            updated_at=now,
+    normalized_url, user_text = inputs.url, inputs.text
+    input_fingerprint_, uploads = input_fingerprint(session, ctx, inputs)
+    recent = session.scalars(
+        select(ProductIntakeRecord)
+        .where(
+            ProductIntakeRecord.workspace_id == ctx.workspace_id,
+            ProductIntakeRecord.input_fingerprint == input_fingerprint_,
+            ProductIntakeRecord.created_at >= utcnow() - REPLAY_WINDOW,
+            ProductIntakeRecord.status.in_(sorted(REPLAYABLE_STATUSES)),
         )
-        session.add(record)
-        session.flush()
-        operation = create_operation(
-            session,
-            command_type=COMMAND_TYPE,
-            idempotency_key_hash=key_hash,
-            initial_state=OperationState.ADMITTED,
-            admission_contract_version=1,
-            result_ref=OperationResultRef(resource_type=RESOURCE_TYPE, resource_id=intake_id),
-            reason="product intake admitted",
-        )
-        job = enqueue_in_session(
-            session,
-            context=ctx,
-            job_type=JOB_TYPE,
-            payload={"intake_id": intake_id, "operation_id": operation.id},
-            idempotency_key=f"product_intake:{intake_id}",
-            resource_type=RESOURCE_TYPE,
-            resource_id=intake_id,
-            max_attempts=3,
-        )
-        job.operation_id = operation.id
-        session.flush()
-        try:
-            reservation = reserve_llm_chat(
-                session, ctx,
-                operation_id=operation.id,
-                job_id=job.id,
-                call_name=extraction.CALL_NAME,
-                execution_mode=mode,
-                input_token_budget=extraction.input_token_budget(
-                    model_spec("openai" if mode == "byok" else "mock", None)
-                ),
-                max_output_tokens=extraction.MAX_OUTPUT_TOKENS,
-            )
-        except LlmChatError as error:
-            status = {"guardrail_exceeded": 409, "entitlement_unavailable": 403,
-                      "credential_unavailable": 409}.get(error.code, 422)
-            raise IntakeProblem(status, error.code, error.detail) from error
-        record.operation_id = operation.id
-        record.job_id = job.id
-        record.evidence_json = {
-            "admission": {
-                "execution_mode": mode,
-                "reservation_id": reservation.reservation_id,
-                "quote": {
-                    "provider": reservation.quote.provider,
-                    "model": reservation.quote.model,
-                    "max_amount": format(reservation.quote.amount, "f"),
-                    "simulated_max_amount": (
-                        format(reservation.quote.simulated_amount, "f")
-                        if reservation.quote.simulated_amount is not None else None
-                    ),
-                    "currency": reservation.quote.currency,
-                    "price_rule_version": reservation.quote.price_rule_version,
-                },
-            }
-        }
+        .order_by(ProductIntakeRecord.created_at.desc())
+    ).first() if reuse_recent else None
+    if recent is not None:
         audit.append_event(
-            session,
-            event_type="product_intake.created",
-            resource_type=RESOURCE_TYPE,
-            resource_id=intake_id,
-            details={
-                "has_url": bool(normalized_url),
-                "host": parse_target(normalized_url).host if normalized_url else None,
-                "upload_count": len(uploads),
-                "text_chars": len(user_text),
-                "execution_mode": mode,
-                "operation_id": operation.id,
-                "job_id": job.id,
-            },
+            session, event_type="product_intake.replayed", resource_type=RESOURCE_TYPE,
+            resource_id=recent.id, details={"input_fingerprint": input_fingerprint_},
         )
-        session.flush()
-        return {**intake_view(session, ctx, record), "replayed": False}
+        return recent, True
+
+    mode = execution_mode or resolve_llm_execution_mode(session, ctx)
+    intake_id = new_id("pin")
+    candidates = [
+        {
+            "image_id": f"img_{index}",
+            "source": "upload",
+            **{key: value for key, value in upload.items()},
+        }
+        for index, upload in enumerate(uploads, start=1)
+    ]
+    now = utcnow()
+    record = ProductIntakeRecord(
+        id=intake_id,
+        workspace_id=ctx.workspace_id,
+        status="queued",
+        input_fingerprint=input_fingerprint_,
+        request_fingerprint=request_fingerprint,
+        idempotency_key_hash=key_hash,
+        source_url=normalized_url,
+        input_text=user_text or None,
+        upload_intent_ids=[item["upload_intent_id"] for item in uploads],
+        inputs_json={
+            "url": normalized_url,
+            "text_chars": len(user_text),
+            "text_sha256": hashlib.sha256(user_text.encode("utf-8")).hexdigest() if user_text else None,
+            "uploads": uploads,
+        },
+        execution_mode=mode,
+        evidence_json={},
+        images_json=candidates,
+        initiator_id=ctx.initiator_id,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(record)
+    session.flush()
+    operation = create_operation(
+        session,
+        command_type=COMMAND_TYPE,
+        idempotency_key_hash=key_hash,
+        initial_state=OperationState.ADMITTED,
+        admission_contract_version=1,
+        result_ref=OperationResultRef(resource_type=RESOURCE_TYPE, resource_id=intake_id),
+        reason="product intake admitted",
+    )
+    job = enqueue_in_session(
+        session,
+        context=ctx,
+        job_type=JOB_TYPE,
+        payload={"intake_id": intake_id, "operation_id": operation.id},
+        idempotency_key=f"product_intake:{intake_id}",
+        resource_type=RESOURCE_TYPE,
+        resource_id=intake_id,
+        max_attempts=3,
+    )
+    job.operation_id = operation.id
+    session.flush()
+    try:
+        reservation = reserve_llm_chat(
+            session, ctx,
+            operation_id=operation.id,
+            job_id=job.id,
+            call_name=extraction.CALL_NAME,
+            execution_mode=mode,
+            input_token_budget=extraction.input_token_budget(
+                model_spec("openai" if mode == "byok" else "mock", None)
+            ),
+            max_output_tokens=extraction.MAX_OUTPUT_TOKENS,
+        )
+    except LlmChatError as error:
+        status = {"guardrail_exceeded": 409, "entitlement_unavailable": 403,
+                  "credential_unavailable": 409}.get(error.code, 422)
+        raise IntakeProblem(status, error.code, error.detail) from error
+    record.operation_id = operation.id
+    record.job_id = job.id
+    record.evidence_json = {
+        "admission": {
+            "execution_mode": mode,
+            "reservation_id": reservation.reservation_id,
+            "quote": {
+                "provider": reservation.quote.provider,
+                "model": reservation.quote.model,
+                "max_amount": format(reservation.quote.amount, "f"),
+                "simulated_max_amount": (
+                    format(reservation.quote.simulated_amount, "f")
+                    if reservation.quote.simulated_amount is not None else None
+                ),
+                "currency": reservation.quote.currency,
+                "price_rule_version": reservation.quote.price_rule_version,
+            },
+        }
+    }
+    audit.append_event(
+        session,
+        event_type="product_intake.created",
+        resource_type=RESOURCE_TYPE,
+        resource_id=intake_id,
+        details={
+            "has_url": bool(normalized_url),
+            "host": parse_target(normalized_url).host if normalized_url else None,
+            "upload_count": len(uploads),
+            "text_chars": len(user_text),
+            "execution_mode": mode,
+            "operation_id": operation.id,
+            "job_id": job.id,
+        },
+    )
+    session.flush()
+    return record, False
 
 
 # ---------------------------------------------------------------------------
@@ -632,6 +675,16 @@ def _confirmed_content(record: ProductIntakeRecord, edits: dict, selected_varian
         }]
     if record.source_url:
         content["source_url"] = record.source_url
+    return content
+
+
+def proposed_content(record: ProductIntakeRecord, selected_variant: str | None) -> dict:
+    """The card as an unconfirmed product draft (ads-first first batch, #193; design doc §6).
+
+    The same content a confirmation would publish, minus the confirmation: the must-match items stay the
+    AI's proposals (``confirmed: False``) until the user checks them."""
+    content = _confirmed_content(record, {}, selected_variant)
+    content["must_match"] = [{**item, "confirmed": False} for item in content.get("must_match") or []]
     return content
 
 

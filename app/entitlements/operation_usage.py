@@ -125,6 +125,8 @@ MODE_EVIDENCE: tuple[ModeEvidence, ...] = (
     ModeEvidence("spend_reservations", "operation_id", "execution_mode"),
     ModeEvidence("marketing_planning_calls", "operation_id", "execution_mode"),
     ModeEvidence("marketing_ai_qc_calls", "operation_id", "execution_mode"),
+    # The ads-first first batch's own Operation (#193); each step it admits records its own.
+    ModeEvidence("marketing_first_batches", "operation_id", "execution_mode"),
     ModeEvidence("generation_runs", "creation_operation_id", "execution_mode"),
     ModeEvidence("competitor_scans", "operation_id", "execution_mode"),
     ModeEvidence("competitor_resolutions", "operation_id", "execution_mode"),

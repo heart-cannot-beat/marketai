@@ -115,6 +115,10 @@ JOB_POLICIES: dict[str, JobPolicy] = {
         "同一天重跑是计数的重复，不写第二行（#148）"),
     "marketing.resolve_call": _policy(_NONE_REQUEUE, "核对已有调用记录，不重发"),
     "marketing.export": _policy(_NONE_REQUEUE, "只写 BlobStore"),
+    "marketing.first_batch": _policy(
+        _NONE_REQUEUE,
+        "首批的一次推进：在首批行锁下单事务，当前一步完成才受理下一步（下一步各自预留、各自是付费任务）；"
+        "重跑先看当前一步的状态，不多受理、不多预留（#193）"),
     "scale_evaluate": _policy(
         _NONE_REQUEUE,
         "Phase A/B/C 检查点可续跑（tests/test_scale_recovery.py）；收集器写 complete manifest 时"

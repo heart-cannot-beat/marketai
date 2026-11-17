@@ -62,8 +62,8 @@ from app.platform.tenancy import TenantContext
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION, DOWN_REVISION = "zzk145a1b2c3", "zzj113a1b2c3"
-#: The current head: zzl148a1b2c3 (#148) and zzm189a1b2c3 (#189) follow the checks and leave usage_events alone.
-HEAD = "zzm189a1b2c3"
+#: The current head: zzl148a1b2c3 (#148), zzm189a1b2c3 (#189) and zzn193a1b2c3 (#193) follow the checks and leave usage_events alone.
+HEAD = "zzn193a1b2c3"
 WORKSPACE = "ws_usage_checks"
 CTX = TenantContext(workspace_id=WORKSPACE, role="owner", initiator_id="owner_c",
                     request_id="req-checks", trace_id="trace-checks")
@@ -192,7 +192,17 @@ class UsageEventChecksMigrationTests(unittest.TestCase):
     def test_rows_every_writer_wrote_before_the_checks_survive_the_upgrade(self):
         self._alembic("downgrade", DOWN_REVISION)
         self.assertEqual(self._checks(), {})
-        self._write_as_every_writer()
+        # Writers of that time read the mode of an Operation from the tables that existed then; a table
+        # added later (marketing_first_batches, #193) is not there to read at this revision.
+        from sqlalchemy import inspect
+
+        from app.entitlements import operation_usage
+        self.engine.dispose()
+        present = set(inspect(self.engine).get_table_names())
+        then = tuple(e for e in operation_usage.MODE_EVIDENCE
+                     if e.table in present and (e.via_table is None or e.via_table in present))
+        with patch.object(operation_usage, "MODE_EVIDENCE", then):
+            self._write_as_every_writer()
         before = self._rows()
         modes_per_metric = sum(len(metric.execution_modes) for metric in METRICS.values())
         self.assertEqual(len(before), 4 + 1 + 1 + modes_per_metric * 2 + 2)

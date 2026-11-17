@@ -86,7 +86,7 @@
 - **D4 原始资料。** 项目的 `source_text` 是产品页的文字摘要（`evidence_json["fetch"]["digest_text"]`）加用户贴的文字，这样事实的引文能在原始资料里找到。资料只有图片或截图时，把模型从图里读出的文字放进 `source_text`，事实的出处标为“来自你上传的图片”。
 - **D5 出图意图。** 草稿的 `selectors.marketing_intent` 带 `schema_version: 2` 和 `flow: "ads_first"`，并带出图时的产品理解快照和这张广告引用的事实编号。S10 靠它判断草稿状态。
 - **D6 广告清单。** 一个项目的广告通过出图配方里的 `marketing_intent.project_id` 找，不依赖小轮。查询写在 `app/marketing/ideas.py::project_ads`，S1 提供，后面各块共用。
-- **D7 费用。** 首批总价是各步最高费用之和，确认一次。每一步仍然单独预留、单独结算。预留总额不超过确认的数字，超过就停下来。
+- **D7 费用。** 首批总价是各步最高费用之和，再加一次策划调用的最高费用，确认一次。多出的一次只用于应用拒收主张草稿时重新起草一次（#193 维护者决定）。每一步仍然单独预留、单独结算，没用上的不收费。预留总额不超过确认的数字，超过就停下来。
 - **D8 供应商。** 第 1 步保证只有 OpenAI Key 时全程能跑。只有 Gemini Key 时，在开始之前提示“目前需要 OpenAI 的 Key”。
 - **D9 新接口一览。** 全部做完后接口数从 242 变成 256。
 
@@ -98,7 +98,7 @@
 | S1 | `set_marketing_ad_kept` | `PUT /marketing/ideas/{project_id}/ads/{asset_version_id}/kept` |
 | S2 | `start_marketing_ideas_planning` | `POST /marketing/ideas/{project_id}/planning` |
 | S3 | `prepare_marketing_ideas_generation` | `POST /marketing/ideas/{project_id}/generation-drafts` |
-| S4 | `get_marketing_first_batch_quote` | `GET /marketing/first-batch/quote` |
+| S4 | `get_marketing_first_batch_quote` | `GET /marketing/first-batch-quote`（不放在 `/first-batch/` 下：BFF 按 operation_id 顺序匹配，`/first-batch/quote` 会被当成编号为 quote 的首批） |
 | S4 | `start_marketing_first_batch` | `POST /marketing/first-batch` |
 | S4 | `get_marketing_first_batch` | `GET /marketing/first-batch/{first_batch_id}` |
 | S4 | `resume_marketing_first_batch` | `POST /marketing/first-batch/{first_batch_id}/resume` |
@@ -473,7 +473,8 @@ class IdeasApiTests(MarketingIdeasFixtures):
 
 - **目的：** 一次调用把读产品、起草理解、起草主张、出图串起来，确认一次总价。
 - **改哪里：** 新表 `marketing_first_batches`（`id`、`workspace_id`、`intake_id`、`project_id` 可空、`product_id` 可空、`market`、`ad_language`、`state`、`attention_json`、`confirmed_max_cost`、`reserved_total`、`quote_hash`、`operation_id`、`initiator_id`、时间戳；唯一约束 `(workspace_id, intake_id)`）；新文件 `app/marketing/first_batch.py`、`app/marketing/first_batch_api.py`；新任务类型 `marketing.first_batch`；在 `run_product_intake`、`execute_planning`、`handle_run_item` 的成功和失败出口调用 `first_batch.notify(session, ctx, ...)`。
-- **规则：** `state` 取 `reading`、`understanding`、`ideas`、`generating`、`done`、`needs_attention`、`failed`。`marketing.first_batch` 是一次“推进”：看当前这一步完成没有，完成了就受理下一步并排队，没完成就什么都不做，可以重复执行。每受理一步付费调用前，检查 `reserved_total + 这一步最高费用 <= confirmed_max_cost`，否则进 `needs_attention`。停下来的三种情况：多个型号、读不到页面、主张不足 2 个。读完产品后把录入结果存成创意库产品草稿（不发布）并建项目（D3、D4）。
+- **规则：** `state` 取 `reading`、`understanding`、`ideas`、`generating`、`done`、`needs_attention`、`failed`。`marketing.first_batch` 是一次“推进”：看当前这一步完成没有，完成了就受理下一步并排队，没完成就什么都不做，可以重复执行。总价是各步最高费用之和再加一次策划调用（D7）。每受理一步付费调用前，检查 `reserved_total + 这一步最高费用 <= confirmed_max_cost`，否则进 `needs_attention`。主张草稿被应用拒收（`planner_output_invalid`）时自动再起草一次，带上被拒的草稿和错误；第二次仍被拒就停下来。结果不确定、超时、供应商报错的调用不自动重发。停下来的三种情况：多个型号、读不到页面、主张不足 2 个（不出图，也不用重试额度）。读完产品后把录入结果存成创意库产品草稿（不发布）并建项目（D3、D4）。
+- **做成的样子（#193）：** 推进任务在 Worker 里受理下一步，所以 Worker 角色多了受理用的最小权限（产品、项目、策划调用、出图草稿、预览、出图任务的 INSERT，`spend_guardrails` 只读和加锁），在 `domain-tenant-roles.sql` 和迁移 `zzn193a1b2c3` 里逐条列出。“主张不足 2 个”从调用记录的 `validation_errors` 认出来（`angles` 列表 `too_short`），不加新错误码。读不到页面时首批结束（`failed`），补救是贴文字或截图重新开始；其他停下都能用 `resume` 继续，继续时按钮上写新的最高费用，点击即确认。`list_marketing_ideas`、`get_marketing_ideas` 的每个项目带可选的 `first_batch`（状态、是否等用户处理、原因），总览从这里读“出错待处理”。
 - **测试要点：** 用假的抓取器、假的模型和 Mock 出图，反复推进直到 `done`，得到 6 张草稿；同一个推进任务跑两遍，不多一次调用、不多一份预留（Review Focus 1、2）；重复提交同一个链接返回同一个首批；超出确认的总价时停下；三种停下的情况各一条；另一个工作区 404。
 - **开工前先确认：** 录入的 `create_intake` 能不能在同一个事务里被复用；创意库产品草稿不发布时桥接的 `ProductRecord` 是否已经存在；出图完成的通知挂在哪个函数最稳。S9 做完后，在这里加上“检查”这一步。
 
