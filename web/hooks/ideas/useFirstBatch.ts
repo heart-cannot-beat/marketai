@@ -8,7 +8,14 @@ import { waitForOperation } from '@/hooks/products/useProductIntake';
 import { newActionId } from '@/components/generation/shared/newActionId';
 import { buildIntakeRequest, splitPaste } from '@/lib/products/intake-model';
 import { utf8ToBase64 } from '@/lib/credentials/plaintext';
-import type { DomainProblem } from '@/lib/i18n/domain-errors';
+import {
+  DomainProblemError,
+  type DomainProblem,
+} from '@/lib/i18n/domain-errors';
+import {
+  isTransientProblem,
+  transientRetriesExhausted,
+} from '@/lib/domain-client/transient-problems';
 import {
   isRunning,
   type FirstBatch,
@@ -38,7 +45,7 @@ export function useFirstBatchQuote() {
         executionMode: 'byok',
       });
       if (result.kind === 'ok') return result.data as FirstBatchQuote;
-      throw result.problem;
+      throw new DomainProblemError(result.problem);
     },
     // A quote ages only when keys, prices or limits change; the page asks
     // again after saving a key and before every start.
@@ -100,7 +107,12 @@ export function useStartFirstBatch() {
     done: number;
     total: number;
   } | null>(null);
-  const actions = useRef(new Map<string, string>());
+  // Per intended start (same paste, files, market, language and quote): the
+  // action id and the uploaded images, kept until the start is answered, so
+  // a click after a lost reply replays the same command with the same body.
+  const pending = useRef(
+    new Map<string, { action: string; uploadIntentIds?: string[] }>()
+  );
 
   const refuse = (code: string, problem: DomainProblem | null = null) => {
     setPhase('idle');
@@ -108,56 +120,45 @@ export function useStartFirstBatch() {
     return { kind: 'refused' as const, problem: { code, problem } };
   };
 
+  const upload = useCallback(
+    async (files: File[]): Promise<string[] | StartProblem> => {
+      setPhase('uploading');
+      setUploadProgress({ done: 0, total: files.length });
+      const ownerId = newActionId();
+      const ids: string[] = [];
+      for (const file of files) {
+        const uploaded = await startUpload({
+          file,
+          ownerKind: 'product_intake',
+          ownerId,
+          actionInstanceId: newActionId(),
+        });
+        if (uploaded.kind !== 'accepted')
+          return uploaded.kind === 'problem'
+            ? {
+                code: uploaded.problem.code || 'upload_failed',
+                problem: uploaded.problem,
+              }
+            : { code: 'upload_failed', problem: null };
+        const state = await waitForOperation(
+          gateway,
+          current.slug,
+          uploaded.operationRecordId,
+          () => false
+        );
+        if (state !== 'succeeded')
+          return { code: 'upload_rejected', problem: null };
+        ids.push(uploaded.uploadIntentId);
+        setUploadProgress({ done: ids.length, total: files.length });
+      }
+      return ids;
+    },
+    [current.slug, gateway, startUpload]
+  );
+
   const start = useCallback(
     async (input: StartInput): Promise<StartOutcome> => {
       const parts = splitPaste(input.raw);
-      const uploadIntentIds: string[] = [];
-      if (input.files.length > 0) {
-        setPhase('uploading');
-        setUploadProgress({ done: 0, total: input.files.length });
-        const ownerId = newActionId();
-        for (const file of input.files) {
-          const uploaded = await startUpload({
-            file,
-            ownerKind: 'product_intake',
-            ownerId,
-            actionInstanceId: newActionId(),
-          });
-          if (uploaded.kind !== 'accepted')
-            return refuse(
-              uploaded.kind === 'problem'
-                ? uploaded.problem.code || 'upload_failed'
-                : 'upload_failed',
-              uploaded.kind === 'problem' ? uploaded.problem : null
-            );
-          const state = await waitForOperation(
-            gateway,
-            current.slug,
-            uploaded.operationRecordId,
-            () => false
-          );
-          if (state !== 'succeeded') return refuse('upload_rejected');
-          uploadIntentIds.push(uploaded.uploadIntentId);
-          setUploadProgress({
-            done: uploadIntentIds.length,
-            total: input.files.length,
-          });
-        }
-      }
-      const intake = buildIntakeRequest(parts, uploadIntentIds);
-      if (!intake) return refuse('intake_input_required');
-
-      setPhase('starting');
-      const body = {
-        url: intake.url ?? null,
-        text: intake.text ?? null,
-        upload_intent_ids: intake.upload_intent_ids ?? [],
-        market: input.market,
-        ad_language: input.adLanguage,
-        strategy_language: input.strategyLanguage,
-        execution_mode: 'byok' as const,
-        quote_hash: input.quoteHash,
-      };
       const identity = JSON.stringify([
         parts,
         input.files.map((file) => [file.name, file.size, file.lastModified]),
@@ -165,27 +166,62 @@ export function useStartFirstBatch() {
         input.adLanguage,
         input.quoteHash,
       ]);
-      const action = actions.current.get(identity) ?? newActionId();
-      actions.current.set(identity, action);
-      const result = await gateway.startMarketingFirstBatch({
-        workspaceSlug: current.slug,
-        actionInstanceId: action,
-        body,
-      });
-      if (result.kind === 'created') {
-        actions.current.delete(identity);
+      const intended = pending.current.get(identity) ?? {
+        action: newActionId(),
+      };
+      pending.current.set(identity, intended);
+
+      let uploadIntentIds = intended.uploadIntentIds ?? [];
+      if (input.files.length > 0 && !intended.uploadIntentIds) {
+        const uploaded = await upload(input.files).catch(() => ({
+          code: 'upload_failed',
+          problem: null,
+        }));
+        if (!Array.isArray(uploaded)) {
+          pending.current.delete(identity);
+          return refuse(uploaded.code, uploaded.problem);
+        }
+        uploadIntentIds = uploaded;
+        intended.uploadIntentIds = uploaded;
+      }
+      const intake = buildIntakeRequest(parts, uploadIntentIds);
+      if (!intake) {
+        pending.current.delete(identity);
+        return refuse('intake_input_required');
+      }
+
+      setPhase('starting');
+      const result = await gateway
+        .startMarketingFirstBatch({
+          workspaceSlug: current.slug,
+          actionInstanceId: intended.action,
+          body: {
+            url: intake.url ?? null,
+            text: intake.text ?? null,
+            upload_intent_ids: intake.upload_intent_ids ?? [],
+            market: input.market,
+            ad_language: input.adLanguage,
+            strategy_language: input.strategyLanguage,
+            execution_mode: 'byok',
+            quote_hash: input.quoteHash,
+          },
+        })
+        .catch(() => null);
+      if (result?.kind === 'created') {
+        pending.current.delete(identity);
         setPhase('idle');
         setUploadProgress(null);
         return { kind: 'started', batch: result.data as FirstBatch };
       }
-      if (result.kind === 'problem') {
-        actions.current.delete(identity);
+      if (result?.kind === 'problem') {
+        pending.current.delete(identity);
         return refuse(result.problem.code || 'start_failed', result.problem);
       }
-      // No answer: the same click again replays this action.
+      // No answer (lost reply, network, an unreadable error page): whether it
+      // started is unknown, and the same click again replays this action.
       return refuse('start_unconfirmed');
     },
-    [current.slug, gateway, startUpload]
+    [current.slug, gateway, upload]
   );
 
   return { start, phase, uploadProgress };
@@ -201,9 +237,10 @@ export type ResumeOutcome =
   | { kind: 'resumed' }
   | { kind: 'refused'; problem: DomainProblem | null; uncertain: boolean };
 
+/** A batch, or the final answer that this workspace has no such batch. */
 type Loaded =
-  | { batch: FirstBatch; problem?: undefined }
-  | { batch?: undefined; problem: DomainProblem & { status?: number } };
+  | { batch: FirstBatch; notFound?: undefined }
+  | { batch?: undefined; notFound: true };
 
 function pollInterval(batch: FirstBatch | undefined): number {
   if (isRunning(batch)) return FIRST_BATCH_POLL_MS;
@@ -227,9 +264,11 @@ export function useFirstBatch(batchId: string | null) {
         workspaceSlug: current.slug,
         firstBatchId: batchId as string,
       });
-      return result.kind === 'ok'
-        ? { batch: result.data as FirstBatch }
-        : { problem: { ...result.problem, status: result.status } };
+      if (result.kind === 'ok') return { batch: result.data as FirstBatch };
+      if (result.status === 404) return { notFound: true };
+      // Anything else may pass: SWR keeps the last batch on screen and asks
+      // again (every 5 s while the workspace's access is still syncing).
+      throw new DomainProblemError(result.problem);
     },
     { refreshInterval: (latest) => pollInterval(latest?.batch) }
   );
@@ -242,20 +281,25 @@ export function useFirstBatch(batchId: string | null) {
       const identity = JSON.stringify([batchId, input]);
       const action = actions.current.get(identity) ?? newActionId();
       actions.current.set(identity, action);
-      const result = await gateway.resumeMarketingFirstBatch({
-        workspaceSlug: current.slug,
-        actionInstanceId: action,
-        firstBatchId: batchId,
-        body: {
-          quote_hash: input.quoteHash,
-          ...(input.selectedVariant
-            ? { selected_variant: input.selectedVariant }
-            : {}),
-          ...(input.additionalText
-            ? { additional_text: input.additionalText }
-            : {}),
-        },
-      });
+      const result = await gateway
+        .resumeMarketingFirstBatch({
+          workspaceSlug: current.slug,
+          actionInstanceId: action,
+          firstBatchId: batchId,
+          body: {
+            quote_hash: input.quoteHash,
+            ...(input.selectedVariant
+              ? { selected_variant: input.selectedVariant }
+              : {}),
+            ...(input.additionalText
+              ? { additional_text: input.additionalText }
+              : {}),
+          },
+        })
+        .catch(() => null);
+      if (result === null)
+        // No answer: the same click again replays this action.
+        return { kind: 'refused', problem: null, uncertain: true };
       if (result.kind === 'ok') {
         actions.current.delete(identity);
         await mutate(
@@ -279,11 +323,20 @@ export function useFirstBatch(batchId: string | null) {
     await mutate();
   }, [mutate]);
 
+  const error: unknown = query.error;
+  const waitingForAccess =
+    error instanceof DomainProblemError &&
+    isTransientProblem(error.problem) &&
+    !transientRetriesExhausted(error);
+  const batch = query.data?.batch;
   return {
-    batch: query.data?.batch,
-    problem: query.data?.problem,
-    failed: Boolean(query.data?.problem) || Boolean(query.error),
-    isLoading: query.data === undefined && !query.error,
+    batch,
+    notFound: Boolean(query.data?.notFound),
+    /** Nothing to show: not found, or the first read failed for good. */
+    failed:
+      Boolean(query.data?.notFound) ||
+      (!batch && Boolean(error) && !waitingForAccess),
+    isLoading: !batch && !query.data?.notFound && (!error || waitingForAccess),
     refresh,
     resume,
   };
@@ -306,7 +359,7 @@ export function useFirstBatchIntake(intakeId: string | null, reading: boolean) {
         intakeId: intakeId as string,
       });
       if (result.kind === 'ok') return result.data as IntakeDetail;
-      throw result.problem;
+      throw new DomainProblemError(result.problem);
     },
     { refreshInterval: reading ? FIRST_BATCH_POLL_MS : 0 }
   );

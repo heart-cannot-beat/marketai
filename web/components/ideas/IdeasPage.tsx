@@ -73,7 +73,8 @@ function IdeasProject({
   const retryOffer =
     batch?.state === 'needs_attention' &&
     batch.attention?.reason === 'step_failed' &&
-    batch.attention.step === 'images'
+    batch.attention.step === 'images' &&
+    (batch.attention.combination_ids ?? []).length > 0
       ? batch.resume
       : null;
   const [retrying, setRetrying] = useState(false);

@@ -354,6 +354,47 @@ describe('StartPage (#195)', () => {
     );
   });
 
+  it('a start that gets no answer says so, and the next click replays the same start with the same uploads', async () => {
+    mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(ok(quote()));
+    mockStartUpload.mockResolvedValue({
+      kind: 'accepted',
+      uploadIntentId: 'ui_1',
+      operationRecordId: 'op_upload',
+    });
+    mockGateway.pollOperation.mockResolvedValue(ok({ state: 'succeeded' }));
+    mockGateway.startMarketingFirstBatch
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(
+        ok({ id: 'mfb_1', state: 'reading' }, 201, 'created')
+      );
+    const { container } = renderPage();
+
+    const start = await screen.findByRole('button', {
+      name: 'Start · up to $0.87',
+    });
+    const file = new File(['png'], 'charger.png', { type: 'image/png' });
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [file] },
+    });
+    fireEvent.click(start);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "We couldn't confirm whether it started. Click again; it won't start twice."
+    );
+    const again = screen.getByRole('button', { name: 'Start · up to $0.87' });
+    expect(again).toBeEnabled();
+    fireEvent.click(again);
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith('/w/acme/start/mfb_1')
+    );
+    const [first, second] = mockGateway.startMarketingFirstBatch.mock.calls;
+    expect(second[0].actionInstanceId).toBe(first[0].actionInstanceId);
+    expect(second[0].body).toEqual(first[0].body);
+    // The images went up once; the replay sends the same upload ids.
+    expect(mockStartUpload).toHaveBeenCalledTimes(1);
+  });
+
   it('uploads dropped images first and starts with them', async () => {
     mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(ok(quote()));
     mockStartUpload.mockResolvedValue({

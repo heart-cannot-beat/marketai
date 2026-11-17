@@ -51,7 +51,7 @@ const CARD =
 export function ReadingPage({ batchId }: { batchId: string }) {
   const { t } = useTranslation('ideas');
   const { current } = useWorkspace();
-  const { batch, problem, failed, isLoading, refresh, resume } =
+  const { batch, notFound, failed, isLoading, refresh, resume } =
     useFirstBatch(batchId);
 
   if (isLoading)
@@ -66,12 +66,10 @@ export function ReadingPage({ batchId }: { batchId: string }) {
     return (
       <div className="mx-auto max-w-3xl space-y-3" role="alert">
         <p className="text-sm">
-          {problem?.status === 404
-            ? t('reading-not-found')
-            : t('reading-problem')}
+          {notFound ? t('reading-not-found') : t('reading-problem')}
         </p>
         <div className="flex flex-wrap gap-2">
-          {problem?.status !== 404 && (
+          {!notFound && (
             <button
               type="button"
               className="btn btn-sm min-h-11"
@@ -366,7 +364,8 @@ function StopPanel({
     }
   }
 
-  const imagesFailed = view.reason === 'step_failed' && view.step === 'images';
+  // Ads that did not come out; a stop before any was admitted reads as the step failing.
+  const imagesFailed = view.failedAds > 0;
   const title =
     view.kind === 'start_again'
       ? t(

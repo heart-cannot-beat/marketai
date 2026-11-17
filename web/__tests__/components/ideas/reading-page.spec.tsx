@@ -439,6 +439,70 @@ describe('ReadingPage (#195)', () => {
     }
   );
 
+  it('keeps the progress on screen and keeps asking when a re-read fails', async () => {
+    mockGateway.getMarketingFirstBatch
+      .mockResolvedValueOnce(ok(batch()))
+      .mockResolvedValue({
+        kind: 'problem',
+        status: 502,
+        problem: {
+          type: 'about:blank',
+          title: 'x',
+          status: 502,
+          detail: 'x',
+          instance: '/x',
+          code: 'invalid_domain_response',
+          trace_id: 'tr',
+          retryable: false,
+          field_errors: [],
+        },
+        meta: {},
+      });
+    render(
+      <Fresh>
+        <ReadingPage batchId="mfb_1" />
+      </Fresh>
+    );
+    await screen.findByRole('heading', { level: 1 });
+    // The next poll fails; what was shown stays.
+    await waitFor(
+      () =>
+        expect(
+          mockGateway.getMarketingFirstBatch.mock.calls.length
+        ).toBeGreaterThan(1),
+      { timeout: 4000 }
+    );
+    expect(screen.getByTestId('reading-progress')).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load the progress.")).toBeNull();
+  });
+
+  it('an images stop with no ad admitted reads as a failed step, with its reason', async () => {
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        attention: {
+          reason: 'step_failed',
+          step: 'images',
+          code: 'budget_exceeded',
+          resumable: true,
+        },
+        resume: RESUME,
+      })
+    );
+    const stop = screen.getByTestId('reading-stop');
+    expect(
+      within(stop).getByRole('heading', { name: "“Make the ads” didn't work" })
+    ).toBeInTheDocument();
+    expect(
+      within(stop).getByText(
+        "It would have gone over the workspace's spending limit. The Owner can raise it in Settings."
+      )
+    ).toBeInTheDocument();
+    expect(within(stop).queryByText(/ads? didn't come out/)).toBeNull();
+  });
+
   it('an uncertain call offers no retry until it has been checked', async () => {
     await renderPage(
       batch({
@@ -456,9 +520,15 @@ describe('ReadingPage (#195)', () => {
       })
     ).toBeInTheDocument();
     expect(within(stop).queryByRole('button')).toBeNull();
+    // Nothing clears this on its own: the Owner has to check the step.
     expect(
       within(stop).getByText(
-        'Waiting for the check. This page updates by itself.'
+        'To avoid paying twice, it is never sent again on its own. Someone has to check whether it went through first: ask the workspace Owner. Once it has been checked, you can continue here.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(stop).getByText(
+        'Waiting for that check. This page looks again every few seconds.'
       )
     ).toBeInTheDocument();
   });
@@ -495,6 +565,35 @@ describe('ReadingPage (#195)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The cost changed. Refresh and confirm the new maximum.'
     );
+  });
+
+  it('a continue that gets no answer says so, and the next click replays the same continue', async () => {
+    mockGateway.resumeMarketingFirstBatch
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(ok(batch({ ...READ, state: 'ideas' })));
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        attention: { reason: 'over_budget', step: 'ideas', resumable: true },
+        resume: RESUME,
+      })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue · up to $0.09 more' })
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "We couldn't confirm whether it continued. Click again; it won't run twice."
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue · up to $0.09 more' })
+    );
+    await waitFor(() =>
+      expect(mockGateway.resumeMarketingFirstBatch).toHaveBeenCalledTimes(2)
+    );
+    const [first, second] = mockGateway.resumeMarketingFirstBatch.mock.calls;
+    expect(second[0].actionInstanceId).toBe(first[0].actionInstanceId);
   });
 
   it('a start from another workspace is not found here', async () => {
