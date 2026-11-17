@@ -4288,6 +4288,7 @@ export interface components {
       /** @enum {string} */
       status: 'draft' | 'exportable' | 'needs_redo';
       kept: boolean;
+      used_product_photo: boolean;
       created_at: string;
     };
     AddExperimentEntryRequest: {

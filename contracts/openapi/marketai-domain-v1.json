@@ -15378,6 +15378,9 @@
           "kept": {
             "type": "boolean"
           },
+          "used_product_photo": {
+            "type": "boolean"
+          },
           "created_at": {
             "type": "string"
           }
@@ -15391,6 +15394,7 @@
           "expression_id",
           "status",
           "kept",
+          "used_product_photo",
           "created_at"
         ]
       },

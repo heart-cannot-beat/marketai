@@ -126,10 +126,13 @@ def set_kept(session, ctx, row, asset_version_id: str, kept: bool) -> None:
 
 def _ad(version, recipe, keeps):
     combination = _intent(recipe).get("combination") or {}
+    selection = (recipe.canonical_json or {}).get("selection") or {}
     return {"asset_version_id": version.id, "combination_id": combination.get("id", ""),
             "angle_id": combination.get("angle_id", ""), "expression_id": combination.get("expression_id", ""),
             # Step 1 has no checking yet, so every ad is a draft (ADR 0018 §2); S10 derives the others.
             "status": "draft", "kept": keeps.get(version.id, False),
+            # The photos the request sent (design §5.2): an ad made without one is marked as such.
+            "used_product_photo": bool(selection.get("product_references")),
             "created_at": version.created_at.isoformat() if version.created_at else ""}
 
 

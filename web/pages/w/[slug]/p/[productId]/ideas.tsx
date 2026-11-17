@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { useRouter } from 'next/router';
 import WorkspaceLayout from '@/components/layouts/WorkspaceLayout';
 import { ProductFrame } from '@/components/workspace/ProductFrame';
-import { ProductIdeasSummary } from '@/components/workspace/ProductViews';
+import { IdeasPage as ProductIdeas } from '@/components/ideas/IdeasPage';
 import { getWorkspacePageProps } from '@/lib/workspace-bootstrap';
 import type { NextPageWithLayout } from 'types';
 import type { WorkspaceBootstrap } from '@/lib/workspace-bootstrap';
@@ -19,7 +19,7 @@ const IdeasPage: NextPageWithLayout<Props> = ({ bootstrap }) => {
   if (!bootstrap) return null;
   return (
     <ProductFrame productId={router.query.productId as string} view="ideas">
-      {(product) => <ProductIdeasSummary product={product} />}
+      {(product) => <ProductIdeas product={product} />}
     </ProductFrame>
   );
 };
@@ -38,7 +38,7 @@ IdeasPage.getLayout = function getLayout(page: ReactElement) {
 };
 
 export const getServerSideProps = getWorkspacePageProps({
-  namespaces: ['common'],
+  namespaces: ['common', 'ideas'],
   adsFirstOnly: true,
 });
 export default IdeasPage;

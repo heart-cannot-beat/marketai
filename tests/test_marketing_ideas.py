@@ -108,8 +108,10 @@ class MarketingIdeasFixtures(MarketingPlanningFixtures):
         """A product card in the workspace (an Acme Charge charger)."""
         return self._product_id(ctx or self.context)
 
-    def plant_ad(self, project_id, combination_id="c1", *, flow="ads_first", ctx=None):
-        """An image generated for ``project_id``: the recipe's marketing intent names the project and its flow."""
+    def plant_ad(self, project_id, combination_id="c1", *, flow="ads_first", ctx=None, product_references=None):
+        """An image generated for ``project_id``: the recipe's marketing intent names the project and its flow.
+
+        ``product_references`` are the product photos the request sent, as the recipe's selection records them."""
         ctx = ctx or self.context
         with tenant_session(ctx) as s:
             product_id = s.get(MarketingProjectRecord, project_id).product_id
@@ -117,8 +119,11 @@ class MarketingIdeasFixtures(MarketingPlanningFixtures):
                       "combination": {"id": combination_id, "angle_id": "a1", "expression_id": "e1"}}
             if flow:
                 intent["flow"] = flow
+            selection = {"marketing_intent": intent}
+            if product_references:
+                selection["product_references"] = product_references
             recipe = GenerationRecipeSnapshotRecord(id=new_id("rs"), workspace_id=ctx.workspace_id, canonicalization_version="v1",
-                recipe_hash=new_id("h"), canonical_json={"selection": {"marketing_intent": intent}}, execution_mode="byok",
+                recipe_hash=new_id("h"), canonical_json={"selection": selection}, execution_mode="byok",
                 created_at=utcnow())
             s.add(recipe)
             s.flush()
@@ -211,6 +216,20 @@ class IdeasServiceTests(MarketingIdeasFixtures):
                 AuditEventRecord.resource_id == project_id).order_by(AuditEventRecord.created_at, AuditEventRecord.id)).all()
             self.assertEqual([e.details_json["kept"] for e in events], [True, False, True])
             self.assertEqual({e.details_json["asset_version_id"] for e in events}, {ad})
+
+    def test_an_ad_says_whether_its_request_sent_a_product_photo(self):
+        # The ideas page marks an ad made without a product photo (design §5.2, #196): the recipe's
+        # selection lists the photos the request sent, and an ad without any says so.
+        project_id = self.make()
+        photo = {"reference_version_id": "rv_1", "content_sha256": "a" * 64, "content_hash": "a" * 64,
+                 "source": "product", "attestation": "verified_product_photo"}
+        with_photo = self.plant_ad(project_id, "c1", product_references=[photo])
+        without_photo = self.plant_ad(project_id, "c2")
+        with tenant_session(self.context) as session:
+            row = ideas.get_ideas_project(session, self.context, project_id)
+            self.assertEqual({a["asset_version_id"]: a["used_product_photo"]
+                              for a in ideas.ideas_dict(session, self.context, row)["ads"]},
+                             {with_photo: True, without_photo: False})
 
     def test_only_ads_first_images_of_the_project_are_its_ads(self):
         project_id = self.make()
