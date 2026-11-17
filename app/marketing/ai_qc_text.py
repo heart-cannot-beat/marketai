@@ -110,7 +110,7 @@ SENTENCES = {
         "en-US": "facts_supported cites only fact_ids listed in evidence_fact_ids, the facts this ad was drafted on; other facts, "
             "inferences and speculation cannot support a factual claim, and never invent certifications, prices, performance or "
             "compatibility. A claim in the image or copy that these facts do not support must fail.",
-        "zh-CN": "facts_supported 只能引用 evidence_fact_ids 中列出的事实，即这张广告起草时依据的事实；其他事实、推测和猜想都不能支持事实性声明，"
+        "zh-CN": "facts_supported 的 fact_ids 只能引用 evidence_fact_ids 中列出的事实，即这张广告起草时依据的事实；其他事实、推测和猜想都不能支持事实性声明，"
             "不得捏造认证、价格、性能或兼容性。图片或文案中有这些事实不支持的说法时必须 fail。"},
     "transcribe_ideas": {
         "en-US": "Fill rendered_text first: transcribe the headline and the body text exactly as the image renders them, character by "
