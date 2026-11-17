@@ -1330,6 +1330,31 @@ def create_entry(
     )
 
 
+def create_entry_in_transaction(
+    session,
+    context: TenantContext,
+    *,
+    entry_type: str,
+    display_name: str,
+    content: dict | None = None,
+) -> LibraryEntryRecord:
+    """``create_entry`` inside the caller's transaction, for a server-side command that owns it.
+
+    The ads-first first batch (#193) stores what it read as an unpublished product draft in the same
+    transaction that opens its ideas, so a retry never leaves one without the other. No idempotency
+    record: the caller's own row lock and state make the command happen once.
+    """
+    if entry_type not in ENTRY_TYPES:
+        raise LibraryError(f"未知创意库条目类型: {entry_type}", code="library_entry_type_unknown")
+    name = derived_display_name((display_name or "").strip())
+    if not name:
+        raise LibraryError("display_name 不能为空", code="library_display_name_required")
+    _require_workspace(session, context.workspace_id)
+    entry, _draft = _create_entry_with_draft(session, context, entry_type=entry_type, display_name=name, content=content)
+    _audit(session, context, "create_entry", entry_id=entry.id, detail={"entry_type": entry_type})
+    return entry
+
+
 # library_entries.display_name is varchar(300), the same bound the API puts on
 # a user-supplied name. A name the server derives from another entry's name
 # ("Schema for <product>") can exceed it even when the source fits; PostgreSQL

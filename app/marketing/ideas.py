@@ -179,6 +179,7 @@ def pending_ads(session, ctx, row) -> list[dict]:
 
 def ideas_dict(session, ctx, row) -> dict:
     """The ``IdeasProjectDetail`` of an ads-first project."""
+    from .first_batch import summaries
     call = service.latest_call(session, ctx, row.id)
     keeps = _keeps(session, ctx, row)
     return {"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
@@ -186,7 +187,7 @@ def ideas_dict(session, ctx, row) -> dict:
             "ideas": row.ideas_json,
             "latest_call": service.call_dict(call, include_maximum_cost=True) if call else None,
             "ads": [_ad(version, recipe, keeps) for version, recipe in project_ads(session, ctx, row)],
-            "pending": pending_ads(session, ctx, row)}
+            "pending": pending_ads(session, ctx, row), "first_batch": summaries(session, ctx, [row.id]).get(row.id)}
 
 
 #: The parts of an intent that come from the ideas and shaped the draft's image prompt: an ads-first draft
@@ -344,8 +345,10 @@ def ideas_summary(session, ctx, row) -> dict:
 
 def ideas_summaries(session, ctx, rows) -> list[dict]:
     """``ideas_summary`` of several projects with a fixed number of queries, in the order given."""
+    from .first_batch import summaries
     ids = [row.id for row in rows]
     ads, keeps = _ads_by_project(session, ctx, ids), _keeps_by_project(session, ctx, ids)
+    batches = summaries(session, ctx, ids)
     product_ids = {row.product_id for row in rows}
     names = {p.id: p.name for p in session.scalars(select(ProductRecord).where(ProductRecord.workspace_id == ctx.workspace_id,
                                                                               ProductRecord.id.in_(product_ids))).all()} if rows else {}
@@ -355,7 +358,8 @@ def ideas_summaries(session, ctx, rows) -> list[dict]:
         name = names.get(row.product_id) or (row.understanding_json or {}).get("product_name") or row.source_text[:80]
         result.append({"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
                        "product_name": name, "ad_count": len(own), "kept_count": sum(1 for ad in own if keeps[row.id].get(ad)),
-                       "updated_at": row.updated_at.isoformat() if row.updated_at else ""})
+                       "updated_at": row.updated_at.isoformat() if row.updated_at else "",
+                       "first_batch": batches.get(row.id)})
     return result
 
 

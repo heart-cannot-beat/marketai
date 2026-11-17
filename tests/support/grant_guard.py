@@ -107,7 +107,17 @@ _BINDINGS_VIEW = (
     "and credential records themselves. include_secret=True (Worker) reads them everywhere"
 )
 
+_SETTLED_TOTAL = (
+    "PostgreSQL answers the reservation book's settled totals from the SECURITY DEFINER function "
+    "marketai_settled_cost_total, which both runtime roles may execute; only SQLite sums the ledger "
+    "rows. The Worker reaches it when it admits a first batch's next step (#193)"
+)
+
 SQLITE_ONLY_WRITES: tuple[SqliteOnlyWrite, ...] = (
+    SqliteOnlyWrite("provider_cost_ledger", "SELECT",
+                    "app.entitlements.reservation_book:ReservationBook._settled_amount_since", _SETTLED_TOTAL),
+    SqliteOnlyWrite("provider_cost_ledger", "SELECT",
+                    "app.entitlements.reservation_book:ReservationBook._period_settled", _SETTLED_TOTAL),
     SqliteOnlyWrite("entitlement_snapshot_inbox", "INSERT", _PROJECTION_INGEST, _PROJECTED),
     SqliteOnlyWrite("entitlement_projections", "INSERT", _PROJECTION_INGEST, _PROJECTED),
     SqliteOnlyWrite("entitlement_projections", "UPDATE", _PROJECTION_INGEST, _PROJECTED),

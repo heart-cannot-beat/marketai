@@ -323,6 +323,9 @@ class WorkerRuntime:
             handler = {"marketing.plan": self._marketing_plan, "marketing.ai_qc": self._marketing_ai_qc, "marketing.export": self._marketing_export}[job.type]
             await handler(job)
             return True
+        if job.type == "marketing.first_batch":
+            self._marketing_first_batch(job)
+            return True
         if job.type == "generation.qc_asset_version":
             await self._generation_qc_asset_version(job)
             return True
@@ -884,6 +887,31 @@ class WorkerRuntime:
                 await heartbeat
             except asyncio.CancelledError:
                 pass
+
+    @runs_as(WORKER_ROLE)
+    def _marketing_first_batch(self, job: jobs.ClaimedJob) -> None:
+        """One advance of an ads-first first batch (#193): admit the next step once the current one finished.
+
+        It writes only this database, under the batch's row lock; the steps it admits are their own paid
+        Jobs. A rerun finds the step it already admitted and adds nothing, so a failure is retried."""
+        from .marketing.first_batch import record_fault, run_advance
+
+        batch_id = str(job.payload.get("first_batch_id") or "")
+        jobs.mark_running(job.context, job.id, self.owner)
+        try:
+            run_advance(job.context, batch_id)
+            jobs.succeed(job.context, job.id, self.owner)
+        except Exception as exc:
+            logger.exception("marketing_first_batch_advance_failed",
+                             extra={"workspace_id": job.context.workspace_id, "job_id": job.id})
+            if job.attempt >= job.max_attempts:
+                try:  # no retry is left: the batch waits for the user instead of staying silent
+                    record_fault(job.context, batch_id)
+                except Exception:
+                    logger.exception("marketing_first_batch_fault_not_recorded",
+                                     extra={"workspace_id": job.context.workspace_id, "job_id": job.id})
+            jobs.fail(job.context, job.id, self.owner, code="marketing_first_batch_failed",
+                      detail=type(exc).__name__, retryable=True)
 
     @runs_as(WORKER_ROLE)
     async def _generation_run_item(self, job: jobs.ClaimedJob) -> None:

@@ -166,7 +166,15 @@ def _finish(
         record.updated_at = now
         if status in TERMINAL_JOB_STATUSES:
             record.finished_at = now
+            _notify_first_batch(session, ctx, record)
         _audit_step(session, intake_id, step, step_payload)
+
+
+def _notify_first_batch(session, ctx: TenantContext, record: ProductIntakeRecord) -> None:
+    """The intake reached its final status: an ads-first first batch reading it moves on (#193)."""
+    from app.marketing.first_batch import notify
+
+    notify(session, ctx, intake_id=record.id, event=f"intake:{record.id}:{record.status}")
 
 
 def _begin(ctx: TenantContext, intake_id: str, *, status: str, step: str) -> dict:
@@ -257,6 +265,7 @@ def mark_intake_failed(ctx: TenantContext, intake_id: str, *, code: str, detail:
             record.updated_at = now
             record.finished_at = now
             _audit_step(session, intake_id, step, {"status": "failed", "code": code})
+            _notify_first_batch(session, ctx, record)
         _release_unused_reservation(ctx, intake_id)
     except Exception:  # noqa: BLE001 -- the Job row still carries the failure
         pass
@@ -822,6 +831,7 @@ def _finish_ready(ctx: TenantContext, intake_id: str, ranked: list[dict], payloa
         record.updated_at = now
         record.finished_at = now
         _audit_step(session, intake_id, "images", payload)
+        _notify_first_batch(session, ctx, record)
         audit.append_event(
             session,
             event_type="product_intake.ready",

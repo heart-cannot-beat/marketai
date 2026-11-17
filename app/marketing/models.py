@@ -33,6 +33,48 @@ class MarketingProjectRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class MarketingFirstBatchRecord(Base):
+    """One "start" of the ads-first opening (#193): read the product, draft, generate, under one confirmed maximum.
+
+    The steps stay ordinary records -- the product intake, the planning calls, the generation runs -- each
+    reserved and settled on its own. This row only remembers which intake it began with, the product and
+    ideas it created, the maximum the user confirmed, the maxima reserved so far and why it stopped.
+    """
+    __tablename__ = "marketing_first_batches"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id", name="uq_marketing_first_batches_workspace_id"),
+        UniqueConstraint("workspace_id", "intake_id", name="uq_marketing_first_batch_intake"),
+        Index("ix_marketing_first_batches_project", "workspace_id", "project_id"),
+        ForeignKeyConstraint(["workspace_id", "project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
+                             ondelete="RESTRICT", name="fk_marketing_first_batch_project"),
+        ForeignKeyConstraint(["workspace_id", "product_id"], ["products.workspace_id", "products.id"],
+                             ondelete="RESTRICT", name="fk_marketing_first_batch_product"),
+        ForeignKeyConstraint(["workspace_id", "operation_id"], ["operation_records.workspace_id", "operation_records.id"],
+                             ondelete="RESTRICT", name="fk_marketing_first_batch_operation"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
+    intake_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    product_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    market: Mapped[str] = mapped_column(String(80), nullable=False)
+    ad_language: Mapped[str] = mapped_column(String(35), nullable=False)
+    strategy_language: Mapped[str] = mapped_column(String(10), nullable=False)
+    execution_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    selected_variant: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    attention_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # The image settings confirmed with the price and every step admitted so far, with its maximum.
+    progress_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    confirmed_max_cost: Mapped[str] = mapped_column(String(32), nullable=False)
+    reserved_total: Mapped[str] = mapped_column(String(32), nullable=False)
+    quote_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    operation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    initiator_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class MarketingAdKeepRecord(Base):
     """The user's current "keep" mark on one ad of an ads_first project; changes are audited."""
     __tablename__ = "marketing_ad_keeps"

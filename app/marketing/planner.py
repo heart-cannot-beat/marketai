@@ -497,6 +497,10 @@ def _end_operation(session, ctx, call, state):
     transition_operation(session, call.operation_id, state, call.error_code or "planning_completed", ctx.executor,
         result_ref=OperationResultRef("marketing_round", call.input_json["round_id"]) if call.kind == "explanation"
             else OperationResultRef("marketing_project", call.project_id))
+    if call.kind in ("understanding", "ideas"):
+        # Every exit of a drafting call ends here; an ads-first first batch then takes its next step (#193).
+        from .first_batch import notify
+        notify(session, ctx, project_id=call.project_id, event=f"call:{call.id}:{call.state}")
 
 
 def _log_failure(ctx, call, code, exc):

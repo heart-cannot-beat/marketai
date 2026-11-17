@@ -1048,6 +1048,9 @@ from .marketing.api import router as marketing_router, register_handlers as regi
 v1_router.include_router(marketing_router)
 from .marketing.ideas_api import router as marketing_ideas_router
 v1_router.include_router(marketing_ideas_router)
+from .marketing.first_batch_api import quote_router as marketing_first_batch_quote_router, router as marketing_first_batch_router
+v1_router.include_router(marketing_first_batch_quote_router)
+v1_router.include_router(marketing_first_batch_router)
 register_marketing_handlers(app)
 
 from .learnings.v1_router import router as learnings_v1_router
