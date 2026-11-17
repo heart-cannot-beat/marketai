@@ -1,10 +1,12 @@
 """The ads-first first batch (#193, ADR 0018; design doc §5.1, §5.2, §8): one start, one confirmed maximum.
 
-"Start" reads the product, drafts the understanding, drafts the ideas and makes their images without
-another click. The user confirms one number, the start button's maximum: the maxima of the steps plus
+"Start" reads the product, drafts the understanding, drafts the ideas, makes their images and checks
+each image (#197) without another click. The user confirms one number, the start button's maximum: the maxima of the steps plus
 one extra planning call, kept for drafting the ideas again when the application refuses the first draft
 (maintainer decision on #193). Every step is still an ordinary record -- the product intake, the
-planning calls, one generation run per ad -- reserved and settled on its own.
+planning calls, one generation run per ad, one single-image check per image -- reserved and settled on
+its own. The checks are admitted by the advance in the Worker too (maintainer decision on #197; the cost
+contract §11 lists the steps).
 
 ``advance`` is the whole state machine. It looks at the current step and, when that step has finished,
 admits the next one; otherwise it does nothing, so it may run any number of times. Before admitting a
@@ -39,7 +41,7 @@ from .models import MarketingFirstBatchRecord, MarketingProjectRecord
 
 JOB_TYPE = "marketing.first_batch"
 RESOURCE_TYPE = "marketing_first_batch"
-ACTIVE = ("reading", "understanding", "ideas", "generating")
+ACTIVE = ("reading", "understanding", "ideas", "generating", "checking")
 ENDED = ("done", "failed")
 #: Images the price is quoted for: 3 claims x 2 ways of telling x 1 ad (``ideas.FIRST_BATCH``). Ideas
 #: with 2 claims make 4, which the same confirmation covers.
@@ -96,8 +98,15 @@ def _planning(session, ctx, mode: str) -> tuple[Decimal, str, str | None]:
     return Decimal(cap["maximum_cost"]), cap["quote_hash"], None
 
 
+def _check_unit(session, ctx, mode: str) -> tuple[Decimal, dict]:
+    """One image check's maximum and who checks (``ai_qc.mode_capability``); its ``reason`` when none can run."""
+    from . import ai_qc
+    cap = ai_qc.mode_capability(session, ctx, mode)
+    return (Decimal("0") if cap["reason"] else Decimal(cap["unit_maximum"])), cap
+
+
 def quote(session, ctx, execution_mode: str = "byok") -> dict:
-    """The start button's maximum: reading, understanding, ideas, one more ideas draft, and the images.
+    """The start button's maximum: reading, understanding, ideas, one more ideas draft, the images and their checks.
 
     Step 1 runs on one OpenAI key (design D8): without an active OpenAI key -- for instance with a
     Gemini key only -- the quote says ``openai_key_required`` before anything is started."""
@@ -113,8 +122,10 @@ def quote(session, ctx, execution_mode: str = "byok") -> dict:
         unit = _image_unit(image)
     except SelectionError as exc:
         unit, reason = Decimal("0"), reason or exc.code
+    check, check_cap = _check_unit(session, ctx, execution_mode)
+    reason = reason or check_cap["reason"]
     planned = (("reading", 1, reading), ("understanding", 1, planning), ("ideas", 1, planning),
-               ("ideas_retry", IDEAS_RETRIES, planning), ("images", ADS, unit))
+               ("ideas_retry", IDEAS_RETRIES, planning), ("images", ADS, unit), ("checks", ADS, check))
     total = sum((unit_cost * quantity for _, quantity, unit_cost in planned), Decimal("0"))
     if reason is None and execution_mode == "byok":
         from app.generation.selection import authorize_paid, check_budget
@@ -124,7 +135,8 @@ def quote(session, ctx, execution_mode: str = "byok") -> dict:
         except SelectionError as exc:
             reason = exc.code
     quote_hash = service.digest([QUOTE_VERSION, execution_mode, str(reading), planning_hash, str(planning),
-                                 image, str(unit), ADS, IDEAS_RETRIES])
+                                 image, str(unit), ADS, IDEAS_RETRIES,
+                                 [check_cap["provider"], check_cap["model"], str(check)]])
     return {"available": reason is None, "unavailable_reason": reason, "execution_mode": execution_mode,
             "maximum_cost": _money(total) if reason is None else "0", "currency": "USD", "quote_hash": quote_hash,
             "image_provider": image["provider"], "image_model": image["model"],
@@ -270,7 +282,8 @@ def run_advance(ctx, batch_id: str) -> None:
         advance(session, ctx, batch)
 
 
-STEP_OF_STATE = {"reading": "reading", "understanding": "understanding", "ideas": "ideas", "generating": "images"}
+STEP_OF_STATE = {"reading": "reading", "understanding": "understanding", "ideas": "ideas", "generating": "images",
+                 "checking": "checks"}
 
 
 @runs_as(WORKER_ROLE)
@@ -533,7 +546,7 @@ def _generate(session, ctx, batch, row, resumed: bool) -> None:
         return
     todo = [c for c in combinations if c not in states or c in failed]
     if not todo:
-        _done(session, ctx, batch)
+        _check(session, ctx, batch, row, resumed)
         return
     _admit_images(session, ctx, batch, row, todo)
 
@@ -570,6 +583,78 @@ def _admit_images(session, ctx, batch, row, combination_ids) -> None:
     _set_state(batch, "generating")
 
 
+def batch_images(session, ctx, batch) -> dict:
+    """The images this batch's runs made: asset version id -> its ad (combination id), oldest first."""
+    runs = _image_runs(batch)
+    if not runs:
+        return {}
+    ad_of = {run_id: combination_id for combination_id, run_id in runs.items()}
+    rows = session.execute(select(AssetVersionRecord.id, RunItemRecord.generation_run_id)
+        .join(RunItemRecord, (RunItemRecord.id == AssetVersionRecord.producing_run_item_id)
+              & (RunItemRecord.workspace_id == ctx.workspace_id))
+        .where(AssetVersionRecord.workspace_id == ctx.workspace_id, RunItemRecord.generation_run_id.in_(list(runs.values())))
+        .order_by(AssetVersionRecord.created_at, AssetVersionRecord.id)).all()
+    return {asset_id: ad_of[run_id] for asset_id, run_id in rows}
+
+
+def check_states(session, ctx, batch) -> dict:
+    """The state of each batch image's newest check, whoever started it: absent while it has none."""
+    from .ideas_checks import latest_by_asset
+    images = batch_images(session, ctx, batch)
+    latest = latest_by_asset(session, ctx, batch.project_id) if images else {}
+    return {asset_id: latest[asset_id] for asset_id in images if asset_id in latest}
+
+
+def _check(session, ctx, batch, row, resumed: bool) -> None:
+    """Every image is made: check each one (maintainer decision on #197), then the batch is done.
+
+    The images are already on the ideas page while they are being checked. A check that failed stops the
+    batch until the user continues; an uncertain one waits for its reconciliation and is never resent."""
+    images = batch_images(session, ctx, batch)
+    calls = check_states(session, ctx, batch)
+    states = {asset_id: call.state for asset_id, call in calls.items()}
+    if any(state in ("queued", "running") for state in states.values()):
+        _set_state(batch, "checking")
+        return
+    uncertain = [images[a] for a in images if states.get(a) == "uncertain"]
+    if uncertain:
+        _stop(session, ctx, batch, "uncertain", "checks", combination_ids=uncertain)
+        return
+    failed = [a for a in images if states.get(a) == "failed"]
+    if failed and not resumed:
+        _stop(session, ctx, batch, "step_failed", "checks", code=calls[failed[0]].error_code,
+              combination_ids=[images[a] for a in failed])
+        return
+    todo = [a for a in images if a not in states or a in failed]
+    if not todo:
+        _done(session, ctx, batch)
+        return
+    _admit_checks(session, ctx, batch, row, {a: images[a] for a in todo})
+
+
+def _admit_checks(session, ctx, batch, row, todo: dict) -> None:
+    from . import ideas_checks
+    unit, cap = _check_unit(session, ctx, batch.execution_mode)
+    if cap["reason"]:
+        _stop(session, ctx, batch, "step_failed", "checks", code=cap["reason"])
+        return
+    maximum = unit * len(todo)
+    if not _fits(batch, maximum):
+        _stop(session, ctx, batch, "over_budget", "checks", needed=_money(Decimal(batch.reserved_total) + maximum),
+              combination_ids=list(todo.values()))
+        return
+    try:
+        with session.begin_nested():
+            records = ideas_checks.admit_for_first_batch(session, ctx, row, batch.execution_mode, list(todo), batch.id)
+    except _admission_errors() as exc:
+        _stop(session, ctx, batch, "step_failed", "checks", code=_code(exc))
+        return
+    if records:
+        _record_step(batch, "checks", sum((Decimal(r.maximum_cost) for r in records), Decimal("0")),
+                     calls={r.asset_version_id: r.id for r in records})
+    _set_state(batch, "checking")
+
+
 def _done(session, ctx, batch) -> None:
     batch.state, batch.attention_json, batch.updated_at = "done", None, utcnow()
     transition_operation(session, batch.operation_id, OperationState.SUCCEEDED, "first batch done", ctx.executor)
@@ -583,6 +668,8 @@ def _done(session, ctx, batch) -> None:
 
 def _still_uncertain(session, ctx, batch) -> bool:
     attention = batch.attention_json or {}
+    if attention.get("step") == "checks":
+        return any(call.state == "uncertain" for call in check_states(session, ctx, batch).values())
     if attention.get("step") == "images":
         return any(state == "uncertain" for state in image_states(session, ctx, batch).values())
     if batch.project_id is None:
@@ -610,28 +697,32 @@ def resume_offer(session, ctx, batch) -> dict | None:
         unit = _image_unit((batch.progress_json or {})["image"])
     except SelectionError:
         return None
-    if unavailable:
+    check, check_cap = _check_unit(session, ctx, batch.execution_mode)
+    if unavailable or check_cap["reason"]:
         return None
     retries = 0 if (batch.progress_json or {}).get("ideas_retry_used") else IDEAS_RETRIES
-    if step == "images":
-        images = len(attention.get("combination_ids") or []) or ADS
-        remaining = unit * images
+    concerned = len(attention.get("combination_ids") or []) or ADS
+    if step == "checks":
+        remaining = check * concerned
+    elif step == "images":
+        remaining = unit * concerned + check * ADS
     elif reason == "ideas_refused":
-        remaining = planning + unit * ADS
+        remaining = planning + (unit + check) * ADS
     elif step == "ideas" and reason != "too_few_claims":
-        remaining = planning * (1 + retries) + unit * ADS
+        remaining = planning * (1 + retries) + (unit + check) * ADS
     else:  # several models, too few claims, or the understanding: the understanding and everything after it
-        remaining = planning * (2 + retries) + unit * ADS
+        remaining = planning * (2 + retries) + (unit + check) * ADS
     maximum = max(Decimal(batch.reserved_total) + remaining, Decimal(batch.confirmed_max_cost))
     requires = (["selected_variant"] if reason == "several_models" else []) + (
         ["additional_text"] if reason == "too_few_claims" else [])
     quote_hash = service.digest([QUOTE_VERSION, "resume", batch.id, attention, batch.reserved_total,
-                                 batch.confirmed_max_cost, str(maximum), planning_hash, str(unit)])
+                                 batch.confirmed_max_cost, str(maximum), planning_hash, str(unit), str(check)])
     return {"maximum_cost": _money(maximum), "additional_cost": _money(maximum - Decimal(batch.confirmed_max_cost)),
             "currency": "USD", "quote_hash": quote_hash, "requires": requires}
 
 
-RESUME_STATE = {"reading": "reading", "understanding": "understanding", "ideas": "ideas", "images": "generating"}
+RESUME_STATE = {"reading": "reading", "understanding": "understanding", "ideas": "ideas", "images": "generating",
+                "checks": "checking"}
 
 
 def resume(session, ctx, batch, *, quote_hash: str, selected_variant: str | None = None,

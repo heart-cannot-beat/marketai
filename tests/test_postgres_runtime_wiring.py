@@ -1039,6 +1039,18 @@ class PostgresRuntimeWiringTests(unittest.TestCase):
                         with connection.begin_nested():
                             connection.execute(self.text(statement), {"workspace": self.workspace})
 
+        # A first batch also admits the checks of the images it made (maintainer decision on #197): the
+        # Worker may insert a check call, and still never delete one; the API admits every other check.
+        with self.worker.connect() as connection:
+            privileges = {
+                privilege: connection.scalar(
+                    self.text("SELECT has_table_privilege(current_user, 'public.marketing_ai_qc_calls', :privilege)"),
+                    {"privilege": privilege},
+                )
+                for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE")
+            }
+        self.assertEqual(privileges, {"SELECT": True, "INSERT": True, "UPDATE": True, "DELETE": False})
+
     def test_process_startup_checks_the_role_it_really_connected_as(self) -> None:
         import subprocess
         import sys

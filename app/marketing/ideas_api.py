@@ -4,6 +4,8 @@ The plan-first endpoints in ``api.py`` never return these projects, and these ne
 """
 from datetime import datetime
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy import and_, or_, select
 
@@ -14,8 +16,8 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 from . import ideas, service
-from .ideas_contracts import (CreateIdeas, IdeasCallSummary, IdeasGenerationDrafts, IdeasProjectDetail, IdeasProjectPage,
-                              PrepareIdeasGeneration, SetKept, StartIdeasPlanning)
+from .ideas_contracts import (CreateIdeas, IdeasCallSummary, IdeasChecksQuote, IdeasGenerationDrafts, IdeasProjectDetail,
+                              IdeasProjectPage, PrepareIdeasGeneration, SetKept, StartIdeasChecks, StartIdeasPlanning)
 from .models import MarketingProjectRecord, PlanningCallRecord
 
 router = APIRouter(prefix="/marketing/ideas", tags=["marketing"])
@@ -122,3 +124,34 @@ def prepare_ideas_generation(project_id: str, body: PrepareIdeasGeneration, requ
         row = _resource_command(session, ctx, request, key, "marketing.ideas.prepare_generation", body.model_dump(mode="json"),
                                 prepare, lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
         return {"project_id": row.id, "revision": revision, "drafts": ideas.prepared_drafts(session, ctx, row, revision)}
+
+
+@router.get("/{project_id}/checks/quote", operation_id="get_marketing_ideas_checks_quote", response_model=IdeasChecksQuote)
+def get_ideas_checks_quote(project_id: str, execution_mode: Literal["byok", "mock"] = Query(default="byok"),
+                           ctx: TenantContext = Depends(request_tenant_context)):
+    """What checking the unchecked ads of these ideas costs at most: one single-image check per image (#197)."""
+    from . import ideas_checks
+    with tenant_session(ctx) as session:
+        row = ideas.get_ideas_project(session, ctx, project_id)
+        return ideas_checks.quote_and_inputs(session, ctx, row, execution_mode)[0]
+
+
+@router.post("/{project_id}/checks", operation_id="start_marketing_ideas_checks", response_model=IdeasProjectDetail,
+             status_code=202, openapi_extra={"x-marketai-idempotent": True})
+def start_ideas_checks(project_id: str, body: StartIdeasChecks, request: Request, response: Response,
+                       ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key)):
+    """Check the ads the quote counted, against the intent each image was made from (#197).
+
+    The result is a suggestion on each ad (``ads[].check``), never a quality approval; no round is needed.
+    Without the workspace's key nothing is admitted (409 ``checks_unavailable``)."""
+    from . import ideas_checks
+
+    def check(s):
+        row = ideas.get_ideas_project(s, ctx, project_id)
+        ideas_checks.start(s, ctx, row, body.execution_mode, body.quote_hash)
+        return row
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.check", body.model_dump(mode="json"), check,
+                                lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)

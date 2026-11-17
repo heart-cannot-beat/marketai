@@ -14,6 +14,7 @@ from app.entitlements.usage import record_provider_call
 from app.generation.paid_execution import _settle
 from app.generation.selection import authorize_paid, credential_binding
 from app.platform.blob_store import CommittedBlobRef
+from app.platform.audit import append_event
 from app.platform.operations import OperationState, OperationResultRef, get_operation, transition_operation
 from app.llm import extract_json
 from .ai_qc_models import MarketingAIQCRecord as Call
@@ -57,6 +58,14 @@ def finish_operation(session, ctx, call, state):
         return
     transition_operation(session, op.id, state, call.error_code or "ai_qc_completed", ctx.executor,
         result_ref=OperationResultRef(resource_type="marketing_ai_qc", resource_id=call.id))
+    notify_first_batch(session, ctx, call)
+
+
+def notify_first_batch(session, ctx, call):
+    """An ideas check reached its end: the first batch of those ideas, if one is running, moves on (#197)."""
+    if call.project_id:
+        from .first_batch import notify
+        notify(session, ctx, project_id=call.project_id, event=f"check:{call.id}:{call.state}")
 
 
 def uncertain(session, ctx, call):
@@ -109,12 +118,20 @@ async def execute_ai_qc(ctx, call_id, blob_store, *, complete=visual_completion)
         reservation = reservation_for(session, ctx, call)
         try:
             ensure_active(session, ctx)
-            row = workflow.get_round(session, ctx, call.round_id)
             job = session.get(JobRecord, call.job_id)
-            if row.state != "reviewing" or not job or job.workspace_id != ctx.workspace_id or job.state != "running":
+            if not job or job.workspace_id != ctx.workspace_id or job.state != "running":
                 raise ValueError("qc_admission_changed")
-            if not input_is_current(session, ctx, row, call):
-                raise ValueError("qc_input_changed")
+            if call.project_id:
+                # An ads-first ideas check (#197): no round has to be in review; the ad's intent must be unchanged.
+                from .ideas_checks import input_is_current as ideas_input_is_current
+                if not ideas_input_is_current(session, ctx, call):
+                    raise ValueError("qc_input_changed")
+            else:
+                row = workflow.get_round(session, ctx, call.round_id)
+                if row.state != "reviewing":
+                    raise ValueError("qc_admission_changed")
+                if not input_is_current(session, ctx, row, call):
+                    raise ValueError("qc_input_changed")
             if call.execution_mode == "byok":
                 authorize_paid(session, ctx)
                 binding = credential_binding(session, ctx, call.provider, include_secret=True)
@@ -186,8 +203,12 @@ async def execute_ai_qc(ctx, call_id, blob_store, *, complete=visual_completion)
                 **{k: v for k, v in image.items() if k != "bytes"}} for meta, image in zip(frozen["images"], images)]
             call.state, call.result_json, call.error_code = "succeeded", normalized, None
             finish_operation(session, ctx, call, OperationState.SUCCEEDED)
-            row = workflow.get_round(session, ctx, call.round_id)
-            workflow.audit(session, row, "ai_qc_completed", {"call_id": call.id, "input_hash": call.input_hash, "source": normalized["source"]})
+            details = {"call_id": call.id, "input_hash": call.input_hash, "source": normalized["source"]}
+            if call.project_id:
+                append_event(session, event_type="marketing.ideas_check_completed", resource_type="marketing_project",
+                             resource_id=call.project_id, details=details)
+            else:
+                workflow.audit(session, workflow.get_round(session, ctx, call.round_id), "ai_qc_completed", details)
         except (ValidationError, ValueError, TypeError) as exc:
             call.state, call.error_code = "failed", "qc_output_invalid" if not known_error else known_error
             if not known_error:

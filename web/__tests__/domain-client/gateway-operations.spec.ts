@@ -102,6 +102,8 @@ describe('DomainGateway operation coverage', () => {
     // 248 -> 252: the ads-first first batch `get_marketing_first_batch_quote`,
     // `start_marketing_first_batch`, `get_marketing_first_batch` and
     // `resume_marketing_first_batch` (#193).
-    expect(DOMAIN_ALLOWLIST.length).toBe(252);
+    // 252 -> 254: ads-first ideas checks `get_marketing_ideas_checks_quote`
+    // and `start_marketing_ideas_checks` (#197).
+    expect(DOMAIN_ALLOWLIST.length).toBe(254);
   });
 });

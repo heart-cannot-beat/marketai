@@ -81,6 +81,17 @@ Worker 先读取并校验实际存储版本，再提交付费调用边界，之�
 - 读取轮次或工作流时带 `include_qc_kinds=true` 才返回 `paired_ai_qc`、调用 `kind` 与看板的 `single_qc_*`/`paired_qc_*` 阶段；旧 BFF 读取保持拆分前的形状。
 - 带 `include_qc_evidence=true` 才返回结果的 `rendered_text`、检查项的 `rendered_text_diff`（含人工审核冻结的有效检查结果）与调用的 `error_detail`；不带时 fail / unknown 结论相同，只是不含这些字段。
 
+### 新开头的广告草稿检查（#197）
+
+新开头（[ADR 0018](../adr/0018-ads-before-test-setup.md)）的广告没有小轮，检查挂在广告想法项目上：迁移 `zzo197a1b2c3` 把 `marketing_ai_qc_calls.round_id` 改为可空并加 `project_id`（复合外键指向同一工作区的 `marketing_projects`），每条调用二选一；项目上的调用只能是单图检查。表原有的强制 RLS、`tenant_isolation` 策略和三种角色的整表授权不变，Worker 没有新增权限。
+
+- 只做单图检查，策略 `marketing-ideas-qc-single-v1`；对照检查留到第 2 步冻结小轮之后。
+- 输入取自这张图的出图意图：主张想法里的组合、主张和讲法，出图时的产品理解快照（记下 `understanding_hash`）和这张广告引用的事实（`evidence_fact_ids`）。事实还没核对也照样作为依据，只有这些事实能支持图里和文案里的说法；图里的字照常逐字转写，由服务端和这张广告的文案比对。
+- 结果是建议，不写质量审核记录。读广告想法时每张广告带最新一次检查（`ads[].check`），只列需要注意的发现（`fail` 或 `unknown`），通过的不列。
+- 图和它的出图意图不会变，所以一张图检查成功后不再计费重查；已知失败可以按新报价再查；结果不确定的不重发。Mock 图只用 Mock 检查，真实图只用真实检查。
+- 接口：`GET /marketing/ideas/{project_id}/checks/quote?execution_mode=byok|mock`（报价，列出要检查的图和不能按原样检查的图）；`POST /marketing/ideas/{project_id}/checks`（确认报价并排队，幂等）。没有 Key 时报价不可用（`credential_required`），提交返回 409 `checks_unavailable`。
+- 首批流水（#193）出完图后自己受理这一批图的检查（状态 `checking`），计入用户点开始时确认的总价；由 Worker 受理是 #197 上维护者的决定，范围写在[费用合同 §11](../architecture/subscription-entitlement-usage-cost-ownership.md#11-spend-guardrail)。检查进行中图已经在广告想法页上；检查失败、超出总价或结果不确定时首批停下，`resume` 只重查没查成的图。
+
 图片输入和结构化输出协议依据 [OpenAI Images and vision](https://developers.openai.com/api/docs/guides/images-vision)、[OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)、[Gemini generateContent](https://ai.google.dev/api/generate-content)。部署方仍须核实所配置模型与账户支持情况。
 
 ## 验证

@@ -3560,6 +3560,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'get_marketing_ideas_checks_quote',
+    {
+      operationId: 'get_marketing_ideas_checks_quote',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/checks/quote',
+      pathParams: ['project_id'],
+      queryParams: ['execution_mode'],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 65536,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'get_marketing_ideas_checks_quote_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'get_marketing_project',
     {
       operationId: 'get_marketing_project',
@@ -6595,6 +6622,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         201: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'start_marketing_first_batch_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'start_marketing_ideas_checks',
+    {
+      operationId: 'start_marketing_ideas_checks',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/checks',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 1024,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        202: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'start_marketing_ideas_checks_202' },
           locationShapes: [],
         },
         422: {

@@ -2594,6 +2594,49 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/checks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start Ideas Checks
+     * @description Check the ads the quote counted, against the intent each image was made from (#197).
+     *
+     *     The result is a suggestion on each ad (``ads[].check``), never a quality approval; no round is needed.
+     *     Without the workspace's key nothing is admitted (409 ``checks_unavailable``).
+     */
+    post: operations['start_marketing_ideas_checks'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/ideas/{project_id}/checks/quote': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Ideas Checks Quote
+     * @description What checking the unchecked ads of these ideas costs at most: one single-image check per image (#197).
+     */
+    get: operations['get_marketing_ideas_checks_quote'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/generation-drafts': {
     parameters: {
       query?: never;
@@ -4290,6 +4333,7 @@ export interface components {
       kept: boolean;
       used_product_photo: boolean;
       created_at: string;
+      check?: components['schemas']['IdeasAdCheck'] | null;
     };
     AddExperimentEntryRequest: {
       asset_version_id: string;
@@ -7977,7 +8021,7 @@ export interface components {
         | 'step_failed'
         | 'uncertain';
       /** @enum {string} */
-      step: 'reading' | 'understanding' | 'ideas' | 'images';
+      step: 'reading' | 'understanding' | 'ideas' | 'images' | 'checks';
       code?: string | null;
       variants?: string[];
       combination_ids?: string[];
@@ -7994,6 +8038,7 @@ export interface components {
         | 'understanding'
         | 'ideas'
         | 'generating'
+        | 'checking'
         | 'done'
         | 'needs_attention'
         | 'failed';
@@ -8021,7 +8066,8 @@ export interface components {
       updated_at: string;
     };
     /**
-     * @description The start button's maximum (#193): every step's maximum plus one more drafting of the ideas.
+     * @description The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one
+     *     more drafting of the ideas.
      *
      *     Step 1 runs on one OpenAI key; without one the quote is unavailable with ``openai_key_required``.
      */
@@ -8040,7 +8086,13 @@ export interface components {
     };
     FirstBatchQuoteStep: {
       /** @enum {string} */
-      step: 'reading' | 'understanding' | 'ideas' | 'ideas_retry' | 'images';
+      step:
+        | 'reading'
+        | 'understanding'
+        | 'ideas'
+        | 'ideas_retry'
+        | 'images'
+        | 'checks';
       quantity: number;
       unit_maximum: string;
       maximum_cost: string;
@@ -8063,6 +8115,7 @@ export interface components {
         | 'understanding'
         | 'ideas'
         | 'generating'
+        | 'checking'
         | 'done'
         | 'needs_attention'
         | 'failed';
@@ -8514,6 +8567,31 @@ export interface components {
       guiding_questions?: components['schemas']['GuidingQuestion'][];
     };
     /**
+     * @description The newest automatic check of one ad (#197): a suggestion, never a quality approval.
+     *
+     *     It was made against the product understanding as it was when the image was made (``understanding_hash``)
+     *     and the facts the ad cites (``fact_ids``); whether that still holds after the user checks the facts is
+     *     for the ad's status to say.
+     */
+    IdeasAdCheck: {
+      id: string;
+      /** @enum {string} */
+      state: 'queued' | 'running' | 'succeeded' | 'failed' | 'uncertain';
+      /** @enum {string} */
+      execution_mode: 'byok' | 'mock';
+      source?: ('ai_visual_suggestion' | 'controlled_mock') | null;
+      suggestion?:
+        | ('needs_changes' | 'needs_confirmation' | 'ready_to_confirm')
+        | null;
+      findings: components['schemas']['IdeasCheckFinding'][];
+      understanding_hash: string;
+      fact_ids: string[];
+      language: string;
+      maximum_cost: string;
+      error_code?: string | null;
+      created_at: string;
+    };
+    /**
      * @description A drafting call of ads-first ideas: the product understanding, then the ideas (#190).
      *
      *     The plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call.
@@ -8529,6 +8607,51 @@ export interface components {
       error_code?: string | null;
       /** @default 0 */
       maximum_cost: string;
+    };
+    /** @description A check that needs attention: ``fail``, or ``unknown`` when the image alone cannot settle it. Passes are left out. */
+    IdeasCheckFinding: {
+      check_id: string;
+      description: string;
+      /** @enum {string} */
+      status: 'fail' | 'unknown';
+      /** @enum {string} */
+      confidence: 'high' | 'medium' | 'low';
+      gate_reason?: string | null;
+      visual_evidence: string;
+      rationale: string;
+      suggested_fix: string;
+      fact_ids: string[];
+      unsupported_claims?: string[];
+      rendered_text_diff?: components['schemas']['RenderedCopyDifference'][];
+    };
+    /**
+     * @description What checking these ideas' unchecked ads costs at most (#197): one single-image check per image.
+     *
+     *     Only images made in ``execution_mode`` are counted: a Mock image gets the Mock check, a real one a real
+     *     check. An image with a check queued, running or uncertain, or with a finished one, is not counted again.
+     */
+    IdeasChecksQuote: {
+      available: boolean;
+      unavailable_reason?: string | null;
+      /** @enum {string} */
+      execution_mode: 'byok' | 'mock';
+      provider: string;
+      model: string;
+      quantity: number;
+      maximum_cost: string;
+      /**
+       * @default USD
+       * @constant
+       */
+      currency: 'USD';
+      quote_hash: string;
+      asset_version_ids: string[];
+      skipped: components['schemas']['IdeasChecksSkipped'][];
+    };
+    /** @description An ad that cannot be checked as it was made, and why (e.g. ``product_reference_changed``). */
+    IdeasChecksSkipped: {
+      asset_version_id: string;
+      code: string;
     };
     IdeasGenerationDraft: {
       combination_id: string;
@@ -10498,6 +10621,18 @@ export interface components {
       concept_key_id: string;
       concept_key_name: string;
     };
+    RenderedCopyChange: {
+      expected: string;
+      rendered: string;
+    };
+    /** @description A headline or body text the image renders differently from the ad's copy (empty ``rendered``: not readable). */
+    RenderedCopyDifference: {
+      /** @enum {string} */
+      field: 'headline' | 'body_copy';
+      expected: string;
+      rendered: string;
+      changes: components['schemas']['RenderedCopyChange'][];
+    };
     /** @description The headline and body text as the image renders them, transcribed verbatim; empty when not shown or unreadable. */
     RenderedText: {
       headline: string;
@@ -10991,6 +11126,12 @@ export interface components {
        * @default byok
        * @enum {string}
        */
+      execution_mode: 'byok' | 'mock';
+      quote_hash: string;
+    };
+    /** @description Check the ads the quote counted, confirming its maximum. */
+    StartIdeasChecks: {
+      /** @enum {string} */
       execution_mode: 'byok' | 'mock';
       quote_hash: string;
     };
@@ -17151,6 +17292,76 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  start_marketing_ideas_checks: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StartIdeasChecks'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_marketing_ideas_checks_quote: {
+    parameters: {
+      query?: {
+        execution_mode?: 'byok' | 'mock';
+      };
+      header?: never;
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasChecksQuote'];
         };
       };
       /** @description Validation Error */

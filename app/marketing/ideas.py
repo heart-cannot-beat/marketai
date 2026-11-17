@@ -92,6 +92,10 @@ def _intent(recipe):
     return (recipe.canonical_json or {}).get("selection", {}).get("marketing_intent") or {}
 
 
+#: The ``marketing_intent`` a generation recipe froze, for other modules (the ideas checks, #197).
+intent_of = _intent
+
+
 def _keeps(session, ctx, row):
     return _keeps_by_project(session, ctx, [row.id])[row.id]
 
@@ -124,7 +128,7 @@ def set_kept(session, ctx, row, asset_version_id: str, kept: bool) -> None:
     session.flush()
 
 
-def _ad(version, recipe, keeps):
+def _ad(version, recipe, keeps, checks=None):
     combination = _intent(recipe).get("combination") or {}
     selection = (recipe.canonical_json or {}).get("selection") or {}
     return {"asset_version_id": version.id, "combination_id": combination.get("id", ""),
@@ -133,7 +137,9 @@ def _ad(version, recipe, keeps):
             "status": "draft", "kept": keeps.get(version.id, False),
             # The photos the request sent (design §5.2): an ad made without one is marked as such.
             "used_product_photo": bool(selection.get("product_references")),
-            "created_at": version.created_at.isoformat() if version.created_at else ""}
+            "created_at": version.created_at.isoformat() if version.created_at else "",
+            # The newest automatic check of this image (#197): only what needs attention.
+            "check": (checks or {}).get(version.id)}
 
 
 #: Run item states of an image not made yet, as ``PendingAd.state``; a succeeded, reused or cancelled item is not pending.
@@ -183,13 +189,15 @@ def pending_ads(session, ctx, row) -> list[dict]:
 def ideas_dict(session, ctx, row) -> dict:
     """The ``IdeasProjectDetail`` of an ads-first project."""
     from .first_batch import summaries
+    from .ideas_checks import ad_checks
     call = service.latest_call(session, ctx, row.id)
     keeps = _keeps(session, ctx, row)
+    checks = ad_checks(session, ctx, row)
     return {"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
             "market": row.market, "ad_language": row.ad_language, "understanding": row.understanding_json,
             "ideas": row.ideas_json,
             "latest_call": service.call_dict(call, include_maximum_cost=True) if call else None,
-            "ads": [_ad(version, recipe, keeps) for version, recipe in project_ads(session, ctx, row)],
+            "ads": [_ad(version, recipe, keeps, checks) for version, recipe in project_ads(session, ctx, row)],
             "pending": pending_ads(session, ctx, row), "first_batch": summaries(session, ctx, [row.id]).get(row.id)}
 
 

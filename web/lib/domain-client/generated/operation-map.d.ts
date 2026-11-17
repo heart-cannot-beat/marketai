@@ -852,6 +852,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
   };
+  get_marketing_ideas_checks_quote: {
+    pathParams: { project_id: string };
+    queryParams: { execution_mode?: string };
+    requestBody: never;
+    successResponses: { 200: components['schemas']['IdeasChecksQuote'] };
+  };
   get_marketing_project: {
     pathParams: { project_id: string };
     queryParams: {
@@ -1667,6 +1673,12 @@ export type DomainOperationMap = {
     queryParams: Record<string, never>;
     requestBody: components['schemas']['StartFirstBatch'];
     successResponses: { 201: components['schemas']['FirstBatchDetail'] };
+  };
+  start_marketing_ideas_checks: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['StartIdeasChecks'];
+    successResponses: { 202: components['schemas']['IdeasProjectDetail'] };
   };
   start_marketing_ideas_planning: {
     pathParams: { project_id: string };

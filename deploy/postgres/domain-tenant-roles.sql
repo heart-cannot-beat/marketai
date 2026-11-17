@@ -816,6 +816,9 @@ BEGIN
   END LOOP;
   IF to_regclass('public.marketing_ai_qc_calls') IS NOT NULL THEN
     EXECUTE 'GRANT UPDATE ON public.marketing_ai_qc_calls TO marketai_domain_worker';
+    -- A first batch admits the single-image checks of the images it made (maintainer decision on #197):
+    -- the Worker inserts those check calls, each with its own reservation, Operation and Job.
+    EXECUTE 'GRANT INSERT ON public.marketing_ai_qc_calls TO marketai_domain_worker';
   END IF;
   IF to_regclass('public.marketing_handoffs') IS NOT NULL THEN
     EXECUTE 'GRANT UPDATE ON public.marketing_handoffs TO marketai_domain_worker';

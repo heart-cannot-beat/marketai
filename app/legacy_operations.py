@@ -308,7 +308,7 @@ def _resolve_ai_qc_call(session: Session, context: TenantContext, job: JobRecord
     from .entitlements.cost_models import ProviderCallAttemptRecord
     from .generation.paid_execution import _settle
     from .marketing.ai_qc_models import MarketingAIQCRecord
-    from .marketing.ai_qc_worker import reservation_for
+    from .marketing.ai_qc_worker import notify_first_batch, reservation_for
 
     call = session.scalar(
         select(MarketingAIQCRecord)
@@ -328,6 +328,7 @@ def _resolve_ai_qc_call(session: Session, context: TenantContext, job: JobRecord
         reservation = reservation_for(session, context, call)
         if reservation:
             _settle(session, reservation, None, called=False)
+        notify_first_batch(session, context, call)
 
     def uncertain() -> None:
         # ``ai_qc_worker.uncertain`` without its Operation transition.
@@ -345,6 +346,7 @@ def _resolve_ai_qc_call(session: Session, context: TenantContext, job: JobRecord
         )
         if attempt:
             attempt.dispatch_state, attempt.error_code = "uncertain", call.error_code
+        notify_first_batch(session, context, call)
 
     return Correlation(
         call.operation_id, fail=fail, uncertain=uncertain, dispatched=call.state == "running",
