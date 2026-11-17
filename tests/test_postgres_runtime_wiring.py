@@ -1024,19 +1024,20 @@ class PostgresRuntimeWiringTests(unittest.TestCase):
 
         from sqlalchemy.exc import ProgrammingError
 
+        # The Worker creates a product draft when it admits an ads-first first batch's next step (#193),
+        # so the API-only write it is refused is the Workspace's spend limit: it may read and lock the
+        # row the reservation book checks, never create one or change a limit.
         with self.worker.begin() as connection:
             self._scope(connection, self.workspace, 17)
-            with self.assertRaises(ProgrammingError):
-                with connection.begin_nested():
-                    connection.execute(
-                        self.text(
-                            "INSERT INTO products (id, workspace_id, name, description,"
-                            " selling_points, audience, brand_notes, ref_images, economics,"
-                            " revision, created_at, updated_at) VALUES ('forbidden', :workspace,"
-                            " 'forbidden', '', '[]', '', '', '[]', '{}', 1, now(), now())"
-                        ),
-                        {"workspace": self.workspace},
-                    )
+            for statement in (
+                "INSERT INTO spend_guardrails (workspace_id, budget_currency) VALUES (:workspace, 'USD')",
+                "UPDATE spend_guardrails SET per_operation_limit = 1000 WHERE workspace_id = :workspace",
+                "INSERT INTO credential_versions (id, workspace_id) VALUES ('forbidden', :workspace)",
+            ):
+                with self.subTest(statement=statement):
+                    with self.assertRaises(ProgrammingError):
+                        with connection.begin_nested():
+                            connection.execute(self.text(statement), {"workspace": self.workspace})
 
     def test_process_startup_checks_the_role_it_really_connected_as(self) -> None:
         import subprocess

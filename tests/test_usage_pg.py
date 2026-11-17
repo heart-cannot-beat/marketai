@@ -533,21 +533,30 @@ class UsagePostgresTests(unittest.TestCase):
 
         ctx = self._workspace("ws_usage_pg_validate", ROLE_OWNER, "owner_v")
         now = datetime.now(timezone.utc)
-        for index, name in ROLE_NAMES.items():
-            with self._as(index), tenant_session(ctx) as session:
-                for mode in ("byok", "sandbox", "mock", "controlled_mock"):  # S1 (#69)
-                    attempt = SimpleNamespace(id=f"pca_{name}_{mode}", workspace_id=ctx.workspace_id,
-                                              execution_mode=mode)
-                    self.assertEqual(record_provider_call(session, ctx, attempt, occurred_at=now).written, 1)
-                version = SimpleNamespace(id=f"av_{name}", workspace_id=ctx.workspace_id,  # S2 (#87)
-                                          origin_kind="generation", execution_mode="byok", created_at=now)
-                self.assertEqual(record_asset_version_generated(session, ctx, version).written, 1)
-                self.assertEqual(record_generation_item_failed(
-                    session, ctx, run_item_id=f"ri_{name}", revision=1, execution_mode="controlled_mock",
-                    occurred_at=now).written, 1)
-            operation_id = self._operation(ctx)
-            for state in (OperationState.RUNNING, OperationState.SUCCEEDED):
-                self._move(index, ctx, operation_id, state)
+        # Writers of that time read an Operation's mode from the tables that existed then; a table added
+        # later (marketing_first_batches, #193) is not there to read at this revision.
+        from sqlalchemy import inspect as inspect_schema
+
+        from app.entitlements import operation_usage
+        present = set(inspect_schema(self.owner).get_table_names())
+        then = tuple(e for e in operation_usage.MODE_EVIDENCE
+                     if e.table in present and (e.via_table is None or e.via_table in present))
+        with patch.object(operation_usage, "MODE_EVIDENCE", then):
+            for index, name in ROLE_NAMES.items():
+                with self._as(index), tenant_session(ctx) as session:
+                    for mode in ("byok", "sandbox", "mock", "controlled_mock"):  # S1 (#69)
+                        attempt = SimpleNamespace(id=f"pca_{name}_{mode}", workspace_id=ctx.workspace_id,
+                                                  execution_mode=mode)
+                        self.assertEqual(record_provider_call(session, ctx, attempt, occurred_at=now).written, 1)
+                    version = SimpleNamespace(id=f"av_{name}", workspace_id=ctx.workspace_id,  # S2 (#87)
+                                              origin_kind="generation", execution_mode="byok", created_at=now)
+                    self.assertEqual(record_asset_version_generated(session, ctx, version).written, 1)
+                    self.assertEqual(record_generation_item_failed(
+                        session, ctx, run_item_id=f"ri_{name}", revision=1, execution_mode="controlled_mock",
+                        occurred_at=now).written, 1)
+                operation_id = self._operation(ctx)
+                for state in (OperationState.RUNNING, OperationState.SUCCEEDED):
+                    self._move(index, ctx, operation_id, state)
         before = self._stored(ctx)
         self.assertEqual(len(before), len(ROLE_NAMES) * (4 + 1 + 1 + 2))
         self.assertEqual({row.execution_mode for row in before}, set(USAGE_EXECUTION_MODES))
