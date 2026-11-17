@@ -6,7 +6,7 @@ import { useWorkspaceProducts } from '@/hooks/products/useWorkspaceProducts';
 import { KeepFailed, useIdeasProject } from '@/hooks/ideas/useIdeasProject';
 import { useFirstBatch } from '@/hooks/ideas/useFirstBatch';
 import { errorMessage } from '@/lib/i18n/domain-errors';
-import { costLabel, costsMore } from '@/lib/ideas/first-batch-view';
+import { adsMade, costLabel, costsMore } from '@/lib/ideas/first-batch-view';
 import { firstBatchHref } from '@/lib/workspace-navigator';
 import {
   ideasView,
@@ -99,7 +99,8 @@ function IdeasProject({
   }
   const batchStopped =
     firstBatch?.state === 'needs_attention' || firstBatch?.state === 'failed';
-  const notice = firstBatch && firstBatch.state !== 'done' && (
+  // Done, or (S9) every ad made and being checked: nothing to point back to.
+  const notice = firstBatch && !adsMade(firstBatch) && (
     <FirstBatchNotice
       href={firstBatchHref(current.slug, firstBatch.id)}
       stopped={batchStopped}

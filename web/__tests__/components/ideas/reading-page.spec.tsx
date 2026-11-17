@@ -249,6 +249,54 @@ describe('ReadingPage (#195)', () => {
     expect(stepStates()).toEqual(['done', 'done', 'done', 'done']);
   });
 
+  it('once the ads are made and being checked, opens the ad ideas like when done (S9, #197)', async () => {
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'checking' as unknown as FirstBatch['state'],
+        ads_planned: 6,
+      })
+    );
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/w/acme/p/prod_home/ideas')
+    );
+    expect(
+      Math.max(...mockRefreshProducts.mock.invocationCallOrder)
+    ).toBeLessThan(mockReplace.mock.invocationCallOrder[0]);
+    expect(stepStates()).toEqual(['done', 'done', 'done', 'done']);
+  });
+
+  it('a stop at the check: says which step, links to the made ads, offers to try again (S9, #197)', async () => {
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        ads_planned: 6,
+        attention: {
+          reason: 'step_failed',
+          step: 'checks' as unknown as 'images',
+          combination_ids: ['c1', 'c2'],
+          resumable: true,
+        },
+        resume: RESUME,
+      })
+    );
+    const stop = screen.getByTestId('reading-stop');
+    expect(
+      within(stop).getByRole('heading', { name: "“Check the ads” didn't work" })
+    ).toBeInTheDocument();
+    expect(within(stop).queryByText(/ads? didn't come out/)).toBeNull();
+    expect(
+      within(stop).getByRole('button', { name: 'Try again · up to $0.09 more' })
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('link', { name: 'See the ads made so far' })
+    ).toHaveAttribute('href', '/w/acme/p/prod_home/ideas');
+    expect(stepStates()).toEqual(['done', 'done', 'done', 'done', 'stopped']);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
   it('several models: choose one, then continue with it', async () => {
     mockGateway.resumeMarketingFirstBatch.mockResolvedValue(
       ok(batch({ state: 'reading' }))

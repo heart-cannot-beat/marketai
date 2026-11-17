@@ -119,6 +119,7 @@
   "reading-step-understanding": "Sort out the product facts",
   "reading-step-ideas": "Think of claims to try",
   "reading-step-images": "Make the ads",
+  "reading-step-checks": "Check the ads",
   "reading-step-images-count": "Make the ads ({{done}} of {{count}})",
   "reading-step-state-done": "(done)",
   "reading-step-state-active": "(in progress)",

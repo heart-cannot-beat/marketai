@@ -119,6 +119,7 @@
   "reading-step-understanding": "整理产品事实",
   "reading-step-ideas": "想值得试的主张",
   "reading-step-images": "出图",
+  "reading-step-checks": "检查广告",
   "reading-step-images-count": "出图（{{done}}/{{count}}）",
   "reading-step-state-done": "（已完成）",
   "reading-step-state-active": "（进行中）",

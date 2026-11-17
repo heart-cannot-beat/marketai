@@ -16,9 +16,16 @@ type Attention = components['schemas']['FirstBatchAttention'];
 type IntakeInput = components['schemas']['IntakeInputSummary'];
 
 export type StopReason = Attention['reason'];
-export type ProgressStepKey = Attention['step'];
+/**
+ * A batch's state and the step it stopped at. S9 (#197) adds `checking`
+ * (every image made, the checks running) and the `checks` step; they are
+ * listed here so the pages handle them before the generated contract does.
+ */
+export type FirstBatchState = FirstBatch['state'] | 'checking';
+export type ProgressStepKey = Attention['step'] | 'checks';
 export type ProgressStepState = 'done' | 'active' | 'pending' | 'stopped';
 
+/** The progress list; the check shows only when the batch stopped there. */
 export const PROGRESS_STEPS: ProgressStepKey[] = [
   'reading',
   'understanding',
@@ -26,34 +33,55 @@ export const PROGRESS_STEPS: ProgressStepKey[] = [
   'images',
 ];
 
-const STEP_OF_STATE: Partial<Record<FirstBatch['state'], ProgressStepKey>> = {
+const STEP_OF_STATE: Partial<Record<FirstBatchState, ProgressStepKey>> = {
   reading: 'reading',
   understanding: 'understanding',
   ideas: 'ideas',
   generating: 'images',
 };
 
-const RUNNING: ReadonlyArray<FirstBatch['state']> = [
+const RUNNING: ReadonlyArray<FirstBatchState> = [
   'reading',
   'understanding',
   'ideas',
   'generating',
 ];
 
+/** A batch's (or its summary's) state, including the ones S9 adds. */
+export const stateOf = (batch: { state: string }) =>
+  batch.state as FirstBatchState;
+
+const stepOf = (attention: Attention | null | undefined) =>
+  attention?.step as ProgressStepKey | undefined;
+
 /** True while the batch still has a step on its way (nothing to do but wait). */
 export function isRunning(batch: FirstBatch | undefined): boolean {
-  return !!batch && RUNNING.includes(batch.state);
+  return !!batch && RUNNING.includes(stateOf(batch));
 }
 
-/** The four steps of the reading page's progress list, in order. */
+/**
+ * Every ad is made: the batch is done, or (S9) its ads are being checked and
+ * the checks land on the ads page as they finish.
+ */
+export function adsMade(batch: { state: string } | null | undefined): boolean {
+  const state = batch ? stateOf(batch) : null;
+  return state === 'done' || state === 'checking';
+}
+
+/** The reading page's progress list, in order. */
 export function progressSteps(
   batch: FirstBatch
 ): { key: ProgressStepKey; state: ProgressStepState }[] {
-  if (batch.state === 'done')
+  if (adsMade(batch))
     return PROGRESS_STEPS.map((key) => ({ key, state: 'done' }));
   const stopped = batch.state === 'needs_attention' || batch.state === 'failed';
   const current =
-    batch.attention?.step ?? STEP_OF_STATE[batch.state] ?? 'reading';
+    stepOf(batch.attention) ?? STEP_OF_STATE[stateOf(batch)] ?? 'reading';
+  if (current === 'checks')
+    return [
+      ...PROGRESS_STEPS.map((key) => ({ key, state: 'done' as const })),
+      { key: 'checks', state: stopped ? 'stopped' : 'active' },
+    ];
   const at = PROGRESS_STEPS.indexOf(current);
   return PROGRESS_STEPS.map((key, index) => ({
     key,

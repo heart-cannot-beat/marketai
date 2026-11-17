@@ -310,6 +310,24 @@ describe('StartPage (#195)', () => {
     }
   );
 
+  it('says the site is not set up when checking the ads is not configured (S9, #197)', async () => {
+    mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(
+      ok(
+        quote({
+          available: false,
+          unavailable_reason: 'qc_not_configured',
+          maximum_cost: '0',
+        })
+      )
+    );
+    renderPage();
+    expect(
+      await screen.findByText(
+        "Making ads isn't fully set up on this site yet, so you can't start. Contact the administrator."
+      )
+    ).toBeInTheDocument();
+  });
+
   it('says plainly why starting is not possible when there is no price, and keeps the button off', async () => {
     mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(
       ok(

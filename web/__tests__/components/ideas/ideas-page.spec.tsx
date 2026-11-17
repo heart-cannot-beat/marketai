@@ -343,6 +343,23 @@ describe('IdeasPage (#196)', () => {
     expect(mockRefreshProducts).toHaveBeenCalled();
   });
 
+  it('says nothing about the first batch once its ads are made and being checked (S9, #197)', async () => {
+    await renderPage(
+      ideasDetail({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'checking' as unknown as 'done',
+          needs_attention: false,
+          reason: null,
+        },
+      })
+    );
+    expect(screen.queryByTestId('ideas-first-batch')).toBeNull();
+    expect(
+      screen.queryByText('The first ads are still being made.')
+    ).toBeNull();
+  });
+
   it('points back to the progress while the first batch is still running (#195)', async () => {
     await renderPage(
       ideasDetail({

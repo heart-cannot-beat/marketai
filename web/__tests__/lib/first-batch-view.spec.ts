@@ -1,4 +1,5 @@
 import {
+  adsMade,
   costLabel,
   isRunning,
   progressSteps,
@@ -124,6 +125,54 @@ describe('progressSteps', () => {
         })
       )
     ).toEqual(['stopped', 'pending', 'pending', 'pending']);
+  });
+});
+
+/** S9 (#197) adds a checking state and a checks step; today's generated
+ * contract does not list them yet. */
+const CHECKING = 'checking' as unknown as FirstBatch['state'];
+const CHECKS = 'checks' as unknown as NonNullable<
+  FirstBatch['attention']
+>['step'];
+
+describe('progressSteps once the ads are checked (S9, #197)', () => {
+  const states = (b: FirstBatch) => progressSteps(b).map((s) => s.state);
+
+  it('counts checking as every step done: the ads are made', () => {
+    expect(states(batch({ state: CHECKING }))).toEqual([
+      'done',
+      'done',
+      'done',
+      'done',
+    ]);
+    expect(adsMade(batch({ state: CHECKING }))).toBe(true);
+    expect(adsMade(batch({ state: 'done' }))).toBe(true);
+    expect(adsMade(batch({ state: 'generating' }))).toBe(false);
+    expect(isRunning(batch({ state: CHECKING }))).toBe(false);
+  });
+
+  it('adds the check as a fifth step only when it stopped there', () => {
+    const steps = progressSteps(
+      batch({
+        state: 'needs_attention',
+        attention: { reason: 'step_failed', step: CHECKS, resumable: true },
+      })
+    );
+    expect(steps.map((s) => s.key)).toEqual([
+      'reading',
+      'understanding',
+      'ideas',
+      'images',
+      'checks',
+    ]);
+    expect(steps.map((s) => s.state)).toEqual([
+      'done',
+      'done',
+      'done',
+      'done',
+      'stopped',
+    ]);
+    expect(progressSteps(batch({ state: 'generating' }))).toHaveLength(4);
   });
 });
 

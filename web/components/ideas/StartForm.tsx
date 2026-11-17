@@ -27,6 +27,7 @@ const UNAVAILABLE_COPY: Record<string, string> = {
   budget_exceeded: 'start-unavailable-budget',
   planner_not_configured: 'start-unavailable-not-set-up',
   model_unavailable: 'start-unavailable-not-set-up',
+  qc_not_configured: 'start-unavailable-not-set-up',
 };
 
 /** A refused key, by the reason OpenAI gave (#192). */

@@ -17,6 +17,7 @@ import type { IdeasDetail } from '@/lib/ideas/ideas-view';
 import {
   costLabel,
   costsMore,
+  adsMade,
   isRunning,
   progressSteps,
   readFromImagesOnly,
@@ -36,6 +37,7 @@ const STEP_FAILED_WHY: Record<string, string> = {
   openai_key_required: 'stop-why-key',
   planner_not_configured: 'stop-why-not-set-up',
   price_unavailable: 'stop-why-not-set-up',
+  qc_not_configured: 'stop-why-not-set-up',
 };
 
 const CARD =
@@ -154,7 +156,13 @@ function Reading({
   // Done: refresh the product list first, then open the product's ad ideas.
   const leaving = useRef(false);
   useEffect(() => {
-    if (batch.state !== 'done' || !batch.product_id || leaving.current) return;
+    // Done, or (S9) every ad made and the checks running: the ideas page shows them.
+    if (
+      !adsMade({ state: batch.state }) ||
+      !batch.product_id ||
+      leaving.current
+    )
+      return;
     leaving.current = true;
     const productId = batch.product_id;
     void (async () => {
@@ -174,7 +182,7 @@ function Reading({
             {t('reading-intro')}
           </p>
         )}
-        {batch.state === 'done' && (
+        {adsMade(batch) && (
           <p className="text-sm" role="status">
             {t('reading-done')}
           </p>
@@ -192,14 +200,15 @@ function Reading({
         </section>
         <div className="order-first space-y-3 lg:order-none">
           <Progress batch={batch} made={detail?.ads.length ?? 0} />
-          {batch.state === 'generating' && batch.product_id && (
-            <GuardedLink
-              href={productViewHref(current.slug, batch.product_id, 'ideas')}
-              className="btn btn-outline btn-sm min-h-11 w-full"
-            >
-              {t('reading-see-ads')}
-            </GuardedLink>
-          )}
+          {(batch.state === 'generating' || view?.step === 'checks') &&
+            batch.product_id && (
+              <GuardedLink
+                href={productViewHref(current.slug, batch.product_id, 'ideas')}
+                className="btn btn-outline btn-sm min-h-11 w-full"
+              >
+                {t('reading-see-ads')}
+              </GuardedLink>
+            )}
         </div>
       </div>
     </div>
