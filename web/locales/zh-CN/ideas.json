@@ -160,5 +160,11 @@
   "stop-uncertain-waiting": "正在等核对，页面会自己更新。",
   "stop-why-budget": "这一步会超过工作区的花费上限。Owner 可以在设置里调高。",
   "stop-why-key": "工作区的 OpenAI Key 不能用了。Owner 可以在设置里检查。",
-  "stop-why-not-set-up": "这个站点还没把做广告需要的设置配好。请联系管理员。"
+  "stop-why-not-set-up": "这个站点还没把做广告需要的设置配好。请联系管理员。",
+  "ideas-ad-retry-cost": "重试 · 最多多花 {{cost}}",
+  "ideas-batch-running": "第一批广告还在做。",
+  "ideas-batch-progress": "看进度",
+  "ideas-batch-stopped": "做第一批广告时停下来了，等你处理。",
+  "ideas-batch-sort-out": "去处理",
+  "ideas-batch-retry-together": "重试会把没出成功的几张一起重出，不只是这一张。"
 }

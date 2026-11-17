@@ -160,5 +160,11 @@
   "stop-uncertain-waiting": "Waiting for the check. This page updates by itself.",
   "stop-why-budget": "It would have gone over the workspace's spending limit. The Owner can raise it in Settings.",
   "stop-why-key": "The workspace's OpenAI key can't be used. The Owner can check it in Settings.",
-  "stop-why-not-set-up": "Making ads isn't fully set up on this site. Contact the administrator."
+  "stop-why-not-set-up": "Making ads isn't fully set up on this site. Contact the administrator.",
+  "ideas-ad-retry-cost": "Try again · up to {{cost}} more",
+  "ideas-batch-running": "The first ads are still being made.",
+  "ideas-batch-progress": "See progress",
+  "ideas-batch-stopped": "Making the first ads stopped and is waiting for you.",
+  "ideas-batch-sort-out": "See what to do",
+  "ideas-batch-retry-together": "Trying again makes every ad that didn't come out again, not just one."
 }

@@ -4,7 +4,10 @@ import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { GuardedLink } from '@/components/workspace/GuardedLink';
 import { useWorkspaceProducts } from '@/hooks/products/useWorkspaceProducts';
 import { KeepFailed, useIdeasProject } from '@/hooks/ideas/useIdeasProject';
+import { useFirstBatch } from '@/hooks/ideas/useFirstBatch';
 import { errorMessage } from '@/lib/i18n/domain-errors';
+import { costLabel, costsMore } from '@/lib/ideas/first-batch-view';
+import { firstBatchHref } from '@/lib/workspace-navigator';
 import {
   ideasView,
   type ClaimGroup,
@@ -50,7 +53,7 @@ function IdeasProject({
   product: WorkspaceProduct;
   projectId: string;
 }) {
-  const { t } = useTranslation('ideas');
+  const { t, i18n } = useTranslation('ideas');
   const { current } = useWorkspace();
   const products = useWorkspaceProducts();
   const { detail, failed, isLoading, refresh, setKept } =
@@ -58,6 +61,48 @@ function IdeasProject({
   const view = useMemo(() => (detail ? ideasView(detail) : null), [detail]);
   const [busyAd, setBusyAd] = useState<string | null>(null);
   const [keepProblem, setKeepProblem] = useState<string | null>(null);
+
+  // The first batch's failed images are tried again together, confirming
+  // what continuing costs (#193). Only then is the batch itself read.
+  const firstBatch = detail?.first_batch ?? null;
+  const { batch, resume } = useFirstBatch(
+    firstBatch?.needs_attention && firstBatch.reason === 'step_failed'
+      ? firstBatch.id
+      : null
+  );
+  const retryOffer =
+    batch?.state === 'needs_attention' &&
+    batch.attention?.reason === 'step_failed' &&
+    batch.attention.step === 'images'
+      ? batch.resume
+      : null;
+  const [retrying, setRetrying] = useState(false);
+  async function retryImages() {
+    if (!retryOffer || retrying) return;
+    setRetrying(true);
+    setKeepProblem(null);
+    try {
+      const outcome = await resume({ quoteHash: retryOffer.quote_hash });
+      if (outcome.kind === 'resumed') {
+        await refresh();
+        void products.refresh();
+      } else
+        setKeepProblem(
+          outcome.uncertain
+            ? t('ideas-keep-uncertain')
+            : errorMessage(t, outcome.problem)
+        );
+    } finally {
+      setRetrying(false);
+    }
+  }
+  const notice = firstBatch && firstBatch.state !== 'done' && (
+    <FirstBatchNotice
+      href={firstBatchHref(current.slug, firstBatch.id)}
+      stopped={firstBatch.state === 'needs_attention' || firstBatch.state === 'failed'}
+      retriesTogether={retryOffer !== null}
+    />
+  );
 
   if (isLoading)
     return (
@@ -83,11 +128,14 @@ function IdeasProject({
 
   if (!detail.ideas)
     return (
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <p className="text-sm text-gray-600 dark:text-gray-400" role="status">
-          {t('ideas-preparing')}
-        </p>
-        <ProductPanel understanding={detail.understanding} />
+      <div className="space-y-6">
+        {notice}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <p className="text-sm text-gray-600 dark:text-gray-400" role="status">
+            {t('ideas-preparing')}
+          </p>
+          <ProductPanel understanding={detail.understanding} />
+        </div>
       </div>
     );
 
@@ -118,6 +166,14 @@ function IdeasProject({
       slot={slot}
       busy={slot.kind === 'ad' && busyAd === slot.ad.asset_version_id}
       onToggleKept={(item) => void toggleKept(item)}
+      onRetry={retryOffer ? () => void retryImages() : undefined}
+      retryLabel={
+        retryOffer && costsMore(retryOffer.additional_cost)
+          ? t('ideas-ad-retry-cost', {
+              cost: costLabel(i18n.language, retryOffer.additional_cost),
+            })
+          : undefined
+      }
     />
   );
 
@@ -139,6 +195,8 @@ function IdeasProject({
           </p>
         )}
       </div>
+
+      {notice}
 
       <a
         href={`#${PRODUCT_PANEL_ID}`}
@@ -173,6 +231,41 @@ function IdeasProject({
       {/* Last on the page, so it stays at the bottom of the screen past the
           facts too, where a phone shows them (design §5.8). */}
       <KeptBar keptCount={view.keptCount} problem={keepProblem} />
+    </div>
+  );
+}
+
+/**
+ * The product's first batch is still on its way, or stopped and waits for
+ * the user (#195): a line and a link to its progress page, where every stop
+ * says what to do.
+ */
+function FirstBatchNotice({
+  href,
+  stopped,
+  retriesTogether,
+}: {
+  href: string;
+  stopped: boolean;
+  retriesTogether: boolean;
+}) {
+  const { t } = useTranslation('ideas');
+  return (
+    <div
+      className={
+        stopped
+          ? 'flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200'
+          : 'flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-900'
+      }
+      data-testid="ideas-first-batch"
+    >
+      <div className="min-w-0 flex-1 basis-60 space-y-1">
+        <p>{stopped ? t('ideas-batch-stopped') : t('ideas-batch-running')}</p>
+        {retriesTogether && <p>{t('ideas-batch-retry-together')}</p>}
+      </div>
+      <GuardedLink href={href} className="btn btn-sm min-h-11">
+        {stopped ? t('ideas-batch-sort-out') : t('ideas-batch-progress')}
+      </GuardedLink>
     </div>
   );
 }

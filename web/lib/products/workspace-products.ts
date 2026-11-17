@@ -18,8 +18,8 @@ export type NextStepKind =
   | 'no_ideas';
 
 export interface ProductSignals {
-  /** An error waiting for the user. Nothing reports one yet: the first
-   * batch's stops arrive with S4/S16 of the ads-first opening. */
+  /** An error waiting for the user: a first batch of one of the product's
+   * ad ideas stopped and waits (`first_batch.needs_attention`, #193, #195). */
   needsAttention: boolean;
   /** A running test whose delivery report is missing (step 2). */
   reportMissing: boolean;
@@ -79,6 +79,7 @@ export function mergeWorkspaceProducts(
       name: string | null;
       changedAt: string;
       ideas: (ProductIdeas & { changedAt: string }) | null;
+      needsAttention?: boolean;
     }
   >();
 
@@ -105,6 +106,8 @@ export function mergeWorkspaceProducts(
       keptCount: (ideas?.keptCount ?? 0) + project.kept_count,
     };
     row.changedAt = newest(row.changedAt, project.updated_at);
+    row.needsAttention =
+      row.needsAttention || Boolean(project.first_batch?.needs_attention);
     rows.set(project.product_id, row);
   }
 
@@ -119,7 +122,7 @@ export function mergeWorkspaceProducts(
           }
         : null;
       const signals: ProductSignals = {
-        needsAttention: false,
+        needsAttention: row.needsAttention ?? false,
         reportMissing: false,
         conclusionUnseen: false,
         keptUntested: ideas?.keptCount ?? 0,
