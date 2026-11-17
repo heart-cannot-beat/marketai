@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import WorkspaceLayout from '@/components/layouts/WorkspaceLayout';
-import { CompetitorsPlaceholder } from '@/components/workspace/ProductViews';
+import { ProductCompetitors } from '@/components/competitors/ProductCompetitors';
 import { getWorkspacePageProps } from '@/lib/workspace-bootstrap';
 import type { NextPageWithLayout } from 'types';
 import type { WorkspaceBootstrap } from '@/lib/workspace-bootstrap';
@@ -13,11 +13,12 @@ interface Props {
 
 /**
  * `/w/{slug}/competitors` -- the sidebar's Competitors (ADR 0018, design
- * §5.6). A placeholder until S15 moves the competitor area here.
+ * §5.6): pick a product, then its competitors, scans and summary, apart from
+ * the ad flow. Exists only while the ads-first switch is on.
  */
 const CompetitorsPage: NextPageWithLayout<Props> = ({ bootstrap }) => {
   if (!bootstrap) return null;
-  return <CompetitorsPlaceholder />;
+  return <ProductCompetitors />;
 };
 
 CompetitorsPage.getLayout = function getLayout(page: ReactElement) {
@@ -34,7 +35,7 @@ CompetitorsPage.getLayout = function getLayout(page: ReactElement) {
 };
 
 export const getServerSideProps = getWorkspacePageProps({
-  namespaces: ['common'],
+  namespaces: ['common', 'library', 'products', 'competitors'],
   adsFirstOnly: true,
 });
 export default CompetitorsPage;

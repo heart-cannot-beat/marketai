@@ -96,21 +96,3 @@ export function ProductProfilePlaceholder() {
     />
   );
 }
-
-export function CompetitorsPlaceholder() {
-  const { t } = useTranslation('common');
-  const { current } = useWorkspace();
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold outline-none">
-        {t('competitors-page-title')}
-      </h1>
-      <Placeholder
-        text={t('competitors-page-placeholder')}
-        href={`/w/${current.slug}/experiments`}
-        label={t('product-open-earlier-tests')}
-        testId="competitors-placeholder"
-      />
-    </div>
-  );
-}

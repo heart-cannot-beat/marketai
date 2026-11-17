@@ -270,6 +270,33 @@ describe('WorkspaceNavigation with the ads-first switch on (#194)', () => {
     );
   });
 
+  it.each([
+    ['/w/acme/assets?overlay=v_1', 'workspace-nav-assets', '/w/acme/assets'],
+    [
+      '/w/acme/competitors?product=prod_go&competitor_scan=scan_1',
+      'workspace-nav-competitors',
+      '/w/acme/competitors',
+    ],
+    ['/w/acme/settings', 'workspace-settings-link', '/w/acme/settings'],
+  ])(
+    'opens %s from the sidebar, its entry marked and no product marked (#203)',
+    (path, testId, href) => {
+      render(<WorkspaceNavigation slug="acme" activePathname={path} />);
+      const entry = screen.getByTestId(testId);
+      expect(entry).toHaveAttribute('href', href);
+      expect(entry.className).toMatch(/\btext-white\b/);
+      const marked = screen
+        .getAllByRole('link')
+        .filter((link) => /\btext-white\b/.test(link.className));
+      expect(marked).toEqual([entry]);
+      expect(
+        screen
+          .getAllByTestId('workspace-nav-product')
+          .filter((link) => link.hasAttribute('aria-current'))
+      ).toEqual([]);
+    }
+  );
+
   it('opens More by itself on a test made before the redesign', () => {
     render(
       <WorkspaceNavigation

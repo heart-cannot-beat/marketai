@@ -30,22 +30,55 @@ const SECONDARY =
   'rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm disabled:opacity-40';
 
 /**
+ * Where the area sits. `test`: folded into a marketing test made before the
+ * redesign, its market the plan's. `page`: the sidebar's Competitors page
+ * (ADR 0018, design §5.6), which names the product above it; no fold, and
+ * the market is the product's.
+ */
+export type CompetitorsPlacement = 'test' | 'page';
+
+/**
  * The product understanding page's "Competitors" area (spec §9): the list
  * and its confirmations, then scans. Observations only show what others say
  * (ADR 0014). Below the scan on screen, its board and summary (C-32), then
  * the advertisers its keywords found (C-33, a scan with keywords only).
+ * `planMarket` is the market a scan starts from: the plan's on a test, the
+ * product's on the Competitors page.
  */
 export function CompetitorsArea({
   productId,
   planMarket,
-  defaultOpen,
+  defaultOpen = false,
+  placement = 'test',
 }: {
   productId: string | null;
   planMarket: string | null;
-  defaultOpen: boolean;
+  defaultOpen?: boolean;
+  placement?: CompetitorsPlacement;
 }) {
   const { t } = useTranslation('competitors');
   const [open, setOpen] = useState(defaultOpen);
+
+  if (placement === 'page') {
+    return (
+      <section
+        id="competitors"
+        className="max-w-3xl space-y-6 rounded-xl border border-gray-200 p-4 sm:p-5"
+        data-testid="competitors-area"
+        aria-label={t('area-title')}
+      >
+        {productId ? (
+          <CompetitorsBody
+            productId={productId}
+            planMarket={planMarket}
+            marketSource="product"
+          />
+        ) : (
+          <p className="text-sm text-gray-600">{t('area-needs-product')}</p>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section
@@ -94,9 +127,11 @@ export function CompetitorsArea({
 function CompetitorsBody({
   productId,
   planMarket,
+  marketSource = 'plan',
 }: {
   productId: string;
   planMarket: string | null;
+  marketSource?: 'plan' | 'product';
 }) {
   const { t, i18n } = useTranslation('competitors');
   const { current } = useWorkspace();
@@ -296,6 +331,7 @@ function CompetitorsBody({
               country={country}
               marketUnmatched={!!planMarket?.trim() && !planCountry}
               planMarket={planMarket?.trim() || null}
+              marketSource={marketSource}
               onCountryChange={setCountry}
               onStarted={started}
             />
