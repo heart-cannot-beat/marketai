@@ -1135,8 +1135,7 @@ export interface DomainGateway {
     projectId: string;
     body: DomainOperationMap['prepare_marketing_ideas_feedback']['requestBody'];
   }): Promise<
-    | DomainResultFor<'prepare_marketing_ideas_feedback'>
-    | ReconciliationRequired
+    DomainResultFor<'prepare_marketing_ideas_feedback'> | ReconciliationRequired
   >;
   /** Crop then rotate one ad: a free new version made by the Worker (#200). */
   createMarketingIdeasImageEdit(params: {
@@ -5158,8 +5157,7 @@ export class DefaultDomainGateway implements DomainGateway {
     projectId: string;
     body: DomainOperationMap['prepare_marketing_ideas_feedback']['requestBody'];
   }): Promise<
-    | DomainResultFor<'prepare_marketing_ideas_feedback'>
-    | ReconciliationRequired
+    DomainResultFor<'prepare_marketing_ideas_feedback'> | ReconciliationRequired
   > {
     return this.runCommand(
       'prepare_marketing_ideas_feedback',
