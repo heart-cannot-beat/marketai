@@ -40,7 +40,11 @@ export function ImageSettingsPanel({ image }: { image: UseImageSettings }) {
       <h2 id={title} className="text-base font-semibold">
         {t('settings-title')}
       </h2>
-      {!settings ? (
+      {!settings && image.loading ? (
+        <p className="text-sm text-gray-600 dark:text-gray-400" role="status">
+          {t('settings-loading')}
+        </p>
+      ) : !settings ? (
         <p className="text-sm text-gray-600 dark:text-gray-400" role="note">
           {image.failed ? t('settings-failed') : t('settings-unavailable')}
         </p>

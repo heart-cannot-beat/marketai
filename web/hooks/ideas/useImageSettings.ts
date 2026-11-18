@@ -35,6 +35,8 @@ export interface UseImageSettings {
   prepared: (revision: number, settings: ImageSettings) => void;
   /** The capabilities could not be read. */
   failed: boolean;
+  /** The providers, or the first batch's settings, are still being read. */
+  loading: boolean;
 }
 
 const storageKey = (workspaceId: string, projectId: string) =>
@@ -237,5 +239,6 @@ export function useImageSettings(
     candidates,
     prepared,
     failed: Boolean(caps.error),
+    loading: waiting || (caps.data === undefined && !caps.error),
   };
 }
