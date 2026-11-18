@@ -219,7 +219,9 @@ describe('ProductProfile (#202)', () => {
 
     expect(
       screen.getByRole('region', { name: 'Product photos' })
-    ).toHaveTextContent('This product has no product photos yet.');
+    ).toHaveTextContent(
+      'No product photo was found when the product was read, so its ads were made without one.'
+    );
     expect(screen.getByRole('region', { name: 'Brand' })).toBeInTheDocument();
 
     // No internal ids anywhere on the screen.
@@ -548,7 +550,7 @@ describe('ProductProfile (#202)', () => {
     );
   });
 
-  it('lists the published photos with their checking, read only', async () => {
+  it('ideas with no photos of their own list the published photos, read only', async () => {
     mockReads.list_products = {
       items: [{ product_id: 'prod_home', entry_id: 'le_1', ready: true }],
     };
@@ -579,7 +581,7 @@ describe('ProductProfile (#202)', () => {
       within(photos).getByRole('img', { name: 'Main photo' })
     ).toHaveAttribute('src', 'blob:photo-rv_1');
     expect(within(photos).getByText('Checked')).toBeInTheDocument();
-    // Nothing here changes a photo yet (#199).
+    // Published photos are managed on the product card, not here (#229).
     expect(within(photos).queryByRole('button')).toBeNull();
     expect(within(photos).queryByRole('combobox')).toBeNull();
   });

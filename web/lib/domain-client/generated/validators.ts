@@ -11905,6 +11905,20 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['item_id', 'attempt_number', 'replayed'],
   },
+  ReuseBlock: {
+    properties: {
+      status: { type: 'string', enum: ['draft', 'needs_redo'] },
+      reasons: {
+        items: { $ref: '#/components/schemas/AdReason' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['status', 'reasons'],
+    description:
+      'Why a candidate may not go into the round (#225): it is an ad of ads-first ideas that is still a\n``draft`` or ``needs_redo``, with the reasons its ideas page shows (``ideas_export.statuses``).',
+  },
   ReuseCandidate: {
     properties: {
       asset_version_id: { type: 'string' },
@@ -11924,6 +11938,9 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
           { type: 'string', enum: ['same', 'differs'] },
           { type: 'null' },
         ],
+      },
+      reuse_block: {
+        anyOf: [{ $ref: '#/components/schemas/ReuseBlock' }, { type: 'null' }],
       },
     },
     additionalProperties: false,

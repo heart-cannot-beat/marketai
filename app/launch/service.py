@@ -78,6 +78,18 @@ class LaunchNotFound(LaunchError):
     default_code = "launch_not_found"
 
 
+def refuse_unchecked_ads(session, context: TenantContext, asset_version_ids: list[str]) -> None:
+    """A launch uploads the image to Meta: an ad of ads-first ideas that may not be exported does not leave
+    (#225, ADR 0018 §2), even if it was exportable when its experiment froze. Asked by the API when a preview
+    is made (the routes, and ``create_preview``); the saga's Worker cannot read the verification records.
+    Any other image is not judged."""
+    from app.marketing.ideas_export import library_refusals, refusal_params
+    refused = library_refusals(session, context, asset_version_ids)
+    if refused:
+        raise LaunchConflict("这些广告还没核对完，不能投放：先到广告想法页核对，需要重出的请先重出。",
+                             code="ads_not_exportable", params=refusal_params(refused))
+
+
 def _aware(value):
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
@@ -627,6 +639,7 @@ def create_preview(context: TenantContext, *, experiment_id: str, entry_id: str,
         ))
         if version is None or version.workspace_id != context.workspace_id:
             raise LaunchNotFound("AssetVersion 不存在")
+        refuse_unchecked_ads(session, context, [version.id])
         if account is None or not account.currency or not account.timezone_name:
             raise LaunchError("必须先完成目标 Meta account 的只读同步，确认币种和时区")
         if not _asset_path(version.object_key).is_file():

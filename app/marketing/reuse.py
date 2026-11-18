@@ -5,6 +5,10 @@ started from, or of another test of that same card (#7, J-32 lineage in
 ``card_lineage``). The reuse never rewrites the original AssetVersion or its
 generation snapshot and carries no delivery evidence over; the creative is
 reviewed again in this round against this test's confirmed facts.
+
+An ad of ads-first ideas enters a round only once it may be exported (#225, ADR 0018 §2: a draft enters no
+round). The candidates still list a draft, so the page can show it and say why it cannot be chosen
+(``reuse_block``), and ``attach`` refuses it on its own, whatever the page offered.
 """
 from dataclasses import dataclass
 from datetime import datetime
@@ -17,6 +21,7 @@ from app.adapters.persistence.models import AssetRecord, AssetVersionRecord, Pro
 from app.generation.paid_execution import asset_blob_ref
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from .contracts import Document
+from .ideas_contracts import AdReason
 from .models import MarketingProjectRecord, MarketingRevisionRecord
 from .workflow_models import MarketingCreativeReuseRecord as Reuse
 from .service import MarketingError, digest
@@ -30,6 +35,17 @@ Relation = Literal["this_test", "product_card", "other_test"]
 class ReuseCreative(Document):
     asset_version_id: str = Field(min_length=1, max_length=64)
     combination_id: str = Field(min_length=1, max_length=64)
+
+
+class ReuseBlock(Document):
+    """Why a candidate may not go into the round (#225): it is an ad of ads-first ideas that is still a
+    ``draft`` or ``needs_redo``, with the reasons its ideas page shows (``ideas_export.statuses``)."""
+    status: Literal["draft", "needs_redo"]
+    reasons: list[AdReason]
+
+
+#: The refusal of a draft (#225), worded for the round it was meant for.
+NOT_REUSABLE = ("这张广告还没核对完，不能放进小轮：先到广告想法页核对它用到的事实、外观和检查结果，需要重出的请先重出。")
 
 
 class ReuseCandidate(Document):
@@ -46,6 +62,8 @@ class ReuseCandidate(Document):
     source_test_name: str | None = None
     #: ``other_test`` only: whether that test confirmed the same facts as this round.
     facts_relation: Literal["same", "differs"] | None = None
+    #: Set only on an ad of ads-first ideas that may not be exported yet: listed, but not to be chosen.
+    reuse_block: ReuseBlock | None = None
 
 
 class ReuseCandidatePage(Document):
@@ -130,6 +148,10 @@ def attach(session, ctx, row, body):
         return
     if native:
         raise MarketingError("creative_already_in_round", "该素材已经属于本轮。", 409)
+    from .ideas_export import library_refusals, refusal_params
+    refused = library_refusals(session, ctx, [version.id])
+    if refused:
+        raise MarketingError("ad_not_reusable", NOT_REUSABLE, 409, params=refusal_params(refused))
     lineage = {"relation": origin.relation, "source_project_id": origin.source_project_id,
         "card_product_id": origin.card_product_id,
         "facts_relation": facts_relation(session.scalar(select(ProductRecord).where(
@@ -152,6 +174,10 @@ def candidates(session, ctx, row, *, cursor: str | None = None, limit: int = 20)
 
     Only images ``attach`` would accept: an allowed product, this round's
     execution mode and a checkable image. Each item says where it comes from.
+    An ad of ads-first ideas that may not be exported yet stays in the page,
+    with the ``reuse_block`` that ``attach`` would refuse it for (#225): the
+    judgement depends on the facts as they are now, so it cannot be a filter of
+    the query without leaving short or empty pages.
     """
     from . import workflow
     allowed = reusable(session, ctx, row)
@@ -183,12 +209,16 @@ def candidates(session, ctx, row, *, cursor: str | None = None, limit: int = 20)
     projects = {allowed[p].source_project_id for p in others}
     names = {p.id: (p.understanding_json or {}).get("product_name") for p in session.scalars(select(MarketingProjectRecord).where(
         MarketingProjectRecord.workspace_id == ctx.workspace_id, MarketingProjectRecord.id.in_(projects))).all()} if projects else {}
+    from .ideas_export import library_refusals
+    blocks = {refused["asset_version_id"]: {"status": refused["status"], "reasons": refused["reasons"]}
+              for refused in library_refusals(session, ctx, [version.id for version, _ in rows])} if rows else {}
     items = []
     for version, asset in rows:
         origin = allowed[asset.product_id]
         item = {"asset_version_id": version.id, "asset_id": version.asset_id,
             "created_at": version.created_at.isoformat() if version.created_at else None,
-            "provider": asset.provider, "model": asset.model, "aspect_ratio": version.aspect_ratio, "relation": origin.relation}
+            "provider": asset.provider, "model": asset.model, "aspect_ratio": version.aspect_ratio, "relation": origin.relation,
+            "reuse_block": blocks.get(version.id)}
         if origin.relation == "other_test":
             item.update(source_project_id=origin.source_project_id, source_test_name=names.get(origin.source_project_id),
                 facts_relation=facts_relation(anchors.get(asset.product_id), row))
@@ -215,6 +245,19 @@ def ensure_editable(project, recipe):
     if not editable(project, recipe):
         raise MarketingError("reused_creative_not_editable",
             "从其他测试或产品卡片复用的素材，暂时不能在本测试里修改或裁剪；请在原测试里修改，或在这一轮重新生成。")
+
+
+def ensure_not_an_ad_of_ideas(session, ctx, asset_version_id):
+    """Refuse a revision or crop in a round of an ad of ads-first ideas, checked or not (#225).
+
+    Such an ad is changed on its ideas page, where the new image is an ad again and is checked like the
+    others; a round's revision or crop would be a round image no check or verification of the ideas
+    ever sees, and it would leave in the handoff after the ad itself stopped being exportable."""
+    from .ideas_export import ads_of_ideas
+    if ads_of_ideas(session, ctx, [asset_version_id]):
+        raise MarketingError("ad_edit_on_ideas_page",
+            "这张图是广告想法里的一张广告，不能在小轮里修改或裁剪：要改它，请到广告想法页的“修改这张广告”，改出的新图同样要核对后才能导出。",
+            409)
 
 
 def creatives(session, ctx, row, combos):

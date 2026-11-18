@@ -64,9 +64,11 @@ type Screen =
  * how many are kept, which leads to the check before downloading.
  *
  * Each claim's "More" changes or deletes it in the user's own words (#224).
+ * Product photos are checked in the check before downloading and on the
+ * product profile (#229).
  *
- * Left for later on purpose: taking ads to a test (step 2), the image model's
- * own instructions (no server path yet), checking product photos (#199).
+ * Left for later on purpose: taking ads to a test (step 2) and the image
+ * model's own instructions (no server path yet).
  */
 export function IdeasPage({ product }: { product: WorkspaceProduct }) {
   const { t } = useTranslation('ideas');

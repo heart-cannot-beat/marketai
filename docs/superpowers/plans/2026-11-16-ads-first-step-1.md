@@ -127,6 +127,21 @@ S17（#219，素材库的导出包和下载不交出没核对的草稿）不加�
 | `get_generation_export_package` | 回应多一个 `left_out_drafts`（按规则选时没放进包里的广告数） |
 | `list_generation_assets` | 每一项多一个 `export_block`（不可导出的新开头广告的状态和原因，其余为空） |
 
+S19（#225，新开头的草稿不能经复用或重新生成绕过核对）也不加新接口（当时总数是 260）。改了形状的只有一个，其余是新的拒绝：
+
+| 接口 | 改了什么 |
+| --- | --- |
+| `list_marketing_reuse_candidates` | 每一项多一个 `reuse_block`（不可导出的新开头广告的状态和原因，其余为空）；照常列出，分页不变 |
+| `reuse_marketing_creative` | 不可导出的新开头广告返回 409 `ad_not_reusable` |
+| `create_marketing_handoff`、`retry_marketing_handoff` | 要打包的素材里有不可导出的新开头广告时返回 409 `ads_not_exportable`；202 的回应和 `Location` 不变 |
+| `download_marketing_handoff` | 包里有广告已经不能导出时返回 409 `ads_not_exportable`，包保留为历史 |
+| `create_generation_regeneration_draft`、`create_generation_review_summary_regeneration` | 来源是新开头的广告（不论状态）时返回 409 `ad_regenerate_on_ideas_page` |
+| `get_generation_asset_version` | 形状不变；新开头的广告 `allowed_actions` 里 `regenerate` 不允许（`ad_regenerate_on_ideas_page`），不可导出的 `download` 不允许（`ads_not_exportable`） |
+| `add_experiment_entry`、`update_experiment_entry`、`freeze_experiment`、`start_experiment` | 不可导出的新开头广告返回 409 `ad_not_reusable` |
+| `create_marketing_evidence_handoff` | 不可导出的新开头广告返回 409 `ad_not_reusable`（不交给实验当胜出） |
+| `create_marketing_image_edit`、`prepare_marketing_feedback` | 复用进小轮的新开头广告（不论状态）返回 409 `ad_edit_on_ideas_page`；小轮详情里它的 `editable` 为 `false` |
+| `create_meta_launch_preview` | 候选里有不可导出的新开头广告时返回 409 `ads_not_exportable` |
+
 ---
 
 ## S0：合同和 ADR
@@ -548,7 +563,7 @@ class IdeasApiTests(MarketingIdeasFixtures):
 - **目的：** 首批就能用产品页上的照片保证产品外观。
 - **改哪里：** `app/marketing/product_references.py`（新的解析路径：录入里已通过图片检查的候选图，`attestation="unverified_product_photo"`，策略名 `ads-first-unverified-photos-v1`）、`app/marketing/ideas.py`（首批选主图加至多两张细节图）、S10 的 `verify`（核对照片时把它提升为创意库参考图并标为已对照实物）、`lineage_current`（同一内容哈希的照片已核对时视为当前）。
 - **测试要点：** 没核对的照片进了出图请求，图的状态是 `draft`；核对该照片后同一张图变 `exportable`，不用重出；用户否定该照片后变 `needs_redo`；`plan_first` 项目仍然只用已核对的照片（回归）。
-- **做成的样子（#199）：** 没有迁移，也没有新接口（总数仍是 260）。候选照片（`product_references.candidates`）是首批那次录入里已通过上传门禁、判为 `main` / `angle` / `detail` 的图，只取用户选的型号的；照片的身份是受控派生的内容哈希（`photo_id`）。出图选图（`for_ideas`）：一张主图加至多两张，已核对的在前、未核对的在后，否定的不用；已在产品照片集里核对过的按创意库参考图冻结，其余按参考对象冻结（`unverified_product_photo`，策略 `ads-first-unverified-photos-v1`），预览、提交、执行前照样查文件。首批、`prepare_marketing_ideas_generation` 和 S12 的按意见重出都用它；按意见重出把所用照片记进幂等哈希，照片变了就是新的草稿。照片的核对放在 `verify_marketing_ideas`：加 `photo_ids`（核对：是这个产品的实物照片、有权用在广告里）和 `rejected_photo_ids`（否定），可以只核对照片；核对时在同一个事务里把照片提升为创意库参考图（`library.promote_reference_in_transaction`），权利声明由核对的人作出。决定逐条记在核对记录里，按产品算（同一个产品的各项目里，同一张照片以最后一次为准）；核对过、但参考图后来被撤回或权利过期的照片算 `unavailable`，和否定一样让用到它的图需要重出，也不再进产品版本。核对发布的产品版本带上已核对的照片（创意库合同 §5.1 已改）。读接口 `IdeasProjectDetail` 加 `photos`（每张候选照片、核对状态、哪些广告用了它），`AdSummary` 加 `photo_ids`。`lineage_current` 没有按计划改成“同一哈希已核对视为当前”：测试轮次、复用这些改版前的消费方仍只认出图时就是已核对参考图的照片，不把未核对照片的出图记录带进交付包；新开头的状态自己按哈希判断（`ideas_export.photo_states`）。S9 的检查对照的是冻结照片的字节，核对不改字节，所以已有检查仍然算数；用了未核对照片的检查，提示词如实写“用户还没核对”，用已核对照片的检查提示词不变。Worker 多了 `marketing_ideas_export_records` 的 SELECT（首批选照片要排除用户否定的；执行前拒绝已否定的照片），等维护者确认。首批报价不变：出图最高费用按供应商、模型、清晰度定价，单图检查每次固定最高费用，带不带参考照片都不影响。
+- **做成的样子（#199）：** 没有迁移，也没有新接口（当时总数是 260）。候选照片（`product_references.candidates`）是首批那次录入里已通过上传门禁、判为 `main` / `angle` / `detail` 的图，只取用户选的型号的；照片的身份是受控派生的内容哈希（`photo_id`）。出图选图（`for_ideas`）：一张主图加至多两张，已核对的在前、未核对的在后，否定的不用；已在产品照片集里核对过的按创意库参考图冻结，其余按参考对象冻结（`unverified_product_photo`，策略 `ads-first-unverified-photos-v1`），预览、提交、执行前照样查文件。首批、`prepare_marketing_ideas_generation` 和 S12 的按意见重出都用它；按意见重出把所用照片记进幂等哈希，照片变了就是新的草稿。照片的核对放在 `verify_marketing_ideas`：加 `photo_ids`（核对：是这个产品的实物照片、有权用在广告里）和 `rejected_photo_ids`（否定），可以只核对照片；核对时在同一个事务里把照片提升为创意库参考图（`library.promote_reference_in_transaction`），权利声明由核对的人作出。决定逐条记在核对记录里，按产品算（同一个产品的各项目里，同一张照片以最后一次为准）；核对过、但参考图后来被撤回或权利过期的照片算 `unavailable`，和否定一样让用到它的图需要重出，也不再进产品版本。核对发布的产品版本带上已核对的照片（创意库合同 §5.1 已改）。读接口 `IdeasProjectDetail` 加 `photos`（每张候选照片、核对状态、哪些广告用了它），`AdSummary` 加 `photo_ids`。`lineage_current` 没有按计划改成“同一哈希已核对视为当前”：测试轮次、复用这些改版前的消费方仍只认出图时就是已核对参考图的照片，不把未核对照片的出图记录带进交付包；新开头的状态自己按哈希判断（`ideas_export.photo_states`）。S9 的检查对照的是冻结照片的字节，核对不改字节，所以已有检查仍然算数；用了未核对照片的检查，提示词如实写“用户还没核对”，用已核对照片的检查提示词不变。Worker 多了 `marketing_ideas_export_records` 的 SELECT（首批选照片要排除用户否定的；执行前拒绝已否定的照片），等维护者确认。首批报价不变：出图最高费用按供应商、模型、清晰度定价，单图检查每次固定最高费用，带不带参考照片都不影响。
 
 ### S12 后端：草稿的修改和追加
 
@@ -570,6 +585,11 @@ class IdeasApiTests(MarketingIdeasFixtures):
 - **改哪里：** `web/components/ideas/ProductProfile.tsx`，页面 `p/[productId]/profile.tsx`；照片和品牌两块复用 `ProductReferenceSettings`、`ProductBrandKitSettings`。
 - **规则：** 新流程的产品用这个视图；改版前的产品仍用现在的产品卡编辑器。
 - **测试要点：** 核对、修改、删除事实各一条；补充出处后“没有出处的说法”变成事实（未核对）；改被引用的事实前提示“用到它的广告需要重出”。
+
+### S21 前端：下载前核对和产品资料接上照片的核对（#229）
+
+- **做成的样子：** 只改前端，不加接口（当时总数是 260），照片的读和写都用 S11 的 `get_marketing_ideas` `photos` 和 `verify_marketing_ideas` `photo_ids` / `rejected_photo_ids`。下载前核对把留下的草稿用到的、还没核对的照片列出来，勾选框的文字就是声明（“这是这个产品的实物照片，我有权把它用在广告里”），和事实、外观、检查发现一起在同一次核对里提交；否定一张照片先问（用到它的广告有几张、其中几张在这次下载里、否定后需要重出），确认后单独提交一次，这些广告立刻变成需要重出、移出这次下载。产品资料的照片区列出候选照片和状态，可以核对、否定，否定过的可以改为核对（后端以最后一次决定为准）；“不能再用”的照片说明原因，不给按钮。广告想法页和修改页说明照片被否定或不能再用的广告为什么需要重出、怎么重出。两个画面读同一份回答，状态一致。
+- **没做的：** 用户自己上传新的产品照片（后端没有路径，要新表、Worker 门禁任务和新接口）、核对的续期、从照片里选 Logo（核对过的照片是产品参考图，不是 Logo），结论写在 #229。
 
 ### S15 前端：竞品独立页面，素材库和设置接入
 

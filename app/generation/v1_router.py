@@ -1316,6 +1316,7 @@ _REGENERATION_STATUS = {
     "asset_not_found": 404,
     "invalid_intent": 422,
     "qc_attempt_required": 409,
+    "ad_regenerate_on_ideas_page": 409,
 }
 
 _RECOVERY_PREVIEW_STATUS = {

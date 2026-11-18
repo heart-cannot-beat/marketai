@@ -135,7 +135,11 @@ function Profile({
           {t('profile-reading')}
         </p>
       )}
-      <ProfilePhotos productId={product.productId} />
+      <ProfilePhotos
+        productId={product.productId}
+        projectId={projectId}
+        detail={detail}
+      />
       <ProfileBrand productId={product.productId} />
     </div>
   );

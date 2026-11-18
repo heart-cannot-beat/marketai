@@ -8,6 +8,7 @@ import type {
   IdeasAd,
   IdeasFinding,
 } from '@/lib/ideas/ideas-view';
+import { photoGone } from '@/lib/ideas/photos';
 import { useFindingTitle } from './FindingList';
 
 const STATUS_STYLE: Record<IdeasAd['status'], string> = {
@@ -111,6 +112,13 @@ export function AdCard({
             {t('ideas-ad-no-photo')}
           </p>
         )}
+        {slot.kind === 'ad' &&
+          slot.ad.status === 'needs_redo' &&
+          photoGone(slot.ad) && (
+            <p className="text-sm text-red-800 dark:text-red-300">
+              {t('ideas-ad-photo-gone')}
+            </p>
+          )}
         {slot.kind === 'ad' && check === 'checking' && (
           <p
             className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
