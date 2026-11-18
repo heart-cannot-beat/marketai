@@ -15,7 +15,7 @@ import type { IdeasPhoto, PhotoStatus } from '@/lib/ideas/photos';
 
 const THUMBNAIL = {
   sm: 'w-20',
-  lg: 'w-full',
+  lg: 'w-full max-w-60',
 } as const;
 
 /** The photo itself: the reading's released copy, never a link to keep. */

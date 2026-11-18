@@ -157,7 +157,7 @@ function CandidatePhotos({
       <p className="text-sm text-gray-600 dark:text-gray-400">
         {t('profile-photos-expiry')}
       </p>
-      <ul role="list" className="grid gap-4 sm:grid-cols-2">
+      <ul role="list" className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         {photos.map((photo, index) => {
           const label = labelOf(photo);
           const name = t('profile-photo-name', {
