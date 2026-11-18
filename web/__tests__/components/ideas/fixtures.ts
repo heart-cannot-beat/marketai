@@ -215,3 +215,115 @@ export function product(
     stepCount: 0,
   };
 }
+
+type Finding = components['schemas']['IdeasCheckFinding'];
+type Check = components['schemas']['IdeasAdCheck'];
+
+/** One finding of a check (#197): a fail or an unknown, never a pass. */
+export function finding(
+  checkId: string,
+  extra: Partial<Finding> = {}
+): Finding {
+  return {
+    check_id: checkId,
+    description: `Check ${checkId}`,
+    status: 'fail',
+    confidence: 'high',
+    gate_reason: null,
+    visual_evidence: '',
+    rationale: '',
+    suggested_fix: '',
+    fact_ids: [],
+    unsupported_claims: [],
+    rendered_text_diff: [],
+    ...extra,
+  };
+}
+
+/** A finished check of one ad with these findings. */
+export function check(id: string, findings: Finding[] = []): Check {
+  return {
+    id,
+    state: 'succeeded',
+    execution_mode: 'byok',
+    source: 'ai_visual_suggestion',
+    suggestion: findings.length ? 'needs_confirmation' : 'ready_to_confirm',
+    findings,
+    understanding_hash: 'h',
+    fact_ids: [],
+    language: 'en-US',
+    maximum_cost: '0.02',
+    created_at: '2026-11-17T08:05:00+00:00',
+  };
+}
+
+/** What one drafting call costs at most (`get_marketing_capabilities`). */
+export function plannerCapabilities(maximum = '0.08') {
+  return {
+    paid: {
+      provider: 'openai',
+      model: 'planner-model',
+      available: true,
+      unavailable_reason: null,
+      maximum_cost: maximum,
+      currency: 'USD',
+      quote_hash: 'pq_1',
+    },
+    mock_available: true,
+  };
+}
+
+/** The image providers a workspace's own key can use (`get_generation_capabilities`). */
+export function generationCapabilities() {
+  return {
+    providers: [],
+    models: {},
+    modes: [],
+    format_limits: {},
+    credential_readiness: {},
+    llm: {},
+    products: [],
+    provider_options: [
+      {
+        id: 'openai',
+        label: 'OpenAI',
+        default_model: 'image-model',
+        execution_mode: 'byok',
+        credential_ready: true,
+        available: true,
+        unavailable_reason: null,
+        aspect_ratios: ['1:1', '4:5', '9:16', '16:9'],
+        models: [
+          {
+            id: 'image-model',
+            available: true,
+            image_sizes: ['1K', '2K'],
+            image_tools: ['upscale', 'remove_background', 'erase'],
+            maximum_costs: {},
+            unavailable_reason: null,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** What checking the unchecked ads costs at most (`get_marketing_ideas_checks_quote`). */
+export function checksQuote(
+  extra: Partial<components['schemas']['IdeasChecksQuote']> = {}
+): components['schemas']['IdeasChecksQuote'] {
+  return {
+    available: true,
+    unavailable_reason: null,
+    execution_mode: 'byok',
+    provider: 'openai',
+    model: 'qc-model',
+    quantity: 2,
+    maximum_cost: '0.04',
+    currency: 'USD',
+    quote_hash: 'q'.repeat(64),
+    asset_version_ids: ['av_5', 'av_6'],
+    skipped: [],
+    ...extra,
+  };
+}

@@ -22,6 +22,8 @@ export interface Telling {
 interface SlotBase {
   /** Stable React key; never shown. */
   key: string;
+  /** The ad of the ideas this slot is for (`CreativeCombination.id`); never shown. */
+  combinationId?: string;
   /** The ad's headline, for the image's text alternative. */
   headline: string | null;
   telling: Telling | null;
@@ -97,6 +99,7 @@ export function ideasView(detail: IdeasDetail): IdeasView {
     for (const combination of combinations) {
       if (combination.angle_id !== angle.id) continue;
       const base = {
+        combinationId: combination.id,
         headline: combination.headline,
         telling: telling(
           angle.expressions.find((e) => e.id === combination.expression_id)
@@ -180,12 +183,160 @@ export function ideasView(detail: IdeasDetail): IdeasView {
   };
 }
 
-/** True while something the page shows is still on its way. */
+/**
+ * True while something the page shows is still on its way: an image being
+ * made, a drafting call, a check (#197), a crop (#200), or a first batch that
+ * is still making or checking its ads.
+ */
 export function stillWorking(detail: IdeasDetail | undefined): boolean {
   if (!detail) return false;
   if (detail.pending.some((item) => item.state !== 'failed')) return true;
   const call = detail.latest_call?.state;
-  return call === 'queued' || call === 'running';
+  if (call === 'queued' || call === 'running') return true;
+  if (detail.ads.some((item) => checkRunning(item.check))) return true;
+  if ((detail.image_edits ?? []).some((edit) => edit.state === 'queued'))
+    return true;
+  return firstBatchChecking(detail);
+}
+
+export type IdeasCheck = components['schemas']['IdeasAdCheck'];
+export type IdeasFinding = components['schemas']['IdeasCheckFinding'];
+
+const checkRunning = (check: IdeasCheck | null | undefined) =>
+  check?.state === 'queued' || check?.state === 'running';
+
+/**
+ * The first batch has made every image and is checking them (#197): the
+ * images are on the page, their checks land one by one.
+ */
+export function firstBatchChecking(detail: IdeasDetail): boolean {
+  return (detail.first_batch?.state as string | undefined) === 'checking';
+}
+
+/**
+ * Where an ad's automatic check stands, as the page shows it (#197):
+ * - `checking`: queued or running, or the first batch is still on its way to it;
+ * - `findings`: finished, and some findings are not handled yet;
+ * - `clear`: finished, nothing left to handle;
+ * - `unchecked`: no check yet (a new version, #200), or it failed.
+ */
+export type CheckView = 'checking' | 'findings' | 'clear' | 'unchecked';
+
+export function checkView(ad: IdeasAd, detail: IdeasDetail): CheckView {
+  const check = ad.check;
+  if (checkRunning(check) || check?.state === 'uncertain') return 'checking';
+  if (!check || check.state === 'failed')
+    return firstBatchChecking(detail) && ad.origin === 'generated'
+      ? 'checking'
+      : 'unchecked';
+  return openFindings(ad).length > 0 ? 'findings' : 'clear';
+}
+
+/**
+ * The findings of an ad's newest check the user has not handled yet, as the
+ * server counts them (`reasons[findings_open].finding_ids`, #198), in the
+ * check's order. A finding is never summed up: each is shown on its own.
+ */
+export function openFindings(ad: IdeasAd): IdeasFinding[] {
+  const open = new Set(
+    ad.reasons
+      ?.filter((reason) => reason.code === 'findings_open')
+      .flatMap((reason) => reason.finding_ids ?? []) ?? []
+  );
+  return (ad.check?.findings ?? []).filter((finding) =>
+    open.has(finding.check_id)
+  );
+}
+
+/**
+ * The finding a no-photo ad's look confirmation settles (#198): the check
+ * could not judge the product from the image alone. The page asks "please
+ * confirm the product's look" for it, never shows it as a fault.
+ */
+export function settledByLook(finding: IdeasFinding): boolean {
+  return (
+    finding.check_id === 'product_fidelity' && finding.status === 'unknown'
+  );
+}
+
+/** Whether an ad still waits for the user to confirm the product looks right. */
+export function needsLook(ad: IdeasAd): boolean {
+  return (ad.reasons ?? []).some(
+    (reason) => reason.code === 'appearance_unconfirmed'
+  );
+}
+
+/**
+ * Every version of the ad `assetVersionId` belongs to (#200): the version it
+ * was made from, back to the first, and everything made from any of them;
+ * oldest first. Each new version stays an ad of its own.
+ */
+export function versionsOf(
+  detail: IdeasDetail,
+  assetVersionId: string
+): IdeasAd[] {
+  const byId = new Map(detail.ads.map((item) => [item.asset_version_id, item]));
+  let root = byId.get(assetVersionId);
+  const seen = new Set<string>();
+  while (
+    root?.source_asset_version_id &&
+    byId.has(root.source_asset_version_id) &&
+    !seen.has(root.asset_version_id)
+  ) {
+    seen.add(root.asset_version_id);
+    root = byId.get(root.source_asset_version_id);
+  }
+  if (!root) return [];
+  const family = new Set([root.asset_version_id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const item of detail.ads)
+      if (
+        !family.has(item.asset_version_id) &&
+        item.source_asset_version_id &&
+        family.has(item.source_asset_version_id)
+      ) {
+        family.add(item.asset_version_id);
+        grew = true;
+      }
+  }
+  return detail.ads
+    .filter((item) => family.has(item.asset_version_id))
+    .sort(
+      (a, b) =>
+        a.created_at.localeCompare(b.created_at) ||
+        a.asset_version_id.localeCompare(b.asset_version_id)
+    );
+}
+
+/** Where an ad sits in the ideas: its claim's number, the claim and its way of telling. */
+export interface AdPlace {
+  claimNumber: number | null;
+  proposition: string | null;
+  telling: Telling | null;
+  headline: string | null;
+  bodyCopy: string | null;
+  /** The visual mechanism of its way of telling (`Expression.visual_mechanism`). */
+  mechanism: string | null;
+}
+
+export function placeOf(detail: IdeasDetail, ad: IdeasAd): AdPlace {
+  const angles = detail.ideas?.angles ?? [];
+  const index = angles.findIndex((angle) => angle.id === ad.angle_id);
+  const angle = index >= 0 ? angles[index] : undefined;
+  const expression = angle?.expressions.find((e) => e.id === ad.expression_id);
+  const combination = detail.ideas?.combinations.find(
+    (c) => c.id === ad.combination_id
+  );
+  return {
+    claimNumber: index >= 0 ? index + 1 : null,
+    proposition: angle?.proposition ?? null,
+    telling: telling(expression),
+    headline: combination?.headline ?? null,
+    bodyCopy: combination?.body_copy ?? null,
+    mechanism: expression?.visual_mechanism ?? null,
+  };
 }
 
 /** The detail with one ad's keep mark set, as the page shows it at once. */
