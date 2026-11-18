@@ -606,8 +606,12 @@ def ideas_input(session, ctx, project, version, recipe, *, policy=IDEAS_POLICY):
     if "language_correct" in required:
         inputs["ad_language"] = intent["ad_language"]
     from .ai_qc_provider import public_input, output_schema
+    from .product_references import UNVERIFIED
     inputs["output_schema"] = output_schema(inputs)
-    inputs["system_prompt"] = text.ideas_single_prompt(required, language, inputs["output_schema"])
+    # The recipe never changes, so neither does this: checking the photo later leaves the check's input as it was.
+    inputs["system_prompt"] = text.ideas_single_prompt(
+        required, language, inputs["output_schema"],
+        unverified_photos=any(ref.get("attestation") == UNVERIFIED for ref in references))
     import json
     if len((inputs["system_prompt"] + json.dumps(public_input(inputs), ensure_ascii=False)).encode()) > MAX_TEXT_BYTES:
         raise MarketingError("qc_input_too_large", "检查意图与产品依据过长。")

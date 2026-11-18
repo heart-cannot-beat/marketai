@@ -2811,10 +2811,12 @@ export interface paths {
     /**
      * Verify Ideas
      * @description Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made
-     *     without a product photo, and check findings accepted as they are.
+     *     without a product photo, check findings accepted as they are, and the product photos the user checks
+     *     or rejects (#199).
      *
-     *     Only what is named here becomes confirmed; the checked facts are published as the product's version.
-     *     Ads whose three conditions now hold become ``exportable``.
+     *     Only what is named here becomes confirmed; the checked facts and photos are published as the product's
+     *     version. Ads whose three conditions now hold become ``exportable``; ads made with a rejected photo need
+     *     making again.
      */
     post: operations['verify_marketing_ideas'];
     delete?: never;
@@ -4517,6 +4519,7 @@ export interface components {
       appearance_confirmed: boolean;
       kept: boolean;
       used_product_photo: boolean;
+      photo_ids?: string[];
       created_at: string;
       check?: components['schemas']['IdeasAdCheck'] | null;
     };
@@ -8939,6 +8942,29 @@ export interface components {
       state: 'queued' | 'succeeded' | 'unchanged' | 'failed';
       error_code?: string | null;
     };
+    /**
+     * @description A photo the product's reading found that may show the product's look (#199; design doc §5.2).
+     *
+     *     Ads may be drafted with it before anyone checks it; an ad made with it is exportable only once the user
+     *     checks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.
+     *     Show it with ``create_product_intake_image_download_intent(intake_id, image_id)``.
+     */
+    IdeasPhoto: {
+      photo_id: string;
+      /** @enum {string} */
+      status: 'unverified' | 'verified' | 'rejected';
+      /** @enum {string} */
+      role: 'main' | 'angle' | 'detail';
+      /** @enum {string} */
+      source: 'product_page' | 'upload';
+      source_url?: string | null;
+      intake_id: string;
+      image_id: string;
+      width?: number | null;
+      height?: number | null;
+      reference_version_id?: string | null;
+      asset_version_ids?: string[];
+    };
     IdeasProjectDetail: {
       id: string;
       revision: number;
@@ -8954,6 +8980,7 @@ export interface components {
       pending: components['schemas']['PendingAd'][];
       first_batch?: components['schemas']['FirstBatchSummary'] | null;
       image_edits?: components['schemas']['IdeasImageEdit'][];
+      photos?: components['schemas']['IdeasPhoto'][];
     };
     IdeasProjectPage: {
       items: components['schemas']['IdeasProjectSummary'][];
@@ -12120,6 +12147,8 @@ export interface components {
       fact_ids?: string[];
       appearance_confirmed?: string[];
       accepted_findings?: components['schemas']['AcceptedFindings'][];
+      photo_ids?: string[];
+      rejected_photo_ids?: string[];
     };
     Vocabulary: {
       factors?: components['schemas']['VocabularyFactor'][];

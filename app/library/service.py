@@ -2466,6 +2466,147 @@ def normalize_rights_declaration(
     return normalized
 
 
+def _promote_object(session, context: TenantContext, object_id: str, *, requested_name: str, rights: dict | None,
+                    today: date | None, audit_base: dict):
+    """The published ReferenceAssetVersion of a released object: the one it already has, or a new one.
+
+    Returns ``(record, entry, version_dict, created, declaration)``, or a ``_TerminalFailure`` whose
+    evidence (audit, the blocked Draft) is worth keeping when the caller commits it."""
+    record = session.get(ReferenceObjectRecord, object_id)
+    if record is None or record.workspace_id != context.workspace_id:
+        # 跨 Workspace 猜测 ID 不泄露存在性。
+        raise LibraryNotFound("参考对象不存在", code="reference_object_not_found")
+    if record.state != references.STATE_RELEASED:
+        failure_code, failure_detail = references.gate_failure(record)
+        raise LibraryConflict(
+            "参考对象尚未通过上传门禁，不能发布为参考素材",
+            {
+                "code": "reference_object_not_released",
+                "state": record.state,
+                "failure_code": failure_code,
+                "failure_detail": failure_detail,
+            },
+        )
+
+    meta = dict(record.checks_json or {})
+    declaration = normalize_rights_declaration(
+        rights, declared_by=context.initiator_id or "", today=today,
+    ) if rights is not None else meta.get("rights_declaration")
+    if not isinstance(declaration, dict):
+        report = ValidationReport(
+            ENTRY_REFERENCE_ASSET,
+            "",
+            [
+                Finding(
+                    "reference_rights_required",
+                    "参考素材必须带有上传时或 promote 时的权利声明（scope、valid_to）",
+                    "rights",
+                )
+            ],
+        ).as_dict()
+        _audit(session, context, "promote_reference", result="blocked",
+               detail={"object_id": record.id, "reason": "reference_rights_required",
+                       **audit_base})
+        return _TerminalFailure(
+            LibraryValidationError(
+                "缺少权利声明，不能发布参考素材", report, code="library_reference_rights_required",
+            ),
+        )
+
+    filename = str(meta.get("filename") or "")
+    name = requested_name or Path(filename).stem.strip() or f"参考 {record.id[-8:]}"
+    created = False
+    entry = None
+    if record.promoted_entry_id:
+        entry = session.get(LibraryEntryRecord, record.promoted_entry_id)
+        if entry is not None and entry.workspace_id != context.workspace_id:
+            entry = None
+    if entry is not None and entry.lifecycle == LIFECYCLE_ARCHIVED:
+        raise LibraryConflict(
+            "该参考素材条目已归档，不能再次发布或绑定",
+            {"code": "entry_archived", "entry_id": entry.id},
+        )
+
+    if entry is None:
+        content = {
+            "name": name,
+            "object_id": record.id,
+            "source": "upload",
+            "file": {
+                "content_sha256": record.content_sha256,
+                "mime_type": record.mime_type,
+                "byte_size": record.byte_size,
+                "width": record.width,
+                "height": record.height,
+                "filename": Path(filename).name,
+            },
+            "rights": dict(declaration),
+            "gate_checks": list(meta.get("checks") or []),
+            "derivative": {
+                "sha256": record.derivative_sha256,
+                "mime_type": record.derivative_mime,
+                "byte_size": record.derivative_byte_size,
+                "width": record.derivative_width,
+                "height": record.derivative_height,
+            },
+            "execution_mode": record.execution_mode,
+        }
+        entry, draft = _create_entry_with_draft(
+            session, context, entry_type=ENTRY_REFERENCE_ASSET,
+            display_name=name, content=content,
+        )
+        report, resolved = _build_report(session, context, entry, content, today=today)
+        if not report.ok:
+            # 服务端生成的内容仍走同一套校验：权利过期、对象证据漂移都在这里
+            # 失败关闭，并把 ValidationReport 作为证据留在 Draft 与审计里。
+            draft.state = DRAFT_VALIDATION_FAILED
+            draft.validation_json = report.as_dict()
+            _emit(session, context, entry.id, "validated", to_state=DRAFT_VALIDATION_FAILED)
+            _audit(session, context, "promote_reference", entry_id=entry.id, result="blocked",
+                   detail={"object_id": record.id, **report.as_dict(), **audit_base})
+            return _TerminalFailure(LibraryValidationError("参考素材发布被阻断项拒绝", report.as_dict()))
+        version_dict = _publish_effective_version(
+            session, context, entry, draft, content, report, resolved, set(), draft.revision,
+            extra_audit_detail={"object_id": record.id, "promoted": True, **audit_base},
+        )
+        record.promoted_entry_id = entry.id
+        record.updated_at = utcnow()
+        created = True
+    else:
+        current = _effective_version(session, entry)
+        if current is None:
+            raise LibraryConflict(
+                "该参考素材条目没有生效版本（可能已被 Withdraw），不能绑定",
+                {"code": "reference_version_unavailable", "entry_id": entry.id},
+            )
+        version_dict = _version_dict(current)
+    return record, entry, version_dict, created, declaration
+
+
+def promote_reference_in_transaction(
+    session, context: TenantContext, object_id: str, *, display_name: str, rights: dict,
+    today: date | None = None,
+) -> str:
+    """``promote_reference_object`` inside the caller's transaction, without binding; the version id.
+
+    For an ads-first verification (#199): the user checks a photo the product's reading found, and the
+    photo becomes a creative-library reference in the same command that records the check. The rights
+    declaration is the checking user's (``declared_by`` is set here, never by the caller). An object
+    promoted before keeps its entry and effective version. Any refusal raises, so the caller's command
+    makes nothing."""
+    _require_workspace(session, context.workspace_id)
+    promoted = _promote_object(session, context, object_id, requested_name=(display_name or "").strip(),
+                               rights=rights, today=today, audit_base={})
+    if isinstance(promoted, _TerminalFailure):
+        raise promoted.error
+    record, entry, version_dict, created, declaration = promoted
+    _audit(session, context, "promote_reference", entry_id=entry.id, version_id=version_dict["id"],
+           detail={"object_id": record.id, "created": created, "rights_scope": declaration.get("scope"),
+                   "rights_valid_to": declaration.get("valid_to"), "in_transaction": True})
+    session.flush()
+    return version_dict["id"]
+
+
 def promote_reference_object(
     context: TenantContext,
     object_id: str,
@@ -2497,114 +2638,11 @@ def promote_reference_object(
     def body(session, key_hash):
         audit_base = _idem_detail(key_hash)
         _require_workspace(session, context.workspace_id)
-        record = session.get(ReferenceObjectRecord, object_id)
-        if record is None or record.workspace_id != context.workspace_id:
-            # 跨 Workspace 猜测 ID 不泄露存在性。
-            raise LibraryNotFound("参考对象不存在", code="reference_object_not_found")
-        if record.state != references.STATE_RELEASED:
-            failure_code, failure_detail = references.gate_failure(record)
-            raise LibraryConflict(
-                "参考对象尚未通过上传门禁，不能发布为参考素材",
-                {
-                    "code": "reference_object_not_released",
-                    "state": record.state,
-                    "failure_code": failure_code,
-                    "failure_detail": failure_detail,
-                },
-            )
-
-        meta = dict(record.checks_json or {})
-        declaration = normalize_rights_declaration(
-            rights, declared_by=context.initiator_id or "", today=today,
-        ) if rights is not None else meta.get("rights_declaration")
-        if not isinstance(declaration, dict):
-            report = ValidationReport(
-                ENTRY_REFERENCE_ASSET,
-                "",
-                [
-                    Finding(
-                        "reference_rights_required",
-                        "参考素材必须带有上传时或 promote 时的权利声明（scope、valid_to）",
-                        "rights",
-                    )
-                ],
-            ).as_dict()
-            _audit(session, context, "promote_reference", result="blocked",
-                   detail={"object_id": record.id, "reason": "reference_rights_required",
-                           **audit_base})
-            return _TerminalFailure(
-                LibraryValidationError(
-                    "缺少权利声明，不能发布参考素材", report, code="library_reference_rights_required",
-                ),
-            )
-
-        filename = str(meta.get("filename") or "")
-        name = requested_name or Path(filename).stem.strip() or f"参考 {record.id[-8:]}"
-        created = False
-        entry = None
-        if record.promoted_entry_id:
-            entry = session.get(LibraryEntryRecord, record.promoted_entry_id)
-            if entry is not None and entry.workspace_id != context.workspace_id:
-                entry = None
-        if entry is not None and entry.lifecycle == LIFECYCLE_ARCHIVED:
-            raise LibraryConflict(
-                "该参考素材条目已归档，不能再次发布或绑定",
-                {"code": "entry_archived", "entry_id": entry.id},
-            )
-
-        if entry is None:
-            content = {
-                "name": name,
-                "object_id": record.id,
-                "source": "upload",
-                "file": {
-                    "content_sha256": record.content_sha256,
-                    "mime_type": record.mime_type,
-                    "byte_size": record.byte_size,
-                    "width": record.width,
-                    "height": record.height,
-                    "filename": Path(filename).name,
-                },
-                "rights": dict(declaration),
-                "gate_checks": list(meta.get("checks") or []),
-                "derivative": {
-                    "sha256": record.derivative_sha256,
-                    "mime_type": record.derivative_mime,
-                    "byte_size": record.derivative_byte_size,
-                    "width": record.derivative_width,
-                    "height": record.derivative_height,
-                },
-                "execution_mode": record.execution_mode,
-            }
-            entry, draft = _create_entry_with_draft(
-                session, context, entry_type=ENTRY_REFERENCE_ASSET,
-                display_name=name, content=content,
-            )
-            report, resolved = _build_report(session, context, entry, content, today=today)
-            if not report.ok:
-                # 服务端生成的内容仍走同一套校验：权利过期、对象证据漂移都在这里
-                # 失败关闭，并把 ValidationReport 作为证据留在 Draft 与审计里。
-                draft.state = DRAFT_VALIDATION_FAILED
-                draft.validation_json = report.as_dict()
-                _emit(session, context, entry.id, "validated", to_state=DRAFT_VALIDATION_FAILED)
-                _audit(session, context, "promote_reference", entry_id=entry.id, result="blocked",
-                       detail={"object_id": record.id, **report.as_dict(), **audit_base})
-                return _TerminalFailure(LibraryValidationError("参考素材发布被阻断项拒绝", report.as_dict()))
-            version_dict = _publish_effective_version(
-                session, context, entry, draft, content, report, resolved, set(), draft.revision,
-                extra_audit_detail={"object_id": record.id, "promoted": True, **audit_base},
-            )
-            record.promoted_entry_id = entry.id
-            record.updated_at = utcnow()
-            created = True
-        else:
-            current = _effective_version(session, entry)
-            if current is None:
-                raise LibraryConflict(
-                    "该参考素材条目没有生效版本（可能已被 Withdraw），不能绑定",
-                    {"code": "reference_version_unavailable", "entry_id": entry.id},
-                )
-            version_dict = _version_dict(current)
+        promoted = _promote_object(session, context, object_id, requested_name=requested_name, rights=rights,
+                                   today=today, audit_base=audit_base)
+        if isinstance(promoted, _TerminalFailure):
+            return promoted
+        record, entry, version_dict, created, declaration = promoted
 
         binding_result = None
         if bind_spec is not None:

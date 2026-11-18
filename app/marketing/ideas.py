@@ -155,8 +155,10 @@ def _ad(version, recipe, keeps, checks=None, statuses=None):
             # How the image came to be and, for a new version of an ad, the version it was made from (#200).
             "origin": made,
             "source_asset_version_id": version.parent_version_id if made in ("corrected", "image_tool", "image_edit") else None,
-            # The photos the request sent (design §5.2): an ad made without one is marked as such.
+            # The photos the request sent (design §5.2): an ad made without one is marked as such. A photo is
+            # its content hash, the ``IdeasPhoto.photo_id`` its checking is read from (#199).
             "used_product_photo": bool(selection.get("product_references")),
+            "photo_ids": [ref.get("content_sha256", "") for ref in selection.get("product_references") or []],
             "created_at": version.created_at.isoformat() if version.created_at else "",
             # The newest automatic check of this image (#197): only what needs attention.
             "check": (checks or {}).get(version.id)}
@@ -216,14 +218,18 @@ def ideas_dict(session, ctx, row) -> dict:
     ads = project_ads(session, ctx, row)
     calls = ideas_checks.latest_by_asset(session, ctx, row.id)
     checks = {asset_id: ideas_checks.projection(check) for asset_id, check in calls.items()}
-    statuses = ideas_export.statuses(session, ctx, row, ads, calls)
+    photos = ideas_export.photo_list(session, ctx, row, ads)
+    states = ideas_export.photo_states(session, ctx, row)
+    statuses = ideas_export.statuses(session, ctx, row, ads, calls, states)
     return {"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
             "market": row.market, "ad_language": row.ad_language, "understanding": row.understanding_json,
             "ideas": row.ideas_json,
             "latest_call": call_summary(call) if call else None,
             "ads": [_ad(version, recipe, keeps, checks, statuses) for version, recipe in ads],
             "pending": pending_ads(session, ctx, row), "first_batch": summaries(session, ctx, [row.id]).get(row.id),
-            "image_edits": edit_summaries(session, ctx, row)}
+            "image_edits": edit_summaries(session, ctx, row),
+            # The photos the product's reading found and whether the user checked each (#199).
+            "photos": photos}
 
 
 def call_summary(call) -> dict:
@@ -333,7 +339,19 @@ def selection_intent(session, ctx, project, link, draft) -> dict:
                       references=bool(selectors.get("product_references")))
     if selectors.get("prompt") != written:
         raise SelectionError("ideas_prompt_changed", "这张广告的出图说明被改过。新开头的广告只按主张出图，请重新准备这张广告。")
+    assert_photos_usable(session, ctx, project, selectors.get("product_references"))
     return current
+
+
+def assert_photos_usable(session, ctx, project, references) -> None:
+    """No new image is sent with a photo the user rejected for these ideas (#199): such a draft is
+    prepared again on the current photos. Checked or not, any other photo may make a draft."""
+    if not references:
+        return
+    from .ideas_export import photo_decisions
+    decided = photo_decisions(session, ctx, project)
+    if any((decided.get(ref.get("content_sha256")) or {}).get("decision") == "rejected" for ref in references):
+        raise SelectionError("product_reference_changed", "这张广告用到的产品照片已被否定，请按当前的照片重新准备。")
 
 
 def _prompt(combo, intent, kit, *, logo: bool, references: bool) -> str:
@@ -344,14 +362,16 @@ def _prompt(combo, intent, kit, *, logo: bool, references: bool) -> str:
     return service.image_brief(combo, intent, brand=brand) + ("\n" + REFERENCE_BRIEF if references else "")
 
 
-def check_intent(session, ctx, intent):
+def check_intent(session, ctx, intent, references=()):
     """A frozen ads-first intent at submission and execution: its project exists in this workspace, is
-    ads-first, and its ad's content still equals the ideas. A plan-first project never matches."""
+    ads-first, and its ad's content still equals the ideas. A plan-first project never matches.
+    ``references``: the photos the recipe froze, none of which the user may have rejected since (#199)."""
     try:
         project = get_ideas_project(session, ctx, intent.get("project_id", ""))
     except service.MarketingError:
         raise SelectionError("ideas_unavailable", "找不到关联的广告想法。") from None
     _current_intent(project, intent)
+    assert_photos_usable(session, ctx, project, references)
     return project
 
 
@@ -360,8 +380,10 @@ def generation_drafts(session, ctx, row, revision, provider, model, format_confi
 
     Each draft carries its ad's ``ideas_intent`` and is linked to the project and combination, so its
     preview and submission go through the existing generation endpoints. Preparing again at the same
-    revision returns the same drafts. The product's verified photos are the appearance references;
-    unchecked photos come with S11."""
+    revision returns the same drafts. The appearance references are the product's photos as they are at
+    this revision (``product_references.for_ideas``, #199): checked ones first, then those the reading
+    found that nobody checked yet, never a rejected one. A photo decision is a verification, which spends
+    a revision, so new photos always mean new drafts."""
     service.ensure_active(session, ctx)
     call = service.latest_call(session, ctx, row.id)
     if call and call.state in ("queued", "running", "uncertain"):
@@ -376,11 +398,11 @@ def generation_drafts(session, ctx, row, revision, provider, model, format_confi
     from . import brand_kits
     from .ideas_contracts import Ideas
     from .models import MarketingGenerationLinkRecord
-    from .product_references import from_product_set
+    from .product_references import for_ideas
     if model not in get_provider(provider).models:
         raise service.MarketingError("model_unavailable", "该供应商不支持所选模型。")
     doc = Ideas.model_validate(row.ideas_json)
-    references = from_product_set(session, ctx, row)
+    references = for_ideas(session, ctx, row)
     kit = brand_kits.resolve_ref(session, ctx, doc.brand_kit) if doc.brand_kit else None
     logo = brand_kits.logo_input(session, ctx, kit.content_json["logo"]) if kit and kit.content_json.get("logo") else None
     drafts = []
