@@ -99,6 +99,15 @@ export function GalleryZone({
   }, [current.slug, gallery.items, selection, urlState]);
 
   const canExport = isActionAllowed(gallery.allowedActions, 'export');
+  // Ads of ads-first ideas that may not be exported yet (Issue #219). Only
+  // the loaded pages are known here; the server refuses the rest.
+  const blockedSelected = useMemo(
+    () =>
+      gallery.items.filter(
+        (item) => item.export_block && selection.isSelected(item.id)
+      ).length,
+    [gallery.items, selection]
+  );
   const canReview = isActionAllowed(gallery.allowedActions, 'review');
 
   return (
@@ -162,6 +171,7 @@ export function GalleryZone({
         onReviewMode={handleReviewMode}
         canExport={canExport}
         canReview={canReview}
+        blockedCount={blockedSelected}
       />
     </div>
   );

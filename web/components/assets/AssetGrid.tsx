@@ -77,6 +77,7 @@ export function AssetGrid({
             effectiveReview={item.effective_review_value}
             executionMode={item.execution_mode}
             thumbnail={item.thumbnail ?? null}
+            exportBlock={item.export_block ?? null}
             isSelected={selection.isSelected(item.id)}
             onSelect={selection.toggle}
             onOpen={onOpenVersion}

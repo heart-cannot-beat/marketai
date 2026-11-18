@@ -1,7 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { useDomainGateway } from '@/lib/domain-client/gateway-provider';
-import type { DomainGateway } from '@/lib/domain-client/gateway';
+import type {
+  AssetLinkPurpose,
+  DomainGateway,
+} from '@/lib/domain-client/gateway';
 import type { DomainOperationMap } from '@/lib/domain-client/generated/operation-map';
 import type {
   BodyParam,
@@ -167,7 +170,8 @@ function callCommandOperation<K extends CommandOperationId>(
   actionInstanceId: string,
   body: DomainOperationMap[K]['requestBody'],
   pathParams: DomainOperationMap[K]['pathParams'] | undefined,
-  transport: { ifMatch?: string | number }
+  transport: { ifMatch?: string | number },
+  queryParams?: DomainOperationMap[K]['queryParams']
 ): Promise<DomainResultFor<K> | ReconciliationRequired> {
   switch (operationId) {
     case 'create_upload_intent':
@@ -729,10 +733,12 @@ function callCommandOperation<K extends CommandOperationId>(
     case 'create_generation_asset_version_download_intent': {
       const p =
         pathParams as DomainOperationMap['create_generation_asset_version_download_intent']['pathParams'];
+      const q = queryParams as { purpose?: AssetLinkPurpose } | undefined;
       return gateway.createGenerationAssetVersionDownloadIntent({
         workspaceSlug,
         actionInstanceId,
         versionId: p.version_id,
+        ...(q?.purpose ? { purpose: q.purpose } : {}),
       }) as Promise<DomainResultFor<K> | ReconciliationRequired>;
     }
     case 'create_generation_export_package':
@@ -1143,7 +1149,8 @@ export function useDomainCommand<K extends CommandOperationId>(
           params.actionInstanceId,
           (params as BodyParam<K>).body as DomainOperationMap[K]['requestBody'],
           params.pathParams,
-          { ifMatch: params.ifMatch }
+          { ifMatch: params.ifMatch },
+          params.queryParams
         );
 
         const meta =

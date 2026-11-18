@@ -17,6 +17,13 @@ produces the inputs that Worker needs (the frozen selector, the Manifest
 shape) and the read-side projections (``get_export_package``,
 ``resolve_export_blob_ref``) the v1 router calls for polling recovery and
 download-intent issuance.
+
+A draft of ads-first ideas does not leave through a package (Issue #219, ADR
+0018 §2): an explicit selection that names one is refused whole, a preset
+leaves them out and says how many, and a ready package is handed out only
+while every ad in it may still be exported. Whether an image is such a
+draft is ``app.marketing.ideas_export``'s judgement, not this module's; any
+other image is selected and packaged exactly as before.
 """
 from __future__ import annotations
 
@@ -36,7 +43,7 @@ from app.generation.models import ExportPackageRecord
 from app.generation.review import project_effective_review
 from app.platform.blob_store import CommittedBlobRef
 from app.platform.denial_audit import check_and_record_denial
-from app.platform.idempotency import create_or_replay_operation
+from app.platform.idempotency import create_or_replay_operation, get_idempotency_record, hash_idempotency_key
 from app.platform.jobs import enqueue_in_session
 from app.platform.tenancy import TenantContext
 
@@ -46,6 +53,8 @@ __all__ = [
     "get_export_package",
     "build_manifest",
     "resolve_export_blob_ref",
+    "left_out_drafts",
+    "record_handout",
 ]
 
 
@@ -174,6 +183,80 @@ def _export_fingerprint(selector: dict) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _unexportable_ads(session: Session, ctx: TenantContext, version_ids: list[str]) -> list[dict]:
+    """The ads of ads-first ideas among ``version_ids`` that may not be
+    exported now, each with its status and reasons (Issue #219). Empty for
+    any selection without such an ad."""
+    from app.marketing import ideas_export
+
+    return ideas_export.library_refusals(session, ctx, version_ids)
+
+
+def _refuse(refused: list[dict], detail: str) -> ExportError:
+    from app.marketing import ideas_export
+
+    return ExportError("ads_not_exportable", detail, params=ideas_export.refusal_params(refused))
+
+
+def _accepted_replay(
+    session: Session, ctx: TenantContext, selector: dict, idempotency_key: str | None
+) -> dict | None:
+    """The package an earlier, identical request under ``idempotency_key``
+    already created, as that request was answered -- or ``None``.
+
+    Asked only when the gate would refuse (Issue #219): an ad that was
+    exportable when the package was accepted may have stopped being so since,
+    and a client retrying after a lost response still gets its package id
+    back. The package's link is refused anyway (``resolve_export_blob_ref``).
+    A key bound to any other request is left to ``create_or_replay_operation``
+    to refuse, exactly as before."""
+    if not idempotency_key:
+        return None
+    record = get_idempotency_record(session, hash_idempotency_key(idempotency_key), ctx.workspace_id)
+    if (
+        record is None
+        or record.state != "committed"
+        or record.command_type != "generation.export"
+        or record.request_fingerprint_hash != _export_fingerprint(selector)
+    ):
+        return None
+    operation = create_or_replay_operation(
+        session,
+        idempotency_key=idempotency_key,
+        command_type="generation.export",
+        fingerprint_hash=_export_fingerprint(selector),
+        actor=ctx.initiator_id or ctx.executor,
+    )
+    package = session.execute(
+        select(ExportPackageRecord).where(
+            ExportPackageRecord.workspace_id == ctx.workspace_id,
+            ExportPackageRecord.operation_id == operation.id,
+        )
+    ).scalar_one_or_none()
+    if package is None:
+        return None
+    return {"package_id": package.id, "operation_id": operation.id, "state": operation.state}
+
+
+def record_handout(session: Session, ctx: TenantContext, package_id: str, intent_id: str) -> None:
+    """Record the ads of ads-first ideas a new link to this package hands out
+    (Issue #219): one download record per project, as the ads-first download
+    writes. Any other image in the package leaves no such record."""
+    from app.marketing import ideas_export
+
+    package = get_export_package(session, ctx, package_id)
+    ideas_export.record_library_download(
+        session, ctx, list((package.selected_versions_json or {}).get("version_ids") or []), intent_id,
+        path={"path": "export_package", "export_package_id": package.id},
+    )
+
+
+def left_out_drafts(package: ExportPackageRecord) -> list[str]:
+    """The ads a preset selector matched but left out of ``package``
+    because they could not be exported when it was created."""
+    return list((package.selected_versions_json or {}).get("left_out_draft_ids") or [])
+
+
 def create_export_package(
     session: Session,
     ctx: TenantContext,
@@ -204,6 +287,21 @@ def create_export_package(
         raise ExportError("empty_selection", "No versions selected")
 
     versions = _load_versions_in_selector_order(session, ctx, version_ids)
+
+    # A draft of ads-first ideas does not leave (Issue #219). Named by the
+    # caller, it refuses the whole selection and says which ads and why;
+    # matched by a preset, it is left out -- an ad that needs redoing never
+    # becomes exportable again, so refusing would close the preset for good.
+    left_out: list[str] = []
+    refused = _unexportable_ads(session, ctx, [v.id for v in versions])
+    if refused:
+        replay = _accepted_replay(session, ctx, selector, idempotency_key)
+        if replay is not None:
+            return replay
+        left_out = [item["asset_version_id"] for item in refused]
+        versions = [v for v in versions if v.id not in set(left_out)]
+        if (selector.get("kind") or "explicit") == "explicit" or not versions:
+            raise _refuse(refused, "选中的素材里有还不能导出的广告：先核对它们用到的事实、外观和检查结果，需要重出的请先重出。")
 
     modes = {v.execution_mode or "mock" for v in versions}
     if len(modes) > 1:
@@ -241,7 +339,10 @@ def create_export_package(
         operation_id=operation.id,
         actor_id=ctx.initiator_id or "unknown",
         selector_json=selector,
-        selected_versions_json={"version_ids": [v.id for v in versions]},
+        selected_versions_json={
+            "version_ids": [v.id for v in versions],
+            **({"left_out_draft_ids": left_out} if left_out else {}),
+        },
         execution_mode=execution_mode,
         state="pending",
         revision=1,
@@ -349,6 +450,12 @@ def resolve_export_blob_ref(
     ``export_package_not_ready`` rather than issuing a capability against a
     blob that doesn't exist (spec: "Export completion never creates a
     capability that may expire before the user polls").
+
+    The package is frozen, but whether an ad of ads-first ideas may leave is
+    not (Issue #219): a fact it cites may have been changed since the
+    package was built. Every call asks again, and a package holding an ad
+    that may no longer be exported raises ``ads_not_exportable``; the
+    package stays as history and a new one has to be made.
     """
     package = get_export_package(session, ctx, package_id)
     if (
@@ -360,6 +467,11 @@ def resolve_export_blob_ref(
             "export_package_not_ready",
             f"ExportPackage {package_id} is not ready for download",
         )
+    refused = _unexportable_ads(
+        session, ctx, list((package.selected_versions_json or {}).get("version_ids") or [])
+    )
+    if refused:
+        raise _refuse(refused, "这个导出包里有广告在建包之后已经不能导出了，请重新建一个导出包。")
 
     return CommittedBlobRef(
         committed_key=package.committed_object_key,

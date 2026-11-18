@@ -564,6 +564,7 @@ export function MarketingCreativeReview({
         await gateway.createGenerationAssetVersionDownloadIntent({
           workspaceSlug: current.slug,
           versionId: asset.asset_version_id,
+          purpose: 'display',
           actionInstanceId: crypto.randomUUID(),
         })
       ) as { download_grant: DownloadGrant },

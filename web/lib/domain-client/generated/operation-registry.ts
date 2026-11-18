@@ -1163,7 +1163,7 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
       pathTemplate:
         '/api/v1/generation/asset-versions/{version_id}/download-intent',
       pathParams: ['version_id'],
-      queryParams: [],
+      queryParams: ['purpose'],
       requestMediaTypes: [],
       requiresIdempotency: true,
       maxRequestBytes: 0,

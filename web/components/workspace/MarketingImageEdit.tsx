@@ -18,18 +18,34 @@ type Progress = ImageEditProgress;
 const INPUT =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm';
 
+/**
+ * Copy a caller states in its own words: the ads-first edit screen (#201)
+ * speaks of checks, not of a round's review. Without it the round's copy
+ * shows, unchanged.
+ */
+export interface ImageEditLabels {
+  note?: string;
+  state?: (state: Progress['state']) => string;
+}
+
+/**
+ * Crop then rotate one image: a free new version. The caller owns the data
+ * (a round's `image_edits`, or a project's, #200) and the command.
+ */
 export function MarketingImageEdit({
   assetVersionId,
   busy,
   edits,
   onCreate,
   selected = 0,
+  labels,
 }: {
   assetVersionId: string;
   busy: boolean;
   edits: Progress[];
   onCreate: (body: Edit) => void;
   selected?: number;
+  labels?: ImageEditLabels;
 }) {
   const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
@@ -68,7 +84,9 @@ export function MarketingImageEdit({
       <summary className="cursor-pointer text-sm font-medium">
         {t('marketing-image-edit-title')}
       </summary>
-      <p className="text-sm text-gray-600">{t('marketing-image-edit-note')}</p>
+      <p className="text-sm text-gray-600">
+        {labels?.note ?? t('marketing-image-edit-note')}
+      </p>
       {imageUrl && (
         <ImageSelectionCanvas
           src={imageUrl}
@@ -177,7 +195,8 @@ export function MarketingImageEdit({
       </button>
       {edits.map((edit) => (
         <p key={edit.id} role="status" className="text-sm">
-          {t(`marketing-image-edit-state-${edit.state}`)}
+          {labels?.state?.(edit.state) ??
+            t(`marketing-image-edit-state-${edit.state}`)}
           {edit.state === 'failed' && edit.error_code && (
             <span className="block">
               {errorCodeMessage(t, edit.error_code)}

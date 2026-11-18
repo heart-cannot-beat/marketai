@@ -478,6 +478,8 @@
   "generation-byok": "Workspace API key",
   "generation-download": "Download image",
   "generation-download-failed": "The image could not be downloaded. Please try again.",
+  "generation-download-draft": "This is an ad draft that hasn't been checked yet. It can be downloaded once it is checked.",
+  "generation-download-needs-redo": "This ad needs redoing and can't be downloaded.",
   "generation-open-assets": "Open assets",
   "generation-variation-number": "Variation {{number}}",
   "generation-uncertain-help": "The provider call outcome is unknown. Check the provider request and billing before creating another paid generation.",

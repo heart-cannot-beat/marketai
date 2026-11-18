@@ -100,7 +100,10 @@ _EXPORT_NOT_FOUND_CODES = {"export_package_not_found", "asset_version_not_found"
 #: "mixed_execution_modes" (like "empty_selection"/"experiment_context_required")
 #: is a plain admission failure on the request itself (422, Issue #49 Task 9),
 #: not a conflict with server-side state.
-_EXPORT_CONFLICT_CODES = {"export_package_not_ready"}
+#: "ads_not_exportable" (Issue #219) is the same conflict the ads-first
+#: download answers with: the selection or the package holds an ad of
+#: ads-first ideas that may not be exported as things are now.
+_EXPORT_CONFLICT_CODES = {"export_package_not_ready", "ads_not_exportable"}
 
 
 def _status_for_export(code: str) -> int:

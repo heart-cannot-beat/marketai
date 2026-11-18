@@ -5,6 +5,7 @@ import type { AssetFilters } from '@/hooks/assets/useAssetsUrlState';
 import type { AssetThumbnailLink } from '@/hooks/assets/useAssetImageUrl';
 import type { AssetFacets } from '@/components/assets/FilterBar';
 import type { ActionEligibility } from '@/hooks/assets/useAssetActions';
+import type { AssetExportBlock } from '@/lib/assets/export-block';
 
 export interface AssetVersionSummary {
   id: string;
@@ -27,6 +28,9 @@ export interface AssetVersionSummary {
   /** Signed 512px thumbnail link (`AssetThumbnailLink`), `null` when the
    * version has no derivative yet -- the card then loads the original. */
   thumbnail?: AssetThumbnailLink | null;
+  /** Set only on an ad of ads-first ideas that may not be exported yet
+   * (Issue #219): the card marks it, and export and saving are not offered. */
+  export_block?: AssetExportBlock | null;
   created_at: string;
 }
 

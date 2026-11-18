@@ -13,7 +13,16 @@ import {
 import { SWRConfig } from 'swr';
 import { IdeasPage } from '@/components/ideas/IdeasPage';
 import { AdCard } from '@/components/ideas/AdCard';
-import { ad, ANGLES, COMBINATIONS, ideasDetail, product } from './fixtures';
+import {
+  ad,
+  ANGLES,
+  checksQuote,
+  COMBINATIONS,
+  generationCapabilities,
+  ideasDetail,
+  plannerCapabilities,
+  product,
+} from './fixtures';
 
 /**
  * The ad ideas page (ADR 0018, design §5.3, #196): ads grouped by claim, each
@@ -31,6 +40,9 @@ const mockGateway = {
   setMarketingAdKept: jest.fn(),
   getMarketingFirstBatch: jest.fn(),
   resumeMarketingFirstBatch: jest.fn(),
+  getMarketingCapabilities: jest.fn(),
+  getGenerationCapabilities: jest.fn(),
+  getMarketingIdeasChecksQuote: jest.fn(),
 };
 jest.mock('@/lib/domain-client/gateway-provider', () => ({
   useDomainGateway: () => mockGateway,
@@ -41,6 +53,9 @@ jest.mock('@/components/workspace/useMarketingImageSource', () => ({
     imageFailed: false,
     onImageError: jest.fn(),
   }),
+}));
+jest.mock('@/lib/domain-client/upload-deps', () => ({
+  useBlobTransferClient: () => ({ downloadBlob: jest.fn() }),
 }));
 const mockRefreshProducts = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/hooks/products/useWorkspaceProducts', () => ({
@@ -75,6 +90,13 @@ const claim = (number: number) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGateway.getMarketingCapabilities.mockResolvedValue(
+    ok(plannerCapabilities())
+  );
+  mockGateway.getGenerationCapabilities.mockResolvedValue(
+    ok(generationCapabilities())
+  );
+  mockGateway.getMarketingIdeasChecksQuote.mockResolvedValue(ok(checksQuote()));
 });
 
 describe('IdeasPage (#196)', () => {
@@ -123,14 +145,16 @@ describe('IdeasPage (#196)', () => {
       )
     ).toBeInTheDocument();
 
-    // The buttons later slices add are not shown yet.
-    for (const later of [
-      /download images only/i,
-      /^edit/i,
-      /another way of telling/i,
-      /take to a test/i,
-    ])
-      expect(screen.queryByRole('button', { name: later })).toBeNull();
+    // S13 (#201) adds the buttons S8 left out; taking ads to a test is step 2.
+    expect(within(first).getAllByRole('button', { name: 'Edit' })).toHaveLength(
+      2
+    );
+    expect(
+      screen.getByRole('button', { name: 'Download images only' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /take to a test/i })
+    ).toBeNull();
   });
 
   it('shows two claims when the ideas have only two, never six empty slots', async () => {
@@ -259,7 +283,18 @@ describe('IdeasPage (#196)', () => {
   });
 
   it('shows a placeholder for an image being made and a retry entry for a failed one', async () => {
-    await renderPage();
+    // While the first batch is still making its ads, it makes this one too:
+    // trying again from here waits for it (#195, #201).
+    await renderPage(
+      ideasDetail({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'generating',
+          needs_attention: false,
+          reason: null,
+        },
+      })
+    );
     const third = claim(3);
     const [making, failed] = within(third).getAllByTestId('ad-card');
     expect(within(making).getByRole('status')).toHaveTextContent(
@@ -422,7 +457,7 @@ describe('IdeasPage (#196)', () => {
     const bar = screen.getByTestId('ideas-kept-bar');
     expect(bar).toHaveTextContent('0 kept');
     expect(
-      within(bar).getByRole('button', { name: 'Check and download' })
+      within(bar).getByRole('button', { name: 'Download images only' })
     ).toBeDisabled();
 
     mockGateway.setMarketingAdKept.mockResolvedValue(
@@ -438,17 +473,20 @@ describe('IdeasPage (#196)', () => {
       within(claim(1)).getAllByRole('button', { name: 'Keep this one' })[0]
     );
     const button = within(bar).getByRole('button', {
-      name: 'Check and download',
+      name: 'Download images only',
     });
     await waitFor(() => expect(button).toBeEnabled());
     expect(bar).toHaveTextContent('1 kept');
 
-    // Checking and downloading come with a later slice; the page says so
-    // rather than doing nothing.
+    // It leads to the check before downloading (#201), not to a placeholder.
     fireEvent.click(button);
-    expect(within(bar).getByRole('status')).toHaveTextContent(
-      "Checking and downloading aren't open yet, so these drafts can't be downloaded for now."
-    );
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Check once before downloading',
+      })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/aren't open yet/)).toBeNull();
   });
 
   it('shows the facts the AI read on the side, each not checked yet until it is', async () => {

@@ -478,6 +478,8 @@
   "generation-byok": "工作区 API key",
   "generation-download": "下载图片",
   "generation-download-failed": "图片没能下载，请重试。",
+  "generation-download-draft": "这张是还没核对的广告草稿，核对之后才能下载。",
+  "generation-download-needs-redo": "这张广告需要重出，不能下载。",
   "generation-open-assets": "打开素材",
   "generation-variation-number": "变体 {{number}}",
   "generation-uncertain-help": "服务商调用的结果未知。在再次发起付费生成前，请先检查服务商的请求记录和账单。",

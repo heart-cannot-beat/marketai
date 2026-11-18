@@ -6,7 +6,38 @@ import { useMarketingImageSource } from './useMarketingImageSource';
 import { CHECKERBOARD } from './ImageSelectionCanvas';
 import { TechnicalDetails } from './MarketingTechnicalInfo';
 
-type Asset = components['schemas']['WorkflowAsset'];
+/**
+ * What the history reads of a version. A round's `WorkflowAsset` is one; the
+ * ads-first edit screen (#201) maps each ad version of its project to one
+ * (`parent_version_id` = the version it was made from).
+ */
+export interface HistoryAsset {
+  asset_version_id: string;
+  parent_version_id?: string | null;
+  created_at?: string | null;
+  edit_operation?: string | null;
+  editable?: boolean | null;
+  ready?: boolean;
+  quality?: Pick<
+    NonNullable<components['schemas']['WorkflowAsset']['quality']>,
+    'quality'
+  > | null;
+}
+
+/**
+ * Copy a caller states in its own words (#201): the ads-first edit screen
+ * names a version's origin and status as its ads do. Without it the round's
+ * copy shows, unchanged.
+ */
+export interface VersionHistoryLabels {
+  note?: string;
+  /** The "continue from this version" button. */
+  continue?: string;
+  operation?: (asset: HistoryAsset) => string;
+  status?: (asset: HistoryAsset) => string;
+}
+
+type Asset = HistoryAsset;
 const INPUT =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm';
 
@@ -81,13 +112,23 @@ export function MarketingVersionHistory({
   busy,
   editable,
   onEdit,
+  labels: copy,
+  showIds = true,
 }: {
   assets: Asset[];
   busy: boolean;
   editable: boolean;
   onEdit: (id: string) => void;
+  labels?: VersionHistoryLabels;
+  /** The technical details with each version's id; the ads-first screens show none (#201). */
+  showIds?: boolean;
 }) {
   const { t, i18n } = useTranslation('common');
+  const operation = (asset: Asset) =>
+    copy?.operation?.(asset) ??
+    t(`image-history-operation-${asset.edit_operation || 'generated'}`);
+  const status = copy?.status;
+  const continueLabel = copy?.continue;
   const [open, setOpen] = useState(false);
   const [beforeId, setBeforeId] = useState('');
   const [afterId, setAfterId] = useState('');
@@ -132,7 +173,9 @@ export function MarketingVersionHistory({
       <summary className="cursor-pointer text-sm font-medium">
         {t('image-history-title')}
       </summary>
-      <p className="text-sm text-gray-600">{t('image-history-note')}</p>
+      <p className="text-sm text-gray-600">
+        {copy?.note ?? t('image-history-note')}
+      </p>
       <ol
         aria-label={t('image-history-title')}
         className="max-h-80 space-y-3 overflow-auto"
@@ -151,24 +194,22 @@ export function MarketingVersionHistory({
                   open={open}
                 />
                 <p className="font-medium">
-                  {labels.get(asset.asset_version_id)} ·{' '}
-                  {t(
-                    `image-history-operation-${asset.edit_operation || 'generated'}`
-                  )}
+                  {labels.get(asset.asset_version_id)} · {operation(asset)}
                 </p>
               </div>
               <span>
-                {t(
-                  asset.ready
-                    ? 'image-history-approved'
-                    : asset.quality?.quality === 'approved'
-                      ? 'image-history-recheck'
-                      : asset.quality?.quality === 'rejected'
-                        ? 'image-history-rejected'
-                        : asset.quality?.quality === 'needs_changes'
-                          ? 'image-history-needs-changes'
-                          : 'image-history-pending'
-                )}
+                {status?.(asset) ??
+                  t(
+                    asset.ready
+                      ? 'image-history-approved'
+                      : asset.quality?.quality === 'approved'
+                        ? 'image-history-recheck'
+                        : asset.quality?.quality === 'rejected'
+                          ? 'image-history-rejected'
+                          : asset.quality?.quality === 'needs_changes'
+                            ? 'image-history-needs-changes'
+                            : 'image-history-pending'
+                  )}
               </span>
             </div>
             <p>
@@ -215,17 +256,22 @@ export function MarketingVersionHistory({
                   disabled={busy}
                   onClick={() => onEdit(asset.asset_version_id)}
                 >
-                  {t('image-history-continue')}
+                  {continueLabel ?? t('image-history-continue')}
                 </button>
               )}
             </div>
-            <TechnicalDetails
-              className="text-xs"
-              facts={[
-                [t('marketing-board-version'), asset.asset_version_id],
-                [t('marketing-board-parent-version'), asset.parent_version_id],
-              ]}
-            />
+            {showIds && (
+              <TechnicalDetails
+                className="text-xs"
+                facts={[
+                  [t('marketing-board-version'), asset.asset_version_id],
+                  [
+                    t('marketing-board-parent-version'),
+                    asset.parent_version_id ?? null,
+                  ],
+                ]}
+              />
+            )}
           </li>
         ))}
       </ol>
@@ -243,10 +289,7 @@ export function MarketingVersionHistory({
                 key={asset.asset_version_id}
                 value={asset.asset_version_id}
               >
-                {labels.get(asset.asset_version_id)} ·{' '}
-                {t(
-                  `image-history-operation-${asset.edit_operation || 'generated'}`
-                )}
+                {labels.get(asset.asset_version_id)} · {operation(asset)}
               </option>
             ))}
           </select>
@@ -267,10 +310,7 @@ export function MarketingVersionHistory({
                 key={asset.asset_version_id}
                 value={asset.asset_version_id}
               >
-                {labels.get(asset.asset_version_id)} ·{' '}
-                {t(
-                  `image-history-operation-${asset.edit_operation || 'generated'}`
-                )}
+                {labels.get(asset.asset_version_id)} · {operation(asset)}
               </option>
             ))}
           </select>

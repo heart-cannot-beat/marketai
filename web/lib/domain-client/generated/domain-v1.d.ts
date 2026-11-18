@@ -932,7 +932,19 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Create Asset Version Download Intent */
+    /**
+     * Create Asset Version Download Intent
+     * @description A signed link to one AssetVersion's file, to save it (``purpose =
+     *     download``, the default) or to show it on a page (``display``).
+     *
+     *     Showing is open to every image of the Workspace. Saving is refused for
+     *     an ad of ads-first ideas that may not be exported yet (Issue #219): 409
+     *     ``ads_not_exportable`` with the ad's status and reasons, the shape the
+     *     ads-first download answers with. Any other image is handed out as
+     *     before, whatever the purpose. This keeps the product from offering a
+     *     way to take a draft out; it does not hide the image, which every page
+     *     that lists it already shows.
+     */
     post: operations['create_generation_asset_version_download_intent'];
     delete?: never;
     options?: never;
@@ -4647,6 +4659,28 @@ export interface components {
       impact_hash?: string | null;
     };
     /**
+     * @description Why an AssetVersion may not leave through the creative library
+     *     (Issue #219, ADR 0018 §2): it is an ad of ads-first ideas that is still
+     *     a ``draft`` (something it stands on is not checked yet) or
+     *     ``needs_redo`` (checking cannot rescue it). Derived on every read by
+     *     ``app.marketing.ideas_export``, never stored.
+     */
+    AssetExportBlock: {
+      /** @enum {string} */
+      status: 'draft' | 'needs_redo';
+      reasons?: components['schemas']['AssetExportBlockReason'][];
+    };
+    /**
+     * @description One reason an ad of ads-first ideas may not be exported: the same
+     *     ``code``/``fact_ids``/``finding_ids`` its ``AdSummary.reasons`` carries
+     *     (``app.marketing.ideas_contracts.AdReason``).
+     */
+    AssetExportBlockReason: {
+      code: string;
+      fact_ids?: string[];
+      finding_ids?: string[];
+    };
+    /**
      * @description Server-computed facets over the full matching Workspace dataset, not
      *     just the currently loaded page (spec §0.2). ``reviews`` (Task 5) is
      *     computed from the supersession-aware effective-review projection, with
@@ -4848,6 +4882,10 @@ export interface components {
      *     spec §0.3); ``latest_qc_state`` is the latest
      *     ``AssetQCAttemptRecord.state``. ``thumbnail`` (Issue #159) is the
      *     version's signed thumbnail link, or ``None`` when it has no derivative.
+     *     ``export_block`` (Issue #219) is set only on an ad of ads-first ideas
+     *     that may not be exported yet: an export package naming it and a
+     *     ``purpose=download`` download intent for it are refused, so the page
+     *     marks the tile and does not offer either. ``None`` on every other image.
      */
     AssetVersionSummary: {
       id: string;
@@ -4872,6 +4910,7 @@ export interface components {
       } | null;
       byte_size: number;
       thumbnail?: components['schemas']['AssetThumbnailLink'] | null;
+      export_block?: components['schemas']['AssetExportBlock'] | null;
       created_at?: string | null;
     };
     /** @description Cost sub-object inside AttemptSummary: Decimal string + currency. */
@@ -8039,6 +8078,8 @@ export interface components {
       revision: number;
       byte_size?: number | null;
       zip_hash?: string | null;
+      /** @default 0 */
+      left_out_drafts: number;
     };
     /**
      * @description ``POST /generation/exports`` 202 result (Issue #49 Task 9).
@@ -14326,7 +14367,9 @@ export interface operations {
   };
   create_generation_asset_version_download_intent: {
     parameters: {
-      query?: never;
+      query?: {
+        purpose?: 'download' | 'display';
+      };
       header: {
         'Idempotency-Key': string;
       };

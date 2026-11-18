@@ -14,6 +14,8 @@ import {
 import type { DomainQueryKey } from '@/lib/domain-client/query-keys';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { errorMessage } from '@/lib/i18n/domain-errors';
+import { exportRefusal } from '@/lib/assets/export-block';
+import { ExportRefusedList } from './ExportRefusedList';
 
 interface ExportFlowProps {
   packageId?: string;
@@ -40,6 +42,12 @@ export function ExportFlow({
   );
   const { mutate: globalMutate } = useSWRConfig();
   const { current } = useWorkspace();
+  // A draft of ads-first ideas does not leave through a package (Issue
+  // #219): the server refuses a selection that names one, and refuses to
+  // hand out a package once an ad in it stopped being exportable.
+  const refusedSelection = exportRefusal(flow.problem);
+  const refusedDownload = exportRefusal(downloadIntent.problem);
+  const leftOut = flow.packageDetail?.left_out_drafts ?? 0;
 
   useEffect(() => {
     if (flow.packageId && flow.packageId !== initialPackageId) {
@@ -164,10 +172,17 @@ export function ExportFlow({
               )}
             </div>
 
-            {flow.problem && (
-              <div role="alert" className="alert alert-error text-sm">
-                <span>{errorMessage(t, flow.problem)}</span>
-              </div>
+            {refusedSelection ? (
+              <ExportRefusedList
+                refusal={refusedSelection}
+                heading={t('export-refused-heading')}
+              />
+            ) : (
+              flow.problem && (
+                <div role="alert" className="alert alert-error text-sm">
+                  <span>{errorMessage(t, flow.problem)}</span>
+                </div>
+              )
             )}
 
             <div className="modal-action">
@@ -214,6 +229,20 @@ export function ExportFlow({
               manifest={flow.manifest}
               packageDetail={flow.packageDetail}
             />
+            {leftOut > 0 && (
+              <div
+                className="alert alert-info text-sm"
+                data-testid="export-left-out"
+              >
+                <span>{t('export-left-out', { count: leftOut })}</span>
+              </div>
+            )}
+            {refusedDownload && (
+              <ExportRefusedList
+                refusal={refusedDownload}
+                heading={t('export-link-refused')}
+              />
+            )}
             <div className="modal-action">
               <button type="button" className="btn btn-ghost" onClick={onClose}>
                 {t('close')}
