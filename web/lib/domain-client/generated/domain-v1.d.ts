@@ -11158,6 +11158,15 @@ export interface components {
       operation_id?: string | null;
       replayed: boolean;
     };
+    /**
+     * @description Why a candidate may not go into the round (#225): it is an ad of ads-first ideas that is still a
+     *     ``draft`` or ``needs_redo``, with the reasons its ideas page shows (``ideas_export.statuses``).
+     */
+    ReuseBlock: {
+      /** @enum {string} */
+      status: 'draft' | 'needs_redo';
+      reasons: components['schemas']['AdReason'][];
+    };
     ReuseCandidate: {
       asset_version_id: string;
       asset_id: string;
@@ -11170,6 +11179,7 @@ export interface components {
       source_project_id?: string | null;
       source_test_name?: string | null;
       facts_relation?: ('same' | 'differs') | null;
+      reuse_block?: components['schemas']['ReuseBlock'] | null;
     };
     ReuseCandidatePage: {
       items: components['schemas']['ReuseCandidate'][];

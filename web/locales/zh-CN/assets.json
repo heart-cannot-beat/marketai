@@ -110,6 +110,7 @@
   "intent-label-new-seed": "换随机种子",
   "intent-label-edit-prompt": "改提示词",
   "intent-label-quality-feedback": "按质检意见修正",
+  "regenerate-on-ideas-page": "这张图是广告想法里的一张广告，这里不能重新生成。要改它，请到广告想法页的“修改这张广告”；改出的新图同样要核对后才能导出。",
   "review-actions-label": "审核操作",
   "review-approve": "通过",
   "review-needs-changes": "需修改",

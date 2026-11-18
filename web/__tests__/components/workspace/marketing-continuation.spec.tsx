@@ -16,13 +16,18 @@ import type { MarketingRound } from '@/components/workspace/MarketingExecution';
 import fixture from '../../fixtures/marketing-workflow.json';
 import messages from '../../../locales/en/common.json';
 import zhMessages from '../../../locales/zh-CN/common.json';
-// #293 reads the reuse picker's scope copy in both locales.
+import assetMessages from '../../../locales/en/assets.json';
+import zhAssetMessages from '../../../locales/zh-CN/assets.json';
+// #293 reads the reuse picker's scope copy in both locales; #225 its reasons
+// for an ad of the ad ideas, which are the library's (`assets`).
 let catalog: Record<string, string> = messages;
+let assetCatalog: Record<string, string> = assetMessages;
 jest.mock('next-i18next', () => ({
-  useTranslation: () => ({
+  useTranslation: (namespace?: string) => ({
     t: (key: string, options?: Record<string, unknown>) =>
-      (catalog[key] ?? key).replace(/\{\{(\w+)\}\}/g, (_: string, k: string) =>
-        String(options?.[k] ?? '')
+      ((namespace === 'assets' ? assetCatalog : catalog)[key] ?? key).replace(
+        /\{\{(\w+)\}\}/g,
+        (_: string, k: string) => String(options?.[k] ?? '')
       ),
   }),
 }));
@@ -368,6 +373,110 @@ describe('reuse picker across the product card (#7)', () => {
     }
   );
 });
+describe('an ad of the ad ideas that is not checked yet (#225)', () => {
+  afterEach(() => {
+    catalog = messages;
+    assetCatalog = assetMessages;
+  });
+  const ad = (id: string, extra = {}) => ({
+    asset_version_id: id,
+    asset_id: `${id}-asset`,
+    created_at: '2026-11-18',
+    provider: 'mock',
+    model: 'mock-v1',
+    aspect_ratio: '1:1',
+    relation: 'product_card',
+    reuse_block: null,
+    ...extra,
+  });
+  test.each([
+    ['en', messages, assetMessages, 'Ad draft', 'Needs remaking'],
+    ['zh-CN', zhMessages, zhAssetMessages, '广告草稿', '需要重出'],
+  ])(
+    'in %s, is listed with why it cannot be chosen, and only a checked one can be added',
+    async (_, strings, assetStrings, draftWord, redoWord) => {
+      catalog = strings;
+      assetCatalog = assetStrings;
+      gateway.listMarketingReuseCandidates.mockResolvedValue({
+        kind: 'ok',
+        data: {
+          items: [
+            ad('draft', {
+              reuse_block: {
+                status: 'draft',
+                reasons: [
+                  { code: 'facts_unverified', fact_ids: ['f1'], finding_ids: [] },
+                  { code: 'check_missing', fact_ids: [], finding_ids: [] },
+                ],
+              },
+            }),
+            ad('redo', {
+              reuse_block: {
+                status: 'needs_redo',
+                reasons: [
+                  { code: 'facts_changed', fact_ids: ['f2'], finding_ids: [] },
+                  { code: 'a_reason_this_page_has_no_words_for', fact_ids: [], finding_ids: [] },
+                ],
+              },
+            }),
+            ad('checked'),
+          ],
+          next_cursor: null,
+        },
+      });
+      const onAttach = jest.fn(async () => undefined);
+      wrap(<MarketingReusePicker row={row} busy={false} onAttach={onAttach} />);
+      fireEvent.click(screen.getByText(strings['marketing-reuse-title']));
+      const select = screen.getByLabelText(strings['marketing-reuse-creative']);
+      const draft = await within(select).findByRole('option', {
+        name: new RegExp(draftWord),
+      });
+      const redo = within(select).getByRole('option', {
+        name: new RegExp(redoWord),
+      });
+      expect(draft).toBeDisabled();
+      expect(redo).toBeDisabled();
+      const sep = assetStrings['export-block-reasons-separator'];
+      expect(draft.textContent).toContain(
+        [
+          assetStrings['export-block-reason-facts_unverified'],
+          assetStrings['export-block-reason-check_missing'],
+        ].join(sep)
+      );
+      // A reason without words reads as "not checked yet", never as its code.
+      expect(redo.textContent).toContain(
+        assetStrings['export-block-reason-other']
+      );
+      expect(redo.textContent).not.toContain('a_reason_this_page');
+      expect(screen.getByRole('note')).toHaveTextContent(
+        strings['marketing-reuse-blocked-note'].replace('{{count}}', '2')
+      );
+      const attach = screen.getByRole('button', {
+        name: strings['marketing-reuse-attach'],
+      });
+      // Even set by hand, a blocked ad is never added.
+      fireEvent.change(select, { target: { value: 'draft' } });
+      await waitFor(() =>
+        expect(
+          gateway.createGenerationAssetVersionDownloadIntent
+        ).toHaveBeenCalled()
+      );
+      expect(attach).toBeDisabled();
+      fireEvent.change(select, { target: { value: 'checked' } });
+      expect(await screen.findByRole('img')).toBeInTheDocument();
+      await waitFor(() => expect(attach).toBeEnabled());
+      fireEvent.click(attach);
+      await waitFor(() => expect(onAttach).toHaveBeenCalledTimes(1));
+      expect(onAttach.mock.calls[0]).toEqual([
+        {
+          asset_version_id: 'checked',
+          combination_id: row.snapshot.plan.combinations[0].id,
+        },
+      ]);
+    }
+  );
+});
+
 test('optional comparison preserves all five distinct expressions and marks gaps unknown', () => {
   wrap(<MarketingComparisonView plan={row.snapshot.plan} />);
   for (const angle of row.snapshot.plan.angles)

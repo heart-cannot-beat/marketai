@@ -839,6 +839,25 @@ def get_asset_version_detail(session: Session, ctx: TenantContext, version_id: s
         "contextual_conclusions": project_contextual_conclusions(session, ctx, version.id),
         "parent": parent,
         "children": children,
-        "allowed_actions": asset_version_actions(version),
+        "allowed_actions": _ad_of_ideas_actions(session, ctx, version),
         "created_at": version.created_at.isoformat() if version.created_at else None,
     }
+
+
+def _ad_of_ideas_actions(session: Session, ctx: TenantContext, version: AssetVersionRecord) -> list[ActionEligibility]:
+    """The detail's ``allowed_actions``, as ``asset_version_actions`` computes them for any image, except
+    for an ad of ads-first ideas (#225): the library never regenerates one (``ad_regenerate_on_ideas_page``),
+    and saves one only while it may be exported (``ads_not_exportable``, #219). Every other image keeps
+    exactly what it had."""
+    from app.marketing import ideas_export
+
+    actions = asset_version_actions(version)
+    if not ideas_export.ads_of_ideas(session, ctx, [version.id]):
+        return actions
+    refused = bool(ideas_export.library_refusals(session, ctx, [version.id]))
+    for action in actions:
+        if action["action"] == "regenerate":
+            action.update(allowed=False, reason_code="ad_regenerate_on_ideas_page")
+        elif action["action"] == "download" and action["allowed"] and refused:
+            action.update(allowed=False, reason_code="ads_not_exportable")
+    return actions

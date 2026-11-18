@@ -267,6 +267,13 @@ def library_refusals(session, ctx, asset_version_ids) -> list[dict]:
     return _refused(asset_version_ids, *_judge(session, ctx, asset_version_ids))
 
 
+def ads_of_ideas(session, ctx, asset_version_ids) -> set[str]:
+    """Which of these images are ads of ads-first ideas, whatever their status (#225): the images
+    ``library_refusals`` judges, found the same way. The creative library does not regenerate any of them:
+    a regenerated image would not be an ad of the ideas, and no check or verification would ever see it."""
+    return set(_ideas_of(session, ctx, list(dict.fromkeys(asset_version_ids))))
+
+
 def _refused(asset_version_ids, owners, judged) -> list[dict]:
     refused = []
     for asset_id in asset_version_ids:

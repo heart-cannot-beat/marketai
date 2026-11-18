@@ -252,6 +252,27 @@ def _quality_ready(qc, quality, blocked):
         and all(r.review_value == 'approved' for r in quality) and not blocked)
 
 
+#: Why a handoff is refused for an ad of ads-first ideas that may not be exported (#225), when it is built
+#: and when its link is asked for.
+HANDOFF_DRAFTS = ("这一轮里有广告想法的广告还没核对完，不能放进交接包：先到广告想法页核对它用到的事实、外观和检查结果，"
+                  "需要重出的请先重出，或者不选它。")
+HANDOFF_LINK_DRAFTS = ("交接包里有广告想法的广告已经不能导出，暂不能重新打包或获取新下载链接；原包保留为历史。"
+                       "先到广告想法页核对，需要重出的请结束这一轮另起一轮。")
+
+
+def assert_ads_exportable(session, ctx, asset_version_ids, message):
+    """No ad of ads-first ideas that may not be exported leaves in a handoff (#225, ADR 0018 §2).
+
+    A draft cannot be reused into a round (``reuse.attach``), but an ad checked when it was reused stops
+    being exportable once a fact it stands on changes; so the handoff asks again when it is built and when
+    its link is handed out, as the library's export package does (#219). Any other image is not judged.
+    The API's own question: the Worker that builds the ZIP cannot read the verification records."""
+    from .ideas_export import library_refusals, refusal_params
+    refused = library_refusals(session, ctx, list(asset_version_ids))
+    if refused:
+        raise MarketingError("ads_not_exportable", message, 409, params=refusal_params(refused))
+
+
 def handoff_quality_current(session, ctx, row, handoff):
     return bool(handoff.manifest_json.get("entries")) and all(
         ready(session, ctx, row, entry["asset_version_id"]) for entry in handoff.manifest_json["entries"])
@@ -348,6 +369,7 @@ def create_handoff(session, ctx, row, body):
     assets = {v.id: (v, recipe, combo) for v, recipe, combo in creative_assets(session, ctx, row)}
     if set(ids) - assets.keys():
         raise MarketingError("asset_not_in_round", "导出只能包含当前方案的具体版本。")
+    assert_ads_exportable(session, ctx, ids, HANDOFF_DRAFTS)
     if not all(ready(session, ctx, row, item) for item in ids):
         raise MarketingError("qc_required", "请先完成所选素材的逐项质量审核。")
     plan = row.snapshot_json["plan"]
@@ -419,6 +441,7 @@ def retry_handoff(session, ctx, row):
     if not records or records[0].state != "failed":
         raise MarketingError("handoff_not_retryable", "只有失败的导出任务需要重试。", 409)
     record = records[0]
+    assert_ads_exportable(session, ctx, [e["asset_version_id"] for e in record.manifest_json["entries"]], HANDOFF_LINK_DRAFTS)
     if not all(ready(session, ctx, row, e["asset_version_id"]) for e in record.manifest_json["entries"]):
         raise MarketingError("qc_required", "冻结素材的质量审核已发生变化，请结束本轮并调整方案。", 409)
     op = create_operation(session, command_type="marketing.export")
