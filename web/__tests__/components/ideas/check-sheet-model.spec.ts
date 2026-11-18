@@ -121,16 +121,17 @@ describe('checkSheet (#201)', () => {
     const detail = sheetDetail();
     const model = checkSheet(detail);
     const facts = new Set<string>();
+    const photos = new Set<string>();
     const looks = new Set<string>();
     const findings = new Set<string>();
-    expect(allTicked(model, { facts, looks, findings })).toBe(false);
-    expect(leftToTick(model, { facts, looks, findings })).toBe(4);
+    expect(allTicked(model, { facts, photos, looks, findings })).toBe(false);
+    expect(leftToTick(model, { facts, photos, looks, findings })).toBe(4);
     model.facts.forEach((fact) => facts.add(factKey(fact)));
     looks.add('av_3');
-    expect(allTicked(model, { facts, looks, findings })).toBe(false);
+    expect(allTicked(model, { facts, photos, looks, findings })).toBe(false);
     findings.add(findingKey('av_1', 'qc_1', 'copy_consistent'));
-    expect(allTicked(model, { facts, looks, findings })).toBe(true);
-    expect(verifyBody(model, { facts, looks, findings })).toEqual({
+    expect(allTicked(model, { facts, photos, looks, findings })).toBe(true);
+    expect(verifyBody(model, { facts, photos, looks, findings })).toEqual({
       fact_ids: ['f1', 'f2'],
       appearance_confirmed: ['av_3'],
       accepted_findings: [
@@ -148,6 +149,7 @@ describe('checkSheet (#201)', () => {
     const before = checkSheet(detail);
     const ticks = {
       facts: new Set(before.facts.map(factKey)),
+      photos: new Set<string>(),
       looks: new Set(['av_3']),
       findings: new Set([findingKey('av_1', 'qc_1', 'copy_consistent')]),
     };
@@ -182,6 +184,7 @@ describe('checkSheet (#201)', () => {
     const model = checkSheet(detail);
     const none = {
       facts: new Set<string>(),
+      photos: new Set<string>(),
       looks: new Set<string>(),
       findings: new Set<string>(),
     };

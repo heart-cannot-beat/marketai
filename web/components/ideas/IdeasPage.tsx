@@ -64,7 +64,8 @@ type Screen =
  *
  * Left for later on purpose: taking ads to a test (step 2), changing or
  * removing a claim and the image model's own instructions (no server path
- * yet), checking product photos (#199).
+ * yet). Product photos are checked in the check before downloading and on
+ * the product profile (#229).
  */
 export function IdeasPage({ product }: { product: WorkspaceProduct }) {
   const { t } = useTranslation('ideas');

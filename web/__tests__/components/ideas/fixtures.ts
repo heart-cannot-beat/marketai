@@ -327,3 +327,27 @@ export function checksQuote(
     ...extra,
   };
 }
+
+/**
+ * A product photo the reading found (#199, #229); its id stands for the
+ * content hash. Unchecked, from the fictional product page, unless told.
+ */
+export function photo(
+  id: string,
+  extra: Partial<components['schemas']['IdeasPhoto']> = {}
+): components['schemas']['IdeasPhoto'] {
+  return {
+    photo_id: id,
+    status: 'unverified',
+    role: 'main',
+    source: 'product_page',
+    source_url: 'https://acme-charge.example/home',
+    intake_id: 'pin_secret',
+    image_id: `img_${id}`,
+    width: 1200,
+    height: 1200,
+    reference_version_id: null,
+    asset_version_ids: [],
+    ...extra,
+  };
+}

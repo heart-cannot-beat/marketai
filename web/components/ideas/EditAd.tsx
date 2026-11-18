@@ -257,6 +257,7 @@ export function EditAd({
             uploaded={uploaded}
             removedFact={reasons.has('facts_removed')}
             ideasChanged={reasons.has('ideas_changed')}
+            photoGone={reasons.has('photo_unavailable')}
             hasFindings={findings.length > 0}
           />
 
@@ -334,6 +335,7 @@ function Redo({
   uploaded,
   removedFact,
   ideasChanged,
+  photoGone,
   hasFindings,
 }: {
   ad: IdeasAd;
@@ -343,6 +345,8 @@ function Redo({
   uploaded: boolean;
   removedFact: boolean;
   ideasChanged: boolean;
+  /** A product photo it used was rejected or may no longer be used (#229). */
+  photoGone: boolean;
   hasFindings: boolean;
 }) {
   const { t } = useTranslation('ideas');
@@ -371,6 +375,11 @@ function Redo({
       {ideasChanged && !removedFact && (
         <p className="text-sm" role="note">
           {t('edit-ideas-changed')}
+        </p>
+      )}
+      {photoGone && !uploaded && !removedFact && (
+        <p className="text-sm" role="note">
+          {t('edit-photo-gone')}
         </p>
       )}
       {canCorrect && (
