@@ -194,6 +194,13 @@ def create(session, ctx, row, body):
     row, evaluation, entry, asset, repeatable = current_evidence(session, ctx, body.evaluation_id, body.asset_version_id)
     if row.id != selected_round_id:
         raise MarketingError("marketing_evidence_wrong_round", "评估不属于这轮测试。", 409)
+    # The handoff writes an experiment with this image as its winner: an ad of ads-first ideas that may not be
+    # exported now does not become one, even if it was exportable when the round handed it off (#225).
+    from .ideas_export import library_refusals, refusal_params
+    refused = library_refusals(session, ctx, [body.asset_version_id])
+    if refused:
+        raise MarketingError("ad_not_reusable", "这张广告还没核对完，不能作为胜出的广告交给实验：先到广告想法页核对，需要重出的请先重出。",
+                             409, params=refusal_params(refused))
     product, offer, source = commercial_context(session, ctx, row, body.offer_version_id)
     key = digest([POLICY, row.id, evaluation.id, asset.id, offer.id])
     ids = {k: f"mh{k}_{key[:36]}" for k in ("exp", "ver", "entry", "cand", "judge", "prop", "conf", "decision", "projection")}

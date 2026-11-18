@@ -35,8 +35,14 @@ export function LightboxModal({
     { version_id: versionId } as any
   );
   const { blobUrl, isLoading: imageLoading } = useAssetImageUrl(versionId);
-  const actions = useAssetActions(
-    (detail as AssetVersionDetail | undefined)?.allowed_actions ?? []
+  const allowedActions =
+    (detail as AssetVersionDetail | undefined)?.allowed_actions ?? [];
+  const actions = useAssetActions(allowedActions);
+  // An ad of the ad ideas is changed on the ideas page, never regenerated here (#225).
+  const regenerateOnIdeasPage = allowedActions.some(
+    (eligibility) =>
+      eligibility.action === 'regenerate' &&
+      eligibility.reason_code === 'ad_regenerate_on_ideas_page'
   );
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -183,6 +189,15 @@ export function LightboxModal({
                     versionId={versionId}
                     latestQcAttemptId={typedDetail.latest_qc_attempt_id ?? null}
                   />
+                )}
+                {regenerateOnIdeasPage && (
+                  <p
+                    className="text-xs text-base-content/70"
+                    role="note"
+                    data-testid="regenerate-on-ideas-page"
+                  >
+                    {t('regenerate-on-ideas-page')}
+                  </p>
                 )}
               </div>
             </>

@@ -12,6 +12,7 @@ import { useBlobTransferClient } from '@/lib/domain-client/upload-deps';
 import { useWorkspace } from './WorkspaceProvider';
 import type { components } from '@/lib/domain-client/generated/domain-v1';
 import type { MarketingRound } from './MarketingExecution';
+import { exportBlockReasons } from '@/lib/assets/export-block';
 
 type PlanRequest = components['schemas']['app__marketing__api__PlanRequest'];
 type Plan = components['schemas']['FrozenTestPlan'];
@@ -220,6 +221,8 @@ export function MarketingReusePicker({
   onAttach: (body: components['schemas']['ReuseCreative']) => Promise<void>;
 }) {
   const { t } = useTranslation('common');
+  // The reasons an ad of the ad ideas is not checked yet read as the library says them (#219).
+  const { t: tAssets } = useTranslation('assets');
   const { current } = useWorkspace();
   const gateway = useDomainGateway();
   const blobs = useBlobTransferClient();
@@ -232,7 +235,9 @@ export function MarketingReusePicker({
   const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState('');
   // The server lists only what `reuse` accepts: this test's creatives, the
-  // product card's and the card's other tests', in this round's mode.
+  // product card's and the card's other tests', in this round's mode. An ad
+  // of the ad ideas that isn't checked yet is listed with its `reuse_block`
+  // (#225): shown, never chosen.
   const page = useSWR(
     open
       ? [
@@ -259,7 +264,10 @@ export function MarketingReusePicker({
         (existing) => existing.asset_version_id === a.asset_version_id
       )
   );
-  const chosen = options.find((a) => a.asset_version_id === selected);
+  const blocked = options.filter((a) => a.reuse_block);
+  const chosen = options.find(
+    (a) => a.asset_version_id === selected && !a.reuse_block
+  );
   const previewFailure = t('marketing-reuse-preview-failed');
   useEffect(() => {
     setImageUrl('');
@@ -301,9 +309,22 @@ export function MarketingReusePicker({
       model: a.model,
       shape: a.aspect_ratio,
     });
-    return a.relation === 'other_test' && a.source_test_name
-      ? t('marketing-reuse-option-from', { test: a.source_test_name, option })
-      : option;
+    const named =
+      a.relation === 'other_test' && a.source_test_name
+        ? t('marketing-reuse-option-from', { test: a.source_test_name, option })
+        : option;
+    if (!a.reuse_block) return named;
+    return t(
+      a.reuse_block.status === 'needs_redo'
+        ? 'marketing-reuse-blocked-needs-redo'
+        : 'marketing-reuse-blocked-draft',
+      {
+        option: named,
+        reasons: exportBlockReasons(tAssets, a.reuse_block).join(
+          tAssets('export-block-reasons-separator')
+        ),
+      }
+    );
   };
   return (
     <details
@@ -333,7 +354,11 @@ export function MarketingReusePicker({
                 label={t(`marketing-reuse-group-${relation}`)}
               >
                 {group.map((a) => (
-                  <option key={a.asset_version_id} value={a.asset_version_id}>
+                  <option
+                    key={a.asset_version_id}
+                    value={a.asset_version_id}
+                    disabled={Boolean(a.reuse_block)}
+                  >
                     {label(a, options.indexOf(a))}
                   </option>
                 ))}
@@ -342,6 +367,11 @@ export function MarketingReusePicker({
           })}
         </select>
       </label>
+      {blocked.length > 0 && (
+        <p className="text-sm text-gray-600" role="note">
+          {t('marketing-reuse-blocked-note', { count: blocked.length })}
+        </p>
+      )}
       {chosen && chosen.relation !== 'this_test' && (
         <div className="space-y-1 text-sm" role="note">
           {chosen.relation === 'other_test' && (
@@ -416,7 +446,7 @@ export function MarketingReusePicker({
       </label>
       <button
         className={BUTTON}
-        disabled={busy || !selected || !imageUrl || !combination}
+        disabled={busy || !chosen || !imageUrl || !combination}
         onClick={() => {
           void onAttach({
             asset_version_id: selected,

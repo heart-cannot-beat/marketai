@@ -252,6 +252,27 @@ def _quality_ready(qc, quality, blocked):
         and all(r.review_value == 'approved' for r in quality) and not blocked)
 
 
+#: Why a handoff is refused for an ad of ads-first ideas that may not be exported (#225), when it is built
+#: and when its link is asked for.
+HANDOFF_DRAFTS = ("这一轮里有广告想法的广告还没核对完，不能放进交接包：先到广告想法页核对它用到的事实、外观和检查结果，"
+                  "需要重出的请先重出，或者不选它。")
+HANDOFF_LINK_DRAFTS = ("交接包里有广告想法的广告已经不能导出，暂不能重新打包或获取新下载链接；原包保留为历史。"
+                       "先到广告想法页核对，需要重出的请结束这一轮另起一轮。")
+
+
+def assert_ads_exportable(session, ctx, asset_version_ids, message):
+    """No ad of ads-first ideas that may not be exported leaves in a handoff (#225, ADR 0018 §2).
+
+    A draft cannot be reused into a round (``reuse.attach``), but an ad checked when it was reused stops
+    being exportable once a fact it stands on changes; so the handoff asks again when it is built and when
+    its link is handed out, as the library's export package does (#219). Any other image is not judged.
+    The API's own question: the Worker that builds the ZIP cannot read the verification records."""
+    from .ideas_export import library_refusals, refusal_params
+    refused = library_refusals(session, ctx, list(asset_version_ids))
+    if refused:
+        raise MarketingError("ads_not_exportable", message, 409, params=refusal_params(refused))
+
+
 def handoff_quality_current(session, ctx, row, handoff):
     return bool(handoff.manifest_json.get("entries")) and all(
         ready(session, ctx, row, entry["asset_version_id"]) for entry in handoff.manifest_json["entries"])
@@ -348,6 +369,7 @@ def create_handoff(session, ctx, row, body):
     assets = {v.id: (v, recipe, combo) for v, recipe, combo in creative_assets(session, ctx, row)}
     if set(ids) - assets.keys():
         raise MarketingError("asset_not_in_round", "导出只能包含当前方案的具体版本。")
+    assert_ads_exportable(session, ctx, ids, HANDOFF_DRAFTS)
     if not all(ready(session, ctx, row, item) for item in ids):
         raise MarketingError("qc_required", "请先完成所选素材的逐项质量审核。")
     plan = row.snapshot_json["plan"]
@@ -419,6 +441,7 @@ def retry_handoff(session, ctx, row):
     if not records or records[0].state != "failed":
         raise MarketingError("handoff_not_retryable", "只有失败的导出任务需要重试。", 409)
     record = records[0]
+    assert_ads_exportable(session, ctx, [e["asset_version_id"] for e in record.manifest_json["entries"]], HANDOFF_LINK_DRAFTS)
     if not all(ready(session, ctx, row, e["asset_version_id"]) for e in record.manifest_json["entries"]):
         raise MarketingError("qc_required", "冻结素材的质量审核已发生变化，请结束本轮并调整方案。", 409)
     op = create_operation(session, command_type="marketing.export")
@@ -645,6 +668,12 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
     # A creative reused from another test or its card is revised or cropped in its own test only (#7).
     project = get_project(session, ctx, row.project_id) if include_reuse_lineage and any(
         r.canonical_json.get("reuse") for _, r, _ in creative_records) else None
+    # An ad of ads-first ideas is changed on its ideas page, never in a round (#225).
+    if project is not None:
+        from .ideas_export import ads_of_ideas
+        ads = ads_of_ideas(session, ctx, [v.id for v, r, _ in creative_records if r.canonical_json.get("reuse")])
+    else:
+        ads = set()
     for version, recipe, combo in creative_records:
         qc, quality, fact = qcs.get(version.id), reviews.get(version.id, []), facts[version.id]
         frozen_references = recipe.canonical_json.get("selection", {}).get("product_references", [])
@@ -657,7 +686,8 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
             "ai_qc": single, "paired_ai_qc": paired, "asset_version_id": version.id, "combination_id": combo["id"], "headline": combo["headline"],
             "body_copy": combo["body_copy"], "required_checks": required_checks(combo, row.snapshot_json["plan"]), "quality": qc.findings_json if qc else None,
             "ready": fact["references_current"] and _quality_ready(qc, quality, fact["blocking"]), "mime_type": version.mime_type,
-            **({"editable": project is None or editable(project, recipe)} if include_reuse_lineage else {})})
+            **({"editable": project is None or (editable(project, recipe) and version.id not in ads)}
+               if include_reuse_lineage else {})})
         executions.append({**fact, "ready": assets[-1]["ready"],
             **({"product_appearance": appearances[appearance_key]} if include_board else {}),
             **{key: {**c, "quality_suggestion": (c["result"] or {}).get("quality_suggestion")} if c else None

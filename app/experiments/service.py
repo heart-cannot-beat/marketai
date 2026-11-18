@@ -92,6 +92,19 @@ class ExperimentNotFound(ExperimentError):
     default_code = "experiment_not_found"
 
 
+def _refuse_unchecked_ads(session, context: TenantContext, asset_version_ids: list[str]) -> None:
+    """An ad of ads-first ideas enters an experiment only while it may be exported (#225, ADR 0018 §2: a
+    draft enters no test). An experiment is frozen, launched and judged, and its winner is the source of
+    later work; so the entry is refused, as a round's reuse is, and freezing asks again. Any
+    other image is not judged (``app.marketing.ideas_export.library_refusals``)."""
+    from app.marketing.ideas_export import library_refusals, refusal_params
+    refused = library_refusals(session, context, asset_version_ids)
+    if refused:
+        raise ExperimentConflict(
+            "这张广告还没核对完，不能放进实验：先到广告想法页核对它用到的事实、外观和检查结果，需要重出的请先重出。",
+            code="ad_not_reusable", params=refusal_params(refused))
+
+
 def _get_experiment(session, context: TenantContext, experiment_id: str) -> ExperimentRecord:
     experiment = session.get(ExperimentRecord, experiment_id)
     if experiment is None or experiment.workspace_id != context.workspace_id:
@@ -153,6 +166,7 @@ def create_experiment(
             ):
                 raise ExperimentError(f"AssetVersion 不存在或不属于该产品: {version_id}", code="asset_version_not_found")
             resolved.append((version, asset, item))
+        _refuse_unchecked_ads(session, context, [version.id for version, _, _ in resolved])
 
         experiment = ExperimentRecord(
             id=new_id("exp"), workspace_id=context.workspace_id, product_id=product_id,
@@ -200,6 +214,7 @@ def freeze_experiment(
                                                 ExperimentEntryRecord.removed_at.is_(None))
             .order_by(ExperimentEntryRecord.position)
         ).all()
+        _refuse_unchecked_ads(session, context, [entry.asset_version_id for entry in entries])
         frozen_entries = []
         for entry in entries:
             version = session.get(AssetVersionRecord, entry.asset_version_id)
@@ -781,6 +796,7 @@ def add_entry_v2(
         if version is None or version.workspace_id != context.workspace_id:
             raise ExperimentError(f"AssetVersion not found: {asset_version_id}", code="asset_version_not_found")
         _refuse_duplicate_asset(session, experiment_id, asset_version_id)
+        _refuse_unchecked_ads(session, context, [asset_version_id])
 
         entry_count = session.scalar(
             select(func.count()).select_from(ExperimentEntryRecord).where(
@@ -853,6 +869,7 @@ def update_entry_v2(
             if version is None or version.workspace_id != context.workspace_id:
                 raise ExperimentError(f"AssetVersion not found: {asset_version_id}", code="asset_version_not_found")
             _refuse_duplicate_asset(session, experiment_id, asset_version_id, entry_id=entry_id)
+            _refuse_unchecked_ads(session, context, [asset_version_id])
             entry.asset_version_id = asset_version_id
 
         if marketing_vars is not None:
@@ -2266,6 +2283,14 @@ def freeze_experiment_v2(
 
         version_id = new_id("expver")
 
+        # Asked before the candidates are loaded, so a draft is refused for what it is (#225).
+        _refuse_unchecked_ads(session, context, list(session.scalars(
+            select(ExperimentEntryRecord.asset_version_id).where(
+                ExperimentEntryRecord.workspace_id == context.workspace_id,
+                ExperimentEntryRecord.experiment_id == experiment_id,
+                ExperimentEntryRecord.removed_at.is_(None),
+            ).order_by(ExperimentEntryRecord.position)
+        ).all()))
         sources = _load_candidate_sources(session, context, experiment)
         # Re-acquire FOR UPDATE on asset versions for freeze atomicity. The
         # shared loader above is a plain read shared with read-only analysis.
@@ -2723,6 +2748,8 @@ def start_experiment_v2(
                 ExperimentVersionCandidateRecord.experiment_version_id == version.id,
             ).order_by(ExperimentVersionCandidateRecord.position)
         ).all()
+        # An ad may stop being exportable between freezing and starting (#225).
+        _refuse_unchecked_ads(session, context, [cand.asset_version_id for cand in candidates])
 
         bindings_by_cand = {}
         for cand in candidates:
@@ -3359,7 +3386,7 @@ def create_next_round(
     if intent_kind != "quality_feedback" and qc_attempt_id:
         raise ExperimentError("qc_attempt_id is forbidden for non-quality_feedback intents")
 
-    from ..generation.regeneration import create_regeneration_draft
+    from ..generation.regeneration import RegenerationError, create_regeneration_draft
 
     with tenant_session(context) as session:
         experiment = _get_experiment(session, context, experiment_id)
@@ -3387,13 +3414,19 @@ def create_next_round(
             if qc_attempt.asset_version_id != candidate.asset_version_id:
                 raise ExperimentError("QC attempt does not match candidate's AssetVersion", code="qc_attempt_mismatch")
 
-        draft = create_regeneration_draft(
-            session, context,
-            source_version_id=candidate.asset_version_id,
-            intent_kind=intent_kind,
-            prompt_overrides=prompt_overrides,
-            qc_attempt_id=qc_attempt_id,
-        )
+        try:
+            draft = create_regeneration_draft(
+                session, context,
+                source_version_id=candidate.asset_version_id,
+                intent_kind=intent_kind,
+                prompt_overrides=prompt_overrides,
+                qc_attempt_id=qc_attempt_id,
+            )
+        except RegenerationError as exc:
+            # An ad of ads-first ideas is changed on its ideas page (#225); any other refusal is as before.
+            if exc.code != "ad_regenerate_on_ideas_page":
+                raise
+            raise ExperimentConflict(exc.detail, code="ad_regenerate_on_ideas_page", params=exc.params) from exc
 
         actor_id = context.initiator_id or context.executor
         record = ExperimentNextRoundRecord(

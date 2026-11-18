@@ -1028,6 +1028,82 @@ describe('BFF domain proxy catch-all — tracer integration (spec §8.1)', () =>
       expect(res.statusCode).toBe(200);
       expect(res._getJSONData()).toEqual(page);
     });
+
+    it('relays reuse candidates whose ads say why they cannot go into the round (#225)', async () => {
+      const candidate = (id: string, reuse_block: unknown) => ({
+        asset_version_id: id,
+        asset_id: `asset_${id}`,
+        created_at: '2026-11-18T00:00:00+00:00',
+        provider: 'mock',
+        model: 'mock-v1',
+        aspect_ratio: '1:1',
+        relation: 'product_card',
+        source_project_id: null,
+        source_test_name: null,
+        facts_relation: null,
+        reuse_block,
+      });
+      const page = {
+        items: [
+          candidate('av_checked', null),
+          candidate('av_draft', {
+            status: 'draft',
+            reasons: REFUSAL.params.ads[0].reasons,
+          }),
+        ],
+        next_cursor: null,
+      };
+      await answering(200, 'application/json', page);
+      const { req, res } = mockGetRequest({
+        method: 'GET',
+        url: '/api/domain/v1/w/acme/marketing/rounds/mr_1/reuse-candidates',
+        query: {
+          slug: 'acme',
+          path: ['marketing', 'rounds', 'mr_1', 'reuse-candidates'],
+        },
+        headers: { host: APP_HOST },
+      });
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res._getJSONData()).toEqual(page);
+    });
+
+    it('relays the refusal of a draft reused into a round with each ad and its reasons (#225)', async () => {
+      const refusal = {
+        ...REFUSAL,
+        type: 'urn:marketai:error:ad-not-reusable',
+        title: 'ad_not_reusable',
+        detail: 'ad_not_reusable',
+        instance: '/api/v1/marketing/rounds/mr_1/creatives/reuse',
+        code: 'ad_not_reusable',
+      };
+      await answering(409, 'application/problem+json', refusal);
+      const { req, res } = mockJsonRequest(
+        {
+          method: 'POST',
+          url: '/api/domain/v1/w/acme/marketing/rounds/mr_1/creatives/reuse',
+          query: {
+            slug: 'acme',
+            path: ['marketing', 'rounds', 'mr_1', 'creatives', 'reuse'],
+          },
+          headers: {
+            ...commandHeaders('reuse.intent.browser.225'),
+            'if-match': '"3"',
+          },
+        },
+        { asset_version_id: 'av_1', combination_id: 'c1' }
+      );
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res._getJSONData()).toMatchObject({
+        code: 'ad_not_reusable',
+        params: REFUSAL.params,
+      });
+    });
   });
 
   describe('Scale evidence readiness (#114)', () => {

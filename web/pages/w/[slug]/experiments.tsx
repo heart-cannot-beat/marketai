@@ -29,6 +29,7 @@ ExperimentsPage.getLayout = function getLayout(page: ReactElement) {
 };
 
 export const getServerSideProps = getWorkspacePageProps({
-  namespaces: ['common', 'library', 'products', 'competitors'],
+  // `assets`: the reuse picker says why an ad of the ad ideas can't be chosen (#225).
+  namespaces: ['common', 'library', 'products', 'competitors', 'assets'],
 });
 export default ExperimentsPage;

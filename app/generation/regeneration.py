@@ -51,6 +51,25 @@ from app.generation.review import project_effective_review
 from app.platform.tenancy import TenantContext
 
 
+def refuse_ads_of_ideas(session: Session, ctx: TenantContext, version_ids: list[str]) -> None:
+    """Refuse a regeneration from an ad of ads-first ideas, whatever its status (#225, ADR 0018 §2).
+
+    The new image would not be an ad of the ideas, and no check or verification would ever see it; the
+    ads-first page's own "change this ad" makes a new ad that is checked like the others. A checked ad is
+    refused too: what was checked is that image, not the one a regeneration would make.
+    ``app.marketing.ideas_export.ads_of_ideas`` finds the same images the library's export gate judges;
+    every other image -- a round's, the workbench's, an uploaded one not placed under an ad -- is
+    regenerated as before."""
+    from app.marketing.ideas_export import ads_of_ideas
+    found = ads_of_ideas(session, ctx, version_ids)
+    if found:
+        raise RegenerationError(
+            "ad_regenerate_on_ideas_page",
+            "这张图是广告想法里的一张广告，素材库不能重新生成它：要改这张广告，请到广告想法页的“修改这张广告”。"
+            "改出的新图同样要核对后才能导出。",
+            params={"asset_version_ids": [item for item in dict.fromkeys(version_ids) if item in found]})
+
+
 class RegenerationError(ValueError):
     def __init__(self, code: str, detail: str, *, params: dict | None = None):
         self.code = code
@@ -316,6 +335,7 @@ def create_regeneration_draft(
         raise RegenerationError("invalid_intent", f"Unknown intent: {intent_kind!r}")
 
     version = _resolve_source_version(session, ctx, source_version_id)
+    refuse_ads_of_ideas(session, ctx, [version.id])
     product_id = _resolve_product_id(session, ctx, version.asset_id)
 
     if intent_kind == "quality_feedback":
@@ -443,6 +463,8 @@ def create_review_summary_regeneration(
                 f"AssetVersion {version_id} not found in this Workspace",
             )
         versions[version_id] = version
+    # A batch with an ad of ads-first ideas among its candidates fails as a whole, before any Draft (#225).
+    refuse_ads_of_ideas(session, ctx, list(versions))
 
     # Spec §0.6: a stale, cross-Workspace, wrong-review, missing-signature,
     # or ineligible candidate fails the WHOLE command. Validate every

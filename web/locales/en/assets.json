@@ -110,6 +110,7 @@
   "intent-label-new-seed": "New random seed",
   "intent-label-edit-prompt": "Edit the prompt",
   "intent-label-quality-feedback": "Fix per QC feedback",
+  "regenerate-on-ideas-page": "This image is an ad in your ad ideas, so it can't be regenerated here. To change it, use “Edit this ad” in your ad ideas; the new image also needs checking before it can be exported.",
   "review-actions-label": "Review actions",
   "review-approve": "Approve",
   "review-needs-changes": "Needs changes",

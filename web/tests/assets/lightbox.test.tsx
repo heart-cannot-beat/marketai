@@ -304,6 +304,54 @@ describe('LightboxModal', () => {
     expect(screen.queryByTestId('review-panel')).not.toBeInTheDocument();
   });
 
+  it('sends an ad of the ad ideas to its own page instead of regenerating it here (#225)', () => {
+    mockUseDomainQuery.mockReturnValue({
+      data: makeDetail({
+        allowed_actions: [
+          { action: 'review', allowed: true },
+          {
+            action: 'regenerate',
+            allowed: false,
+            reason_code: 'ad_regenerate_on_ideas_page',
+          },
+        ],
+      }),
+      isLoading: false,
+      problem: undefined,
+    });
+
+    render(<LightboxModal versionId="v1" onClose={jest.fn()} />);
+
+    expect(screen.queryByTestId('regeneration-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('regenerate-on-ideas-page')).toHaveTextContent(
+      "This image is an ad in your ad ideas, so it can't be regenerated here. To change it, use “Edit this ad” in your ad ideas"
+    );
+    expect(screen.getByTestId('review-panel')).toBeInTheDocument();
+  });
+
+  it('says nothing about the ad ideas when regenerating is refused for another reason', () => {
+    mockUseDomainQuery.mockReturnValue({
+      data: makeDetail({
+        allowed_actions: [
+          {
+            action: 'regenerate',
+            allowed: false,
+            reason_code: 'external_creative_not_regenerable',
+          },
+        ],
+      }),
+      isLoading: false,
+      problem: undefined,
+    });
+
+    render(<LightboxModal versionId="v1" onClose={jest.fn()} />);
+
+    expect(screen.queryByTestId('regeneration-panel')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('regenerate-on-ideas-page')
+    ).not.toBeInTheDocument();
+  });
+
   it('navigates to a lineage version when clicked in the sidebar', () => {
     mockUseDomainQuery.mockReturnValue({
       data: makeDetail({

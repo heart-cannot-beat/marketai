@@ -46,8 +46,9 @@ def prepare(session, ctx, row, body):
     if body.asset_version_id not in assets:
         raise MarketingError("asset_not_in_round", "请使用当前小轮的素材。")
     version, recipe, combo = assets[body.asset_version_id]
-    from .reuse import ensure_editable
+    from .reuse import ensure_editable, ensure_not_an_ad_of_ideas
     ensure_editable(project, recipe)
+    ensure_not_an_ad_of_ideas(session, ctx, version.id)
     qc = workflow.latest_qc(session, ctx, row, version.id)
     from . import ai_qc
     # Current single and paired results both feed the correction; a pre-split call counts once.
