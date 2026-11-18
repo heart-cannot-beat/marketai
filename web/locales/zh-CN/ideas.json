@@ -521,5 +521,6 @@
   "checks-unavailable-qc_not_configured": "这个工作区还没有设置检查用的模型，请联系管理员。",
   "checks-unavailable-reason": "现在不能检查：{{reason}}",
   "check-redo-unavailable": "重出要有能用你自己的 Key 出图的服务商，请到设置里检查 Key。",
-  "settings-loading": "正在读取出图设置…"
+  "settings-loading": "正在读取出图设置…",
+  "check-facts-title-none": "事实"
 }

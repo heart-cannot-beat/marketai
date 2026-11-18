@@ -316,7 +316,9 @@ export function CheckSheet({
       <section className={SECTION} aria-labelledby="check-facts">
         <div className="space-y-1">
           <h2 id="check-facts" className="text-lg font-bold">
-            {t('check-facts-title', { count: model.facts.length })}
+            {model.facts.length > 0
+              ? t('check-facts-title', { count: model.facts.length })
+              : t('check-facts-title-none')}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {model.facts.length > 0

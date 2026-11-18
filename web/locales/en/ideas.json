@@ -521,5 +521,6 @@
   "checks-unavailable-qc_not_configured": "Checking isn't set up for this workspace yet. Ask your administrator.",
   "checks-unavailable-reason": "Checking isn't available right now: {{reason}}",
   "check-redo-unavailable": "Redoing needs an image provider that works with your own key. Check the keys in Settings.",
-  "settings-loading": "Loading the image settings…"
+  "settings-loading": "Loading the image settings…",
+  "check-facts-title-none": "Facts"
 }
