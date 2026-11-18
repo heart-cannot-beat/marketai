@@ -78,10 +78,11 @@ class LaunchNotFound(LaunchError):
     default_code = "launch_not_found"
 
 
-def _refuse_unchecked_ads(session, context: TenantContext, asset_version_ids: list[str]) -> None:
+def refuse_unchecked_ads(session, context: TenantContext, asset_version_ids: list[str]) -> None:
     """A launch uploads the image to Meta: an ad of ads-first ideas that may not be exported does not leave
-    (#225, ADR 0018 §2), even if it was exportable when its experiment froze. Asked when the preview is made,
-    in the API; the saga's Worker cannot read the verification records. Any other image is not judged."""
+    (#225, ADR 0018 §2), even if it was exportable when its experiment froze. Asked by the API when a preview
+    is made (the routes, and ``create_preview``); the saga's Worker cannot read the verification records.
+    Any other image is not judged."""
     from app.marketing.ideas_export import library_refusals, refusal_params
     refused = library_refusals(session, context, asset_version_ids)
     if refused:
@@ -353,7 +354,6 @@ def create_multi_candidate_preview(
         raise LaunchError("currency 必须是 3 位 ISO 货币代码", code="launch_currency_invalid")
     if not candidates:
         raise LaunchError("candidates 不能为空；预览至少需要一个候选", code="launch_candidates_required")
-    _refuse_unchecked_ads(session, context, [str(candidate.get("asset_version_id") or "") for candidate in candidates])
     if any(
         str(campaign_config.get(key, "PAUSED")).upper() != "PAUSED"
         for key in ("initial_status", "campaign_status", "adset_status", "ad_status")
@@ -639,7 +639,7 @@ def create_preview(context: TenantContext, *, experiment_id: str, entry_id: str,
         ))
         if version is None or version.workspace_id != context.workspace_id:
             raise LaunchNotFound("AssetVersion 不存在")
-        _refuse_unchecked_ads(session, context, [version.id])
+        refuse_unchecked_ads(session, context, [version.id])
         if account is None or not account.currency or not account.timezone_name:
             raise LaunchError("必须先完成目标 Meta account 的只读同步，确认币种和时区")
         if not _asset_path(version.object_key).is_file():

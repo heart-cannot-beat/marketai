@@ -588,18 +588,26 @@ class ExperimentAndLaunchGateTests(unittest.TestCase):
         self.assertEqual(start_experiment_v2(ctx, experiment["id"], expected_revision=frozen["revision"])["state"], "running")
 
     def test_a_launch_preview_does_not_send_an_ad_that_may_not_be_exported(self):
-        from dataclasses import replace
-        from app.launch import service as launch
-        ctx = replace(next_round_tests.CTX, meta_mode="controlled_mock")
-        with patch("app.marketing.ideas_export.library_refusals", return_value=self.refusing("av_s19")):
-            with tenant_session(ctx) as session:
-                with self.assertRaises(launch.LaunchConflict) as caught:
-                    launch.create_multi_candidate_preview(
-                        session, ctx, experiment_id="exp_s19", experiment_version_id="expver_s19", connection_id="mc_s19",
-                        ad_account_id="act_s19", candidates=[{"experiment_version_candidate_id": "evc_s19",
-                                                              "asset_version_id": "av_s19", "creative_config": {}}],
-                        daily_budget_minor=100, currency="USD", campaign_config={})
-        self.assertEqual((caught.exception.code, caught.exception.params["count"]), ("ads_not_exportable", 1))
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.platform.http_identity import request_tenant_context
+        app.dependency_overrides[request_tenant_context] = lambda: next_round_tests.CTX
+        self.addCleanup(app.dependency_overrides.pop, request_tenant_context, None)
+        client = TestClient(app)
+        self.addCleanup(client.close)
+        body = {"experiment_id": "exp_s19", "experiment_version_id": "expver_s19", "connection_id": "mc_s19",
+                "meta_mode": "controlled_mock", "ad_account_id": "act_s19", "daily_budget_minor": 100, "currency": "USD",
+                "campaign_config": {}, "candidates": [{"experiment_version_candidate_id": "evc_s19", "asset_version_id": "av_s19",
+                                                       "creative_config": {}}]}
+        with patch("app.marketing.ideas_export.library_refusals", return_value=self.refusing("av_s19")) as asked:
+            response = client.post("/api/v1/launch/previews", json=body, headers={"Idempotency-Key": uuid.uuid4().hex})
+        self.assertEqual(response.status_code, 409, response.text)
+        detail = response.json()
+        self.assertEqual((detail["code"], detail["params"]["count"]), ("ads_not_exportable", 1))
+        asked.assert_called_once()
+        # Without the refusal the same request goes on to the preview's own checks (no such experiment here).
+        response = client.post("/api/v1/launch/previews", json=body, headers={"Idempotency-Key": uuid.uuid4().hex})
+        self.assertNotEqual(response.json().get("code"), "ads_not_exportable")
 
     def test_the_next_round_of_a_decision_on_an_ad_of_ideas_is_refused_with_a_reason(self):
         from app.experiments.service import ExperimentConflict, create_next_round

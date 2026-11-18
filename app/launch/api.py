@@ -340,6 +340,8 @@ def create_multi_candidate_preview_v1(
     effective = _effective_context(context, body.meta_mode)
     with tenant_session(effective) as session:
         try:
+            # Nothing that may not be exported leaves for Meta (#225); asked here, in the API.
+            service.refuse_unchecked_ads(session, effective, [candidate.asset_version_id for candidate in body.candidates])
             preview, candidates = service.create_multi_candidate_preview(
                 session, effective,
                 experiment_id=body.experiment_id,
