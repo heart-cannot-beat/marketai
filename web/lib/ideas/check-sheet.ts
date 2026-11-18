@@ -7,6 +7,7 @@ import {
   type IdeasDetail,
   type IdeasFinding,
 } from './ideas-view';
+import { adsWithPhoto, uncheckedPhotosOf, type IdeasPhoto } from './photos';
 
 /**
  * The check before downloading (ADR 0018 §3, design §5.3, #198, #201): what
@@ -14,13 +15,16 @@ import {
  * count, and of them only what this confirmation can settle:
  *
  * - `ready`: the ads that can be downloaded once the user confirms below
- *   (already exportable, or a draft only for facts, looks or findings);
+ *   (already exportable, or a draft only for facts, photos, looks or
+ *   findings);
  * - `waiting`: drafts a confirmation cannot settle yet (no check, still being
- *   checked, a photo to check on the product profile);
+ *   checked);
  * - `redo`: ads that need redoing (#198): checking cannot rescue them.
  *
- * Facts, looks and findings are listed for the `ready` ads only, so nothing
- * the user ticks is for an ad this download leaves out.
+ * Facts, photos, looks and findings are listed for the `ready` ads only, so
+ * nothing the user ticks is for an ad this download leaves out. A photo is
+ * checked here the way the product profile checks it (#229): the same
+ * declaration, the same command.
  */
 
 type Fact = components['schemas']['Fact'];
@@ -36,7 +40,11 @@ export type WaitingWhy =
   | 'check_uncertain'
   /** The check was made against facts that changed since. */
   | 'check_outdated'
-  /** A product photo it used is not checked yet (S11, #199). */
+  /**
+   * A product photo it used is not checked, and it is not one of the
+   * photos these ideas list to check (#229): the product profile is where
+   * to look. Not expected; kept so such an ad is never offered as ready.
+   */
   | 'photo';
 
 export interface WaitingAd {
@@ -47,6 +55,19 @@ export interface WaitingAd {
 export interface RedoAd {
   ad: IdeasAd;
   reasons: AdReason[];
+}
+
+/**
+ * One unchecked product photo the ready ads were made with (#229): checking
+ * it here declares it is a real photo of this product that may be used in
+ * ads.
+ */
+export interface SheetPhoto {
+  photo: IdeasPhoto;
+  /** The ready ads made with it: they wait for this photo. */
+  ready: IdeasAd[];
+  /** Every ad of these ideas made with it: rejecting it makes them need redoing. */
+  used: IdeasAd[];
 }
 
 /** One ad's findings to handle: accepted ("this is fine") per ad, check and finding (#198). */
@@ -65,9 +86,11 @@ export interface CheckSheetModel {
   facts: Fact[];
   /** Facts the ready ads cite that are checked already: nothing to do. */
   checkedFacts: number;
+  /** Unchecked product photos the ready drafts were made with, in the reading's order. */
+  photos: SheetPhoto[];
   /** Ready ads made without a product photo whose look is not confirmed yet. */
   looks: IdeasAd[];
-  /** Ready ads that used a checked product photo. */
+  /** Ready ads whose product photos are all checked already. */
   withPhoto: IdeasAd[];
   findings: AdFindings[];
 }
@@ -79,7 +102,6 @@ const WAITING: Partial<Record<AdReason['code'], WaitingWhy>> = {
   image_check_in_progress: 'checking',
   check_uncertain: 'check_uncertain',
   check_outdated: 'check_outdated',
-  photo_unverified: 'photo',
 };
 
 /** The first reason, by importance, that keeps a draft out of this download. */
@@ -91,12 +113,19 @@ const WAITING_ORDER: WaitingWhy[] = [
   'photo',
 ];
 
-function waitingWhy(ad: IdeasAd): WaitingWhy | null {
+function waitingWhy(detail: IdeasDetail, ad: IdeasAd): WaitingWhy | null {
+  const reasons = ad.reasons ?? [];
   const found = new Set(
-    (ad.reasons ?? [])
+    reasons
       .map((reason) => WAITING[reason.code])
       .filter((why): why is WaitingWhy => Boolean(why))
   );
+  // A photo to check is settled here, as long as these ideas list it (#229).
+  if (
+    reasons.some((reason) => reason.code === 'photo_unverified') &&
+    uncheckedPhotosOf(detail, ad).length === 0
+  )
+    found.add('photo');
   return WAITING_ORDER.find((why) => found.has(why)) ?? null;
 }
 
@@ -110,7 +139,7 @@ export function checkSheet(detail: IdeasDetail): CheckSheetModel {
       redo.push({ ad: item, reasons: item.reasons ?? [] });
       continue;
     }
-    const why = item.status === 'exportable' ? null : waitingWhy(item);
+    const why = item.status === 'exportable' ? null : waitingWhy(detail, item);
     if (why) waiting.push({ ad: item, why });
     else ready.push(item);
   }
@@ -128,6 +157,22 @@ export function checkSheet(detail: IdeasDetail): CheckSheetModel {
   const unchecked = facts.filter(
     (fact) => toConfirm.has(fact.id) && fact.confirmation !== 'confirmed'
   );
+
+  const drafts = ready.filter((item) => item.status !== 'exportable');
+  const toCheck = new Set(
+    drafts.flatMap((item) =>
+      uncheckedPhotosOf(detail, item).map((photo) => photo.photo_id)
+    )
+  );
+  const photos: SheetPhoto[] = (detail.photos ?? [])
+    .filter((photo) => toCheck.has(photo.photo_id))
+    .map((photo) => ({
+      photo,
+      ready: drafts.filter((item) =>
+        (item.photo_ids ?? []).includes(photo.photo_id)
+      ),
+      used: adsWithPhoto(detail, photo.photo_id),
+    }));
 
   const looks = ready.filter(needsLook);
   const findings: AdFindings[] = [];
@@ -148,8 +193,15 @@ export function checkSheet(detail: IdeasDetail): CheckSheetModel {
     redo,
     facts: unchecked,
     checkedFacts: facts.length - unchecked.length,
+    photos,
     looks,
-    withPhoto: ready.filter((item) => item.used_product_photo),
+    withPhoto: ready.filter(
+      (item) =>
+        item.used_product_photo &&
+        !(item.reasons ?? []).some(
+          (reason) => reason.code === 'photo_unverified'
+        )
+    ),
     findings,
   };
 }
@@ -158,6 +210,8 @@ export function checkSheet(detail: IdeasDetail): CheckSheetModel {
 export interface SheetTicks {
   /** `factKey` of each fact read and confirmed as true. */
   facts: ReadonlySet<string>;
+  /** Photos the user declares are real photos of this product they may use in ads. */
+  photos: ReadonlySet<string>;
   /** Ads whose product the user confirms looks right. */
   looks: ReadonlySet<string>;
   /** `findingKey` of each finding accepted as it is ("this is fine"). */
@@ -182,6 +236,8 @@ export const findingKey = (
 export function leftToTick(model: CheckSheetModel, ticks: SheetTicks): number {
   return (
     model.facts.filter((fact) => !ticks.facts.has(factKey(fact))).length +
+    model.photos.filter(({ photo }) => !ticks.photos.has(photo.photo_id))
+      .length +
     model.looks.filter((item) => !ticks.looks.has(item.asset_version_id))
       .length +
     model.findings
@@ -194,7 +250,7 @@ export function leftToTick(model: CheckSheetModel, ticks: SheetTicks): number {
   );
 }
 
-/** Every fact, look and finding ticked: only then can the user confirm. */
+/** Every fact, photo, look and finding ticked: only then can the user confirm. */
 export function allTicked(model: CheckSheetModel, ticks: SheetTicks): boolean {
   return leftToTick(model, ticks) === 0;
 }
@@ -228,9 +284,14 @@ export function verifyBody(
       }))
       .filter((item) => item.finding_ids.length > 0),
   };
+  const photos = model.photos
+    .map(({ photo }) => photo.photo_id)
+    .filter((id) => ticks.photos.has(id));
+  if (photos.length > 0) body.photo_ids = photos;
   return body.fact_ids?.length ||
     body.appearance_confirmed?.length ||
-    body.accepted_findings?.length
+    body.accepted_findings?.length ||
+    body.photo_ids?.length
     ? body
     : null;
 }

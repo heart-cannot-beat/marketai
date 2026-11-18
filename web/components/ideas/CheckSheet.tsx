@@ -14,6 +14,7 @@ import {
   refusedAds,
   verifyBody,
   type RefusedAd,
+  type SheetPhoto,
   type WaitingWhy,
 } from '@/lib/ideas/check-sheet';
 import { ideasProblem } from '@/lib/ideas/ideas-problems';
@@ -23,6 +24,7 @@ import {
   type IdeasAd,
   type IdeasDetail,
 } from '@/lib/ideas/ideas-view';
+import { photoDecision } from '@/lib/ideas/photos';
 import { saveBlob } from '@/lib/ideas/save-file';
 import type {
   IdeasCommands,
@@ -34,6 +36,15 @@ import { AdThumbnail } from './AdCard';
 import { ChecksButton } from './ChecksButton';
 import { FindingList } from './FindingList';
 import { BUTTON, PaidImageAction, PRESSED } from './PaidImageAction';
+import {
+  PhotoFailureNote,
+  PhotoThumbnail,
+  RejectPhotoQuestion,
+  useCheckDeclaration,
+  usePhotoFailure,
+  usePhotoLabel,
+  type PhotoFailure,
+} from './PhotoParts';
 
 const SECTION =
   'space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900 sm:p-6';
@@ -70,11 +81,13 @@ export interface CheckSheetProps {
 }
 
 /**
- * The check before downloading (ADR 0018 §3, design §5.3, #198, #201): only
- * what the kept ads use -- the facts they cite, their product's look or
- * photo, the check findings still open -- confirmed once. Confirming records
- * the check (`verify_marketing_ideas`) and then downloads the ads, one file
- * each (`download_marketing_ideas`).
+ * The check before downloading (ADR 0018 §3, design §5.3, #198, #201, #229):
+ * only what the kept ads use -- the facts they cite, the product photos they
+ * were made with or their product's look, the check findings still open --
+ * confirmed once. Confirming records the check (`verify_marketing_ideas`)
+ * and then downloads the ads, one file each (`download_marketing_ideas`).
+ * Rejecting a photo is its own step, asked first: the ads made with it need
+ * redoing at once and leave this download.
  */
 export function CheckSheet({
   projectId,
@@ -91,10 +104,12 @@ export function CheckSheet({
   const blobClient = useBlobTransferClient();
   const model = useMemo(() => checkSheet(detail), [detail]);
   const [facts, setFacts] = useState<Set<string>>(new Set());
+  const [photos, setPhotos] = useState<Set<string>>(new Set());
   const [looks, setLooks] = useState<Set<string>>(new Set());
   const [findings, setFindings] = useState<Set<string>>(new Set());
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
-  const ticks = { facts, looks, findings };
+  const declaration = useCheckDeclaration();
+  const ticks = { facts, photos, looks, findings };
   const left = leftToTick(model, ticks);
   const ready = model.ready.length;
   const canConfirm =
@@ -109,6 +124,7 @@ export function CheckSheet({
       update(next);
     };
   const tickFact = toggle(facts, setFacts);
+  const tickPhoto = toggle(photos, setPhotos);
   const tickLook = toggle(looks, setLooks);
   const tickFinding = toggle(findings, setFindings);
 
@@ -362,13 +378,25 @@ export function CheckSheet({
             {t('check-looks-title')}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
+            {model.photos.length > 0 && t('check-photos-intro') + ' '}
             {model.looks.length > 0
               ? t('check-looks-intro')
-              : t('check-looks-none')}
+              : model.photos.length === 0 && t('check-looks-none')}
             {model.withPhoto.length > 0 &&
               ' ' + t('check-looks-photo', { count: model.withPhoto.length })}
           </p>
         </div>
+        {model.photos.map((item) => (
+          <SheetPhotoRow
+            key={item.photo.photo_id}
+            item={item}
+            declaration={declaration(detail.understanding?.product_name)}
+            checked={photos.has(item.photo.photo_id)}
+            onTick={(on) => tickPhoto(item.photo.photo_id, on)}
+            commands={commands}
+            disabled={phase.kind === 'working'}
+          />
+        ))}
         {model.looks.map((ad) => (
           <CheckRow
             key={ad.asset_version_id}
@@ -568,6 +596,123 @@ export function CheckSheet({
         </div>
       </div>
     </SheetFrame>
+  );
+}
+
+/**
+ * One unchecked product photo the ads to download were made with (#229):
+ * ticking it is the declaration itself, written out in full; rejecting it
+ * asks first, then records the rejection at once, so the ads made with it
+ * leave this download as ads to redo.
+ */
+function SheetPhotoRow({
+  item,
+  declaration,
+  checked,
+  onTick,
+  commands,
+  disabled,
+}: {
+  item: SheetPhoto;
+  declaration: string;
+  checked: boolean;
+  onTick: (on: boolean) => void;
+  commands: IdeasCommands;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation('ideas');
+  const id = useId();
+  const label = usePhotoLabel()(item.photo);
+  const failureOf = usePhotoFailure();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<PhotoFailure | null>(null);
+
+  async function reject() {
+    if (busy) return;
+    setBusy(true);
+    setFailure(null);
+    const outcome = await commands.verify(
+      photoDecision([], [item.photo.photo_id])
+    );
+    setBusy(false);
+    const failed = failureOf(outcome);
+    if (failed) {
+      setFailure(failed);
+      // Someone changed these ideas first: show them as they are now.
+      if (outcome.kind === 'refused') void commands.refresh();
+      return;
+    }
+    onTick(false);
+    setAsking(false);
+  }
+
+  return (
+    <div className={ROW} data-testid="check-photo">
+      <PhotoThumbnail photo={item.photo} alt={label.role} />
+      <div className="min-w-0 flex-1 basis-48 space-y-2">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {t('check-photo-about', {
+            role: label.role,
+            source: label.source,
+          })}
+          {' · '}
+          {t('check-photo-used', { count: item.ready.length })}
+        </p>
+        <div className="flex items-start gap-3">
+          <input
+            id={id}
+            type="checkbox"
+            className={CHECKBOX}
+            checked={checked}
+            disabled={disabled || busy}
+            onChange={(e) => onTick(e.target.checked)}
+          />
+          <label
+            htmlFor={id}
+            className="flex min-h-11 min-w-0 flex-1 cursor-pointer flex-col gap-1"
+          >
+            <span className="text-base font-semibold">{declaration}</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {t('check-photo-after')}
+            </span>
+          </label>
+        </div>
+        {!asking && (
+          <button
+            type="button"
+            className={BUTTON}
+            disabled={disabled || busy}
+            onClick={() => {
+              setFailure(null);
+              setAsking(true);
+            }}
+          >
+            {t('photo-reject-open')}
+          </button>
+        )}
+        {asking && (
+          <RejectPhotoQuestion
+            used={item.used.length}
+            inDownload={item.ready.length}
+            busy={busy}
+            failure={failure}
+            onRefresh={() => void commands.refresh()}
+            onReject={() => void reject()}
+            onCancel={() => {
+              setFailure(null);
+              setAsking(false);
+            }}
+          />
+        )}
+        {!asking && (
+          <PhotoFailureNote
+            failure={failure}
+            onRefresh={() => void commands.refresh()}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
