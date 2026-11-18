@@ -32,6 +32,7 @@ from app.providers.adapter import ProviderCallResult
 from app.providers.base import reference_delivery_metadata
 from app.providers.openai_chat import OpenAIChatAdapter
 from tests.support.library_fixtures import png_bytes
+from tests.test_library_export_gate import LibraryGateFixtures
 from tests.test_marketing_first_batch import FakeImages, PAGE, card, check_report
 from tests.test_marketing_ideas_checks import IMAGE_JOBS
 from tests.test_marketing_ideas_export import ADS_OF
@@ -524,6 +525,97 @@ class PhotoRefusalTests(PhotoFixtures):
         self.assertEqual(self.photos(project)["main"]["status"], "unverified")
         self.assertTrue(all("photo_unverified" in self.reasons(ad) for ad in self.read_ideas(project)["ads"]))
         self.assertEqual(self.records(project, "verification"), [])
+
+
+class LibraryPhotoTests(LibraryGateFixtures, PhotoFixtures):
+    """The creative library's own download, export package and gallery judge an ad's photos as the ideas page
+    does (#199 with #219): an ad made with an unchecked photo is a draft there too, one whose photo was rejected
+    needs redoing, and the download records the library writes are never read as a photo decision."""
+
+    def blocked_like_the_page(self, project, combination_id, code):
+        """The library shows the ad, refuses to save or package it, and says why exactly as the page does."""
+        ad = self.ads(project)[combination_id]
+        asset_id = ad["asset_version_id"]
+        self.assertIn(code, self.reasons(ad))
+        block = {"status": ad["status"], "reasons": ad["reasons"]}
+        self.assertEqual(self.gallery()[asset_id]["export_block"], block)
+        self.assertEqual(self.refused_ads(self.link(asset_id, expect=409))[asset_id], {"asset_version_id": asset_id, **block})
+        refused = self.refused_ads(self.package({"kind": "explicit", "version_ids": [asset_id]}, expect=409))
+        self.assertEqual(list(refused), [asset_id])
+        self.link(asset_id, "display")
+        return asset_id
+
+    def test_an_ad_made_with_an_unchecked_photo_leaves_the_library_only_once_the_photo_is_checked(self):
+        project = self.checked_ads()
+        self.everything_but_photos(project)
+        asset_id = self.blocked_like_the_page(project, "c1_1", "photo_unverified")
+        self.assertEqual(self.ads(project)["c1_1"]["status"], "draft")
+        self.assertEqual(self.records(project, "download"), [])
+        self.decide(project, photo_ids=[photo["photo_id"] for photo in self.read_ideas(project)["photos"]])
+        # The same image, no new one: now it is saved and packaged like any checked ad.
+        self.assertEqual(self.ads(project)["c1_1"]["asset_version_id"], asset_id)
+        self.assertIsNone(self.gallery()[asset_id]["export_block"])
+        self.link(asset_id)
+        package = self.built({"kind": "explicit", "version_ids": [asset_id]})
+        self.assertEqual(self.packaged(package["package_id"]), [asset_id])
+        self.package_link(package["package_id"])
+        self.assertEqual(len(self.records(project, "download")), 2)
+
+    def test_an_ad_whose_photo_was_rejected_needs_redoing_in_the_library_too(self):
+        project = self.checked_ads()
+        self.everything_but_photos(project)
+        photos = self.photos(project)
+        self.decide(project, photo_ids=[photos["main"]["photo_id"], photos["angle"]["photo_id"]],
+                    rejected=[photos["detail"]["photo_id"]])
+        self.assertEqual(self.ads(project)["c2_1"]["status"], "needs_redo")
+        self.blocked_like_the_page(project, "c2_1", "photo_unavailable")
+        self.assertEqual(self.records(project, "download"), [])
+
+    def test_a_package_of_checked_ads_is_not_handed_out_once_a_photo_in_them_is_rejected(self):
+        project = self.checked_ads()
+        self.everything_but_photos(project)
+        ids = [photo["photo_id"] for photo in self.read_ideas(project)["photos"]]
+        self.decide(project, photo_ids=ids)
+        chosen = self.ids(project, ["c1_1", "c3_2"])
+        package = self.built({"kind": "explicit", "version_ids": chosen})
+        self.package_link(package["package_id"])
+        self.decide(project, rejected=ids[1:2])
+        refused = self.refused_ads(self.package_link(package["package_id"], expect=409))
+        self.assertEqual(list(refused), chosen)
+        self.assertEqual({item["status"] for item in refused.values()}, {"needs_redo"})
+        self.assertEqual(len(self.records(project, "download")), 1)
+
+    def test_download_records_are_never_read_as_photo_or_appearance_decisions(self):
+        project = self.checked_ads()
+        self.everything_but_photos(project)
+        ids = [photo["photo_id"] for photo in self.read_ideas(project)["photos"]]
+        self.decide(project, photo_ids=ids)
+        asset_id = self.ids(project, ["c1_1"])[0]
+        self.link(asset_id)
+        (handed,) = self.records(project, "download")
+        self.assertNotIn("photos", handed.content_json)
+        # Even a download record that listed photos and looks would be no decision: only verification records are.
+        with tenant_session(self.context) as session:
+            line = {"photo_id": ids[0], "decision": "rejected", "reference_object_id": "", "intake_id": "", "image_id": "",
+                    "role": "main", "rank": 1}
+            session.add(MarketingIdeasExportRecord(
+                id="mie_download_photos", workspace_id=self.context.workspace_id, project_id=project["id"], kind="download",
+                project_revision=self.read_ideas(project)["revision"], actor_id=self.context.initiator_id,
+                content_json={"ads": [], "photos": [line], "appearance": [asset_id]},
+                content_hash="c" * 64, created_at=utcnow()))
+        self.assertEqual({photo["status"] for photo in self.read_ideas(project)["photos"]}, {"verified"})
+        self.assertEqual({ad["status"] for ad in self.ads(project).values()}, {"exportable"})
+        with tenant_session(self.context) as session:
+            row = ideas.get_ideas_project(session, self.context, project["id"])
+            self.assertEqual({pid: line["decision"] for pid, line in ideas_export.photo_decisions(session, self.context, row).items()},
+                             {pid: "verified" for pid in ids})
+            self.assertEqual(ideas_export.confirmations(session, self.context, row)[0], set())
+            # And the ads-first download never hands a verification record back as a download.
+            (verification,) = [record for record in self.records(project, "verification") if record.content_json.get("photos")]
+            with self.assertRaises(ideas_export.MarketingError) as missing:
+                ideas_export.download_record(session, self.context, row, verification.id)
+            self.assertEqual(missing.exception.code, "download_not_found")
+        self.link(asset_id)
 
 
 class PlanFirstPhotoTests(PhotoFixtures):
