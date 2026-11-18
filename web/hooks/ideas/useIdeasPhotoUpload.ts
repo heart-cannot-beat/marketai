@@ -5,7 +5,7 @@ import { useUpload } from '@/hooks/domain/useUpload';
 import { useDomainGateway } from '@/lib/domain-client/gateway-provider';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
 import type { IdeasDetail } from '@/lib/ideas/ideas-view';
-import type { PhotoRole } from '@/lib/ideas/photos';
+import type { UploadRole } from '@/lib/ideas/photos';
 import { ideasProjectKey, type Loaded } from './useIdeasProject';
 
 /**
@@ -64,7 +64,7 @@ class Stopped extends Error {}
 
 export interface UseIdeasPhotoUploadResult {
   state: PhotoUploadState;
-  upload: (file: File, role: PhotoRole) => Promise<void>;
+  upload: (file: File, role: UploadRole) => Promise<void>;
   reset: () => void;
 }
 
@@ -114,7 +114,7 @@ export function useIdeasPhotoUpload(
   );
 
   const upload = useCallback(
-    async (file: File, role: PhotoRole) => {
+    async (file: File, role: UploadRole) => {
       live.current?.abort();
       const controller = new AbortController();
       live.current = controller;

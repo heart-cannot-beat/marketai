@@ -6,7 +6,8 @@ page's pictures did not pass -- and then every ad is made without one. The user 
 1. upload it the way any reference is uploaded (an Upload Intent of purpose ``reference_asset``, then
    ``create_library_reference_object``), so it goes through the same reference upload gate in the Worker
    (``library.reference_gate``), unrelaxed;
-2. once the gate released it, add it here as a photo of the product, saying what it shows (``add``).
+2. once the gate released it, add it here as a photo of the product, saying what it shows (``add``) -- or as
+   the brand's logo, which is listed apart and never stands in for the product's look.
 
 An added photo is the product's, not one project's: every ads-first project of the product lists it among
 its photos (``product_references.candidates``), drafts images with it, and checks or rejects it with the
@@ -50,7 +51,7 @@ def add(session, ctx, row, reference_object_id: str, role: str) -> Added:
     The same image added again to the same product is the same photo: the first addition is returned; an
     image already listed as a photo of these ideas -- found by the reading, or added with another role -- is
     ``photo_already_listed``, naming it."""
-    from .product_references import _usable, candidates
+    from .product_references import _usable, added_logos, candidates
     service.ensure_active(session, ctx)
     if not row.product_id:
         raise MarketingError("product_required", "这些广告想法还没有对应的产品。", 409)
@@ -70,7 +71,8 @@ def add(session, ctx, row, reference_object_id: str, role: str) -> Added:
                                                   Added.reference_object_id == obj.id))
     if existing is not None and existing.role == role:
         return existing
-    if existing is not None or any(photo["photo_id"] == obj.derivative_sha256 for photo in candidates(session, ctx, row)):
+    listed = [*candidates(session, ctx, row), *added_logos(session, ctx, row.product_id)]
+    if existing is not None or any(photo["photo_id"] == obj.derivative_sha256 for photo in listed):
         raise MarketingError("photo_already_listed", "这张照片已经在产品照片里了。", 409,
                              params={"photo_id": obj.derivative_sha256})
     record = Added(id=new_id("mpp"), workspace_id=ctx.workspace_id, product_id=row.product_id, project_id=row.id,
@@ -86,10 +88,12 @@ def add(session, ctx, row, reference_object_id: str, role: str) -> Added:
 def derivative(session, ctx, row, photo_id: str) -> dict:
     """What showing one photo of these ideas needs: its released derivative (never the uploaded original).
 
-    Any photo the ideas list (``candidates``), whatever its checking; ``photo_not_found`` otherwise."""
-    from .product_references import _blob, candidates
+    Any photo or logo the ideas list (``candidates``, ``added_logos``), whatever its checking; ``photo_not_found``
+    otherwise."""
+    from .product_references import _blob, added_logos, candidates
     from app.platform.blob_store import CommittedBlobRef
-    photo = next((photo for photo in candidates(session, ctx, row) if photo["photo_id"] == photo_id), None)
+    listed = [*candidates(session, ctx, row), *added_logos(session, ctx, row.product_id)]
+    photo = next((photo for photo in listed if photo["photo_id"] == photo_id), None)
     if photo is None:
         raise MarketingError("photo_not_found", "这些广告想法里没有这张照片，请刷新后重试。", 404)
     # ``candidates`` lists only photos whose object is still released in this Workspace.

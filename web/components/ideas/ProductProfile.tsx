@@ -128,7 +128,11 @@ function Profile({
         projectId={projectId}
         detail={detail}
       />
-      <ProfileBrand productId={product.productId} />
+      <ProfileBrand
+        productId={product.productId}
+        projectId={projectId}
+        detail={detail}
+      />
     </div>
   );
 }

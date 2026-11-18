@@ -3,7 +3,7 @@ import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
 import type { UseIdeasPhotoUploadResult } from '@/hooks/ideas/useIdeasPhotoUpload';
 import { errorMessage } from '@/lib/i18n/domain-errors';
-import type { PhotoRole } from '@/lib/ideas/photos';
+import type { PhotoRole, UploadRole } from '@/lib/ideas/photos';
 
 /**
  * Add the user's own product photo (#233, design §5.2: "加一张产品照片，图里的
@@ -14,6 +14,9 @@ import type { PhotoRole } from '@/lib/ideas/photos';
  *
  * The ideas page links here (`#add-photo`) when some ads were made without a
  * product photo; arriving that way brings this part into view.
+ *
+ * `kind = "logo"` adds the brand's logo instead (#233): no choice of what it
+ * shows, its own words, and it is listed with the brand, never as a photo.
  */
 
 export const ADD_PHOTO_ANCHOR = 'add-photo';
@@ -23,7 +26,8 @@ const ACCEPT = 'image/png,image/jpeg,image/webp';
 
 export function AddPhoto({
   uploader,
-  hasMain,
+  hasMain = false,
+  kind = 'photo',
 }: {
   /**
    * The upload, held by the photo area itself: the first photo turns the
@@ -32,11 +36,14 @@ export function AddPhoto({
    */
   uploader: UseIdeasPhotoUploadResult;
   /** The product already has a usable photo of the whole product. */
-  hasMain: boolean;
+  hasMain?: boolean;
+  kind?: 'photo' | 'logo';
 }) {
   const { t } = useTranslation('ideas');
   const { state, upload, reset } = uploader;
   const [role, setRole] = useState<PhotoRole>(hasMain ? 'detail' : 'main');
+  const logo = kind === 'logo';
+  const copy = logo ? 'profile-logo-add' : 'profile-photo-add';
   const title = useId();
   const roleName = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -48,7 +55,7 @@ export function AddPhoto({
   // inside the app lands before the route change has finished settling the
   // page, so it is tried once that has finished too.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || logo) return;
     const bring = () => {
       if (window.location.hash === `#${ADD_PHOTO_ANCHOR}`)
         area.current?.scrollIntoView?.({ block: 'center' });
@@ -59,13 +66,14 @@ export function AddPhoto({
       window.clearTimeout(timer);
       router.events?.off('routeChangeComplete', bring);
     };
-  }, [router.events]);
+  }, [router.events, logo]);
 
   function chosen(files: FileList | null) {
     const file = files?.[0];
     if (input.current) input.current.value = '';
     if (!file) return;
-    void upload(file, role);
+    const as: UploadRole = logo ? 'logo' : role;
+    void upload(file, as);
   }
 
   const status =
@@ -76,49 +84,51 @@ export function AddPhoto({
         : state.phase === 'adding'
           ? t('profile-photo-add-adding')
           : state.phase === 'added'
-            ? t('profile-photo-add-added')
+            ? t(`${copy}-added`)
             : '';
 
   return (
     <div
       ref={area}
-      id={ADD_PHOTO_ANCHOR}
+      id={logo ? undefined : ADD_PHOTO_ANCHOR}
       role="group"
       aria-labelledby={title}
       className="space-y-3 rounded-xl border border-dashed border-gray-300 p-4 dark:border-gray-600"
-      data-testid="profile-photo-add"
+      data-testid={`${copy}`}
     >
       <div className="space-y-1">
         <h3 id={title} className="text-base font-semibold">
-          {t('profile-photo-add-title')}
+          {t(`${copy}-title`)}
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          {t('profile-photo-add-intro')}
+          {t(`${copy}-intro`)}
         </p>
       </div>
-      <fieldset className="space-y-2" disabled={working}>
-        <legend id={roleName} className="text-sm font-medium">
-          {t('profile-photo-add-role')}
-        </legend>
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {ROLES.map((value) => (
-            <label
-              key={value}
-              className="flex min-h-11 items-center gap-2 text-sm"
-            >
-              <input
-                type="radio"
-                name={roleName}
-                className="radio radio-sm"
-                value={value}
-                checked={role === value}
-                onChange={() => setRole(value)}
-              />
-              {t(`profile-photo-add-role-${value}`)}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {!logo && (
+        <fieldset className="space-y-2" disabled={working}>
+          <legend id={roleName} className="text-sm font-medium">
+            {t('profile-photo-add-role')}
+          </legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {ROLES.map((value) => (
+              <label
+                key={value}
+                className="flex min-h-11 items-center gap-2 text-sm"
+              >
+                <input
+                  type="radio"
+                  name={roleName}
+                  className="radio radio-sm"
+                  value={value}
+                  checked={role === value}
+                  onChange={() => setRole(value)}
+                />
+                {t(`profile-photo-add-role-${value}`)}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
       {state.phase === 'rejected' || state.phase === 'failed' ? (
         <div role="alert" className="space-y-2 text-sm">
           <p className="text-red-800 dark:text-red-300">
@@ -152,14 +162,14 @@ export function AddPhoto({
             className={`btn btn-sm min-h-11 ${working ? 'btn-disabled' : 'btn-primary'}`}
             aria-disabled={working}
           >
-            {t('profile-photo-add-choose')}
+            {t(`${copy}-choose`)}
             <input
               ref={input}
               type="file"
               accept={ACCEPT}
               className="sr-only"
               disabled={working}
-              data-testid="profile-photo-add-file"
+              data-testid={`${copy}-file`}
               onChange={(event) => chosen(event.target.files)}
             />
           </label>

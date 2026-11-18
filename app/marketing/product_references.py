@@ -204,6 +204,11 @@ def _reading_photos(session, ctx, project) -> list[dict]:
 ADDED_RANK = 10_000
 
 
+def added_logos(session, ctx, product_id) -> list[dict]:
+    """The logos the user added to this product (#233), oldest first; never a photo of the product's look."""
+    return [photo for photo in added_photos(session, ctx, product_id) if photo["role"] == "logo"]
+
+
 def added_photos(session, ctx, product_id) -> list[dict]:
     """The photos the user added to this product (#233), oldest first, each the way ``candidates`` lists one.
 
