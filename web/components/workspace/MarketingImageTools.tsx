@@ -12,16 +12,34 @@ type Tool = NonNullable<Feedback['image_tool']>;
 const INPUT =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm';
 
+/**
+ * Copy a caller states in its own words: the ads-first edit screen (#201)
+ * speaks of checks and asks for the maximum cost first. Without it the
+ * round's copy shows, unchanged.
+ */
+export interface ImageToolsLabels {
+  note?: string;
+  reviewNote?: string;
+  prepare?: string;
+}
+
+/**
+ * Upscale, remove the background or erase an area of one image with the
+ * workspace's image supplier. `onPrepare` receives the request; the caller
+ * prepares it (a round's feedback, or a project's, #200) and quotes it.
+ */
 export function MarketingImageTools({
   assetVersionId,
   mode,
   busy,
   onPrepare,
+  labels,
 }: {
   assetVersionId: string;
   mode: 'mock' | 'byok';
   busy: boolean;
   onPrepare: (body: Feedback) => void;
+  labels?: ImageToolsLabels;
 }) {
   const { t } = useTranslation('common');
   const { current } = useWorkspace();
@@ -110,7 +128,9 @@ export function MarketingImageTools({
       <summary className="cursor-pointer text-sm font-medium">
         {t('marketing-image-tools-title')}
       </summary>
-      <p className="text-sm text-gray-600">{t('marketing-image-tools-note')}</p>
+      <p className="text-sm text-gray-600">
+        {labels?.note ?? t('marketing-image-tools-note')}
+      </p>
       <label className="block space-y-1 text-sm">
         <span>{t('marketing-image-tools-operation')}</span>
         <select
@@ -296,7 +316,7 @@ export function MarketingImageTools({
         </>
       )}
       <p className="text-sm text-gray-600">
-        {t('marketing-image-tools-review-note')}
+        {labels?.reviewNote ?? t('marketing-image-tools-review-note')}
       </p>
       <label className="block space-y-1 text-sm">
         <span>{t('marketing-feedback-provider')}</span>
@@ -389,7 +409,7 @@ export function MarketingImageTools({
           });
         }}
       >
-        {t('marketing-image-tools-prepare')}
+        {labels?.prepare ?? t('marketing-image-tools-prepare')}
       </button>
     </details>
   );
