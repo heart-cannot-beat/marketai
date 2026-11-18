@@ -248,7 +248,7 @@ export function CheckSheet({
                     versionId={item.asset_version_id}
                     alt={ad ? adLabel(ad) : t('ideas-ad-image')}
                   />
-                  <div className="min-w-0 flex-1 space-y-1 text-sm">
+                  <div className="min-w-0 flex-1 basis-40 space-y-1 text-sm">
                     <p className="font-semibold">
                       {ad ? adLabel(ad) : t('ideas-ad-image')}
                     </p>
@@ -514,7 +514,7 @@ export function CheckSheet({
                   versionId={ad.asset_version_id}
                   alt={adLabel(ad)}
                 />
-                <div className="min-w-0 flex-1 space-y-1 text-sm">
+                <div className="min-w-0 flex-1 basis-40 space-y-1 text-sm">
                   <p className="font-semibold">{adLabel(ad)}</p>
                   <p role={why === 'checking' ? 'status' : undefined}>
                     {t(`check-waiting-${why}`)}
@@ -533,7 +533,7 @@ export function CheckSheet({
                   versionId={ad.asset_version_id}
                   alt={adLabel(ad)}
                 />
-                <div className="min-w-0 flex-1 space-y-1 text-sm">
+                <div className="min-w-0 flex-1 basis-40 space-y-1 text-sm">
                   <p className="font-semibold">
                     {adLabel(ad)}
                     <span className="ml-2 inline-block rounded-full bg-red-100 px-2 py-px text-xs font-semibold text-red-900">
