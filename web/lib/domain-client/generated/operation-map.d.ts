@@ -551,6 +551,18 @@ export type DomainOperationMap = {
       201: components['schemas']['app__generation__response_models__DownloadIntentResponse'];
     };
   };
+  download_marketing_ideas: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['DownloadIdeas'];
+    successResponses: { 201: components['schemas']['IdeasDownload'] };
+  };
+  edit_marketing_ideas_understanding: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['EditIdeasUnderstanding'];
+    successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
+  };
   edit_marketing_project: {
     pathParams: { project_id: string };
     queryParams: {
@@ -1757,6 +1769,12 @@ export type DomainOperationMap = {
     queryParams: Record<string, never>;
     requestBody: never;
     successResponses: { 200: components['schemas']['LibraryValidationResult'] };
+  };
+  verify_marketing_ideas: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['VerifyIdeas'];
+    successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
   };
   withdraw_library_version: {
     pathParams: { version_id: string };

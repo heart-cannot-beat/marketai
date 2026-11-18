@@ -128,13 +128,15 @@ def set_kept(session, ctx, row, asset_version_id: str, kept: bool) -> None:
     session.flush()
 
 
-def _ad(version, recipe, keeps, checks=None):
+def _ad(version, recipe, keeps, checks=None, statuses=None):
     combination = _intent(recipe).get("combination") or {}
     selection = (recipe.canonical_json or {}).get("selection") or {}
+    # Derived, never stored (ADR 0018 §3, #198): draft, exportable or needs_redo, and why it is not exportable.
+    derived = (statuses or {}).get(version.id) or {"status": "draft", "reasons": [], "cited_fact_ids": [],
+                                                   "appearance_confirmed": False}
     return {"asset_version_id": version.id, "combination_id": combination.get("id", ""),
             "angle_id": combination.get("angle_id", ""), "expression_id": combination.get("expression_id", ""),
-            # Step 1 has no checking yet, so every ad is a draft (ADR 0018 §2); S10 derives the others.
-            "status": "draft", "kept": keeps.get(version.id, False),
+            **derived, "kept": keeps.get(version.id, False),
             # The photos the request sent (design §5.2): an ad made without one is marked as such.
             "used_product_photo": bool(selection.get("product_references")),
             "created_at": version.created_at.isoformat() if version.created_at else "",
@@ -188,16 +190,19 @@ def pending_ads(session, ctx, row) -> list[dict]:
 
 def ideas_dict(session, ctx, row) -> dict:
     """The ``IdeasProjectDetail`` of an ads-first project."""
+    from . import ideas_checks, ideas_export
     from .first_batch import summaries
-    from .ideas_checks import ad_checks
     call = service.latest_call(session, ctx, row.id)
     keeps = _keeps(session, ctx, row)
-    checks = ad_checks(session, ctx, row)
+    ads = project_ads(session, ctx, row)
+    calls = ideas_checks.latest_by_asset(session, ctx, row.id)
+    checks = {asset_id: ideas_checks.projection(check) for asset_id, check in calls.items()}
+    statuses = ideas_export.statuses(session, ctx, row, ads, calls)
     return {"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
             "market": row.market, "ad_language": row.ad_language, "understanding": row.understanding_json,
             "ideas": row.ideas_json,
             "latest_call": service.call_dict(call, include_maximum_cost=True) if call else None,
-            "ads": [_ad(version, recipe, keeps, checks) for version, recipe in project_ads(session, ctx, row)],
+            "ads": [_ad(version, recipe, keeps, checks, statuses) for version, recipe in ads],
             "pending": pending_ads(session, ctx, row), "first_batch": summaries(session, ctx, [row.id]).get(row.id)}
 
 
@@ -212,20 +217,8 @@ def ideas_intent(row, combination_id: str) -> dict:
     It records the product understanding as it is now, with each fact's checking status, and the facts
     the ad's claim and way of telling cite -- directly, or through a cited inference -- so S10 can tell
     whether the ad may be exported. Raises ``LookupError`` when the ideas have no such combination."""
-    from .contracts import Understanding
-    from .ideas_contracts import Ideas
-    if row.state != "ideas_ready" or not row.ideas_json:
-        raise LookupError(combination_id)
-    doc = Ideas.model_validate(row.ideas_json)
-    combo = next((c for c in doc.combinations if c.id == combination_id), None)
-    if combo is None:
-        raise LookupError(combination_id)
-    angle = next(a for a in doc.angles if a.id == combo.angle_id)
-    expression = next(e for e in angle.expressions if e.id == combo.expression_id)
-    understanding = Understanding.model_validate(row.understanding_json)
-    inferences = {i.id: i for i in understanding.inferences}
-    cited = {*angle.fact_ids, *expression.evidence_basis.fact_ids,
-             *(fact for iid in angle.inference_ids if iid in inferences for fact in inferences[iid].fact_ids)}
+    doc, combo, angle, expression, understanding = _ad_parts(row, combination_id)
+    cited = _cited(angle, expression, understanding)
     return {"schema_version": 2, "flow": FLOW, "project_id": row.id, "plan_revision": row.revision,
             "ideas_hash": service.digest(row.ideas_json),
             "ad_language": doc.ad_language, "strategy_language": doc.strategy_language,
@@ -238,8 +231,41 @@ def ideas_intent(row, combination_id: str) -> dict:
             "cited_fact_ids": [fact.id for fact in understanding.facts if fact.id in cited]}
 
 
+def _ad_parts(row, combination_id: str):
+    """The ideas, combination, claim, way of telling and understanding behind one ad, or ``LookupError``."""
+    from .contracts import Understanding
+    from .ideas_contracts import Ideas
+    if row.state != "ideas_ready" or not row.ideas_json:
+        raise LookupError(combination_id)
+    doc = Ideas.model_validate(row.ideas_json)
+    combo = next((c for c in doc.combinations if c.id == combination_id), None)
+    if combo is None:
+        raise LookupError(combination_id)
+    angle = next(a for a in doc.angles if a.id == combo.angle_id)
+    expression = next(e for e in angle.expressions if e.id == combo.expression_id)
+    return doc, combo, angle, expression, Understanding.model_validate(row.understanding_json)
+
+
+def _cited(angle, expression, understanding) -> set:
+    """Every fact id an ad's claim and way of telling cite, directly or through a cited inference."""
+    inferences = {i.id: i for i in understanding.inferences}
+    return {*angle.fact_ids, *expression.evidence_basis.fact_ids,
+            *(fact for iid in angle.inference_ids if iid in inferences for fact in inferences[iid].fact_ids)}
+
+
+def citations(row, combination_id: str) -> set:
+    """The fact ids one ad of these ideas cites now, including ids whose fact the user has since removed
+    (the ideas are not rewritten when a fact goes: #198). Raises ``LookupError`` like ``ideas_intent``."""
+    _, _, angle, expression, understanding = _ad_parts(row, combination_id)
+    return _cited(angle, expression, understanding)
+
+
 def _content(intent) -> dict:
     return {key: intent.get(key) for key in CONTENT_KEYS}
+
+
+#: The content of an intent that decides whether an image is still the ad the ideas describe (#198).
+content_of = _content
 
 
 def _current_intent(project, intent):
@@ -253,16 +279,40 @@ def _current_intent(project, intent):
     return current
 
 
-def selection_intent(project, link, draft) -> dict:
+def selection_intent(session, ctx, project, link, draft) -> dict:
     """The intent a preview freezes for a draft prepared from these ideas (``resolve_selection``).
 
     The draft is valid while its ad's content still equals the ideas, not while the project revision
-    stays the same: checking a fact or adding a claim later leaves it usable (#191)."""
-    stored = (draft.selectors_json or {}).get("marketing_intent") or {}
+    stays the same: checking a fact or adding a claim later leaves it usable (#191).
+
+    Its image prompt must be the one the application wrote from the ideas (#198): the intent is what an
+    ad is later checked and exported against, so a prompt a client rewrote would make an image the intent
+    does not describe. Changing what an ad says goes through the ideas, never through the draft."""
+    from . import brand_kits
+    selectors = draft.selectors_json or {}
+    stored = selectors.get("marketing_intent") or {}
     # A draft edited to another product or another ad no longer matches the ideas: prepare it again.
     if project.product_id != draft.product_id or (stored.get("combination") or {}).get("id") != link.combination_id:
         raise SelectionError("ideas_changed", "广告想法已变化，请按当前的主张重新准备这张广告。")
-    return _current_intent(project, stored)
+    current = _current_intent(project, stored)
+    doc, combo, *_ = _ad_parts(project, link.combination_id)
+    try:
+        kit = brand_kits.resolve_ref(session, ctx, doc.brand_kit) if doc.brand_kit else None
+    except service.MarketingError as exc:
+        raise SelectionError(exc.code, exc.detail) from None
+    written = _prompt(combo, current, kit, logo=bool(selectors.get("brand_logo")),
+                      references=bool(selectors.get("product_references")))
+    if selectors.get("prompt") != written:
+        raise SelectionError("ideas_prompt_changed", "这张广告的出图说明被改过。新开头的广告只按主张出图，请重新准备这张广告。")
+    return current
+
+
+def _prompt(combo, intent, kit, *, logo: bool, references: bool) -> str:
+    """The image prompt the application writes for one ad of the ideas: nothing a client supplies."""
+    from . import brand_kits
+    from .product_references import REFERENCE_BRIEF
+    brand = brand_kits.brief_lines(kit.content_json, logo_supplied=logo) if kit else ()
+    return service.image_brief(combo, intent, brand=brand) + ("\n" + REFERENCE_BRIEF if references else "")
 
 
 def check_intent(session, ctx, intent):
@@ -297,7 +347,7 @@ def generation_drafts(session, ctx, row, revision, provider, model, format_confi
     from . import brand_kits
     from .ideas_contracts import Ideas
     from .models import MarketingGenerationLinkRecord
-    from .product_references import REFERENCE_BRIEF, from_product_set
+    from .product_references import from_product_set
     if model not in get_provider(provider).models:
         raise service.MarketingError("model_unavailable", "该供应商不支持所选模型。")
     doc = Ideas.model_validate(row.ideas_json)
@@ -322,8 +372,7 @@ def generation_drafts(session, ctx, row, revision, provider, model, format_confi
         if combo.image_brief is None:  # drafted ideas always have one (``checked_ideas``)
             raise service.MarketingError("image_brief_language_mismatch", "Write the English image brief for every ad.")
         intent = ideas_intent(row, combo.id)
-        brand = brand_kits.brief_lines(kit.content_json, logo_supplied=bool(logo)) if kit else ()
-        prompt = service.image_brief(combo, intent, brand=brand) + ("\n" + REFERENCE_BRIEF if references else "")
+        prompt = _prompt(combo, intent, kit, logo=bool(logo), references=bool(references))
         if len(prompt) > 4000:
             raise service.MarketingError("ad_brief_too_long", "这张广告的画面说明太长，请重新起草主张。")
         draft = create_draft(session, ctx, product_id=row.product_id, provider=provider, model=model,
@@ -381,8 +430,15 @@ def start_ideas_planning(session, ctx, row, revision, kind, mode, quote_hash, st
     claims; the ideas need a drafted understanding. Both are ordinary paid planning calls: one job, one
     reservation, settled by the Worker, and an explicit retry carries the last rejected draft."""
     if kind == "understanding":
-        return service.start_planning(session, ctx, row, revision, "understanding", mode, quote_hash,
+        call = service.start_planning(session, ctx, row, revision, "understanding", mode, quote_hash,
                                       ad_language=row.ad_language, strategy_language=strategy_language)
+        # The new understanding comes back unchecked, so what this project had checked leaves the product's
+        # published version now, when the user asks for it (#198). A call that fails leaves the facts
+        # checked here and the version one step behind until the next check: never ahead of the facts.
+        if any(fact.get("confirmation") == "confirmed" for fact in (row.understanding_json or {}).get("facts", [])):
+            from . import ideas_export
+            ideas_export.publish_verified(session, ctx, row, excluding=row.id)
+        return call
     if row.state not in DRAFTABLE or not row.understanding_json:
         raise service.MarketingError("understanding_required", "请先生成或完善产品理解。")
     cap = service.planner_capability(session, ctx)

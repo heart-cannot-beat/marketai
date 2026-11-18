@@ -2637,6 +2637,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/download-intent': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Download Ideas
+     * @description Download exactly the ads named, each through its own short-lived signed link (#198).
+     *
+     *     Every one must be ``exportable``; otherwise nothing is handed out and 409 ``ads_not_exportable`` lists
+     *     each refused ad's status and reasons in ``params.ads``. The same key returns the same download.
+     */
+    post: operations['download_marketing_ideas'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/generation-drafts': {
     parameters: {
       query?: never;
@@ -2674,6 +2697,53 @@ export interface paths {
      * @description Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018, #190).
      */
     post: operations['start_marketing_ideas_planning'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/ideas/{project_id}/understanding': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Edit Ideas Understanding
+     * @description Change, add or remove what the AI read about the product; the ideas and their images stay (#198).
+     *
+     *     A fact is checked only by ``verify_marketing_ideas``: a changed or new fact is unchecked, whatever the
+     *     document says. An ad that cites a changed or removed fact becomes ``needs_redo``; other ads are untouched.
+     */
+    patch: operations['edit_marketing_ideas_understanding'];
+    trace?: never;
+  };
+  '/api/v1/marketing/ideas/{project_id}/verification': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Verify Ideas
+     * @description Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made
+     *     without a product photo, and check findings accepted as they are.
+     *
+     *     Only what is named here becomes confirmed; the checked facts are published as the product's version.
+     *     Ads whose three conditions now hold become ``exportable``.
+     */
+    post: operations['verify_marketing_ideas'];
     delete?: never;
     options?: never;
     head?: never;
@@ -4290,6 +4360,12 @@ export interface components {
       kind?: ('single' | 'paired') | null;
       waiting?: components['schemas']['PairedQCWaiting'][] | null;
     };
+    /** @description Findings of one ad's check the user accepts as they are ("this is fine"). */
+    AcceptedFindings: {
+      asset_version_id: string;
+      check_id: string;
+      finding_ids: string[];
+    };
     ActionEligibility: {
       action?: string;
       allowed?: boolean;
@@ -4323,6 +4399,27 @@ export interface components {
       /** Format: date-time */
       created_at: string;
     };
+    AdReason: {
+      /** @enum {string} */
+      code:
+        | 'ideas_changed'
+        | 'facts_changed'
+        | 'facts_removed'
+        | 'photo_unavailable'
+        | 'image_blocked'
+        | 'facts_unverified'
+        | 'photo_unverified'
+        | 'appearance_unconfirmed'
+        | 'image_check_in_progress'
+        | 'check_missing'
+        | 'check_in_progress'
+        | 'check_failed'
+        | 'check_uncertain'
+        | 'findings_open'
+        | 'check_outdated';
+      fact_ids?: string[];
+      finding_ids?: string[];
+    };
     AdSummary: {
       asset_version_id: string;
       combination_id: string;
@@ -4330,6 +4427,10 @@ export interface components {
       expression_id: string;
       /** @enum {string} */
       status: 'draft' | 'exportable' | 'needs_redo';
+      reasons?: components['schemas']['AdReason'][];
+      cited_fact_ids?: string[];
+      /** @default false */
+      appearance_confirmed: boolean;
       kept: boolean;
       used_product_photo: boolean;
       created_at: string;
@@ -7062,6 +7163,10 @@ export interface components {
       expires_at: string;
       content_disposition: string;
     };
+    /** @description The ads to download: every one must be exportable, and only these are handed out. */
+    DownloadIdeas: {
+      asset_version_ids: string[];
+    };
     /** @description Shape of ``service._draft_dict`` -- also the ``bind`` command result. */
     DraftSummary: {
       id: string;
@@ -7101,6 +7206,17 @@ export interface components {
       source_candidate_fingerprint: string;
       asset_version_id: string;
       display_label: string;
+    };
+    /**
+     * @description Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.
+     *
+     *     ``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A
+     *     fact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out
+     *     removes it. ``source_addition`` adds material for a new quote to the product's source.
+     */
+    EditIdeasUnderstanding: {
+      understanding: components['schemas']['Understanding'];
+      source_addition?: string | null;
     };
     EditProject: {
       /** @enum {string} */
@@ -8593,6 +8709,14 @@ export interface components {
       error_code?: string | null;
       created_at: string;
     };
+    IdeasAdDownload: {
+      asset_version_id: string;
+      combination_id: string;
+      filename: string;
+      intent_id: string;
+      expires_at: string;
+      download_grant: components['schemas']['DownloadGrant'];
+    };
     /**
      * @description A drafting call of ads-first ideas: the product understanding, then the ideas (#190).
      *
@@ -8654,6 +8778,12 @@ export interface components {
     IdeasChecksSkipped: {
       asset_version_id: string;
       code: string;
+    };
+    /** @description One download of ads-first ads: a short-lived signed link per requested ad, in the order asked. */
+    IdeasDownload: {
+      id: string;
+      project_id: string;
+      downloads: components['schemas']['IdeasAdDownload'][];
     };
     IdeasGenerationDraft: {
       combination_id: string;
@@ -11813,6 +11943,12 @@ export interface components {
       n: components['schemas']['SampleSize'];
       ctr: components['schemas']['MetricComparison'];
       cpa: components['schemas']['MetricComparison'];
+    };
+    /** @description One "check before download" (design doc §5.3): what the user confirms, and nothing they did not see. */
+    VerifyIdeas: {
+      fact_ids?: string[];
+      appearance_confirmed?: string[];
+      accepted_findings?: components['schemas']['AcceptedFindings'][];
     };
     Vocabulary: {
       factors?: components['schemas']['VocabularyFactor'][];
@@ -17377,6 +17513,43 @@ export interface operations {
       };
     };
   };
+  download_marketing_ideas: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DownloadIdeas'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasDownload'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   prepare_marketing_ideas_generation: {
     parameters: {
       query?: never;
@@ -17440,6 +17613,82 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdeasCallSummary'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  edit_marketing_ideas_understanding: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EditIdeasUnderstanding'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  verify_marketing_ideas: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VerifyIdeas'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
         };
       };
       /** @description Validation Error */

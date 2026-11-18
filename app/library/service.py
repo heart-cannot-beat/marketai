@@ -1565,40 +1565,26 @@ def publish(
     )
 
 
-def _publish_effective_version(
+def _create_effective_version(
     session,
     context: TenantContext,
     entry: LibraryEntryRecord,
-    draft: LibraryDraftRecord,
     content: dict,
     report: ValidationReport,
     resolved: list[tuple[DependencyEdge, LibraryVersionRecord]],
-    acknowledged: set[str],
-    expected_revision: int,
+    current: LibraryVersionRecord | None,
     *,
-    extra_audit_detail: dict | None = None,
-) -> dict:
-    """在一个事务内创建版本、谱系、依赖、绑定、事件、审计与当前版本投影（§3.4）。"""
+    base_version_id: str | None,
+    source_version_id: str | None,
+    origin_command: str,
+) -> tuple[LibraryVersionRecord, int, datetime]:
+    """Supersede ``current`` and make ``content`` the entry's effective version (§3.4).
+
+    The part of a publish that does not depend on a Draft: the version row, its dependencies and
+    bindings, and the entry's current-version projection. Both the Draft publish and a server-side
+    publish of content the caller composed (``publish_content_in_transaction``) end here.
+    """
     entry_id = entry.id
-
-    claimed_revision = _claim_draft_revision(
-        session, context, draft, expected_revision, attempted_content=content
-    )
-
-    current = _effective_version(session, entry)
-    if current is not None and current.content_hash == report.content_hash:
-        raise LibraryConflict(
-            "内容与当前生效版本相同，不产生新版本",
-            {
-                "current_revision": claimed_revision,
-                "expected_revision": expected_revision,
-                "field_diff": {},
-                "current_version_id": current.id,
-                "content_hash": report.content_hash,
-            },
-            code="library_version_unchanged",
-        )
-
     version_no = int(
         session.scalar(
             select(func.max(LibraryVersionRecord.version_no)).where(
@@ -1636,9 +1622,9 @@ def _publish_effective_version(
         state=VERSION_EFFECTIVE,
         eligibility=ELIGIBILITY_ELIGIBLE,
         validation_json=report.as_dict(),
-        base_version_id=draft.base_version_id,
-        source_version_id=draft.source_version_id,
-        origin_command=draft.origin_command,
+        base_version_id=base_version_id,
+        source_version_id=source_version_id,
+        origin_command=origin_command,
         published_by=context.initiator_id,
         published_at=now,
     )
@@ -1670,6 +1656,48 @@ def _publish_effective_version(
     entry.display_name = str(content.get("name") or entry.display_name)
     entry.updated_at = now
     _sync_bridged_product_name(session, context, entry)
+    return version, version_no, now
+
+
+def _publish_effective_version(
+    session,
+    context: TenantContext,
+    entry: LibraryEntryRecord,
+    draft: LibraryDraftRecord,
+    content: dict,
+    report: ValidationReport,
+    resolved: list[tuple[DependencyEdge, LibraryVersionRecord]],
+    acknowledged: set[str],
+    expected_revision: int,
+    *,
+    extra_audit_detail: dict | None = None,
+) -> dict:
+    """在一个事务内创建版本、谱系、依赖、绑定、事件、审计与当前版本投影（§3.4）。"""
+    entry_id = entry.id
+
+    claimed_revision = _claim_draft_revision(
+        session, context, draft, expected_revision, attempted_content=content
+    )
+
+    current = _effective_version(session, entry)
+    if current is not None and current.content_hash == report.content_hash:
+        raise LibraryConflict(
+            "内容与当前生效版本相同，不产生新版本",
+            {
+                "current_revision": claimed_revision,
+                "expected_revision": expected_revision,
+                "field_diff": {},
+                "current_version_id": current.id,
+                "content_hash": report.content_hash,
+            },
+            code="library_version_unchanged",
+        )
+
+    version, version_no, now = _create_effective_version(
+        session, context, entry, content, report, resolved, current,
+        base_version_id=draft.base_version_id, source_version_id=draft.source_version_id,
+        origin_command=draft.origin_command,
+    )
 
     draft.base_version_id = version.id
     draft.state = DRAFT_EDITING
@@ -1701,6 +1729,69 @@ def _publish_effective_version(
     )
     session.flush()
     return _version_dict(version)
+
+
+#: ``origin_command`` of a product version published by an ads-first verification (#198): only what the
+#: user checked, never the Draft. A version the user published from the Draft keeps its own origin.
+COMMAND_IDEAS_VERIFICATION = "ideas_verification"
+
+
+def publish_content_in_transaction(
+    session,
+    context: TenantContext,
+    entry_id: str,
+    content: dict,
+    *,
+    origin_command: str,
+    replaces: frozenset[str] = frozenset(),
+) -> LibraryVersionRecord | None:
+    """Publish ``content`` as the entry's effective version inside the caller's transaction.
+
+    For a server-side command that composes the published content itself: an ads-first verification
+    (#198, ADR 0018) publishes only what the user checked, while the Draft keeps the AI's whole proposal
+    and its revision, so nothing unchecked becomes a published version. The same validation as any
+    publish applies; a blocking finding raises ``LibraryValidationError`` and no version is made.
+
+    It publishes only while every version the entry ever had has an ``origin_command`` in ``replaces``:
+    a version the user published from the Draft is theirs -- effective, superseded or withdrawn -- and
+    the entry is then left alone (returns ``None``). So is an entry whose versions are all withdrawn:
+    a withdrawal is a person's decision, and this command never undoes it. Content equal to the
+    effective version makes no new version (returns it). No idempotency record: the caller's own
+    command makes this happen once.
+    """
+    entry = _entry(session, context, entry_id)
+    if entry.lifecycle == LIFECYCLE_ARCHIVED:
+        raise LibraryConflict("条目已归档，不能发布新版本", code="entry_archived")
+    if not can_publish(entry.entry_type, context.role):
+        raise LibraryForbidden(f"只有 Owner 可以发布 {entry.entry_type} 版本")
+    origins = set(session.scalars(select(LibraryVersionRecord.origin_command).where(
+        LibraryVersionRecord.workspace_id == context.workspace_id, LibraryVersionRecord.entry_id == entry.id)).all())
+    if origins - replaces:
+        return None
+    current = _effective_version(session, entry)
+    if current is None and origins:
+        return None
+    content = dict(content)
+    report, resolved = _build_report(session, context, entry, content)
+    if not report.ok:
+        raise LibraryValidationError("发布被阻断项拒绝", report.as_dict())
+    if report.warnings:
+        # §3.4: a warning needs the user's acknowledgement, and no user is asked here.
+        raise LibraryValidationError("存在未确认的非阻断警告，必须显式确认后再发布", report.as_dict(),
+                                     code="library_warnings_unacknowledged")
+    if current is not None and current.content_hash == report.content_hash:
+        return current
+    version, version_no, _now = _create_effective_version(
+        session, context, entry, content, report, resolved, current,
+        base_version_id=current.id if current is not None else None, source_version_id=None,
+        origin_command=origin_command,
+    )
+    _emit(session, context, entry.id, "published", version_id=version.id, to_state=VERSION_EFFECTIVE,
+          payload={"version_no": version_no, "content_hash": report.content_hash})
+    _audit(session, context, "publish", entry_id=entry.id, version_id=version.id,
+           detail={"version_no": version_no, "content_hash": report.content_hash, "origin_command": origin_command})
+    session.flush()
+    return version
 
 
 def _materialize_bindings(

@@ -16,8 +16,9 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 from . import ideas, service
-from .ideas_contracts import (CreateIdeas, IdeasCallSummary, IdeasChecksQuote, IdeasGenerationDrafts, IdeasProjectDetail,
-                              IdeasProjectPage, PrepareIdeasGeneration, SetKept, StartIdeasChecks, StartIdeasPlanning)
+from .ideas_contracts import (CreateIdeas, DownloadIdeas, EditIdeasUnderstanding, IdeasCallSummary, IdeasChecksQuote,
+                              IdeasDownload, IdeasGenerationDrafts, IdeasProjectDetail, IdeasProjectPage,
+                              PrepareIdeasGeneration, SetKept, StartIdeasChecks, StartIdeasPlanning, VerifyIdeas)
 from .models import MarketingProjectRecord, PlanningCallRecord
 
 router = APIRouter(prefix="/marketing/ideas", tags=["marketing"])
@@ -155,3 +156,78 @@ def start_ideas_checks(project_id: str, body: StartIdeasChecks, request: Request
                                 lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
         set_etag(response, row.revision)
         return ideas.ideas_dict(session, ctx, row)
+
+
+@router.patch("/{project_id}/understanding", operation_id="edit_marketing_ideas_understanding",
+              response_model=IdeasProjectDetail, openapi_extra={"x-marketai-idempotent": True})
+def edit_ideas_understanding(project_id: str, body: EditIdeasUnderstanding, request: Request, response: Response,
+                             ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                             if_match: str | None = Header(default=None, alias="If-Match")):
+    """Change, add or remove what the AI read about the product; the ideas and their images stay (#198).
+
+    A fact is checked only by ``verify_marketing_ideas``: a changed or new fact is unchecked, whatever the
+    document says. An ad that cites a changed or removed fact becomes ``needs_redo``; other ads are untouched."""
+    from . import ideas_export
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.edit_understanding", body.model_dump(mode="json"),
+            lambda s: ideas_export.edit_understanding(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision,
+                                                      body.understanding, body.source_addition),
+            lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)
+
+
+@router.post("/{project_id}/verification", operation_id="verify_marketing_ideas", response_model=IdeasProjectDetail,
+             openapi_extra={"x-marketai-idempotent": True})
+def verify_ideas(project_id: str, body: VerifyIdeas, request: Request, response: Response,
+                 ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                 if_match: str | None = Header(default=None, alias="If-Match")):
+    """Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made
+    without a product photo, and check findings accepted as they are.
+
+    Only what is named here becomes confirmed; the checked facts are published as the product's version.
+    Ads whose three conditions now hold become ``exportable``."""
+    from . import ideas_export
+    revision = extract_if_match(request)
+
+    def verify(s):
+        row = ideas.get_ideas_project(s, ctx, project_id)
+        ideas_export.verify(s, ctx, row, revision, fact_ids=body.fact_ids, appearance=body.appearance_confirmed,
+                            findings=[item.model_dump(mode="json") for item in body.accepted_findings])
+        return row
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.verify", body.model_dump(mode="json"), verify,
+                                lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)
+
+
+@router.post("/{project_id}/download-intent", operation_id="download_marketing_ideas", response_model=IdeasDownload,
+             status_code=201, openapi_extra={"x-marketai-idempotent": True})
+async def download_ideas(project_id: str, body: DownloadIdeas, request: Request,
+                         ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key)):
+    """Download exactly the ads named, each through its own short-lived signed link (#198).
+
+    Every one must be ``exportable``; otherwise nothing is handed out and 409 ``ads_not_exportable`` lists
+    each refused ad's status and reasons in ``params.ads``. The same key returns the same download."""
+    from app.platform.blob_store import DownloadSpec
+    from app.platform.blob_store_factory import build_blob_store
+    from . import ideas_export
+    with tenant_session(ctx) as session:
+        row = ideas.get_ideas_project(session, ctx, project_id)
+        # Checked again on a replay: a download is never re-issued for an ad that stopped being exportable.
+        ideas_export.assert_exportable(session, ctx, row, body.asset_version_ids)
+        record = _resource_command(session, ctx, request, key, "marketing.ideas.download", body.model_dump(mode="json"),
+            lambda s: ideas_export.download_intent(s, ctx, row, body.asset_version_ids),
+            lambda s, resource: ideas_export.download_record(s, ctx, row, resource))
+        record_id, grants = record.id, ideas_export.download_grants(session, ctx, row, record)
+    store, downloads = build_blob_store(), []
+    for item in grants:
+        grant = await store.issue_download(item["ref"], DownloadSpec(filename=item["filename"],
+                                                                     expires_in_seconds=min(item["remaining"], 300)))
+        downloads.append({"asset_version_id": item["asset_version_id"], "combination_id": item["combination_id"],
+                          "filename": item["filename"], "intent_id": item["intent_id"], "expires_at": item["expires_at"],
+                          "download_grant": {"url": grant.url, "kind": "signed_get", "headers": {},
+                                             "content_disposition": grant.content_disposition}})
+    return {"id": record_id, "project_id": project_id, "downloads": downloads}

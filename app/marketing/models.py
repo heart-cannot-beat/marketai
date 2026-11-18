@@ -1,7 +1,8 @@
 """Marketing planning aggregates and immutable revision history."""
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Index, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (JSON, Boolean, CheckConstraint, DateTime, Index, ForeignKey, ForeignKeyConstraint, Integer, String, Text,
+                        UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.adapters.persistence.database import Base
@@ -90,6 +91,36 @@ class MarketingAdKeepRecord(Base):
     kept: Mapped[bool] = mapped_column(Boolean, nullable=False)
     actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class MarketingIdeasExportRecord(Base):
+    """Append-only evidence of what took ads-first ads from draft to download (#198, ADR 0018).
+
+    ``verification``: the facts one "check before download" confirmed, the ads whose appearance the user
+    confirmed, the check findings the user accepted, and the product version it published.
+    ``download``: the ads one download handed out and the download intents it created. Never updated: an
+    ad's status is derived from these rows, the project's facts and the image's check.
+    """
+    __tablename__ = "marketing_ideas_export_records"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id", name="uq_marketing_ideas_export_records_workspace_id"),
+        Index("ix_marketing_ideas_export_records_project", "workspace_id", "project_id"),
+        ForeignKeyConstraint(["workspace_id", "project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
+                             ondelete="RESTRICT", name="fk_marketing_ideas_export_record_project"),
+        CheckConstraint("kind IN ('verification', 'download')", name="record_kind"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    # The project revision the decision produced (a verification) or was made at (a download).
+    project_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    content_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The creative-library product version a verification published, if it published one.
+    library_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class MarketingRevisionRecord(Base):

@@ -291,7 +291,7 @@ def resolve_selection(session: Session, ctx: TenantContext, draft) -> dict:
             raise SelectionError("marketing_plan_unavailable", "找不到关联的测试方案。") from None
         if project.flow == "ads_first":
             from app.marketing.ideas import selection_intent
-            marketing_intent = selection_intent(project, link, draft)
+            marketing_intent = selection_intent(session, ctx, project, link, draft)
         else:
             if project.state != "plan_confirmed" or project.revision != link.plan_revision:
                 raise SelectionError("marketing_plan_changed", "测试方案已变化，请从当前方案重新准备生成草稿。")

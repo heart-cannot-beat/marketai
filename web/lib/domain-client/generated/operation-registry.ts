@@ -2330,6 +2330,60 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'download_marketing_ideas',
+    {
+      operationId: 'download_marketing_ideas',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/download-intent',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 8192,
+      maxResponseBytes: 262144,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'download_marketing_ideas_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'edit_marketing_ideas_understanding',
+    {
+      operationId: 'edit_marketing_ideas_understanding',
+      method: 'PATCH',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/understanding',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 131072,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'edit_marketing_ideas_understanding_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'edit_marketing_project',
     {
       operationId: 'edit_marketing_project',
@@ -6984,6 +7038,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         200: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'validate_library_draft_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'verify_marketing_ideas',
+    {
+      operationId: 'verify_marketing_ideas',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/verification',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 32768,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'verify_marketing_ideas_200' },
           locationShapes: [],
         },
         422: {

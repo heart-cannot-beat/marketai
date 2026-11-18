@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from app.generation.response_models import DownloadGrant
 from .contracts import (Angle, BrandKitRef, CreativeCombination, Document, GuidingQuestion, Identifier,
                         PlanningCallSummary, Text, Understanding)
 
@@ -101,13 +102,44 @@ class IdeasAdCheck(Document):
     created_at: str
 
 
+#: Why an ad is not exportable (#198). The first five mean ``needs_redo``; the others leave it a ``draft``.
+#: ``ideas_changed``: the ideas no longer hold this ad's content under its combination. ``facts_changed`` /
+#: ``facts_removed``: a cited fact was changed or removed since the image was made. ``photo_unavailable``:
+#: a product photo it used may no longer be used. ``image_blocked``: the image's own generation check
+#: stopped it. ``facts_unverified``: cited facts the user has not checked. ``photo_unverified``: a photo it
+#: used is not checked. ``appearance_unconfirmed``: made without a product photo, and the user has not
+#: confirmed the product looks right. ``image_check_in_progress``: the generation check is still running.
+#: ``check_missing`` / ``check_in_progress`` / ``check_failed`` / ``check_uncertain``: the automatic check
+#: has no result. ``findings_open``: findings the user has not handled. ``check_outdated``: the check was
+#: made against facts that have changed since.
+AdReasonCode = Literal["ideas_changed", "facts_changed", "facts_removed", "photo_unavailable", "image_blocked",
+                       "facts_unverified", "photo_unverified", "appearance_unconfirmed", "image_check_in_progress",
+                       "check_missing", "check_in_progress", "check_failed", "check_uncertain", "findings_open",
+                       "check_outdated"]
+
+
+class AdReason(Document):
+    code: AdReasonCode
+    # The facts concerned (``facts_*``).
+    fact_ids: list[str] = Field(default_factory=list)
+    # ``IdeasCheckFinding.check_id`` of each finding still to handle (``findings_open``).
+    finding_ids: list[str] = Field(default_factory=list)
+
+
 class AdSummary(Document):
     asset_version_id: str
     combination_id: str
     angle_id: str
     expression_id: str
-    # Step 1 only ever reports "draft"; S10 derives "exportable" and "needs_redo" (ADR 0018 §3).
+    # Derived from the facts, the photos and the check as they are now, never stored (ADR 0018 §3, #198).
     status: Literal["draft", "exportable", "needs_redo"]
+    # Why the ad is not exportable; empty when it is.
+    reasons: list[AdReason] = Field(default_factory=list)
+    # The facts the ad stands on, as its image was made: its claim's and way of telling's, and the facts
+    # behind an inference the claim cites -- so sometimes more than the card shows (#211).
+    cited_fact_ids: list[str] = Field(default_factory=list)
+    # Made without a product photo, and the user confirmed the product in the image looks right.
+    appearance_confirmed: bool = False
     kept: bool
     # Whether the image request sent a product photo; the ideas page marks one made without (#196).
     used_product_photo: bool
@@ -343,3 +375,59 @@ class ResumeFirstBatch(Document):
     quote_hash: str = Field(min_length=1, max_length=64)
     selected_variant: str | None = Field(default=None, min_length=1, max_length=200)
     additional_text: str | None = Field(default=None, min_length=1, max_length=16000)
+
+
+class EditIdeasUnderstanding(Document):
+    """Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.
+
+    ``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A
+    fact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out
+    removes it. ``source_addition`` adds material for a new quote to the product's source."""
+    understanding: Understanding
+    source_addition: str | None = Field(default=None, max_length=8000)
+
+
+class AcceptedFindings(Document):
+    """Findings of one ad's check the user accepts as they are ("this is fine")."""
+    asset_version_id: str = Field(min_length=1, max_length=64)
+    # ``IdeasAdCheck.id``: the check the user looked at. A newer check has to be looked at again.
+    check_id: str = Field(min_length=1, max_length=64)
+    # ``IdeasCheckFinding.check_id`` of each accepted finding.
+    finding_ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(min_length=1, max_length=40)
+
+
+class VerifyIdeas(Document):
+    """One "check before download" (design doc §5.3): what the user confirms, and nothing they did not see."""
+    # Facts the user read and confirms.
+    fact_ids: list[Identifier] = Field(default_factory=list, max_length=30)
+    # Ads made without a product photo: the user confirms the product in the image looks right.
+    appearance_confirmed: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(default_factory=list, max_length=60)
+    accepted_findings: list[AcceptedFindings] = Field(default_factory=list, max_length=60)
+
+
+class DownloadIdeas(Document):
+    """The ads to download: every one must be exportable, and only these are handed out."""
+    asset_version_ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(min_length=1, max_length=60)
+
+    @model_validator(mode="after")
+    def distinct(self):
+        if len(set(self.asset_version_ids)) != len(self.asset_version_ids):
+            raise PydanticCustomError("marketing_download_ads_duplicate", "同一张广告只能列一次")
+        return self
+
+
+class IdeasAdDownload(Document):
+    asset_version_id: str
+    combination_id: str
+    # Carries the ad's printable code, so an ad name in a later report can be matched to this image.
+    filename: str
+    intent_id: str
+    expires_at: str
+    download_grant: DownloadGrant
+
+
+class IdeasDownload(Document):
+    """One download of ads-first ads: a short-lived signed link per requested ad, in the order asked."""
+    id: str
+    project_id: str
+    downloads: list[IdeasAdDownload]

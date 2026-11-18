@@ -1098,6 +1098,36 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'start_marketing_ideas_checks'> | ReconciliationRequired
   >;
+  /** Change what the AI read about the product; a changed fact is unchecked again (#198). */
+  editMarketingIdeasUnderstanding(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    body: DomainOperationMap['edit_marketing_ideas_understanding']['requestBody'];
+  }): Promise<
+    | DomainResultFor<'edit_marketing_ideas_understanding'>
+    | ReconciliationRequired
+  >;
+  /** Record what the user checked before a download: facts, looks, findings (#198). */
+  verifyMarketingIdeas(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    body: DomainOperationMap['verify_marketing_ideas']['requestBody'];
+  }): Promise<
+    DomainResultFor<'verify_marketing_ideas'> | ReconciliationRequired
+  >;
+  /** Download exactly the ads named; every one must be exportable (#198). */
+  downloadMarketingIdeas(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['download_marketing_ideas']['requestBody'];
+  }): Promise<
+    DomainResultFor<'download_marketing_ideas'> | ReconciliationRequired
+  >;
   /** The start button's maximum for the ads-first first batch (#193). */
   getMarketingFirstBatchQuote(params: {
     workspaceSlug: string;
@@ -5019,6 +5049,77 @@ export class DefaultDomainGateway implements DomainGateway {
       params.body,
       202,
       'accepted'
+    );
+  }
+
+  async editMarketingIdeasUnderstanding(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    body: DomainOperationMap['edit_marketing_ideas_understanding']['requestBody'];
+  }): Promise<
+    | DomainResultFor<'edit_marketing_ideas_understanding'>
+    | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'edit_marketing_ideas_understanding',
+      params.actionInstanceId,
+      buildBffPath('edit_marketing_ideas_understanding', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'PATCH',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async verifyMarketingIdeas(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    body: DomainOperationMap['verify_marketing_ideas']['requestBody'];
+  }): Promise<
+    DomainResultFor<'verify_marketing_ideas'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'verify_marketing_ideas',
+      params.actionInstanceId,
+      buildBffPath('verify_marketing_ideas', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async downloadMarketingIdeas(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['download_marketing_ideas']['requestBody'];
+  }): Promise<
+    DomainResultFor<'download_marketing_ideas'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'download_marketing_ideas',
+      params.actionInstanceId,
+      buildBffPath('download_marketing_ideas', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created'
     );
   }
 

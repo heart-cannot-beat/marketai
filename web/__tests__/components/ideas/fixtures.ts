@@ -106,6 +106,7 @@ export function ad(
     angle_id: combo?.angle_id ?? 'a_gone',
     expression_id: combo?.expression_id ?? 'e_gone',
     status: 'draft',
+    appearance_confirmed: false,
     kept: false,
     used_product_photo: true,
     created_at: '2026-11-17T08:00:00+00:00',
