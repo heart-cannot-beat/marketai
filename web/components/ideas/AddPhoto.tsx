@@ -34,7 +34,7 @@ export function AddPhoto({
   /** The product already has a usable photo of the whole product. */
   hasMain: boolean;
 }) {
-  const { t } = useTranslation(['ideas', 'common']);
+  const { t } = useTranslation('ideas');
   const { state, upload, reset } = uploader;
   const [role, setRole] = useState<PhotoRole>(hasMain ? 'detail' : 'main');
   const title = useId();
