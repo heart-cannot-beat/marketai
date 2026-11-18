@@ -9098,6 +9098,124 @@
         }
       }
     },
+    "/api/v1/marketing/ideas/{project_id}/photos": {
+      "post": {
+        "operationId": "add_marketing_ideas_photo",
+        "summary": "Add Ideas Photo",
+        "description": "Add the user's own photo to the product of these ideas (#233, design doc §5.2).\n\nUpload it first like any reference (an Upload Intent of purpose ``reference_asset``, then\n``create_library_reference_object``) and wait for its gate. Once released, it is listed in ``photos``\n(``source = \"added\"``) in every ads-first project of the product, drafts images and is checked or\nrejected like a photo the product's reading found; until the user checks it, its ads are drafts.\n409 ``photo_upload_checking`` while the gate is still checking it, ``photo_upload_rejected`` (with the\ngate's ``failure_code``) when it did not pass, ``photo_already_listed`` when the product has it already.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddIdeasPhoto"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasProjectDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/ideas/{project_id}/photos/{photo_id}/download-intent": {
+      "post": {
+        "operationId": "create_marketing_ideas_photo_download_intent",
+        "summary": "Create Ideas Photo Download Intent",
+        "description": "A short-lived signed link to one photo of these ideas (#233): its released derivative, the bytes an image\nrequest sends, never the uploaded original. Any photo listed in ``photos``, checked or not.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "x-marketai-idempotent": true,
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasPhotoDownloadGrant"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/ideas/{project_id}/planning": {
       "post": {
         "operationId": "start_marketing_ideas_planning",
@@ -16060,6 +16178,30 @@
           "asset_version_id",
           "expected_revision"
         ]
+      },
+      "AddIdeasPhoto": {
+        "properties": {
+          "reference_object_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "main",
+              "angle",
+              "detail"
+            ],
+            "default": "detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reference_object_id"
+        ],
+        "description": "Add a photo to the product of these ideas (#233, design doc §5.2): an image the user uploaded that passed\nthe reference upload gate (``create_library_reference_object``), and what it shows. No rights are declared\nhere: checking the photo declares them, as for a photo the reading found."
       },
       "AddProductReference": {
         "properties": {
@@ -33862,7 +34004,8 @@
             "type": "string",
             "enum": [
               "product_page",
-              "upload"
+              "upload",
+              "added"
             ]
           },
           "source_url": {
@@ -33876,10 +34019,24 @@
             ]
           },
           "intake_id": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "image_id": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "width": {
             "anyOf": [
@@ -33924,11 +34081,46 @@
           "photo_id",
           "status",
           "role",
-          "source",
-          "intake_id",
-          "image_id"
+          "source"
         ],
-        "description": "A photo the product's reading found that may show the product's look (#199; design doc §5.2).\n\nAds may be drafted with it before anyone checks it; an ad made with it is exportable only once the user\nchecks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.\nShow it with ``create_product_intake_image_download_intent(intake_id, image_id)``."
+        "description": "A photo that may show the product's look (#199; design doc §5.2): one the product's reading found, or\none the user added to the product (``add_marketing_ideas_photo``, #233).\n\nAds may be drafted with it before anyone checks it; an ad made with it is exportable only once the user\nchecks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.\nShow it with ``create_marketing_ideas_photo_download_intent(photo_id)``; a reading's photo also with\n``create_product_intake_image_download_intent(intake_id, image_id)``."
+      },
+      "IdeasPhotoDownloadGrant": {
+        "properties": {
+          "photo_id": {
+            "type": "string"
+          },
+          "download_url": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "byte_size": {
+            "type": "integer"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "photo_id",
+          "download_url",
+          "expires_at",
+          "mime_type",
+          "byte_size",
+          "width",
+          "height"
+        ],
+        "description": "A short-lived signed link to a photo's released derivative, the bytes an image request sends (#233)."
       },
       "IdeasProjectDetail": {
         "properties": {

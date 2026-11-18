@@ -1160,6 +1160,25 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'place_marketing_ideas_upload'> | ReconciliationRequired
   >;
+  /** Add the user's own gated upload as a photo of the ideas' product (#233). */
+  addMarketingIdeasPhoto(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['add_marketing_ideas_photo']['requestBody'];
+  }): Promise<
+    DomainResultFor<'add_marketing_ideas_photo'> | ReconciliationRequired
+  >;
+  /** A short-lived signed link to one photo of the ideas (#233). */
+  createMarketingIdeasPhotoDownloadIntent(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    photoId: string;
+  }): Promise<
+    | DomainResultFor<'create_marketing_ideas_photo_download_intent'>
+    | ReconciliationRequired
+  >;
   /** The start button's maximum for the ads-first first batch (#193). */
   getMarketingFirstBatchQuote(params: {
     workspaceSlug: string;
@@ -5225,6 +5244,52 @@ export class DefaultDomainGateway implements DomainGateway {
       }),
       'POST',
       params.body,
+      201,
+      'created'
+    );
+  }
+
+  async addMarketingIdeasPhoto(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['add_marketing_ideas_photo']['requestBody'];
+  }): Promise<
+    DomainResultFor<'add_marketing_ideas_photo'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'add_marketing_ideas_photo',
+      params.actionInstanceId,
+      buildBffPath('add_marketing_ideas_photo', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created'
+    );
+  }
+
+  async createMarketingIdeasPhotoDownloadIntent(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    photoId: string;
+  }): Promise<
+    | DomainResultFor<'create_marketing_ideas_photo_download_intent'>
+    | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'create_marketing_ideas_photo_download_intent',
+      params.actionInstanceId,
+      buildBffPath('create_marketing_ideas_photo_download_intent', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+        photo_id: params.photoId,
+      }),
+      'POST',
+      undefined,
       201,
       'created'
     );

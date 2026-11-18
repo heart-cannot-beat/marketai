@@ -31,6 +31,7 @@ import {
   type WorkspaceProduct,
 } from '@/lib/products/workspace-products';
 import { AdCard } from './AdCard';
+import { ADD_PHOTO_ANCHOR } from './AddPhoto';
 import { ChecksButton } from './ChecksButton';
 import { CheckSheet } from './CheckSheet';
 import { EditAd } from './EditAd';
@@ -414,7 +415,10 @@ function IdeasProject({
       {view.withoutPhotoCount > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
           <p className="min-w-0 flex-1 basis-60">{t('ideas-no-photo-hint')}</p>
-          <GuardedLink href={profileHref} className="btn btn-sm min-h-11">
+          <GuardedLink
+            href={`${profileHref}#${ADD_PHOTO_ANCHOR}`}
+            className="btn btn-sm min-h-11"
+          >
             {t('ideas-no-photo-action')}
           </GuardedLink>
         </div>

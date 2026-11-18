@@ -12,7 +12,9 @@ yet: the released candidates the product's reading found. They are frozen by
 the content hash of the derivative the provider reads, marked
 ``unverified_product_photo``, and only a draft may use them: an ad made with
 one is exportable once the user checks that photo, and needs making again once
-the user rejects it (``ideas_export``). Plan-first drafts never get one.
+the user rejects it (``ideas_export``). Plan-first drafts never get one. The photos the user adds to
+the product (#233, ``ideas_photos``) passed the same reference upload gate and are drafted with the same
+way until checked; within photos checked alike, the user's own come first.
 """
 from dataclasses import asdict
 import base64
@@ -144,12 +146,25 @@ def from_product_set(session, ctx, project):
 
 
 def candidates(session, ctx, project) -> list[dict]:
-    """The photos the reading of an ads-first project found that may show the product's look (#199).
+    """The photos of an ads-first project that may show the product's look: the reading's (#199), then the
+    ones the user added to the product (#233).
 
-    The released candidates of its first batch's product intake -- the images that passed the reference
-    gate -- with a ``main``, ``angle`` or ``detail`` role, of the model the user chose, in the page's
-    order. A photo is its derivative's content hash (``photo_id``): the bytes a provider reads, so the
-    same file found twice is one photo. A project no first batch opened has none."""
+    The reading's are the released candidates of its first batch's product intake -- the images that passed
+    the reference gate -- with a ``main``, ``angle`` or ``detail`` role, of the model the user chose, in the
+    page's order. A project no first batch opened has none of these. The added ones (``added_photos``) are
+    the product's, so every ads-first project of the product lists them, in the order they were added.
+    A photo is its derivative's content hash (``photo_id``): the bytes a provider reads, so the same file
+    found or added twice is one photo, listed where it came first."""
+    found = _reading_photos(session, ctx, project)
+    seen = {photo["photo_id"] for photo in found}
+    for photo in added_photos(session, ctx, project.product_id):
+        if photo["role"] in CANDIDATE_ROLES and photo["photo_id"] not in seen:
+            seen.add(photo["photo_id"])
+            found.append(photo)
+    return found
+
+
+def _reading_photos(session, ctx, project) -> list[dict]:
     from .models import MarketingFirstBatchRecord
     batch = session.scalar(select(MarketingFirstBatchRecord).where(
         MarketingFirstBatchRecord.workspace_id == ctx.workspace_id, MarketingFirstBatchRecord.project_id == project.id)
@@ -176,7 +191,7 @@ def candidates(session, ctx, project) -> list[dict]:
         seen.add(obj.derivative_sha256)
         uploaded = item.get("source") == "upload"
         found.append({"photo_id": obj.derivative_sha256, "reference_object_id": obj.id, "intake_id": intake.id,
-                      "image_id": item["image_id"], "role": item["role"], "rank": item["rank"],
+                      "image_id": item["image_id"], "added_id": None, "role": item["role"], "rank": item["rank"],
                       "source": "upload" if uploaded else "product_page",
                       "source_url": None if uploaded else (item.get("source_url") or intake.source_url),
                       "width": obj.derivative_width, "height": obj.derivative_height,
@@ -185,15 +200,45 @@ def candidates(session, ctx, project) -> list[dict]:
     return found
 
 
+#: Where an added photo stands in the product version's order: after every photo of a reading.
+ADDED_RANK = 10_000
+
+
+def added_photos(session, ctx, product_id) -> list[dict]:
+    """The photos the user added to this product (#233), oldest first, each the way ``candidates`` lists one.
+
+    Only an image whose reference object is still released in this Workspace counts; the role is the one the
+    user chose (``logo`` included: callers that want the product's look leave it out)."""
+    from .models import MarketingProductPhotoRecord as Added
+    if not product_id:
+        return []
+    rows = session.execute(select(Added, ReferenceObjectRecord).join(ReferenceObjectRecord,
+            (ReferenceObjectRecord.id == Added.reference_object_id) & (ReferenceObjectRecord.workspace_id == ctx.workspace_id))
+        .where(Added.workspace_id == ctx.workspace_id, Added.product_id == product_id)
+        .order_by(Added.created_at, Added.id)).all()
+    result = []
+    for position, (row, obj) in enumerate(rows):
+        if not _usable(obj, ctx):
+            continue
+        result.append({"photo_id": obj.derivative_sha256, "reference_object_id": obj.id, "intake_id": None, "image_id": None,
+                       "added_id": row.id, "role": row.role, "rank": ADDED_RANK + position, "source": "added",
+                       "source_url": None, "width": obj.derivative_width, "height": obj.derivative_height,
+                       "intake_image": None, "page_url": None})
+    return result
+
+
 def for_ideas(session, ctx, project, states=None) -> list[dict]:
     """The product photos a new image of ads-first ideas is drafted with (#199, design doc §5.2).
 
-    A main photo and at most two more, from the reading's photos (``candidates``) and the product's
-    verified photos (``from_product_set``), one per content hash. A photo the user rejected is never used,
-    nor one checked whose creative-library reference can no longer be used; checked photos come first, then unchecked ones, each in the page's order. The main photo is the first
-    the reading called ``main`` (or the product's ``primary``), else the first one. A photo the product's
-    set lists as verified is frozen as that creative-library reference; any other as the reading's photo,
-    ``unverified_product_photo``. Without any reading's photo this is ``from_product_set``, as before.
+    A main photo and at most two more, from the photos the user added to the product and the reading's
+    photos (``candidates``) and the product's verified photos (``from_product_set``), one per content hash.
+    A photo the user rejected is never used, nor one checked whose creative-library reference can no longer
+    be used. Checked photos come first, then unchecked ones; within each, the photos the user added (in the
+    order they were added, #233) before the reading's (in the page's order), then the product's own set. The
+    main photo is the first in that order the user or the reading called ``main`` (or the product's
+    ``primary``), else the first one. A photo the product's set lists as verified is frozen as that
+    creative-library reference; any other as the gated photo it is, ``unverified_product_photo``. Without any
+    such photo this is ``from_product_set``, as before.
 
     ``states``: each photo's ``verified`` / ``rejected`` / ``unverified`` (``ideas_export.photo_states``)."""
     verified = from_product_set(session, ctx, project)
@@ -204,17 +249,17 @@ def for_ideas(session, ctx, project, states=None) -> list[dict]:
         from .ideas_export import photo_states
         states = photo_states(session, ctx, project, found, verified)
     library = {ref["content_sha256"]: ref for ref in verified}
-    pool = [(photo["photo_id"], photo["role"] == "main", photo) for photo in found]
-    pool += [(ref["content_sha256"], ref["reference_role"] == "primary", None) for ref in verified
+    # (photo id, called main, photo, where it comes from: added 0, the reading 1, the product's set 2)
+    pool = [(photo["photo_id"], photo["role"] == "main", photo, 0 if photo["added_id"] else 1) for photo in found]
+    pool += [(ref["content_sha256"], ref["reference_role"] == "primary", None, 2) for ref in verified
              if ref["content_sha256"] not in {photo["photo_id"] for photo in found}]
     usable = [entry for entry in pool if states.get(entry[0]) not in ("rejected", "unavailable")]
-    ordered = [entry for entry in usable if states.get(entry[0]) == "verified"] + \
-              [entry for entry in usable if states.get(entry[0]) != "verified"]
+    ordered = sorted(usable, key=lambda entry: (states.get(entry[0]) != "verified", entry[3]))
     if not ordered:
         return []
     main = next((entry for entry in ordered if entry[1]), ordered[0])
     result = []
-    for photo_id, _, photo in [main, *(entry for entry in ordered if entry is not main)]:
+    for photo_id, _, photo, _ in [main, *(entry for entry in ordered if entry is not main)]:
         if len(result) == MAX_REFERENCES:
             break
         if photo_id in library:
@@ -224,11 +269,18 @@ def for_ideas(session, ctx, project, states=None) -> list[dict]:
             live = _gated(session, ctx, photo["reference_object_id"])
         except MarketingError:
             continue
-        result.append({**live, "source": f"product_intake:{photo['intake_id']}:{photo['image_id']}",
-                       "attestation": UNVERIFIED, "selection_policy": IDEAS_POLICY, "product_id": project.product_id,
-                       "intake_id": photo["intake_id"], "image_id": photo["image_id"],
+        result.append({**live, "source": photo_source(photo), "attestation": UNVERIFIED, "selection_policy": IDEAS_POLICY,
+                       "product_id": project.product_id, "intake_id": photo["intake_id"], "image_id": photo["image_id"],
+                       **({"added_id": photo["added_id"]} if photo["added_id"] else {}),
                        "reference_role": "primary" if not result else "detail"})
     return result
+
+
+def photo_source(photo) -> str:
+    """Where a candidate photo came from, as a frozen reference and a product version's binding note say it."""
+    if photo.get("added_id"):
+        return f"product_photo:{photo['added_id']}"
+    return f"product_intake:{photo['intake_id']}:{photo['image_id']}"
 
 
 def _current(session, ctx, frozen):

@@ -45,6 +45,11 @@ jest.mock('@/lib/domain-client/gateway-provider', () => ({
 }));
 const mockReads: Record<string, unknown> = {};
 const mockRefreshRead = jest.fn().mockResolvedValue(undefined);
+// The photo area's own upload (#233) needs the browser's storage client; nothing here uploads.
+jest.mock('@/lib/domain-client/upload-deps', () => ({
+  useBlobTransferClient: () => ({ downloadBlob: jest.fn() }),
+  useFileDigest: () => jest.fn(),
+}));
 jest.mock('@/hooks/domain/useDomainQuery', () => ({
   useDomainQuery: (
     operation: string,
@@ -231,13 +236,12 @@ describe('product profile photos (#229)', () => {
     ).toBeInTheDocument();
     expect(within(fourth).queryByRole('button')).toBeNull();
 
-    // The note that checking is not open yet is gone; uploading is said plainly.
-    expect(photos()).not.toHaveTextContent(
-      /checking photos here isn't available/i
-    );
-    expect(photos()).toHaveTextContent(
-      "Uploading your own product photos here isn't available yet."
-    );
+    // The notes that checking and uploading are not open yet are gone (#233):
+    // the user's own photo is added right here.
+    expect(photos()).not.toHaveTextContent(/isn't available/i);
+    expect(
+      within(photos()).getByRole('group', { name: 'Add a product photo' })
+    ).toBeInTheDocument();
     expect(container.textContent).not.toMatch(
       /mp_secret|av_\d|\bp\d\b|img_|pin_secret|rv_\d/
     );

@@ -4,6 +4,10 @@ import classNames from 'classnames';
 import { useDomainQuery } from '@/hooks/domain/useDomainQuery';
 import { useIdeasCommands } from '@/hooks/ideas/useIdeasCommands';
 import {
+  useIdeasPhotoUpload,
+  type UseIdeasPhotoUploadResult,
+} from '@/hooks/ideas/useIdeasPhotoUpload';
+import {
   useProductDirectory,
   type ProductSummary,
 } from '@/hooks/products/useProductDirectory';
@@ -15,6 +19,7 @@ import {
   photoDecision,
   type IdeasPhoto,
 } from '@/lib/ideas/photos';
+import { AddPhoto } from './AddPhoto';
 import {
   PhotoFailureNote,
   PhotoStatusBadge,
@@ -30,14 +35,16 @@ import {
  * The photos and brand of a product's profile (ADR 0018, design §5.6, #202,
  * #229).
  *
- * The photos are the ones the product's reading found (`IdeasPhoto`), each
- * with its checking: they can be checked -- the declaration that it is a
- * real photo of this product the user may use in ads -- or rejected, which
- * makes the ads made with it need redoing. The check before downloading
- * checks the same photos the same way, from the same answer.
+ * The photos are the ones the product's reading found and the ones the user
+ * added (`IdeasPhoto`, #233), each with its checking: they can be checked --
+ * the declaration that it is a real photo of this product the user may use
+ * in ads -- or rejected, which makes the ads made with it need redoing. The
+ * check before downloading checks the same photos the same way, from the
+ * same answer. The user adds their own photo here (`AddPhoto`), through the
+ * same upload gate as any reference.
  *
- * Ideas no first batch opened have no photos of their own: their ads use the
- * product's published photos, listed read only. The photo editor
+ * Ideas with no such photo use the product's published photos, listed read
+ * only, and may get one the user adds. The photo editor
  * (`ProductReferenceSettings`) is never shown here: a product of the new flow
  * has no published product card for it to bind to, and once its checked
  * content is published the editor would publish over it.
@@ -91,12 +98,18 @@ export function ProfilePhotos({
   projectId: string;
   detail: IdeasDetail;
 }) {
+  const uploader = useIdeasPhotoUpload(projectId);
   const photos = detail.photos ?? [];
   if (photos.length > 0)
     return (
-      <CandidatePhotos projectId={projectId} detail={detail} photos={photos} />
+      <CandidatePhotos
+        projectId={projectId}
+        detail={detail}
+        photos={photos}
+        uploader={uploader}
+      />
     );
-  return <PublishedPhotos productId={productId} />;
+  return <PublishedPhotos productId={productId} uploader={uploader} />;
 }
 
 /** One question open at a time: check this photo, or reject it. */
@@ -106,10 +119,12 @@ function CandidatePhotos({
   projectId,
   detail,
   photos,
+  uploader,
 }: {
   projectId: string;
   detail: IdeasDetail;
   photos: IdeasPhoto[];
+  uploader: UseIdeasPhotoUploadResult;
 }) {
   const { t } = useTranslation('ideas');
   const { verify, refresh } = useIdeasCommands(projectId, detail);
@@ -174,7 +189,12 @@ function CandidatePhotos({
               className="space-y-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900"
               data-testid="profile-photo"
             >
-              <PhotoThumbnail photo={photo} alt={name} size="lg" />
+              <PhotoThumbnail
+                photo={photo}
+                projectId={projectId}
+                alt={name}
+                size="lg"
+              />
               <div className="space-y-1">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <p id={nameId} className="text-sm font-semibold">
@@ -266,9 +286,15 @@ function CandidatePhotos({
           );
         })}
       </ul>
-      <p className="text-xs text-gray-600 dark:text-gray-400">
-        {t('profile-photos-upload-later')}
-      </p>
+      <AddPhoto
+        uploader={uploader}
+        hasMain={photos.some(
+          (photo) =>
+            photo.role === 'main' &&
+            photo.status !== 'rejected' &&
+            photo.status !== 'unavailable'
+        )}
+      />
     </Section>
   );
 }
@@ -343,7 +369,13 @@ function CheckPhotoQuestion({
  * Ideas no first batch opened (#199): their ads use the product's published
  * photos, shown read only; or none, when the product has none.
  */
-function PublishedPhotos({ productId }: { productId: string }) {
+function PublishedPhotos({
+  productId,
+  uploader,
+}: {
+  productId: string;
+  uploader: UseIdeasPhotoUploadResult;
+}) {
   const { t } = useTranslation('ideas');
   const directory = useProductDirectory();
   const summary = directory.find(productId);
@@ -426,9 +458,12 @@ function PublishedPhotos({ productId }: { productId: string }) {
           })}
         </ul>
       )}
-      <p className="text-xs text-gray-600 dark:text-gray-400">
-        {t('profile-photos-upload-later')}
-      </p>
+      <AddPhoto
+        uploader={uploader}
+        hasMain={items.some(
+          (item) => item.role === 'primary' && item.available
+        )}
+      />
     </Section>
   );
 }

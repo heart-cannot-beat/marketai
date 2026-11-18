@@ -853,6 +853,13 @@ BEGIN
     EXECUTE 'GRANT SELECT, INSERT ON public.marketing_ideas_uploads TO marketai_domain_api';
     EXECUTE 'GRANT SELECT ON public.marketing_ideas_uploads TO marketai_domain_worker, marketai_domain_readonly';
   END IF;
+  -- Photos the user adds to a product of ads-first ideas (#233), append-only. The API records which
+  -- gated image is a photo of which product; the Worker reads it because a first batch drafts its images
+  -- with the product's photos, added ones included; readonly reads it. Nobody updates or deletes a row.
+  IF to_regclass('public.marketing_product_photos') IS NOT NULL THEN
+    EXECUTE 'GRANT SELECT, INSERT ON public.marketing_product_photos TO marketai_domain_api';
+    EXECUTE 'GRANT SELECT ON public.marketing_product_photos TO marketai_domain_worker, marketai_domain_readonly';
+  END IF;
   -- The Worker admits a first batch's next step once the current one finished (#193): the product
   -- draft and its ideas after the reading, a planning call, the image drafts, previews and runs, each
   -- with its own reservation in the same transaction. Before #193 only the API admitted paid work.

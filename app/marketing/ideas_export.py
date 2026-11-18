@@ -508,9 +508,10 @@ def _photo_binding(photo, primary: bool) -> dict:
     """A checked photo as the product version's reference binding, the way the product's photo set reads it
     (``reference_sets``): a verified photo of the real product, of the one model the version has."""
     from app.products.reference_sets import METADATA
+    from .product_references import photo_source
     item_id = f"pritem_{photo['photo_id'][:24]}"
     return {"reference_version_id": photo["reference_version_id"], "purpose": "product_reference", "viewpoint": item_id,
-            "priority": 0 if primary else 10, "note": f"product_intake:{photo['intake_id']}:{photo['image_id']}",
+            "priority": 0 if primary else 10, "note": photo_source(photo),
             "conditions": {METADATA: {"item_id": item_id, "model_variant": "", "role": "primary" if primary else "detail",
                                       "identity_status": "verified_physical", "added_by": photo.get("actor_id"),
                                       "added_at": photo.get("decided_at") or ""}}}
@@ -610,22 +611,32 @@ def _ads(session, ctx, row, asset_version_ids) -> dict:
     return ads
 
 
+def _photo_rights(photo, today) -> dict:
+    """The rights declaration checking a photo makes: a reading's photo the way confirming a product card
+    declares the rights of its images (``intake_service._rights_for``); a photo the user added to the product
+    (#233) as their own upload, valid as long as a card confirmation's."""
+    from app.products.intake_service import RIGHTS_VALIDITY, _rights_for
+    if photo.get("intake_image") is not None:
+        return _rights_for(photo["intake_image"], photo["page_url"], today)
+    return {"scope": "user_upload", "valid_to": (today + RIGHTS_VALIDITY).isoformat(),
+            "evidence": f"marketing_product_photo:{photo['added_id']}"}
+
+
 def _photo_decisions_to_record(session, ctx, row, photo_ids, rejected_photo_ids) -> list:
-    """The photo lines of a verification (#199), each naming one photo the product's reading found.
+    """The photo lines of a verification (#199), each naming one photo of these ideas (``candidates``): one
+    the product's reading found, or one the user added to the product (#233).
 
     A checked photo becomes a creative-library reference here, in this command: the checking user declares
-    that it shows this product and may be used in ads, the way confirming a product card declares the
-    rights of its images (``intake_service._rights_for``). ``photo_not_found`` names photos the reading
-    of these ideas did not find."""
+    that it shows this product and may be used in ads (``_photo_rights``). ``photo_not_found`` names photos
+    these ideas do not list."""
     from app.library import service as library
-    from app.products.intake_service import _rights_for
     from .product_references import candidates
     if not (photo_ids or rejected_photo_ids):
         return []
     found = {photo["photo_id"]: photo for photo in candidates(session, ctx, row)}
     unknown = [pid for pid in (*photo_ids, *rejected_photo_ids) if pid not in found]
     if unknown:
-        raise MarketingError("photo_not_found", "要核对的照片不是读这个产品时找到的照片，请刷新后重试。",
+        raise MarketingError("photo_not_found", "要核对的照片不在这个产品的照片里，请刷新后重试。",
                              params={"photo_ids": unknown})
     product = session.scalar(select(ProductRecord).where(ProductRecord.workspace_id == ctx.workspace_id,
                                                          ProductRecord.id == row.product_id))
@@ -635,13 +646,14 @@ def _photo_decisions_to_record(session, ctx, row, photo_ids, rejected_photo_ids)
             photo = found[pid]
             line = {"photo_id": pid, "decision": decision, "reference_object_id": photo["reference_object_id"],
                     "intake_id": photo["intake_id"], "image_id": photo["image_id"], "role": photo["role"],
-                    "rank": photo["rank"]}
+                    "rank": photo["rank"], **({"added_id": photo["added_id"]} if photo["added_id"] else {})}
             if decision == "verified":
                 try:
                     line["reference_version_id"] = library.promote_reference_in_transaction(
                         session, ctx, photo["reference_object_id"],
-                        display_name=f"{((product.name if product else '') or 'Product')[:80]} · {photo['image_id']}",
-                        rights=_rights_for(photo["intake_image"], photo["page_url"], today), today=today)
+                        display_name=f"{((product.name if product else '') or 'Product')[:80]} · "
+                                     f"{photo['image_id'] or photo['added_id']}",
+                        rights=_photo_rights(photo, today), today=today)
                 except library.LibraryError as exc:
                     raise MarketingError("verified_product_unpublishable", "核对过的照片不能存进创意库，请刷新后重试。", 409,
                                          params={"reason": getattr(exc, "code", None) or "library_validation_failed"}) from exc

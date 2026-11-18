@@ -88,7 +88,7 @@
 - **D6 广告清单。** 一个项目的广告通过出图配方里的 `marketing_intent.project_id` 找，不依赖小轮。查询写在 `app/marketing/ideas.py::project_ads`，S1 提供，后面各块共用。
 - **D7 费用。** 首批总价是各步最高费用之和，再加一次策划调用的最高费用，确认一次。多出的一次只用于应用拒收主张草稿时重新起草一次（#193 维护者决定）。每一步仍然单独预留、单独结算，没用上的不收费。预留总额不超过确认的数字，超过就停下来。
 - **D8 供应商。** 第 1 步保证只有 OpenAI Key 时全程能跑。只有 Gemini Key 时，在开始之前提示“目前需要 OpenAI 的 Key”。
-- **D9 新接口一览。** 全部做完后接口数从 242 变成 260（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200）。
+- **D9 新接口一览。** 全部做完后接口数从 242 变成 262（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200；S22 多两个产品照片的接口，#233）。
 
 | 块 | operation_id | 路径 |
 | --- | --- | --- |
@@ -110,6 +110,8 @@
 | S12 | `prepare_marketing_ideas_feedback` | `POST /marketing/ideas/{project_id}/feedback-drafts`（按意见重出，带 `image_tool` 时是放大、去背景、擦掉一块；只准备出图草稿，用现有的预览报价、提交出图） |
 | S12 | `create_marketing_ideas_image_edit` | `POST /marketing/ideas/{project_id}/image-edits`（裁剪旋转，免费） |
 | S12 | `place_marketing_ideas_upload` | `POST /marketing/ideas/{project_id}/uploads`（把上传的图放在某个讲法下） |
+| S22 | `add_marketing_ideas_photo` | `POST /marketing/ideas/{project_id}/photos`（把通过上传门禁的图加成产品照片，#233） |
+| S22 | `create_marketing_ideas_photo_download_intent` | `POST /marketing/ideas/{project_id}/photos/{photo_id}/download-intent`（照片区显示照片用：加的照片没有录入，核对前也没有创意库版本） |
 
 S12（#200）原计划加两个，实际加了三个：上传的图要有一个放进广告想法的入口。“追加主张或讲法”不是新接口，是 `start_marketing_ideas_planning` 的 `addition`。S11（#199）没有加接口：照片的列表在 `get_marketing_ideas` 的 `photos` 里，核对和否定照片是 `verify_marketing_ideas` 的 `photo_ids` 和 `rejected_photo_ids`。
 
@@ -586,6 +588,11 @@ class IdeasApiTests(MarketingIdeasFixtures):
 
 - **做成的样子：** 只改前端，不加接口（仍是 260），照片的读和写都用 S11 的 `get_marketing_ideas` `photos` 和 `verify_marketing_ideas` `photo_ids` / `rejected_photo_ids`。下载前核对把留下的草稿用到的、还没核对的照片列出来，勾选框的文字就是声明（“这是这个产品的实物照片，我有权把它用在广告里”），和事实、外观、检查发现一起在同一次核对里提交；否定一张照片先问（用到它的广告有几张、其中几张在这次下载里、否定后需要重出），确认后单独提交一次，这些广告立刻变成需要重出、移出这次下载。产品资料的照片区列出候选照片和状态，可以核对、否定，否定过的可以改为核对（后端以最后一次决定为准）；“不能再用”的照片说明原因，不给按钮。广告想法页和修改页说明照片被否定或不能再用的广告为什么需要重出、怎么重出。两个画面读同一份回答，状态一致。
 - **没做的：** 用户自己上传新的产品照片（后端没有路径，要新表、Worker 门禁任务和新接口）、核对的续期、从照片里选 Logo（核对过的照片是产品参考图，不是 Logo），结论写在 #229。
+
+### S22 上传自己的产品照片（#233，第一个 PR）
+
+- **做成的样子：** 产品资料的照片区可以加自己的产品照片：选它拍的是整个产品、另一个角度还是细节，选文件；页面按创意库参考图的方式上传（`reference_asset` 上传凭证、`create_library_reference_object`），等 Worker 的上传门禁（`library.reference_gate`，不放宽）结果，通过后调 `add_marketing_ideas_photo` 加成产品照片，没通过时用门禁自己的失败码说明原因。加的照片记在新表 `marketing_product_photos`（只追加，强制 RLS），属于产品，同一个产品的各新开头项目都看得到；不写进录入。它和读产品找到的照片一样列在 `photos`（`source = "added"`），核对、否定、出图都一样，核对之前只能出草稿。出图选图：已核对的在前；同一种状态里用户加的在前、读产品找到的在后。广告想法页在有广告没用产品照片时重新给出“加一张产品照片”，直接跳到照片区的上传。接口 260 → 262。
+- **还没做的（#233 的后两个 PR）：** 选 Logo、照片核对过期后的续期。
 
 ### S15 前端：竞品独立页面，素材库和设置接入
 

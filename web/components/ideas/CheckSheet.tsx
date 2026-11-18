@@ -390,6 +390,7 @@ export function CheckSheet({
           <SheetPhotoRow
             key={item.photo.photo_id}
             item={item}
+            projectId={projectId}
             declaration={declaration(detail.understanding?.product_name)}
             checked={photos.has(item.photo.photo_id)}
             onTick={(on) => tickPhoto(item.photo.photo_id, on)}
@@ -607,6 +608,7 @@ export function CheckSheet({
  */
 function SheetPhotoRow({
   item,
+  projectId,
   declaration,
   checked,
   onTick,
@@ -614,6 +616,7 @@ function SheetPhotoRow({
   disabled,
 }: {
   item: SheetPhoto;
+  projectId: string;
   declaration: string;
   checked: boolean;
   onTick: (on: boolean) => void;
@@ -649,7 +652,11 @@ function SheetPhotoRow({
 
   return (
     <div className={ROW} data-testid="check-photo">
-      <PhotoThumbnail photo={item.photo} alt={label.role} />
+      <PhotoThumbnail
+        photo={item.photo}
+        projectId={projectId}
+        alt={label.role}
+      />
       <div className="min-w-0 flex-1 basis-48 space-y-2">
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {t('check-photo-about', {

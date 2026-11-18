@@ -29,6 +29,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'add_marketing_ideas_photo',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/photos',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'add_product_reference',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/products/:product_id/references',
@@ -437,6 +444,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     bffPattern:
       '/api/domain/v1/w/:slug/marketing/ideas/:project_id/image-edits',
     pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'create_marketing_ideas_photo_download_intent',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/photos/:photo_id/download-intent',
+    pathParams: ['project_id', 'photo_id'],
     requiresIdempotency: true,
   },
   {

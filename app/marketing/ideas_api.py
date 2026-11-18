@@ -16,10 +16,11 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 from . import ideas, service
-from .ideas_contracts import (CreateIdeas, CreateIdeasImageEdit, DownloadIdeas, EditIdeasUnderstanding, IdeasCallSummary,
-                              IdeasChecksQuote, IdeasDownload, IdeasFeedbackDraft, IdeasGenerationDrafts, IdeasProjectDetail,
-                              IdeasProjectPage, PlaceIdeasUpload, PrepareIdeasFeedback, PrepareIdeasGeneration, SetKept,
-                              StartIdeasChecks, StartIdeasPlanning, VerifyIdeas)
+from .ideas_contracts import (AddIdeasPhoto, CreateIdeas, CreateIdeasImageEdit, DownloadIdeas, EditIdeasUnderstanding,
+                              IdeasCallSummary, IdeasChecksQuote, IdeasDownload, IdeasFeedbackDraft, IdeasGenerationDrafts,
+                              IdeasPhotoDownloadGrant, IdeasProjectDetail, IdeasProjectPage, PlaceIdeasUpload,
+                              PrepareIdeasFeedback, PrepareIdeasGeneration, SetKept, StartIdeasChecks, StartIdeasPlanning,
+                              VerifyIdeas)
 from .models import MarketingProjectRecord, PlanningCallRecord
 
 router = APIRouter(prefix="/marketing/ideas", tags=["marketing"])
@@ -269,6 +270,61 @@ def place_ideas_upload(project_id: str, body: PlaceIdeasUpload, request: Request
                                 lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
         set_etag(response, row.revision)
         return ideas.ideas_dict(session, ctx, row)
+
+
+@router.post("/{project_id}/photos", operation_id="add_marketing_ideas_photo", response_model=IdeasProjectDetail,
+             status_code=201, openapi_extra={"x-marketai-idempotent": True})
+def add_ideas_photo(project_id: str, body: AddIdeasPhoto, request: Request, response: Response,
+                    ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key)):
+    """Add the user's own photo to the product of these ideas (#233, design doc §5.2).
+
+    Upload it first like any reference (an Upload Intent of purpose ``reference_asset``, then
+    ``create_library_reference_object``) and wait for its gate. Once released, it is listed in ``photos``
+    (``source = "added"``) in every ads-first project of the product, drafts images and is checked or
+    rejected like a photo the product's reading found; until the user checks it, its ads are drafts.
+    409 ``photo_upload_checking`` while the gate is still checking it, ``photo_upload_rejected`` (with the
+    gate's ``failure_code``) when it did not pass, ``photo_already_listed`` when the product has it already."""
+    from . import ideas_photos
+
+    def add(s):
+        row = ideas.get_ideas_project(s, ctx, project_id)
+        ideas_photos.add(s, ctx, row, body.reference_object_id, body.role)
+        return row
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.photo", body.model_dump(mode="json"), add,
+                                lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)
+
+
+@router.post("/{project_id}/photos/{photo_id}/download-intent", operation_id="create_marketing_ideas_photo_download_intent",
+             response_model=IdeasPhotoDownloadGrant, status_code=201, openapi_extra={"x-marketai-idempotent": True})
+async def create_ideas_photo_download_intent(project_id: str, photo_id: str, request: Request,
+                                             ctx: TenantContext = Depends(request_tenant_context),
+                                             key: str = Depends(_idempotency_key)):
+    """A short-lived signed link to one photo of these ideas (#233): its released derivative, the bytes an image
+    request sends, never the uploaded original. Any photo listed in ``photos``, checked or not."""
+    from datetime import timezone
+    from app.platform.blob_store import DownloadSpec
+    from app.platform.blob_store_factory import build_blob_store
+    from app.platform.download_intents import DEFAULT_DOWNLOAD_TTL_SECONDS, create_or_replay_download_intent
+    from app.platform.idempotency import compute_fingerprint
+    from . import ideas_photos
+    with tenant_session(ctx) as session:
+        row = ideas.get_ideas_project(session, ctx, project_id)
+        facts = ideas_photos.derivative(session, ctx, row, photo_id)
+        intent = create_or_replay_download_intent(
+            session, idempotency_key=key, command_type="marketing.ideas_photo_download_intent",
+            fingerprint_hash=compute_fingerprint("POST", "create_marketing_ideas_photo_download_intent", request.url.path,
+                                                 {}, None, {}),
+            owner_kind="marketing_product_photo", owner_id=facts["reference_object_id"], committed_ref=facts["ref"])
+        expires_at = intent.expires_at if intent.expires_at.tzinfo else intent.expires_at.replace(tzinfo=timezone.utc)
+    remaining = max(1, int((expires_at - datetime.now(timezone.utc)).total_seconds()))
+    grant = await build_blob_store().issue_download(facts["ref"], DownloadSpec(
+        filename=f"photo-{photo_id[:12]}.jpg", expires_in_seconds=min(DEFAULT_DOWNLOAD_TTL_SECONDS, remaining)))
+    return {"photo_id": photo_id, "download_url": grant.url, "expires_at": grant.expires_at.isoformat(),
+            "mime_type": facts["mime_type"], "byte_size": facts["byte_size"], "width": facts["width"],
+            "height": facts["height"]}
 
 
 @router.post("/{project_id}/download-intent", operation_id="download_marketing_ideas", response_model=IdeasDownload,
