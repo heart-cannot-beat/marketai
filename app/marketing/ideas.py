@@ -344,14 +344,14 @@ def selection_intent(session, ctx, project, link, draft) -> dict:
 
 
 def assert_photos_usable(session, ctx, project, references) -> None:
-    """No new image is sent with a photo the user rejected for these ideas (#199): such a draft is
-    prepared again on the current photos. Checked or not, any other photo may make a draft."""
+    """No new image is sent with a photo the user rejected for this product, or one they checked whose
+    creative-library reference can no longer be used (#199): such a draft is prepared again on the current
+    photos. Checked or not, any other photo may make a draft."""
     if not references:
         return
-    from .ideas_export import photo_decisions
-    decided = photo_decisions(session, ctx, project)
-    if any((decided.get(ref.get("content_sha256")) or {}).get("decision") == "rejected" for ref in references):
-        raise SelectionError("product_reference_changed", "这张广告用到的产品照片已被否定，请按当前的照片重新准备。")
+    from .ideas_export import photos_gone
+    if photos_gone(session, ctx, project, references):
+        raise SelectionError("product_reference_changed", "这张广告用到的产品照片已被否定或已不可用，请按当前的照片重新准备。")
 
 
 def _prompt(combo, intent, kit, *, logo: bool, references: bool) -> str:

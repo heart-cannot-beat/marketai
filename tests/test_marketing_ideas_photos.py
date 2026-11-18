@@ -19,8 +19,9 @@ from sqlalchemy import func, select
 
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import (AssetVersionRecord, GenerationRunRecord, LibraryVersionRecord, ProductRecord,
-                                            ReferenceObjectRecord)
+                                            ReferenceObjectRecord, utcnow)
 from app.generation.models import GenerationDraftRecord, GenerationRecipeSnapshotRecord, RunItemRecord
+from app.library import service as library
 from app.marketing import ideas, ideas_export, product_references
 from app.marketing.ideas_contracts import IdeasProjectDetail
 from app.marketing.models import MarketingIdeasExportRecord
@@ -338,11 +339,12 @@ class RejectingPhotosTests(PhotoFixtures):
         ids = [photo["photo_id"] for photo in self.read_ideas(project)["photos"]]
         self.decide(project, photo_ids=ids)
         self.assertEqual({ad["status"] for ad in self.ads(project).values()}, {"exportable"})
+        references = [photo["reference_version_id"] for photo in self.read_ideas(project)["photos"]]
         self.decide(project, rejected=[ids[1]])
         self.assertEqual({ad["status"] for ad in self.ads(project).values()}, {"needs_redo"})
         version, _ = self.published_version(project)
-        self.assertNotIn(ids[1], [b["viewpoint"] for b in version.content_json["reference_bindings"]])
-        self.assertEqual(len(version.content_json["reference_bindings"]), 2)
+        self.assertEqual([b["reference_version_id"] for b in version.content_json["reference_bindings"]],
+                         [references[0], references[2]])
 
     def test_redoing_an_ad_sends_the_photos_as_they_are_now(self):
         project = self.checked_ads()
@@ -395,6 +397,78 @@ class RejectingPhotosTests(PhotoFixtures):
         self.assertEqual(len(ads), 6)
         self.assertTrue(all(main not in ad["photo_ids"] and len(ad["photo_ids"]) == 2 for ad in ads))
         self.assertTrue(all(main not in sent for sent in self.images.sent))
+
+
+class GonePhotoTests(PhotoFixtures):
+    """A checked photo whose creative-library reference stops being usable, and decisions made elsewhere."""
+
+    def withdraw(self, version_id):
+        library.withdraw_version(self.owner_ctx(self.context), version_id, reason="Not a photo of this product.")
+
+    def test_a_checked_photo_withdrawn_from_the_library_makes_its_ads_need_redoing_and_blocks_nothing(self):
+        project = self.checked_ads()
+        self.decide(project, fact_ids=["f2", "f3"], accept=[c for cs in ADS_OF.values() for c in cs])
+        ids = [photo["photo_id"] for photo in self.read_ideas(project)["photos"]]
+        self.decide(project, photo_ids=ids)
+        self.assertEqual({ad["status"] for cid, ad in self.ads(project).items() if cid not in ADS_OF["f1"]}, {"exportable"})
+        withdrawn = self.photos(project)["detail"]["reference_version_id"]
+        self.withdraw(withdrawn)
+        # Nothing made with it may leave any more: the photo is not confirmed content now.
+        self.assertEqual(self.photos(project)["detail"]["status"], "unavailable")
+        ads = self.ads(project)
+        self.assertEqual({ad["status"] for ad in ads.values()}, {"needs_redo"})
+        self.assertTrue(all("photo_unavailable" in self.reasons(ad) for ad in ads.values()))
+        self.download(project, ["c2_1"], expect=409)
+        # Checking a fact still publishes, without the withdrawn photo.
+        self.decide(project, fact_ids=["f1"])
+        version, _ = self.published_version(project)
+        self.assertIn("Charging can be scheduled from the Acme Charge app.", version.content_json["selling_points"])
+        self.assertEqual([b["reference_version_id"] for b in version.content_json["reference_bindings"]],
+                         [self.photos(project)["main"]["reference_version_id"], self.photos(project)["angle"]["reference_version_id"]])
+        # New images leave it out, and a draft still holding it is refused before anything is spent.
+        old_draft = self.feedback(project, "c1_1", note="Keep the charger centred.")
+        current = self.read_ideas(project)
+        response = self.client.post(f"/api/v1/marketing/ideas/{project['id']}/generation-drafts",
+                                    headers=self.headers(current["revision"]), json={"provider": "mock", "model": "mock-v1"})
+        self.assertEqual(response.status_code, 201, response.text)
+        fresh = self.draft_references(response.json()["drafts"][0]["draft_id"])
+        self.assertNotIn(ids[1], [ref["content_sha256"] for ref in fresh])
+        self.assertNotIn(ids[1], [ref["content_sha256"] for ref in self.draft_references(old_draft["draft_id"])])
+
+    def test_a_draft_frozen_before_the_withdrawal_is_refused_at_preview(self):
+        project = self.checked_ads()
+        ids = [photo["photo_id"] for photo in self.read_ideas(project)["photos"]]
+        prepared = self.feedback(project, "c3_1")
+        self.decide(project, photo_ids=ids)
+        self.withdraw(self.photos(project)["main"]["reference_version_id"])
+        _, preview = self.preview(prepared["draft_id"])
+        self.assertEqual((preview.status_code, preview.json()["code"]), (422, "product_reference_changed"), preview.text)
+
+    def test_a_photo_rejected_in_another_project_of_the_product_counts_here_too(self):
+        project = self.checked_ads()
+        self.everything_but_photos(project)
+        ids = [photo["photo_id"] for photo in self.read_ideas(project)["photos"]]
+        self.decide(project, photo_ids=ids)
+        self.assertEqual({ad["status"] for ad in self.ads(project).values()}, {"exportable"})
+        # A second project of the same product, whose user later says the close-up is not this product.
+        with tenant_session(self.context) as session:
+            row = ideas.get_ideas_project(session, self.context, project["id"])
+            other = ideas.create_ideas_project(session, self.context, product_id=row.product_id,
+                                               source_text="Acme Charge Home wall charger.", market="Canada",
+                                               ad_language="en-US")
+            line = {"photo_id": ids[1], "decision": "rejected", "reference_object_id": "", "intake_id": "", "image_id": "",
+                    "role": "detail", "rank": 2}
+            session.add(MarketingIdeasExportRecord(
+                id=f"mie_{other.id[-8:]}", workspace_id=self.context.workspace_id, project_id=other.id, kind="verification",
+                project_revision=other.revision, actor_id=self.context.initiator_id,
+                content_json={"facts": [], "appearance": [], "findings": [], "photos": [line]},
+                content_hash="b" * 64, created_at=utcnow()))
+        self.assertEqual(self.photos(project)["detail"]["status"], "rejected")
+        self.assertEqual({ad["status"] for ad in self.ads(project).values()}, {"needs_redo"})
+        # The next publish of the product leaves the photo out.
+        self.decide(project, fact_ids=["f4"])
+        version, _ = self.published_version(project)
+        self.assertEqual(len(version.content_json["reference_bindings"]), 2)
 
 
 class PhotoRefusalTests(PhotoFixtures):

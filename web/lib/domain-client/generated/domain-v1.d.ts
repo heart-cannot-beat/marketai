@@ -8952,7 +8952,7 @@ export interface components {
     IdeasPhoto: {
       photo_id: string;
       /** @enum {string} */
-      status: 'unverified' | 'verified' | 'rejected';
+      status: 'unverified' | 'verified' | 'rejected' | 'unavailable';
       /** @enum {string} */
       role: 'main' | 'angle' | 'detail';
       /** @enum {string} */

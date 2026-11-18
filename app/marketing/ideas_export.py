@@ -118,38 +118,79 @@ def _stamp(moment) -> str:
 
 
 def photo_decisions(session, ctx, row, pending=()) -> dict:
-    """The user's newest decision on each photo of these ideas (#199), by photo id, over every verification.
+    """The user's newest decision on each photo of this product (#199), by photo id, over every verification.
 
-    Each value is the record's line -- ``decision`` (``verified`` / ``rejected``), the reading's image,
-    and for a checked photo its creative-library reference -- with the record's ``actor_id`` and
-    ``decided_at``. ``pending``: the lines a verification is about to record; they are the newest."""
+    A photo is the product's, not one project's: a decision made in any ads-first project of the same
+    product counts for all of them, the newest one winning. Each value is the record's line --
+    ``decision`` (``verified`` / ``rejected``), the reading's image, and for a checked photo its
+    creative-library reference -- with the record's ``project_id``, ``actor_id`` and ``decided_at``.
+    ``pending``: the lines a verification of ``row`` is about to record; they are the newest."""
     latest = {}
-    for record in session.scalars(select(Record).where(Record.workspace_id == ctx.workspace_id, Record.project_id == row.id,
-                                                       Record.kind == "verification")
-                                  .order_by(Record.project_revision, Record.created_at, Record.id)).all():
+    for record in session.scalars(select(Record).join(MarketingProjectRecord,
+            (MarketingProjectRecord.id == Record.project_id) & (MarketingProjectRecord.workspace_id == ctx.workspace_id))
+            .where(Record.workspace_id == ctx.workspace_id, Record.kind == "verification",
+                   MarketingProjectRecord.product_id == row.product_id, MarketingProjectRecord.flow == ideas.FLOW)
+            .order_by(Record.created_at, Record.project_revision, Record.id)).all():
         for item in record.content_json.get("photos", []):
-            latest[item["photo_id"]] = {**item, "actor_id": record.actor_id, "decided_at": _stamp(record.created_at)}
+            latest[item["photo_id"]] = {**item, "project_id": record.project_id, "actor_id": record.actor_id,
+                                        "decided_at": _stamp(record.created_at)}
     for item in pending:
-        latest[item["photo_id"]] = item
+        latest[item["photo_id"]] = {**item, "project_id": row.id}
     return latest
 
 
-def photo_states(session, ctx, row, found=None, verified=None, decisions=None) -> dict:
-    """Each photo's state for these ideas, by photo id: ``verified``, ``rejected`` or ``unverified``.
+def _reference_usable(session, ctx, line) -> bool:
+    """Whether the creative-library reference a checked photo became can still be used: not withdrawn,
+    archived or blocked, its rights still valid, its file still released (``product_references._released``)."""
+    from .product_references import _released
+    if not line.get("reference_version_id"):
+        return False
+    try:
+        _released(session, ctx, line["reference_version_id"])
+    except MarketingError:
+        return False
+    return True
 
-    The user's newest decision here counts first. Without one, a photo whose content the product's photo
-    set lists as a verified photo of the real product is ``verified``: the same bytes checked once are
-    checked wherever they were sent (#199). ``found`` / ``verified`` / ``decisions`` are the reading's
-    photos (``product_references.candidates``), the product's verified photos (``from_product_set``) and
-    ``photo_decisions``, when the caller has them."""
+
+def photo_states(session, ctx, row, found=None, verified=None, decisions=None) -> dict:
+    """Each photo's state for these ideas, by photo id: ``verified``, ``rejected``, ``unavailable`` or ``unverified``.
+
+    The user's newest decision on the product's photo counts first. A checked photo whose creative-library
+    reference can no longer be used (withdrawn, archived, its rights expired) is ``unavailable``: it is not
+    confirmed content any more, and nothing made with it may leave. Without a decision, a photo whose
+    content the product's photo set lists as a verified photo of the real product is ``verified``: the same
+    bytes checked once are checked wherever they were sent (#199). ``found`` / ``verified`` / ``decisions``
+    are the reading's photos (``product_references.candidates``), the product's verified photos
+    (``from_product_set``) and ``photo_decisions``, when the caller has them."""
     from .product_references import candidates, from_product_set
     found = candidates(session, ctx, row) if found is None else found
     verified = from_product_set(session, ctx, row) if verified is None else verified
     decisions = photo_decisions(session, ctx, row) if decisions is None else decisions
     library = {ref["content_sha256"] for ref in verified}
     ids = [photo["photo_id"] for photo in found] + sorted(library) + list(decisions)
-    return {pid: decisions[pid]["decision"] if pid in decisions else "verified" if pid in library else "unverified"
-            for pid in ids}
+
+    def state(pid):
+        line = decisions.get(pid)
+        if line is None:
+            return "verified" if pid in library else "unverified"
+        if line["decision"] == "verified" and not _reference_usable(session, ctx, line):
+            return "unavailable"
+        return line["decision"]
+    return {pid: state(pid) for pid in dict.fromkeys(ids)}
+
+
+#: Photo states nothing new may be made with, and that make every ad made with the photo need redoing.
+PHOTO_GONE = ("rejected", "unavailable")
+
+
+def photos_gone(session, ctx, row, references) -> bool:
+    """Whether any of these frozen photos was rejected, or checked and its library reference is gone since."""
+    decided = photo_decisions(session, ctx, row)
+    for reference in references:
+        line = decided.get(reference.get("content_sha256"))
+        if line is not None and (line["decision"] == "rejected" or not _reference_usable(session, ctx, line)):
+            return True
+    return False
 
 
 def photo_list(session, ctx, row, ads) -> list[dict]:
@@ -221,9 +262,10 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
                 reasons.append(_reason(name, fact_ids=ids))
         references = _references(recipe)
         if references:
-            # A photo the user rejected, or one no longer usable as it was sent, cannot be rescued (#199).
+            # A photo the user rejected, or one no longer usable as it was sent or as it was checked, cannot be
+            # rescued (#199).
             if (not references_current(session, ctx, references) or _photo_rejected(session, ctx, references, photo_sets)
-                    or any(states.get(reference.get("content_sha256")) == "rejected" for reference in references)):
+                    or any(states.get(reference.get("content_sha256")) in PHOTO_GONE for reference in references)):
                 reasons.append(_reason("photo_unavailable"))
             elif any(reference.get("attestation") not in VERIFIED_PHOTOS
                      and states.get(reference.get("content_sha256")) != "verified" for reference in references):
@@ -344,25 +386,31 @@ def verified_content(name: str, source_url, statements: list, markets: list, pho
     return content
 
 
-def _checked_photos(session, ctx, project, pending=()) -> list:
-    """The photos checked in one project, in the page's order: a decision line each (``photo_decisions``)."""
-    decided = photo_decisions(session, ctx, project, pending)
-    return sorted((item for item in decided.values() if item["decision"] == "verified"),
+def _checked_photos(session, ctx, row, pending=()) -> list:
+    """The product's checked photos that are still usable, in the page's order: a decision line each.
+
+    A photo whose newest decision is a rejection is left out, and so is one whose creative-library
+    reference can no longer be used (withdrawn, archived, its rights expired): a version naming it would
+    not pass the library's validation, and it is no longer confirmed content."""
+    decided = photo_decisions(session, ctx, row, pending)
+    return sorted((item for item in decided.values() if item["decision"] == "verified" and _reference_usable(session, ctx, item)),
                   key=lambda item: (item.get("rank") or 10_000, item["photo_id"]))
 
 
 def publish_verified(session, ctx, row, *, excluding: str | None = None, pending=()) -> str | None:
     """Publish what the user has checked as the product's creative-library version; its id, or ``None``.
 
-    The version holds the facts and photos checked in every ads-first project of the product, oldest
-    project first, so one project's edit never drops what another has checked. ``excluding`` leaves one
-    project's facts out: its understanding is about to be drafted again and will come back unchecked (its
-    photos stay: they do not come from the understanding). ``pending``: this project's photo decisions a
-    verification is about to record (``photo_decisions``).
+    The version holds the facts checked in every ads-first project of the product, oldest project first,
+    so one project's edit never drops what another has checked, and the product's checked photos (the
+    newest decision on each photo, from whichever project). ``excluding`` leaves one project's facts out:
+    its understanding is about to be drafted again and will come back unchecked (photos stay: they do not
+    come from the understanding). ``pending``: this project's photo decisions a verification is about to
+    record (``photo_decisions``).
 
     Only checked content goes in (``verified_content``): the library Draft keeps the AI's whole proposal
-    and is not touched. A rejected photo is left out, so a photo checked before and rejected now leaves the
-    version. Nothing is published while nothing is checked, for a product without a library entry, or for
+    and is not touched. A rejected photo is left out, so a photo checked before and rejected now (in any
+    project of the product) leaves the version; so is a checked photo whose creative-library reference can
+    no longer be used, which would otherwise block every later publish. Nothing is published while nothing is checked, for a product without a library entry, or for
     a product the user ever published themself from its card -- that is already the user's confirmed
     content (or their decision to withdraw it) and is left alone. Checking more, or changing a checked
     fact, replaces the version an earlier verification published."""
@@ -373,18 +421,19 @@ def publish_verified(session, ctx, row, *, excluding: str | None = None, pending
         LibraryEntryRecord.id == product.product_profile_entry_id)) if product and product.product_profile_entry_id else None
     if entry is None or entry.lifecycle != "active":
         return None
-    statements, markets, photos = [], [], []
+    statements, markets = [], []
+    # Photos are the product's: the newest decision on each, whichever project made it (``photo_decisions``).
+    photos = _checked_photos(session, ctx, row, pending)
+    photo_projects = {photo["project_id"] for photo in photos}
     for project in session.scalars(select(MarketingProjectRecord).where(
             MarketingProjectRecord.workspace_id == ctx.workspace_id, MarketingProjectRecord.product_id == row.product_id,
             MarketingProjectRecord.flow == ideas.FLOW).order_by(MarketingProjectRecord.created_at, MarketingProjectRecord.id)).all():
         checked = [fact["statement"] for fact in (project.understanding_json or {}).get("facts", [])
                    if fact.get("confirmation") == "confirmed"] if project.id != excluding else []
         statements += [statement for statement in dict.fromkeys(checked) if statement not in statements]
-        shown = _checked_photos(session, ctx, project, pending if project.id == row.id else ())
-        photos += [photo for photo in shown if all(photo["photo_id"] != other["photo_id"] for other in photos)]
         # The audience is the market of each project that has something checked: a project's market is the
         # user's choice, but it joins the published version only together with that project's checked content.
-        if (checked or shown) and project.market and project.market not in markets:
+        if (checked or project.id in photo_projects) and project.market and project.market not in markets:
             markets.append(project.market)
     markets = markets or ([row.market] if row.market else [])
     if not markets or (not statements and not photos and not entry.current_version_id):

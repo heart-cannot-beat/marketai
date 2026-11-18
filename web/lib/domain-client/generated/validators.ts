@@ -7937,7 +7937,10 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
   IdeasPhoto: {
     properties: {
       photo_id: { type: 'string' },
-      status: { type: 'string', enum: ['unverified', 'verified', 'rejected'] },
+      status: {
+        type: 'string',
+        enum: ['unverified', 'verified', 'rejected', 'unavailable'],
+      },
       role: { type: 'string', enum: ['main', 'angle', 'detail'] },
       source: { type: 'string', enum: ['product_page', 'upload'] },
       source_url: { anyOf: [{ type: 'string' }, { type: 'null' }] },

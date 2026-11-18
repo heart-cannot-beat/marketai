@@ -220,7 +220,11 @@ class IdeasPhoto(Document):
     Show it with ``create_product_intake_image_download_intent(intake_id, image_id)``."""
     # The content hash of the photo's controlled derivative, the bytes an image request sends.
     photo_id: str
-    status: Literal["unverified", "verified", "rejected"]
+    # ``unavailable``: the user checked it, but the creative-library reference it became can no longer be
+    # used (withdrawn, archived, its rights expired). Like ``rejected``, nothing new is made with it and
+    # every ad made with it needs making again. The newest decision on the product's photo counts, in
+    # whichever of the product's ideas it was made.
+    status: Literal["unverified", "verified", "rejected", "unavailable"]
     # What the reading took the photo for: the main photo, another angle, or a close-up.
     role: Literal["main", "angle", "detail"]
     # From the product page (or an image link the user pasted), or from the user's upload.

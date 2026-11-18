@@ -189,8 +189,8 @@ def for_ideas(session, ctx, project, states=None) -> list[dict]:
     """The product photos a new image of ads-first ideas is drafted with (#199, design doc §5.2).
 
     A main photo and at most two more, from the reading's photos (``candidates``) and the product's
-    verified photos (``from_product_set``), one per content hash. A photo the user rejected is never used;
-    checked photos come first, then unchecked ones, each in the page's order. The main photo is the first
+    verified photos (``from_product_set``), one per content hash. A photo the user rejected is never used,
+    nor one checked whose creative-library reference can no longer be used; checked photos come first, then unchecked ones, each in the page's order. The main photo is the first
     the reading called ``main`` (or the product's ``primary``), else the first one. A photo the product's
     set lists as verified is frozen as that creative-library reference; any other as the reading's photo,
     ``unverified_product_photo``. Without any reading's photo this is ``from_product_set``, as before.
@@ -207,7 +207,7 @@ def for_ideas(session, ctx, project, states=None) -> list[dict]:
     pool = [(photo["photo_id"], photo["role"] == "main", photo) for photo in found]
     pool += [(ref["content_sha256"], ref["reference_role"] == "primary", None) for ref in verified
              if ref["content_sha256"] not in {photo["photo_id"] for photo in found}]
-    usable = [entry for entry in pool if states.get(entry[0]) != "rejected"]
+    usable = [entry for entry in pool if states.get(entry[0]) not in ("rejected", "unavailable")]
     ordered = [entry for entry in usable if states.get(entry[0]) == "verified"] + \
               [entry for entry in usable if states.get(entry[0]) != "verified"]
     if not ordered:
