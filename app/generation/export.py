@@ -43,7 +43,7 @@ from app.generation.models import ExportPackageRecord
 from app.generation.review import project_effective_review
 from app.platform.blob_store import CommittedBlobRef
 from app.platform.denial_audit import check_and_record_denial
-from app.platform.idempotency import create_or_replay_operation
+from app.platform.idempotency import create_or_replay_operation, get_idempotency_record, hash_idempotency_key
 from app.platform.jobs import enqueue_in_session
 from app.platform.tenancy import TenantContext
 
@@ -197,6 +197,46 @@ def _refuse(refused: list[dict], detail: str) -> ExportError:
     return ExportError("ads_not_exportable", detail, params=ideas_export.refusal_params(refused))
 
 
+def _accepted_replay(
+    session: Session, ctx: TenantContext, selector: dict, idempotency_key: str | None
+) -> dict | None:
+    """The package an earlier, identical request under ``idempotency_key``
+    already created, as that request was answered -- or ``None``.
+
+    Asked only when the gate would refuse (Issue #219): an ad that was
+    exportable when the package was accepted may have stopped being so since,
+    and a client retrying after a lost response still gets its package id
+    back. The package's link is refused anyway (``resolve_export_blob_ref``).
+    A key bound to any other request is left to ``create_or_replay_operation``
+    to refuse, exactly as before."""
+    if not idempotency_key:
+        return None
+    record = get_idempotency_record(session, hash_idempotency_key(idempotency_key), ctx.workspace_id)
+    if (
+        record is None
+        or record.state != "committed"
+        or record.command_type != "generation.export"
+        or record.request_fingerprint_hash != _export_fingerprint(selector)
+    ):
+        return None
+    operation = create_or_replay_operation(
+        session,
+        idempotency_key=idempotency_key,
+        command_type="generation.export",
+        fingerprint_hash=_export_fingerprint(selector),
+        actor=ctx.initiator_id or ctx.executor,
+    )
+    package = session.execute(
+        select(ExportPackageRecord).where(
+            ExportPackageRecord.workspace_id == ctx.workspace_id,
+            ExportPackageRecord.operation_id == operation.id,
+        )
+    ).scalar_one_or_none()
+    if package is None:
+        return None
+    return {"package_id": package.id, "operation_id": operation.id, "state": operation.state}
+
+
 def left_out_drafts(package: ExportPackageRecord) -> list[str]:
     """The ads a preset selector matched but left out of ``package``
     because they could not be exported when it was created."""
@@ -241,6 +281,9 @@ def create_export_package(
     left_out: list[str] = []
     refused = _unexportable_ads(session, ctx, [v.id for v in versions])
     if refused:
+        replay = _accepted_replay(session, ctx, selector, idempotency_key)
+        if replay is not None:
+            return replay
         left_out = [item["asset_version_id"] for item in refused]
         versions = [v for v in versions if v.id not in set(left_out)]
         if (selector.get("kind") or "explicit") == "explicit" or not versions:

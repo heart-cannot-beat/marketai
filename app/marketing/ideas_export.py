@@ -224,8 +224,14 @@ def library_refusals(session, ctx, asset_version_ids) -> list[dict]:
     for project_id in dict.fromkeys(projects.values()):
         row = session.scalar(select(MarketingProjectRecord).where(MarketingProjectRecord.workspace_id == ctx.workspace_id,
             MarketingProjectRecord.id == project_id, MarketingProjectRecord.flow == ideas.FLOW))
-        if row is not None:
+        if row is None:
+            continue
+        try:
             derived.update(statuses(session, ctx, row))
+        except (ValueError, LookupError, StopIteration, TypeError):
+            # Stored ideas a later contract no longer reads: their images are refused below (needs_redo),
+            # while every other image of the page or the package is judged, or left alone, as usual.
+            continue
     refused = []
     for asset_id in asset_version_ids:
         if asset_id not in projects:

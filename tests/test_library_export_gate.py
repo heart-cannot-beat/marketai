@@ -79,6 +79,11 @@ class LibraryGateFixtures(IdeasExportFixtures, MarketingWorkflowFixtures):
             self.assertTrue(DownloadIntentResponse.model_validate(response.json()).download_grant.url)
         return response.json()
 
+    def approve(self, asset_version_id):
+        response = self.client.post(f"/api/v1/generation/asset-versions/{asset_version_id}/reviews",
+                                    json={"review_value": "approved"}, headers=self.headers())
+        self.assertEqual(response.status_code, 201, response.text)
+
     def refused_ads(self, refusal):
         self.assertEqual(refusal["code"], "ads_not_exportable")
         self.assertEqual(refusal["params"]["count"], len(refusal["params"]["ads"]))
@@ -162,6 +167,15 @@ class DownloadIntentTests(LibraryGateFixtures):
         self.refused_ads(self.link(asset_id, key="save-c1-1", expect=409))
         self.assertEqual(self.count(DownloadIntentRecord, owner_id=asset_id), 1)
 
+    def test_a_request_without_a_purpose_is_the_download_it_always_was(self):
+        project = self.checked_ads()
+        self.verify_everything(project)
+        asset_id = self.ids(project, ["c1_1"])[0]
+        first = self.link(asset_id, key="unsaid")
+        # Same key, same request: the purpose only says out loud what was meant before.
+        self.assertEqual(self.link(asset_id, "download", key="unsaid")["intent_id"], first["intent_id"])
+        self.assertEqual(self.count(DownloadIntentRecord, owner_id=asset_id), 1)
+
     def test_one_key_serves_one_purpose(self):
         project = self.checked_ads()
         self.verify_everything(project)
@@ -203,7 +217,16 @@ class ExportPackageTests(LibraryGateFixtures):
         checked, draft = self.ids(project, ["c1_1", "c2_1"])
         refused = self.refused_ads(self.package({"kind": "explicit", "version_ids": [checked, draft]}, expect=409))
         self.assertEqual(list(refused), [draft])
+        self.assertEqual(refused[draft], {"asset_version_id": draft, "status": "draft", "reasons": self.ads(project)["c2_1"]["reasons"]})
         self.assertEqual([(r["code"], r["fact_ids"]) for r in refused[draft]["reasons"]][:1], [("facts_unverified", ["f2"])])
+        self.nothing_started()
+
+    def test_a_draft_among_old_flow_images_refuses_the_whole_selection(self):
+        project = self.checked_ads()
+        images = self.plan_first_images()
+        draft = self.ids(project, ["c3_1"])[0]
+        refused = self.refused_ads(self.package({"kind": "explicit", "version_ids": [*images, draft]}, expect=409))
+        self.assertEqual(list(refused), [draft])
         self.nothing_started()
 
     def test_an_ad_that_needs_redoing_is_refused_too(self):
@@ -254,6 +277,54 @@ class ExportPackageTests(LibraryGateFixtures):
         self.assertEqual(sorted(self.packaged(package["package_id"])), sorted([*self.ids(project, ADS_OF["f1"]), *others]))
         self.package_link(package["package_id"])
 
+    def test_a_repeated_request_gets_its_package_back_after_an_ad_stopped_being_exportable(self):
+        project = self.checked_ads()
+        self.verify_everything(project)
+        selector = {"kind": "explicit", "version_ids": self.ids(project, ["c1_1", "c2_1"])}
+        accepted = self.package(selector, key="pkg")
+        self.edit_facts(project, self.set_fact("f1", statement="Charging can be scheduled from the app or the wall unit."))
+        # A client retrying after a lost response learns its package, which is no longer handed out.
+        self.assertEqual(self.package(selector, key="pkg")["package_id"], accepted["package_id"])
+        self.assertEqual(self.count(ExportPackageRecord), 1)
+        self.drain(job_types=("generation.export_package",))
+        self.refused_ads(self.package_link(accepted["package_id"], expect=409))
+        # A new request for the same selection is refused, and a reused key still cannot name another one.
+        self.refused_ads(self.package(selector, expect=409))
+        reused = self.package({"kind": "explicit", "version_ids": selector["version_ids"][1:]}, key="pkg", expect=409)
+        self.assertEqual(reused["code"], "idempotency_key_reused")
+
+    def test_approved_ads_that_need_redoing_are_left_out_of_an_approved_only_package(self):
+        project = self.checked_ads()
+        self.verify_everything(project)
+        stale, kept = self.ids(project, ["c1_1", "c2_1"])
+        for asset_id in (stale, kept):
+            self.approve(asset_id)
+        self.edit_facts(project, self.set_fact("f1", statement="Charging can be scheduled from the app or the wall unit."))
+        package = self.built({"kind": "approved_only"})
+        self.assertEqual((package["state"], package["left_out_drafts"]), ("ready", 1))
+        self.assertEqual(self.packaged(package["package_id"]), [kept])
+        self.package_link(package["package_id"])
+
+    def test_the_worker_that_builds_a_package_never_judges_an_ad(self):
+        # The Worker's database role cannot read the verification records an ad's status needs.
+        project = self.checked_ads()
+        self.verify_everything(project)
+        package = self.package({"kind": "explicit", "version_ids": self.ids(project, ["c1_1", "c2_1"])})
+        with patch("app.marketing.ideas_export.statuses", side_effect=AssertionError("judged in the Worker")):
+            self.drain(job_types=("generation.export_package",))
+        self.assertEqual(self.detail(package["package_id"])["state"], "ready")
+
+    def test_a_large_selection_is_looked_up_in_parts_with_the_same_answer(self):
+        project = self.checked_ads()
+        self.verify(project, fact_ids=["f1"], ads=ADS_OF["f1"])
+        asked = [*self.plan_first_images(), *self.ids(project), "av_unknown"]
+        with tenant_session(self.context) as session:
+            whole = ideas_export.library_refusals(session, self.context, asked)
+            with patch.object(ideas_export, "_LOOKUP_CHUNK", 2):
+                parts = ideas_export.library_refusals(session, self.context, asked)
+        self.assertEqual(parts, whole)
+        self.assertEqual([item["asset_version_id"] for item in whole], self.ids(project, ADS_OF["f2"] + ADS_OF["f3"]))
+
     def test_a_preset_that_matches_only_drafts_is_refused(self):
         project = self.checked_ads()
         refused = self.refused_ads(self.package({"kind": "all_successful"}, expect=409))
@@ -302,6 +373,27 @@ class OtherImagesTests(LibraryGateFixtures):
             session.get(MarketingProjectRecord, project["id"]).flow = "plan_first"
         refused = self.refused_ads(self.link(asset_id, expect=409))
         self.assertEqual((refused[asset_id]["status"], self.reasons(refused[asset_id])), ("needs_redo", ["ideas_changed"]))
+
+
+    def test_ideas_that_no_longer_read_refuse_their_own_images_and_nothing_else(self):
+        project = self.checked_ads()
+        self.verify_everything(project)
+        images, ads = self.plan_first_images(), self.ids(project)
+        # Stored ideas a later contract no longer reads (its own ideas page fails as it always did).
+        with tenant_session(self.context) as session:
+            row = session.get(MarketingProjectRecord, project["id"])
+            combinations = [dict(c) for c in row.ideas_json["combinations"]]
+            combinations[0]["angle_id"] = "a_missing"
+            row.ideas_json = {**row.ideas_json, "combinations": combinations}
+        listed = self.gallery()
+        for asset_id in ads:
+            self.assertEqual(listed[asset_id]["export_block"]["status"], "needs_redo")
+            self.assertEqual(self.reasons(listed[asset_id]["export_block"]), ["ideas_changed"])
+        self.assertEqual({listed[image]["export_block"] for image in images}, {None})
+        self.refused_ads(self.link(ads[0], expect=409))
+        self.link(ads[0], "display")
+        package = self.built({"kind": "all_successful"})
+        self.assertEqual((package["left_out_drafts"], sorted(self.packaged(package["package_id"]))), (6, images))
 
 
 class TenantTests(LibraryGateFixtures):
