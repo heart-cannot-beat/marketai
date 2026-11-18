@@ -1603,6 +1603,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'create_marketing_ideas_image_edit',
+    {
+      operationId: 'create_marketing_ideas_image_edit',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/image-edits',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 8192,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        202: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'create_marketing_ideas_image_edit_202' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'create_marketing_image_edit',
     {
       operationId: 'create_marketing_image_edit',
@@ -5455,6 +5482,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'place_marketing_ideas_upload',
+    {
+      operationId: 'place_marketing_ideas_upload',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/uploads',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 1024,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'place_marketing_ideas_upload_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'prepare_marketing_feedback',
     {
       operationId: 'prepare_marketing_feedback',
@@ -5504,6 +5558,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         201: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'prepare_marketing_generation_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'prepare_marketing_ideas_feedback',
+    {
+      operationId: 'prepare_marketing_ideas_feedback',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/feedback-drafts',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 16384,
+      maxResponseBytes: 8192,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'prepare_marketing_ideas_feedback_201' },
           locationShapes: [],
         },
         422: {

@@ -105,6 +105,7 @@ export function ad(
     combination_id: combinationId,
     angle_id: combo?.angle_id ?? 'a_gone',
     expression_id: combo?.expression_id ?? 'e_gone',
+    origin: 'generated',
     status: 'draft',
     appearance_confirmed: false,
     kept: false,

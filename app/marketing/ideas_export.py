@@ -196,17 +196,35 @@ _LOOKUP_CHUNK = 500
 
 
 def _ideas_of(session, ctx, asset_version_ids) -> dict:
-    """The ads-first project each of these images was made for, by image id; any other image is left out."""
+    """The ads-first projects each of these images is an ad of, by image id; any other image is left out.
+
+    The same three kinds of ad ``ideas.project_ads`` lists: a generated image whose recipe intent names
+    an ads-first project (a correction or an image tool of an ad included), a crop or rotation of an ad,
+    and an uploaded image placed under an ad (#200)."""
+    from .workflow_models import MarketingImageEditRecord as Edit
+    from .models import MarketingIdeasUploadRecord as Upload
     intent = GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']
+    ads_first = ((MarketingProjectRecord.workspace_id == ctx.workspace_id) & (MarketingProjectRecord.flow == ideas.FLOW))
     found = {}
     for start in range(0, len(asset_version_ids), _LOOKUP_CHUNK):
-        found.update(session.execute(select(AssetVersionRecord.id, intent['project_id'].as_string())
+        chunk = asset_version_ids[start:start + _LOOKUP_CHUNK]
+        generated = session.execute(select(AssetVersionRecord.id, intent['project_id'].as_string())
             .join(RunItemRecord, (RunItemRecord.id == AssetVersionRecord.producing_run_item_id) & (RunItemRecord.workspace_id == ctx.workspace_id))
             .join(GenerationRunRecord, (GenerationRunRecord.id == RunItemRecord.generation_run_id) & (GenerationRunRecord.workspace_id == ctx.workspace_id))
             .join(GenerationRecipeSnapshotRecord, (GenerationRecipeSnapshotRecord.id == GenerationRunRecord.recipe_snapshot_id) & (GenerationRecipeSnapshotRecord.workspace_id == ctx.workspace_id))
-            .where(AssetVersionRecord.workspace_id == ctx.workspace_id,
-                   AssetVersionRecord.id.in_(asset_version_ids[start:start + _LOOKUP_CHUNK]),
-                   intent['flow'].as_string() == ideas.FLOW)).all())
+            .where(AssetVersionRecord.workspace_id == ctx.workspace_id, AssetVersionRecord.id.in_(chunk),
+                   intent['flow'].as_string() == ideas.FLOW)).all()
+        edited = session.execute(select(Edit.result_asset_version_id, Edit.project_id)
+            .join(MarketingProjectRecord, (MarketingProjectRecord.id == Edit.project_id) & ads_first)
+            .where(Edit.workspace_id == ctx.workspace_id, Edit.state == "succeeded",
+                   Edit.result_asset_version_id.in_(chunk))).all()
+        uploaded = session.execute(select(Upload.asset_version_id, Upload.project_id)
+            .join(MarketingProjectRecord, (MarketingProjectRecord.id == Upload.project_id) & ads_first)
+            .where(Upload.workspace_id == ctx.workspace_id, Upload.asset_version_id.in_(chunk))).all()
+        for asset_id, project_id in (*generated, *edited, *uploaded):
+            found.setdefault(asset_id, [])
+            if project_id not in found[asset_id]:
+                found[asset_id].append(project_id)
     return found
 
 
@@ -217,29 +235,31 @@ def library_refusals(session, ctx, asset_version_ids) -> list[dict]:
     The creative library hands out any image of the workspace -- one at a time, or in an export package --
     and this is where it asks whether an image is a draft that may not leave yet (ADR 0018 §2). An image
     that is not an ad of ads-first ideas is never listed: a round's image, one made in the workbench and an
-    uploaded one are not this rule's concern."""
+    uploaded one nobody placed under an ad are not this rule's concern. An image that is an ad of more than
+    one project's ideas leaves only when every one of them says it may."""
     asset_version_ids = list(dict.fromkeys(asset_version_ids))
     projects = _ideas_of(session, ctx, asset_version_ids)
     derived = {}
-    for project_id in dict.fromkeys(projects.values()):
+    for project_id in dict.fromkeys(project for owners in projects.values() for project in owners):
         row = session.scalar(select(MarketingProjectRecord).where(MarketingProjectRecord.workspace_id == ctx.workspace_id,
             MarketingProjectRecord.id == project_id, MarketingProjectRecord.flow == ideas.FLOW))
         if row is None:
             continue
         try:
-            derived.update(statuses(session, ctx, row))
+            derived[project_id] = statuses(session, ctx, row)
         except (ValueError, LookupError, StopIteration, TypeError):
             # Stored ideas a later contract no longer reads: their images are refused below (needs_redo),
             # while every other image of the page or the package is judged, or left alone, as usual.
             continue
+    # Ideas that cannot be read cannot show the image was checked: it does not leave.
+    unreadable = {"status": "needs_redo", "reasons": [_reason("ideas_changed")]}
     refused = []
     for asset_id in asset_version_ids:
-        if asset_id not in projects:
-            continue
-        # Ideas that cannot be read cannot show the image was checked: it does not leave.
-        state = derived.get(asset_id) or {"status": "needs_redo", "reasons": [_reason("ideas_changed")]}
-        if state["status"] != "exportable":
-            refused.append({"asset_version_id": asset_id, "status": state["status"], "reasons": state["reasons"]})
+        for project_id in projects.get(asset_id, ()):
+            state = derived.get(project_id, {}).get(asset_id) or unreadable
+            if state["status"] != "exportable":
+                refused.append({"asset_version_id": asset_id, "status": state["status"], "reasons": state["reasons"]})
+                break
     return refused
 
 

@@ -2672,6 +2672,32 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/feedback-drafts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Prepare Ideas Feedback
+     * @description Change one ad by making it again, without a round (#200): a correction from the user's note and the
+     *     findings of its check, or a supplier image tool (upscale, background removal, erasing).
+     *
+     *     Nothing is spent here: preview the draft with ``create_generation_preview`` (the maximum cost) and submit
+     *     it with ``submit_generation_run``. The new image is a new version of the ad, listed in ``ads`` beside the
+     *     old one, and a draft that needs its own check. A correction is made on the claim and the facts as they
+     *     are now; an image tool keeps what the source stood on and is refused for an ad that needs redoing.
+     */
+    post: operations['prepare_marketing_ideas_feedback'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/generation-drafts': {
     parameters: {
       query?: never;
@@ -2689,6 +2715,29 @@ export interface paths {
      *     images then appear under the ideas' ``ads`` (``pending`` while they are being made).
      */
     post: operations['prepare_marketing_ideas_generation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/ideas/{project_id}/image-edits': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create Ideas Image Edit
+     * @description Crop then rotate one ad, without a round (#200): free of charge, no reservation and no paid call.
+     *
+     *     The Worker writes the new version (``image_edits`` says when); it is listed in ``ads`` beside the old one,
+     *     keeps what the source stood on and needs its own check.
+     */
+    post: operations['create_marketing_ideas_image_edit'];
     delete?: never;
     options?: never;
     head?: never;
@@ -2736,6 +2785,30 @@ export interface paths {
      *     document says. An ad that cites a changed or removed fact becomes ``needs_redo``; other ads are untouched.
      */
     patch: operations['edit_marketing_ideas_understanding'];
+    trace?: never;
+  };
+  '/api/v1/marketing/ideas/{project_id}/uploads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Place Ideas Upload
+     * @description Place the user's own image under one ad of these ideas (#200, design doc §5.3).
+     *
+     *     Upload it first with ``create_external_creatives`` for the same product, declaring the right to use it.
+     *     It then appears in ``ads`` (``origin = "uploaded"``) and is kept, checked, verified and downloaded like
+     *     a generated ad of that claim; it is made without a product photo, so its look needs confirming.
+     */
+    post: operations['place_marketing_ideas_upload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/api/v1/marketing/ideas/{project_id}/verification': {
@@ -4437,6 +4510,17 @@ export interface components {
       combination_id: string;
       angle_id: string;
       expression_id: string;
+      /**
+       * @default generated
+       * @enum {string}
+       */
+      origin:
+        | 'generated'
+        | 'corrected'
+        | 'image_tool'
+        | 'image_edit'
+        | 'uploaded';
+      source_asset_version_id?: string | null;
       /** @enum {string} */
       status: 'draft' | 'exportable' | 'needs_redo';
       reasons?: components['schemas']['AdReason'][];
@@ -6844,6 +6928,16 @@ export interface components {
       market: string;
       ad_language: string;
     };
+    /** @description Crop then rotate one ad clockwise (#200): a new version, made locally and free of charge. */
+    CreateIdeasImageEdit: {
+      asset_version_id: string;
+      crop?: components['schemas']['ImageCrop'] | null;
+      /**
+       * @default 0
+       * @enum {integer}
+       */
+      rotation: 0 | 90 | 180 | 270;
+    };
     CreateImageEdit: {
       asset_version_id: string;
       crop?: components['schemas']['ImageCrop'] | null;
@@ -8759,6 +8853,26 @@ export interface components {
       download_grant: components['schemas']['DownloadGrant'];
     };
     /**
+     * @description Add one claim, or one way of telling an existing claim, to drafted ideas (#200, design doc §5.3).
+     *
+     *     A claim comes with up to two ways of telling it, one ad each; a way of telling comes with one ad and a
+     *     picture mechanism its claim does not use yet. Nothing drafted before changes, and no ad made so far.
+     */
+    IdeasAddition: {
+      /** @enum {string} */
+      kind: 'claim' | 'expression';
+      angle_id?: string | null;
+      /** @default  */
+      note: string;
+      guiding_answers?: components['schemas']['IdeasGuidingAnswer'][];
+    };
+    /** @description What an ``ideas`` call adds instead of drafting the whole ideas (#200). */
+    IdeasCallAddition: {
+      /** @enum {string} */
+      kind: 'claim' | 'expression';
+      angle_id?: string | null;
+    };
+    /**
      * @description A drafting call of ads-first ideas: the product understanding, then the ideas (#190).
      *
      *     The plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call.
@@ -8774,6 +8888,7 @@ export interface components {
       error_code?: string | null;
       /** @default 0 */
       maximum_cost: string;
+      addition?: components['schemas']['IdeasCallAddition'] | null;
     };
     /** @description A check that needs attention: ``fail``, or ``unknown`` when the image alone cannot settle it. Passes are left out. */
     IdeasCheckFinding: {
@@ -8826,6 +8941,17 @@ export interface components {
       project_id: string;
       downloads: components['schemas']['IdeasAdDownload'][];
     };
+    /** @description A prepared correction or image tool: preview and submit ``draft_id`` with the generation endpoints. */
+    IdeasFeedbackDraft: {
+      id: string;
+      project_id: string;
+      draft_id: string;
+      source_asset_version_id: string;
+      combination_id: string;
+      /** @enum {string} */
+      kind: 'correction' | 'image_tool';
+      finding_ids: string[];
+    };
     IdeasGenerationDraft: {
       combination_id: string;
       draft_id: string;
@@ -8835,6 +8961,24 @@ export interface components {
       project_id: string;
       revision: number;
       drafts: components['schemas']['IdeasGenerationDraft'][];
+    };
+    /** @description The user's answer to a guiding question, in their words: a wish, never a product fact. */
+    IdeasGuidingAnswer: {
+      question: string;
+      answer: string;
+    };
+    /**
+     * @description A crop or rotation of one ad (#200): a local Worker job, free of charge. ``unchanged`` when the result
+     *     was the source itself; ``result_asset_version_id`` is then that existing version.
+     */
+    IdeasImageEdit: {
+      id: string;
+      operation_id: string;
+      source_asset_version_id: string;
+      result_asset_version_id?: string | null;
+      /** @enum {string} */
+      state: 'queued' | 'succeeded' | 'unchanged' | 'failed';
+      error_code?: string | null;
     };
     IdeasProjectDetail: {
       id: string;
@@ -8850,6 +8994,7 @@ export interface components {
       ads: components['schemas']['AdSummary'][];
       pending: components['schemas']['PendingAd'][];
       first_batch?: components['schemas']['FirstBatchSummary'] | null;
+      image_edits?: components['schemas']['IdeasImageEdit'][];
     };
     IdeasProjectPage: {
       items: components['schemas']['IdeasProjectSummary'][];
@@ -10125,6 +10270,11 @@ export interface components {
       /** @enum {string} */
       state: 'queued' | 'running' | 'failed';
     };
+    /** @description Place an uploaded image of the product (``create_external_creatives``, rights declared) under one ad. */
+    PlaceIdeasUpload: {
+      external_creative_id: string;
+      combination_id: string;
+    };
     PlanFailure: {
       code: string;
       message: string;
@@ -10228,6 +10378,21 @@ export interface components {
        */
       image_size: '1K' | '2K';
       variants?: number | null;
+    };
+    /**
+     * @description Change one ad by making it again (#200): a correction from the user's note and its check's findings,
+     *     or -- with ``image_tool`` -- a supplier image tool (upscale, remove the background, erase an area).
+     *
+     *     Prepares a generation draft only; preview it for the maximum cost and submit it to make the image.
+     */
+    PrepareIdeasFeedback: {
+      asset_version_id: string;
+      /** @default  */
+      note: string;
+      /** @enum {string} */
+      provider: 'gemini' | 'openai' | 'seedream' | 'mock';
+      model: string;
+      image_tool?: components['schemas']['ImageToolSpec'] | null;
     };
     /**
      * @description Image settings for the ads of these ideas: one generation draft per combination (#191).
@@ -11308,7 +11473,12 @@ export interface components {
       execution_mode: 'byok' | 'mock';
       quote_hash: string;
     };
-    /** @description Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018). */
+    /**
+     * @description Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).
+     *
+     *     With ``addition`` (``kind = "ideas"`` only, #200) the call adds one claim or one way of telling to the
+     *     drafted ideas instead of drafting them again; it costs one planning call, quoted like any other.
+     */
     StartIdeasPlanning: {
       /** @enum {string} */
       kind: 'understanding' | 'ideas';
@@ -11321,6 +11491,7 @@ export interface components {
       execution_mode: 'byok' | 'mock';
       /** @default  */
       quote_hash: string;
+      addition?: components['schemas']['IdeasAddition'] | null;
     };
     StartPreparationInput: {
       truth_resolution_policy_version_id: string;
@@ -17593,6 +17764,43 @@ export interface operations {
       };
     };
   };
+  prepare_marketing_ideas_feedback: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PrepareIdeasFeedback'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasFeedbackDraft'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   prepare_marketing_ideas_generation: {
     parameters: {
       query?: never;
@@ -17618,6 +17826,43 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdeasGenerationDrafts'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  create_marketing_ideas_image_edit: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateIdeasImageEdit'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
         };
       };
       /** @description Validation Error */
@@ -17689,6 +17934,43 @@ export interface operations {
     responses: {
       /** @description Successful Response */
       200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  place_marketing_ideas_upload: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlaceIdeasUpload'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
         headers: {
           [name: string]: unknown;
         };

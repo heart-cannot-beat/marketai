@@ -142,6 +142,10 @@ MODE_EVIDENCE: tuple[ModeEvidence, ...] = (
                  via_table="localization_batches", via_column="batch_id"),
     ModeEvidence("marketing_image_edits", "operation_id", "execution_mode",
                  via_table="marketing_rounds", via_column="round_id"),
+    # An ads-first crop has no round (#200): it takes its source image's mode, as a round's crop takes the
+    # round's (a round only crops images of its own mode). An uploaded image records none.
+    ModeEvidence("marketing_image_edits", "operation_id", "execution_mode",
+                 via_table="asset_versions", via_column="source_asset_version_id"),
     ModeEvidence("marketing_handoffs", "operation_id", "execution_mode",
                  via_table="marketing_rounds", via_column="round_id"),
 )
@@ -234,6 +238,8 @@ def strongest_mode(modes: Iterable[str], *, workspace_id: str, operation_id: str
     """
     found: set[str] = set()
     for mode in modes:
+        if mode is None:  # a row that records no mode (an uploaded image, #200) adds none
+            continue
         bucket = _EVIDENCE_MODES.get(mode)
         if bucket is None:
             logger.warning(

@@ -371,6 +371,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['CreateIdeas'];
     successResponses: { 201: components['schemas']['IdeasProjectDetail'] };
   };
+  create_marketing_ideas_image_edit: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['CreateIdeasImageEdit'];
+    successResponses: { 202: components['schemas']['IdeasProjectDetail'] };
+  };
   create_marketing_image_edit: {
     pathParams: { round_id: string };
     queryParams: Record<string, never>;
@@ -1397,6 +1403,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['EnrollmentPauseRequest'];
     successResponses: { 200: components['schemas']['EnrollmentResponse'] };
   };
+  place_marketing_ideas_upload: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['PlaceIdeasUpload'];
+    successResponses: { 201: components['schemas']['IdeasProjectDetail'] };
+  };
   prepare_marketing_feedback: {
     pathParams: { round_id: string };
     queryParams: Record<string, never>;
@@ -1414,6 +1426,12 @@ export type DomainOperationMap = {
     };
     requestBody: components['schemas']['PrepareGeneration'];
     successResponses: { 201: components['schemas']['MarketingProjectDetail'] };
+  };
+  prepare_marketing_ideas_feedback: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['PrepareIdeasFeedback'];
+    successResponses: { 201: components['schemas']['IdeasFeedbackDraft'] };
   };
   prepare_marketing_ideas_generation: {
     pathParams: { project_id: string };

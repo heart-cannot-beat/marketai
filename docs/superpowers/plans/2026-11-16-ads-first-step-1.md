@@ -88,7 +88,7 @@
 - **D6 广告清单。** 一个项目的广告通过出图配方里的 `marketing_intent.project_id` 找，不依赖小轮。查询写在 `app/marketing/ideas.py::project_ads`，S1 提供，后面各块共用。
 - **D7 费用。** 首批总价是各步最高费用之和，再加一次策划调用的最高费用，确认一次。多出的一次只用于应用拒收主张草稿时重新起草一次（#193 维护者决定）。每一步仍然单独预留、单独结算，没用上的不收费。预留总额不超过确认的数字，超过就停下来。
 - **D8 供应商。** 第 1 步保证只有 OpenAI Key 时全程能跑。只有 Gemini Key 时，在开始之前提示“目前需要 OpenAI 的 Key”。
-- **D9 新接口一览。** 全部做完后接口数从 242 变成 257（S9 多一个检查报价接口，#197）。
+- **D9 新接口一览。** 全部做完后接口数从 242 变成 260（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200）。
 
 | 块 | operation_id | 路径 |
 | --- | --- | --- |
@@ -107,10 +107,13 @@
 | S10 | `edit_marketing_ideas_understanding` | `PATCH /marketing/ideas/{project_id}/understanding` |
 | S10 | `verify_marketing_ideas` | `POST /marketing/ideas/{project_id}/verification` |
 | S10 | `download_marketing_ideas` | `POST /marketing/ideas/{project_id}/download-intent` |
+| S12 | `prepare_marketing_ideas_feedback` | `POST /marketing/ideas/{project_id}/feedback-drafts`（按意见重出，带 `image_tool` 时是放大、去背景、擦掉一块；只准备出图草稿，用现有的预览报价、提交出图） |
+| S12 | `create_marketing_ideas_image_edit` | `POST /marketing/ideas/{project_id}/image-edits`（裁剪旋转，免费） |
+| S12 | `place_marketing_ideas_upload` | `POST /marketing/ideas/{project_id}/uploads`（把上传的图放在某个讲法下） |
 
-S12 再加两个（按意见重出、直接处理图片），接口名在 S12 自己的计划里定，届时更新这张表和总数。
+S12（#200）原计划加两个，实际加了三个：上传的图要有一个放进广告想法的入口。“追加主张或讲法”不是新接口，是 `start_marketing_ideas_planning` 的 `addition`。
 
-S17（#219，素材库的导出包和下载不交出没核对的草稿）不加新接口，总数仍是 257，改了五个现有接口的形状：
+S17（#219，素材库的导出包和下载不交出没核对的草稿）不加新接口（总数仍是上面写的 260），改了五个现有接口的形状：
 
 | 接口 | 改了什么 |
 | --- | --- |
@@ -548,6 +551,7 @@ class IdeasApiTests(MarketingIdeasFixtures):
 - **改哪里：** 现有的按意见重出（`prepare_marketing_feedback`）和图片编辑（`create_marketing_image_edit`）都挂在小轮下，要各加一个挂在项目下的入口；`start_marketing_ideas_planning` 加追加模式（加一个主张，或给某个主张加一个讲法，可带上用户对引导问题的回答）；外部素材归到项目的某个组合下。
 - **测试要点：** 重出得到新版本，旧版本保留；新版本状态是 `draft`，需要重新检查；追加的讲法和同主张下已有的不能是同一种画面机制；裁剪旋转不产生费用。
 - **开工前先确认：** 这两个现有功能对小轮的依赖有多深；接口名定下后更新 D9 的表和总数。
+- **做成的样子（#200）：** 新文件 `app/marketing/ideas_revisions.py`。开工前先确认的一点：两个现有功能对小轮依赖很深——按意见重出和图片工具的记录（`marketing_feedback_drafts`）、裁剪旋转的记录（`marketing_image_edits`）都必须挂小轮，并要求方案已确认、小轮在审核中；出图意图用小轮的方案；预览、提交和执行都回头查小轮；新图只出现在小轮的素材里。所以没有复用小轮的入口，而是像 S9 那样把这两张表的 `round_id` 改为可空、加 `project_id`（二选一，迁移 `zzq200a1b2c3`），预览、提交、执行和 Worker 里按 `project_id` 走新开头的路径，小轮的路径不动。新图的出图意图：按意见重出用当前的意图（预览那一刻的主张和事实）加一段 `revision`，所以能解开“事实被改”；图片工具和裁剪旋转沿用原图的意图，原图需要重出时拒绝（`ad_needs_redo`）。主张引用的事实已被删时，重出先拒绝（`claim_cites_removed_fact`），要等 S14 的改主张入口。新图不自动检查，由用户点检查（自动检查要由 Worker 在新图出来后受理，费用合同 §11 不允许）。追加：`start_marketing_ideas_planning` 带 `addition`（`claim` 或 `expression`，可带用户自己的说法和对引导问题的回答），Worker 校验后换成这次调用专用的新编号再并入，已有内容一字不改；同一主张下画面机制重复记为 `planner_output_invalid`；首批没完成时拒绝。上传：新表 `marketing_ideas_uploads`（只追加），记下放进哪个讲法和当时的出图意图，`project_ads` 把它和裁剪旋转得到的图一起列出；上传的图按真实图检查，不能重出，可以裁剪旋转。每张广告多了 `origin` 和 `source_asset_version_id`，项目多了 `image_edits`，调用摘要多了 `addition`。
 
 ### S13 前端：下载前核对、修改这张广告
 

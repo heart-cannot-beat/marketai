@@ -20,6 +20,7 @@ from app.generation.response_models import AssetGalleryPage, DownloadIntentRespo
 from app.marketing import ideas_export
 from app.marketing.models import MarketingProjectRecord
 from tests.test_marketing_ideas_export import ADS_OF, IdeasExportFixtures
+from tests.test_marketing_ideas_revisions import RevisionFixtures
 from tests.test_marketing_workflow import MarketingWorkflowFixtures
 
 EVERY_AD = [combination for combinations in ADS_OF.values() for combination in combinations]
@@ -394,6 +395,47 @@ class OtherImagesTests(LibraryGateFixtures):
         self.link(ads[0], "display")
         package = self.built({"kind": "all_successful"})
         self.assertEqual((package["left_out_drafts"], sorted(self.packaged(package["package_id"]))), (6, images))
+
+
+class RevisedAdsTests(LibraryGateFixtures, RevisionFixtures):
+    """The new versions of an ad and the images placed under one (#200) are ads too: the gate sees each."""
+
+    def judged_like_its_ad(self, project, asset_version_id):
+        """The library refuses the image exactly as the ideas page reports it, and still shows it."""
+        ad = next(ad for ad in self.read_ideas(project)["ads"] if ad["asset_version_id"] == asset_version_id)
+        self.assertNotEqual(ad["status"], "exportable")
+        block = {"status": ad["status"], "reasons": ad["reasons"]}
+        self.assertEqual(self.gallery()[asset_version_id]["export_block"], block)
+        self.assertEqual(self.refused_ads(self.link(asset_version_id, expect=409))[asset_version_id],
+                         {"asset_version_id": asset_version_id, **block})
+        self.link(asset_version_id, "display")
+        refused = self.refused_ads(self.package({"kind": "explicit", "version_ids": [asset_version_id]}, expect=409))
+        self.assertEqual(list(refused), [asset_version_id])
+
+    def test_a_correction_of_an_ad_is_judged_as_an_ad(self):
+        project = self.checked_ads()
+        self.make(self.feedback(project, "c1_1")["draft_id"])
+        (corrected,) = self.by_origin(project, "corrected")
+        self.judged_like_its_ad(project, corrected["asset_version_id"])
+
+    def test_a_crop_of_an_ad_is_judged_as_an_ad(self):
+        project = self.checked_ads()
+        self.verify_everything(project)
+        self.crop(project, "c2_1", rotation=90)
+        self.drain(job_types=("marketing.image_edit",))
+        (cropped,) = self.by_origin(project, "image_edit")
+        # Its source was checked; the crop has no check of its own yet, so it is a draft.
+        self.assertEqual(cropped["status"], "draft")
+        self.judged_like_its_ad(project, cropped["asset_version_id"])
+
+    def test_an_uploaded_image_is_judged_once_it_is_placed_under_an_ad(self):
+        project = self.checked_ads()
+        creative_id, version_id = self.uploaded(project)
+        # Not placed yet: an external creative like any other, handed out as before.
+        self.assertIsNone(self.gallery()[version_id]["export_block"])
+        self.link(version_id)
+        self.place(project, creative_id, "c2_2")
+        self.judged_like_its_ad(project, version_id)
 
 
 class TenantTests(LibraryGateFixtures):

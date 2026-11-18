@@ -67,17 +67,25 @@ class MarketingCreativeReuseRecord(Base):
 
 
 class MarketingFeedbackDraftRecord(Base):
-    """Immutable QC feedback and exact source lineage for a correction draft."""
+    """Immutable QC feedback and exact source lineage for a correction draft.
+
+    A round's correction names its round; an ads-first ad's correction (#200) names its ideas instead
+    (``project_id``), and exactly one of the two is set."""
     __tablename__ = "marketing_feedback_drafts"
     __table_args__ = (
         UniqueConstraint("workspace_id", "draft_id", name="uq_marketing_feedback_draft"),
         UniqueConstraint("workspace_id", "round_id", "feedback_hash", name="uq_marketing_feedback_intent"),
+        UniqueConstraint("workspace_id", "project_id", "feedback_hash", name="uq_marketing_feedback_project_input"),
         *[ForeignKeyConstraint(["workspace_id", col], [table + ".workspace_id", table + ".id"], ondelete="RESTRICT", name="fk_image_edit_" + col)
           for col, table in (("round_id", "marketing_rounds"), ("source_asset_version_id", "asset_versions"), ("draft_id", "generation_drafts"))],
+        ForeignKeyConstraint(["workspace_id", "project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
+                             ondelete="RESTRICT", name="fk_feedback_project"),
+        CheckConstraint("(round_id IS NULL) <> (project_id IS NULL)", name="feedback_subject"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
-    round_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    round_id: Mapped[str | None] = mapped_column(String(64))
+    project_id: Mapped[str | None] = mapped_column(String(64))
     source_asset_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     draft_id: Mapped[str] = mapped_column(String(64), nullable=False)
     feedback_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -86,19 +94,27 @@ class MarketingFeedbackDraftRecord(Base):
 
 
 class MarketingImageEditRecord(Base):
-    """Frozen local image operation; source mode is provenance, never a paid call."""
+    """Frozen local image operation; source mode is provenance, never a paid call.
+
+    A round's crop names its round; an ads-first ad's crop (#200) names its ideas instead (``project_id``),
+    and exactly one of the two is set."""
     __tablename__ = "marketing_image_edits"
     __table_args__ = (
         UniqueConstraint("workspace_id", "id", name="uq_marketing_image_edit_workspace_id"),
         UniqueConstraint("workspace_id", "round_id", "input_hash", name="uq_marketing_image_edit_input"),
+        UniqueConstraint("workspace_id", "project_id", "input_hash", name="uq_marketing_image_edit_project_input"),
         CheckConstraint("state IN ('queued', 'succeeded', 'unchanged', 'failed')", name="image_edit_state"),
         *[ForeignKeyConstraint(["workspace_id", col], [table + ".workspace_id", table + ".id"], ondelete="RESTRICT", name="fk_image_edit_" + col)
           for col, table in (("round_id", "marketing_rounds"), ("source_asset_version_id", "asset_versions"),
                              ("result_asset_version_id", "asset_versions"), ("operation_id", "operation_records"))],
+        ForeignKeyConstraint(["workspace_id", "project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
+                             ondelete="RESTRICT", name="fk_image_edit_project"),
+        CheckConstraint("(round_id IS NULL) <> (project_id IS NULL)", name="image_edit_subject"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
-    round_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    round_id: Mapped[str | None] = mapped_column(String(64))
+    project_id: Mapped[str | None] = mapped_column(String(64))
     source_asset_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     result_asset_version_id: Mapped[str | None] = mapped_column(String(64))
     operation_id: Mapped[str] = mapped_column(String(64), nullable=False)

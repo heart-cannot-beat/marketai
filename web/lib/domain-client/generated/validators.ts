@@ -195,6 +195,20 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       combination_id: { type: 'string' },
       angle_id: { type: 'string' },
       expression_id: { type: 'string' },
+      origin: {
+        type: 'string',
+        enum: [
+          'generated',
+          'corrected',
+          'image_tool',
+          'image_edit',
+          'uploaded',
+        ],
+        default: 'generated',
+      },
+      source_asset_version_id: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      },
       status: { type: 'string', enum: ['draft', 'exportable', 'needs_redo'] },
       reasons: {
         items: { $ref: '#/components/schemas/AdReason' },
@@ -3981,6 +3995,20 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['product_id', 'source_text', 'market', 'ad_language'],
   },
+  CreateIdeasImageEdit: {
+    properties: {
+      asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
+      crop: {
+        anyOf: [{ $ref: '#/components/schemas/ImageCrop' }, { type: 'null' }],
+      },
+      rotation: { type: 'integer', enum: [0, 90, 180, 270], default: 0 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_id'],
+    description:
+      'Crop then rotate one ad clockwise (#200): a new version, made locally and free of charge.',
+  },
   CreateImageEdit: {
     properties: {
       asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
@@ -7706,6 +7734,44 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'download_grant',
     ],
   },
+  IdeasAddition: {
+    properties: {
+      kind: { type: 'string', enum: ['claim', 'expression'] },
+      angle_id: {
+        anyOf: [
+          {
+            type: 'string',
+            maxLength: 64,
+            minLength: 1,
+            pattern: '^[a-zA-Z0-9_-]+$',
+          },
+          { type: 'null' },
+        ],
+      },
+      note: { type: 'string', maxLength: 1000, default: '' },
+      guiding_answers: {
+        items: { $ref: '#/components/schemas/IdeasGuidingAnswer' },
+        type: 'array',
+        maxItems: 3,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['kind'],
+    description:
+      'Add one claim, or one way of telling an existing claim, to drafted ideas (#200, design doc §5.3).\n\nA claim comes with up to two ways of telling it, one ad each; a way of telling comes with one ad and a\npicture mechanism its claim does not use yet. Nothing drafted before changes, and no ad made so far.',
+  },
+  IdeasCallAddition: {
+    properties: {
+      kind: { type: 'string', enum: ['claim', 'expression'] },
+      angle_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['kind'],
+    description:
+      'What an ``ideas`` call adds instead of drafting the whole ideas (#200).',
+  },
   IdeasCallSummary: {
     properties: {
       id: { type: 'string' },
@@ -7715,6 +7781,12 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       execution_mode: { type: 'string', enum: ['byok', 'mock'] },
       error_code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       maximum_cost: { type: 'string', default: '0' },
+      addition: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallAddition' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -7813,6 +7885,30 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'One download of ads-first ads: a short-lived signed link per requested ad, in the order asked.',
   },
+  IdeasFeedbackDraft: {
+    properties: {
+      id: { type: 'string' },
+      project_id: { type: 'string' },
+      draft_id: { type: 'string' },
+      source_asset_version_id: { type: 'string' },
+      combination_id: { type: 'string' },
+      kind: { type: 'string', enum: ['correction', 'image_tool'] },
+      finding_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'project_id',
+      'draft_id',
+      'source_asset_version_id',
+      'combination_id',
+      'kind',
+      'finding_ids',
+    ],
+    description:
+      'A prepared correction or image tool: preview and submit ``draft_id`` with the generation endpoints.',
+  },
   IdeasGenerationDraft: {
     properties: {
       combination_id: { type: 'string' },
@@ -7836,6 +7932,37 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     required: ['project_id', 'revision', 'drafts'],
     description:
       'The drafts prepared for these ideas at ``revision``; preview and submit each with the generation endpoints.',
+  },
+  IdeasGuidingAnswer: {
+    properties: {
+      question: { type: 'string', maxLength: 300, minLength: 1 },
+      answer: { type: 'string', maxLength: 1000, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['question', 'answer'],
+    description:
+      "The user's answer to a guiding question, in their words: a wish, never a product fact.",
+  },
+  IdeasImageEdit: {
+    properties: {
+      id: { type: 'string' },
+      operation_id: { type: 'string' },
+      source_asset_version_id: { type: 'string' },
+      result_asset_version_id: {
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      },
+      state: {
+        type: 'string',
+        enum: ['queued', 'succeeded', 'unchanged', 'failed'],
+      },
+      error_code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'operation_id', 'source_asset_version_id', 'state'],
+    description:
+      'A crop or rotation of one ad (#200): a local Worker job, free of charge. ``unchanged`` when the result\nwas the source itself; ``result_asset_version_id`` is then that existing version.',
   },
   IdeasProjectDetail: {
     properties: {
@@ -7873,6 +8000,10 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
           { $ref: '#/components/schemas/FirstBatchSummary' },
           { type: 'null' },
         ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
       },
     },
     additionalProperties: false,
@@ -10246,6 +10377,22 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['combination_id', 'state'],
   },
+  PlaceIdeasUpload: {
+    properties: {
+      external_creative_id: { type: 'string', maxLength: 64, minLength: 1 },
+      combination_id: {
+        type: 'string',
+        maxLength: 64,
+        minLength: 1,
+        pattern: '^[a-zA-Z0-9_-]+$',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['external_creative_id', 'combination_id'],
+    description:
+      'Place an uploaded image of the product (``create_external_creatives``, rights declared) under one ad.',
+  },
   PlanFailure: {
     properties: {
       code: { type: 'string' },
@@ -10394,6 +10541,28 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['provider', 'model'],
+  },
+  PrepareIdeasFeedback: {
+    properties: {
+      asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
+      note: { type: 'string', maxLength: 1200, default: '' },
+      provider: {
+        type: 'string',
+        enum: ['gemini', 'openai', 'seedream', 'mock'],
+      },
+      model: { type: 'string', maxLength: 200, minLength: 1 },
+      image_tool: {
+        anyOf: [
+          { $ref: '#/components/schemas/ImageToolSpec' },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_id', 'provider', 'model'],
+    description:
+      "Change one ad by making it again (#200): a correction from the user's note and its check's findings,\nor -- with ``image_tool`` -- a supplier image tool (upscale, remove the background, erase an area).\n\nPrepares a generation draft only; preview it for the maximum cost and submit it to make the image.",
   },
   PrepareIdeasGeneration: {
     properties: {
@@ -12184,12 +12353,18 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       },
       execution_mode: { type: 'string', enum: ['byok', 'mock'] },
       quote_hash: { type: 'string', maxLength: 64, default: '' },
+      addition: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasAddition' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
     required: ['kind', 'execution_mode'],
     description:
-      'Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).',
+      'Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).\n\nWith ``addition`` (``kind = "ideas"`` only, #200) the call adds one claim or one way of telling to the\ndrafted ideas instead of drafting them again; it costs one planning call, quoted like any other.',
   },
   StartPreparationInput: {
     properties: {
@@ -16105,6 +16280,10 @@ const SCHEMAS: Record<string, object> = {
           { type: 'null' },
         ],
       },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -16137,6 +16316,78 @@ const SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['product_id', 'source_text', 'market', 'ad_language'],
+  },
+  create_marketing_ideas_image_edit_202: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  create_marketing_ideas_image_edit_request: {
+    properties: {
+      asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
+      crop: {
+        anyOf: [{ $ref: '#/components/schemas/ImageCrop' }, { type: 'null' }],
+      },
+      rotation: { type: 'integer', enum: [0, 90, 180, 270], default: 0 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_id'],
+    description:
+      'Crop then rotate one ad clockwise (#200): a new version, made locally and free of charge.',
   },
   create_marketing_image_edit_202: {
     properties: {
@@ -17218,6 +17469,10 @@ const SCHEMAS: Record<string, object> = {
           { $ref: '#/components/schemas/FirstBatchSummary' },
           { type: 'null' },
         ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
       },
     },
     additionalProperties: false,
@@ -19060,6 +19315,10 @@ const SCHEMAS: Record<string, object> = {
           { type: 'null' },
         ],
       },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -20510,6 +20769,80 @@ const SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
   },
+  place_marketing_ideas_upload_201: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/Understanding' },
+          { type: 'null' },
+        ],
+      },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  place_marketing_ideas_upload_request: {
+    properties: {
+      external_creative_id: { type: 'string', maxLength: 64, minLength: 1 },
+      combination_id: {
+        type: 'string',
+        maxLength: 64,
+        minLength: 1,
+        pattern: '^[a-zA-Z0-9_-]+$',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['external_creative_id', 'combination_id'],
+    description:
+      'Place an uploaded image of the product (``create_external_creatives``, rights declared) under one ad.',
+  },
   prepare_marketing_feedback_201: {
     properties: {
       id: { type: 'string' },
@@ -20644,6 +20977,52 @@ const SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['provider', 'model'],
+  },
+  prepare_marketing_ideas_feedback_201: {
+    properties: {
+      id: { type: 'string' },
+      project_id: { type: 'string' },
+      draft_id: { type: 'string' },
+      source_asset_version_id: { type: 'string' },
+      combination_id: { type: 'string' },
+      kind: { type: 'string', enum: ['correction', 'image_tool'] },
+      finding_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'project_id',
+      'draft_id',
+      'source_asset_version_id',
+      'combination_id',
+      'kind',
+      'finding_ids',
+    ],
+    description:
+      'A prepared correction or image tool: preview and submit ``draft_id`` with the generation endpoints.',
+  },
+  prepare_marketing_ideas_feedback_request: {
+    properties: {
+      asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
+      note: { type: 'string', maxLength: 1200, default: '' },
+      provider: {
+        type: 'string',
+        enum: ['gemini', 'openai', 'seedream', 'mock'],
+      },
+      model: { type: 'string', maxLength: 200, minLength: 1 },
+      image_tool: {
+        anyOf: [
+          { $ref: '#/components/schemas/ImageToolSpec' },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_id', 'provider', 'model'],
+    description:
+      "Change one ad by making it again (#200): a correction from the user's note and its check's findings,\nor -- with ``image_tool`` -- a supplier image tool (upscale, remove the background, erase an area).\n\nPrepares a generation draft only; preview it for the maximum cost and submit it to make the image.",
   },
   prepare_marketing_ideas_generation_201: {
     properties: {
@@ -22172,6 +22551,10 @@ const SCHEMAS: Record<string, object> = {
           { type: 'null' },
         ],
       },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -22495,6 +22878,10 @@ const SCHEMAS: Record<string, object> = {
           { type: 'null' },
         ],
       },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -22531,6 +22918,12 @@ const SCHEMAS: Record<string, object> = {
       execution_mode: { type: 'string', enum: ['byok', 'mock'] },
       error_code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       maximum_cost: { type: 'string', default: '0' },
+      addition: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallAddition' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -22548,12 +22941,18 @@ const SCHEMAS: Record<string, object> = {
       },
       execution_mode: { type: 'string', enum: ['byok', 'mock'] },
       quote_hash: { type: 'string', maxLength: 64, default: '' },
+      addition: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasAddition' },
+          { type: 'null' },
+        ],
+      },
     },
     additionalProperties: false,
     type: 'object',
     required: ['kind', 'execution_mode'],
     description:
-      'Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).',
+      'Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).\n\nWith ``addition`` (``kind = "ideas"`` only, #200) the call adds one claim or one way of telling to the\ndrafted ideas instead of drafting them again; it costs one planning call, quoted like any other.',
   },
   start_marketing_planning_202: {
     properties: {
@@ -22972,6 +23371,10 @@ const SCHEMAS: Record<string, object> = {
           { $ref: '#/components/schemas/FirstBatchSummary' },
           { type: 'null' },
         ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
       },
     },
     additionalProperties: false,
@@ -23499,6 +23902,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'create_marketing_ideas_request',
       VALIDATOR_FUNCTIONS['create_marketing_ideas_request'],
+    ],
+    [
+      'create_marketing_ideas_image_edit_202',
+      VALIDATOR_FUNCTIONS['create_marketing_ideas_image_edit_202'],
+    ],
+    [
+      'create_marketing_ideas_image_edit_request',
+      VALIDATOR_FUNCTIONS['create_marketing_ideas_image_edit_request'],
     ],
     [
       'create_marketing_image_edit_202',
@@ -24088,6 +24499,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['pause_scale_enrollment_request'],
     ],
     [
+      'place_marketing_ideas_upload_201',
+      VALIDATOR_FUNCTIONS['place_marketing_ideas_upload_201'],
+    ],
+    [
+      'place_marketing_ideas_upload_request',
+      VALIDATOR_FUNCTIONS['place_marketing_ideas_upload_request'],
+    ],
+    [
       'prepare_marketing_feedback_201',
       VALIDATOR_FUNCTIONS['prepare_marketing_feedback_201'],
     ],
@@ -24102,6 +24521,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'prepare_marketing_generation_request',
       VALIDATOR_FUNCTIONS['prepare_marketing_generation_request'],
+    ],
+    [
+      'prepare_marketing_ideas_feedback_201',
+      VALIDATOR_FUNCTIONS['prepare_marketing_ideas_feedback_201'],
+    ],
+    [
+      'prepare_marketing_ideas_feedback_request',
+      VALIDATOR_FUNCTIONS['prepare_marketing_ideas_feedback_request'],
     ],
     [
       'prepare_marketing_ideas_generation_201',
@@ -24735,6 +25162,11 @@ export const REQUEST_VALIDATORS = {
   ] as ValidateFunction<
     DomainOperationMap['create_marketing_ideas']['requestBody']
   >,
+  create_marketing_ideas_image_edit: VALIDATOR_FUNCTIONS[
+    'create_marketing_ideas_image_edit_request'
+  ] as ValidateFunction<
+    DomainOperationMap['create_marketing_ideas_image_edit']['requestBody']
+  >,
   create_marketing_image_edit: VALIDATOR_FUNCTIONS[
     'create_marketing_image_edit_request'
   ] as ValidateFunction<
@@ -24894,6 +25326,11 @@ export const REQUEST_VALIDATORS = {
   ] as ValidateFunction<
     DomainOperationMap['pause_scale_enrollment']['requestBody']
   >,
+  place_marketing_ideas_upload: VALIDATOR_FUNCTIONS[
+    'place_marketing_ideas_upload_request'
+  ] as ValidateFunction<
+    DomainOperationMap['place_marketing_ideas_upload']['requestBody']
+  >,
   prepare_marketing_feedback: VALIDATOR_FUNCTIONS[
     'prepare_marketing_feedback_request'
   ] as ValidateFunction<
@@ -24903,6 +25340,11 @@ export const REQUEST_VALIDATORS = {
     'prepare_marketing_generation_request'
   ] as ValidateFunction<
     DomainOperationMap['prepare_marketing_generation']['requestBody']
+  >,
+  prepare_marketing_ideas_feedback: VALIDATOR_FUNCTIONS[
+    'prepare_marketing_ideas_feedback_request'
+  ] as ValidateFunction<
+    DomainOperationMap['prepare_marketing_ideas_feedback']['requestBody']
   >,
   prepare_marketing_ideas_generation: VALIDATOR_FUNCTIONS[
     'prepare_marketing_ideas_generation_request'

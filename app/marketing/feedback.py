@@ -151,6 +151,9 @@ def resolve(session, ctx, draft):
     record = session.scalar(select(Feedback).where(Feedback.workspace_id == ctx.workspace_id, Feedback.draft_id == draft.id))
     if not record:
         return None
+    if record.project_id:  # an ads-first ad's correction or image tool (#200): no round
+        from .ideas_revisions import resolve as resolve_ideas
+        return resolve_ideas(session, ctx, record, draft)
     if record.feedback_json.get("image_tool") and (draft.source_asset_version_id != record.source_asset_version_id
             or draft.provider != record.feedback_json["provider"] or draft.model != record.feedback_json["model"]):
         raise MarketingError("image_tool_draft_changed", "编辑来源或供应商已变化，请重新准备编辑草稿。", 409)
