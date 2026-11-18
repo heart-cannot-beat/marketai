@@ -324,7 +324,7 @@ describe('LightboxModal', () => {
 
     expect(screen.queryByTestId('regeneration-panel')).not.toBeInTheDocument();
     expect(screen.getByTestId('regenerate-on-ideas-page')).toHaveTextContent(
-      'This image is an ad in your ad ideas, so it can\'t be regenerated here. To change it, use “Edit this ad” in your ad ideas'
+      "This image is an ad in your ad ideas, so it can't be regenerated here. To change it, use “Edit this ad” in your ad ideas"
     );
     expect(screen.getByTestId('review-panel')).toBeInTheDocument();
   });

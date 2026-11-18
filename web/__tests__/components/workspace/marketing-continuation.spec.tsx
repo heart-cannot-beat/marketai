@@ -405,7 +405,11 @@ describe('an ad of the ad ideas that is not checked yet (#225)', () => {
               reuse_block: {
                 status: 'draft',
                 reasons: [
-                  { code: 'facts_unverified', fact_ids: ['f1'], finding_ids: [] },
+                  {
+                    code: 'facts_unverified',
+                    fact_ids: ['f1'],
+                    finding_ids: [],
+                  },
                   { code: 'check_missing', fact_ids: [], finding_ids: [] },
                 ],
               },
@@ -415,7 +419,11 @@ describe('an ad of the ad ideas that is not checked yet (#225)', () => {
                 status: 'needs_redo',
                 reasons: [
                   { code: 'facts_changed', fact_ids: ['f2'], finding_ids: [] },
-                  { code: 'a_reason_this_page_has_no_words_for', fact_ids: [], finding_ids: [] },
+                  {
+                    code: 'a_reason_this_page_has_no_words_for',
+                    fact_ids: [],
+                    finding_ids: [],
+                  },
                 ],
               },
             }),
