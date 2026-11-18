@@ -187,6 +187,13 @@ class AddingPhotosTests(AddedPhotoFixtures):
         self.assertEqual((gate["state"], gate["failure_code"]), ("rejected", references.FAILURE_GATE_REJECTED))
         self.assertEqual(self.read_ideas(project)["photos"], [])
         self.assertEqual(self.count(MarketingProductPhotoRecord), 0)
+        # The same bytes again are refused before any gate runs, by a code the page can say.
+        raw = b"\x89PNG\r\n\x1a\n" + b"not really a picture" * 40
+        intent_id, _ = _provision_finalized_intent(self.context, committed_key=f"committed/{self.context.workspace_id}"
+                                                   f"/reference_asset/2026/11/18/{uuid4().hex}.png", raw=raw, write_file=False)
+        again = self.client.post("/api/v1/library/reference-objects", headers={"Idempotency-Key": uuid4().hex},
+                                  json={"upload_intent_id": intent_id, "declared_mime": "image/png"})
+        self.assertEqual(again.json()["code"], "reference_previously_rejected", again.text)
 
     def test_an_image_still_being_checked_cannot_be_added_yet(self):
         project = self.checked_ads()

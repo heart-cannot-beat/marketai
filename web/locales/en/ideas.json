@@ -582,6 +582,7 @@
   "profile-photo-add-adding": "Adding it to the product photos…",
   "profile-photo-add-added": "Added, not checked yet. Images made with it can be downloaded once you check it.",
   "profile-photo-add-rejected": "This image didn't pass the upload checks: {{reason}}",
+  "profile-photo-add-rejected-gate": "This image didn't pass the upload checks: the file may be damaged, not a picture, too large, or its content not allowed. Try another one.",
   "profile-photo-add-failed": "The photo wasn't added: {{reason}}",
   "profile-photo-add-another": "Choose another",
   "profile-photo-add-transfer": "The photo didn't finish uploading. Try again.",

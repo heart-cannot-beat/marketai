@@ -582,6 +582,7 @@
   "profile-photo-add-adding": "正在加到产品照片里…",
   "profile-photo-add-added": "已加上，还没核对。核对之后，用它出的图才能下载。",
   "profile-photo-add-rejected": "这张图没有通过上传检查：{{reason}}",
+  "profile-photo-add-rejected-gate": "这张图没有通过上传检查：文件可能损坏、不是图片、太大，或内容不合规。换一张试试。",
   "profile-photo-add-failed": "没能加上这张照片：{{reason}}",
   "profile-photo-add-another": "换一张",
   "profile-photo-add-transfer": "照片没能上传完，请再试一次。",

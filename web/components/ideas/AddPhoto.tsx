@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'next-i18next';
+import { useRouter } from 'next/router';
 import type { UseIdeasPhotoUploadResult } from '@/hooks/ideas/useIdeasPhotoUpload';
 import { errorMessage } from '@/lib/i18n/domain-errors';
 import type { PhotoRole } from '@/lib/ideas/photos';
@@ -40,13 +41,25 @@ export function AddPhoto({
   const roleName = useId();
   const input = useRef<HTMLInputElement>(null);
   const area = useRef<HTMLDivElement>(null);
+  const router = useRouter();
   const working = ['uploading', 'checking', 'adding'].includes(state.phase);
 
+  // Arriving from the ideas page's link brings this part into view. A link
+  // inside the app lands before the route change has finished settling the
+  // page, so it is tried once that has finished too.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.location.hash === `#${ADD_PHOTO_ANCHOR}`)
-      area.current?.scrollIntoView?.({ block: 'center' });
-  }, []);
+    const bring = () => {
+      if (window.location.hash === `#${ADD_PHOTO_ANCHOR}`)
+        area.current?.scrollIntoView?.({ block: 'center' });
+    };
+    const timer = window.setTimeout(bring, 0);
+    router.events?.on('routeChangeComplete', bring);
+    return () => {
+      window.clearTimeout(timer);
+      router.events?.off('routeChangeComplete', bring);
+    };
+  }, [router.events]);
 
   function chosen(files: FileList | null) {
     const file = files?.[0];
@@ -110,11 +123,12 @@ export function AddPhoto({
         <div role="alert" className="space-y-2 text-sm">
           <p className="text-red-800 dark:text-red-300">
             {state.phase === 'rejected'
-              ? t('profile-photo-add-rejected', {
-                  reason: errorMessage(t, {
-                    code: state.failureCode ?? 'reference_gate_rejected',
-                  }),
-                })
+              ? !state.failureCode ||
+                state.failureCode === 'reference_gate_rejected'
+                ? t('profile-photo-add-rejected-gate')
+                : t('profile-photo-add-rejected', {
+                    reason: errorMessage(t, { code: state.failureCode }),
+                  })
               : state.trouble
                 ? t(`profile-photo-add-${state.trouble}`)
                 : t('profile-photo-add-failed', {

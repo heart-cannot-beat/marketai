@@ -155,6 +155,11 @@ export function useIdeasPhotoUpload(
           },
         });
         if (created.kind === 'problem') {
+          // The gate rejected these very bytes before: it is the gate's refusal.
+          if (created.problem.code === 'reference_previously_rejected') {
+            set({ phase: 'rejected', failureCode: created.problem.code });
+            return;
+          }
           set({ phase: 'failed', problem: created.problem });
           return;
         }

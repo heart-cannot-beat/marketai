@@ -334,8 +334,9 @@ describe('adding the user’s own product photo (#233)', () => {
     );
     choose('not-a-photo.png');
     const alert = await within(adding()).findByRole('alert');
+    // In the gate's own words, by its stable code.
     expect(alert).toHaveTextContent(
-      "This image didn't pass the upload checks:"
+      "This image didn't pass the upload checks: Image content checks are not set up in this environment."
     );
     expect(mockGateway.getLibraryReferenceObject).toHaveBeenCalledWith(
       expect.objectContaining({ objectId: 'refobj_bad' })
@@ -345,6 +346,42 @@ describe('adding the user’s own product photo (#233)', () => {
     expect(
       within(alert).getByRole('button', { name: 'Choose another' })
     ).toBeInTheDocument();
+  });
+
+  it('an image the gate rejected outright says what can be wrong with it', async () => {
+    await renderProfile();
+    uploadPasses();
+    mockGateway.pollOperation.mockImplementation(
+      async ({ operationId }: { operationId: string }) =>
+        operationId === 'op_gate'
+          ? operation('failed', 'refobj_bad')
+          : operation('succeeded')
+    );
+    mockGateway.getLibraryReferenceObject.mockResolvedValue(
+      ok({
+        object_id: 'refobj_bad',
+        state: 'rejected',
+        failure_code: 'reference_gate_rejected',
+      })
+    );
+    choose('not-a-photo.png');
+    expect(await within(adding()).findByRole('alert')).toHaveTextContent(
+      "This image didn't pass the upload checks: the file may be damaged, not a picture, too large, or its content not allowed. Try another one."
+    );
+    expect(mockGateway.addMarketingIdeasPhoto).not.toHaveBeenCalled();
+  });
+
+  it('the very file the gate rejected before is refused at once, saying so', async () => {
+    await renderProfile();
+    uploadPasses();
+    mockGateway.createLibraryReferenceObject.mockResolvedValue(
+      refused('reference_previously_rejected')
+    );
+    choose('not-a-photo.png');
+    expect(await within(adding()).findByRole('alert')).toHaveTextContent(
+      "This image didn't pass the upload checks: This file was rejected before and cannot be uploaded again."
+    );
+    expect(mockGateway.addMarketingIdeasPhoto).not.toHaveBeenCalled();
   });
 
   it('a photo the product already has is refused with its own words', async () => {
