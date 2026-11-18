@@ -12,7 +12,11 @@ import {
 /** How often the page asks again while images are being made. */
 export const IDEAS_POLL_MS = 3_000;
 
-type Loaded =
+/** The SWR key of one project's ad ideas; the product profile writes its answers here too. */
+export const ideasProjectKey = (workspaceId: string, projectId: string) =>
+  ['marketing-ideas', workspaceId, projectId] as const;
+
+export type Loaded =
   | { detail: IdeasDetail; problem?: undefined }
   | { detail?: undefined; problem: ProblemDetails };
 
@@ -45,7 +49,7 @@ export function useIdeasProject(projectId: string): UseIdeasProjectResult {
   const { current } = useWorkspace();
   const gateway = useDomainGateway();
   const query = useSWR<Loaded>(
-    ['marketing-ideas', current.workspaceId, projectId],
+    ideasProjectKey(current.workspaceId, projectId),
     async () => {
       const result = await gateway.getMarketingIdeas({
         workspaceSlug: current.slug,
