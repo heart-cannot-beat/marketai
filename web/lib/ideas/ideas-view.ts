@@ -321,7 +321,40 @@ export interface AdPlace {
   mechanism: string | null;
 }
 
+/**
+ * Whether an ad is the user's own image (#200): uploaded, or a crop of one
+ * (a crop keeps its source's intent, upload included). Such an ad cannot be
+ * made again or processed by the supplier's tools.
+ */
+export function fromUpload(detail: IdeasDetail, ad: IdeasAd): boolean {
+  const byId = new Map(detail.ads.map((item) => [item.asset_version_id, item]));
+  const seen = new Set<string>();
+  let item: IdeasAd | undefined = ad;
+  while (item && !seen.has(item.asset_version_id)) {
+    if (item.origin === 'uploaded') return true;
+    if (item.origin !== 'image_edit' || !item.source_asset_version_id)
+      return false;
+    seen.add(item.asset_version_id);
+    item = byId.get(item.source_asset_version_id);
+  }
+  return false;
+}
+
+/**
+ * Where an ad sits in the ideas. An ad whose content the ideas no longer hold
+ * (`ideas_changed`, #198) has no place: its combination's words now belong to
+ * another ad, so none are shown as this one's.
+ */
 export function placeOf(detail: IdeasDetail, ad: IdeasAd): AdPlace {
+  if ((ad.reasons ?? []).some((reason) => reason.code === 'ideas_changed'))
+    return {
+      claimNumber: null,
+      proposition: null,
+      telling: null,
+      headline: null,
+      bodyCopy: null,
+      mechanism: null,
+    };
   const angles = detail.ideas?.angles ?? [];
   const index = angles.findIndex((angle) => angle.id === ad.angle_id);
   const angle = index >= 0 ? angles[index] : undefined;

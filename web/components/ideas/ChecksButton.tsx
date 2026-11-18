@@ -14,6 +14,7 @@ const KNOWN_UNAVAILABLE = new Set([
   'credential_required',
   'nothing_to_check',
   'checks_in_progress',
+  'qc_not_configured',
 ]);
 
 /**
@@ -54,7 +55,12 @@ export function ChecksButton({
       <p className="text-sm text-gray-700 dark:text-gray-300" role="note">
         {KNOWN_UNAVAILABLE.has(reason)
           ? t(`checks-unavailable-${reason}`)
-          : t('checks-unavailable')}
+          : t('checks-unavailable-reason', {
+              reason: t(`error-${reason}`, {
+                ns: 'common',
+                defaultValue: t('checks-unavailable'),
+              }),
+            })}
       </p>
     );
   }

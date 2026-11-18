@@ -20,27 +20,38 @@ const FIRST_BATCH_FORMAT = {
 } as const;
 
 export interface UseImageSettings {
+  /** `null` while nothing can make an image yet, or the first batch's settings are still loading. */
   settings: ImageSettings | null;
   /** The providers that can make an ad with the workspace's own key. */
   options: ProviderOption[];
   change: (next: Partial<ImageSettings>) => void;
+  /**
+   * The settings to prepare drafts with at `revision`, in order: the chosen
+   * ones, then those this revision's drafts were already prepared with here,
+   * then the first batch's. The server keeps one set of drafts per revision.
+   */
+  candidates: (revision: number) => ImageSettings[];
+  /** Remembers the settings this revision's drafts were prepared with. */
+  prepared: (revision: number, settings: ImageSettings) => void;
   /** The capabilities could not be read. */
   failed: boolean;
 }
 
 const storageKey = (workspaceId: string, projectId: string) =>
   `ideas-image-settings:${workspaceId}:${projectId}`;
+const preparedKey = (workspaceId: string, projectId: string) =>
+  `ideas-image-prepared:${workspaceId}:${projectId}`;
 
-function readStored(key: string): Partial<ImageSettings> | null {
+function readStored<T>(key: string): T | null {
   try {
     const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Partial<ImageSettings>) : null;
+    return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
   }
 }
 
-function writeStored(key: string, value: ImageSettings) {
+function writeStored(key: string, value: unknown) {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
@@ -148,10 +159,17 @@ export function useImageSettings(
   );
 
   const keyName = storageKey(current.workspaceId, projectId);
+  const preparedName = preparedKey(current.workspaceId, projectId);
   const [chosen, setChosen] = useState<Partial<ImageSettings> | null>(null);
+  const [byRevision, setByRevision] = useState<Record<string, ImageSettings>>(
+    {}
+  );
   useEffect(() => {
-    setChosen(readStored(keyName));
-  }, [keyName]);
+    setChosen(readStored<Partial<ImageSettings>>(keyName));
+    setByRevision(
+      readStored<Record<string, ImageSettings>>(preparedName) ?? {}
+    );
+  }, [keyName, preparedName]);
 
   const fromBatch = useMemo<Partial<ImageSettings>>(
     () =>
@@ -165,9 +183,13 @@ export function useImageSettings(
     [batch.data]
   );
 
+  // Until the ended first batch's settings are known, no image is offered:
+  // the batch prepared this revision's drafts with them.
+  const waiting = batchId !== null && batch.data === undefined && !batch.error;
   const settings = useMemo(
-    () => settle({ ...fromBatch, ...(chosen ?? {}) }, options),
-    [chosen, fromBatch, options]
+    () =>
+      waiting ? null : settle({ ...fromBatch, ...(chosen ?? {}) }, options),
+    [chosen, fromBatch, options, waiting]
   );
 
   const change = useCallback(
@@ -180,5 +202,40 @@ export function useImageSettings(
     [keyName, options, settings]
   );
 
-  return { settings, options, change, failed: Boolean(caps.error) };
+  const batchSettings = useMemo(
+    () => (batch.data ? settle(fromBatch, options) : null),
+    [batch.data, fromBatch, options]
+  );
+  const candidates = useCallback(
+    (revision: number) =>
+      [settings, byRevision[String(revision)] ?? null, batchSettings].filter(
+        (item): item is ImageSettings => item !== null
+      ),
+    [batchSettings, byRevision, settings]
+  );
+  const prepared = useCallback(
+    (revision: number, used: ImageSettings) => {
+      setByRevision((current) => {
+        // The last few revisions are enough: an older one is never asked for again.
+        const kept = Object.entries(current)
+          .filter(
+            ([key]) => Number(key) > revision - 5 && Number(key) !== revision
+          )
+          .slice(-4);
+        const next = { ...Object.fromEntries(kept), [String(revision)]: used };
+        writeStored(preparedName, next);
+        return next;
+      });
+    },
+    [preparedName]
+  );
+
+  return {
+    settings,
+    options,
+    change,
+    candidates,
+    prepared,
+    failed: Boolean(caps.error),
+  };
 }

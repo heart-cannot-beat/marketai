@@ -14,12 +14,16 @@ const KNOWN_CHECKS = new Set([
   'brand_style',
   'text_readable',
 ]);
+/**
+ * Reasons that say what is wrong on their own. "The check wasn't sure"
+ * (`low_confidence`) does not: such a finding is named by what was checked,
+ * with its "needs you to look" mark.
+ */
 const KNOWN_GATES = new Set([
   'rendered_text_mismatch',
   'rendered_text_missing',
   'claim_evidence_missing',
   'product_reference_missing',
-  'low_confidence',
   'supporting_facts_missing',
   'brand_logo_missing',
 ]);

@@ -8,6 +8,9 @@ import type { PaidImage } from '@/hooks/ideas/usePaidImage';
 
 export const BUTTON =
   'inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-900 hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100';
+/** A toggle that is on: a style of its own, never `BUTTON` plus overrides (they would clash). */
+export const PRESSED =
+  'inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-900 bg-gray-900 px-4 text-sm font-semibold text-white dark:border-gray-100 dark:bg-gray-100 dark:text-gray-900';
 export const PRIMARY =
   'inline-flex min-h-11 items-center justify-center rounded-lg bg-gray-900 px-4 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900';
 

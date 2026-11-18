@@ -8,24 +8,24 @@ import {
   type HistoryAsset,
 } from '@/components/workspace/MarketingVersionHistory';
 import { ideasProblem } from '@/lib/ideas/ideas-problems';
+import { mainReasons } from '@/lib/ideas/check-sheet';
 import {
   checkView,
+  fromUpload,
   openFindings,
   placeOf,
   versionsOf,
   type IdeasAd,
   type IdeasDetail,
 } from '@/lib/ideas/ideas-view';
-import type {
-  IdeasCommands,
-  ImageSettings,
-} from '@/hooks/ideas/useIdeasCommands';
+import type { IdeasCommands } from '@/hooks/ideas/useIdeasCommands';
+import type { UseImageSettings } from '@/hooks/ideas/useImageSettings';
 import { usePaidImage } from '@/hooks/ideas/usePaidImage';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
 import { AdImage, AdThumbnail } from './AdCard';
 import { ChecksButton } from './ChecksButton';
 import { FindingList } from './FindingList';
-import { BUTTON, PaidImageAction } from './PaidImageAction';
+import { BUTTON, PaidImageAction, PRESSED } from './PaidImageAction';
 
 const SECTION =
   'space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900 sm:p-5';
@@ -52,7 +52,7 @@ export interface EditAdProps {
   detail: IdeasDetail;
   assetVersionId: string;
   commands: IdeasCommands;
-  settings: ImageSettings | null;
+  image: UseImageSettings;
   onClose: () => void;
   /** Shows another version of this ad on this screen. */
   onSwitch: (assetVersionId: string) => void;
@@ -73,7 +73,7 @@ export function EditAd({
   detail,
   assetVersionId,
   commands,
-  settings,
+  image,
   onClose,
   onSwitch,
   onToggleKept,
@@ -100,8 +100,10 @@ export function EditAd({
   const facts = (detail.understanding?.facts ?? []).filter((fact) =>
     (ad.cited_fact_ids ?? []).includes(fact.id)
   );
+  const settings = image.settings;
   const reasons = new Set((ad.reasons ?? []).map((reason) => reason.code));
-  const uploaded = ad.origin === 'uploaded';
+  // A crop of an uploaded image is still the user's own image (#200).
+  const uploaded = fromUpload(detail, ad);
   const needsRedo = ad.status === 'needs_redo';
   const findings = openFindings(ad);
   const check = checkView(ad, detail);
@@ -154,12 +156,7 @@ export function EditAd({
             <button
               type="button"
               aria-pressed={ad.kept}
-              className={classNames(
-                BUTTON,
-                'w-full',
-                ad.kept &&
-                  'border-gray-900 bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-              )}
+              className={classNames(ad.kept ? PRESSED : BUTTON, 'w-full')}
               onClick={() => onToggleKept(ad)}
             >
               {ad.kept ? t('ideas-ad-kept') : t('ideas-ad-keep')}
@@ -244,7 +241,7 @@ export function EditAd({
               <div className="space-y-1 text-sm text-red-900 dark:text-red-200">
                 <p className="font-semibold">{t('edit-needs-redo')}</p>
                 <ul className="list-disc pl-5">
-                  {Array.from(reasons).map((code) => (
+                  {mainReasons(ad).map((code) => (
                     <li key={code}>{t(`ideas-reason-${code}`)}</li>
                   ))}
                 </ul>
@@ -255,7 +252,8 @@ export function EditAd({
           <Redo
             ad={ad}
             commands={commands}
-            settings={settings}
+            image={image}
+            revision={detail.revision}
             uploaded={uploaded}
             removedFact={reasons.has('facts_removed')}
             ideasChanged={reasons.has('ideas_changed')}
@@ -331,7 +329,8 @@ function BackButton({ onClose }: { onClose: () => void }) {
 function Redo({
   ad,
   commands,
-  settings,
+  image,
+  revision,
   uploaded,
   removedFact,
   ideasChanged,
@@ -339,7 +338,8 @@ function Redo({
 }: {
   ad: IdeasAd;
   commands: IdeasCommands;
-  settings: ImageSettings | null;
+  image: UseImageSettings;
+  revision: number;
   uploaded: boolean;
   removedFact: boolean;
   ideasChanged: boolean;
@@ -347,6 +347,7 @@ function Redo({
 }) {
   const { t } = useTranslation('ideas');
   const noteId = useId();
+  const settings = image.settings;
   const [note, setNote] = useState('');
   const correction = usePaidImage(commands);
   const again = usePaidImage(commands);
@@ -454,7 +455,11 @@ function Redo({
             onStart={() =>
               settings &&
               void again.quote(() =>
-                commands.draftFor(ad.combination_id, settings)
+                commands.draftFor(
+                  ad.combination_id,
+                  image.candidates(revision),
+                  image.prepared
+                )
               )
             }
           />

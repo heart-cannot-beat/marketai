@@ -235,6 +235,31 @@ export function verifyBody(
     : null;
 }
 
+/** The reasons that make an ad need redoing (#198); checking cannot settle them. */
+export const REDO_REASONS: ReadonlySet<string> = new Set([
+  'ideas_changed',
+  'facts_changed',
+  'facts_removed',
+  'photo_unavailable',
+  'image_blocked',
+]);
+
+/**
+ * The reasons worth saying for one ad: for an ad that needs redoing, only
+ * why it needs redoing -- what a check would settle no longer matters.
+ */
+export function mainReasons(ad: {
+  status: string;
+  reasons?: AdReason[] | null;
+}): AdReason['code'][] {
+  const codes = Array.from(
+    new Set((ad.reasons ?? []).map((reason) => reason.code))
+  );
+  return ad.status === 'needs_redo'
+    ? codes.filter((code) => REDO_REASONS.has(code))
+    : codes;
+}
+
 /** One ad a download refused, as `ads_not_exportable` names it (#198). */
 export interface RefusedAd {
   asset_version_id: string;

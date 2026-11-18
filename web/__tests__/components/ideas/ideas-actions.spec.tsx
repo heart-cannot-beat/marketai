@@ -79,8 +79,10 @@ jest.mock('@/hooks/external-creatives/useExternalCreatives', () => ({
   useExternalCreatives: () => mockUpload,
 }));
 
+/** A domain answer as the gateway gives it: 200 `ok`, 201 `created`, 202 `accepted`. */
 function ok<T>(data: T, status = 200) {
-  return { kind: 'ok' as const, status, data, meta: {} };
+  const kind = status === 201 ? 'created' : status === 202 ? 'accepted' : 'ok';
+  return { kind, status, data, meta: {} };
 }
 
 function Fresh({ children }: { children: ReactNode }) {
@@ -280,6 +282,8 @@ describe('ideas page actions (#201)', () => {
           options: ['Most already do', 'Most are about to buy'],
           multiple: false,
           why_needed: 'It changes what the ads should explain.',
+          selected: [],
+          custom_answer: '',
         },
       ],
     };
@@ -420,6 +424,88 @@ describe('ideas page actions (#201)', () => {
         },
       })
     );
+  });
+
+  it('makes an image with the settings this version was prepared with when the chosen ones are refused', async () => {
+    mockGateway.getMarketingFirstBatch.mockResolvedValue(
+      ok({
+        id: 'mfb_1',
+        state: 'done',
+        image_provider: 'openai',
+        image_model: 'image-model',
+      })
+    );
+    mockGateway.prepareMarketingIdeasGeneration.mockImplementation(
+      async ({ body }) =>
+        body.aspect_ratio === '4:5'
+          ? ok(
+              {
+                project_id: 'mp_secret',
+                revision: 3,
+                drafts: [{ combination_id: 'c6', draft_id: 'gd_c6' }],
+              },
+              201
+            )
+          : {
+              kind: 'problem',
+              status: 409,
+              problem: {
+                type: 'about:blank',
+                title: '',
+                status: 409,
+                detail: '',
+                instance: '',
+                code: 'ideas_drafts_already_prepared',
+                trace_id: 't',
+                retryable: false,
+                field_errors: [],
+              },
+              meta: {},
+            }
+    );
+    mockGateway.createGenerationPreview.mockResolvedValue(
+      ok(
+        {
+          id: 'gp_c6',
+          preview_hash: 'h6',
+          draft_revision: 1,
+          maximum_cost: { amount: '0.04', currency: 'USD' },
+        },
+        201
+      )
+    );
+    await renderPage(
+      ideasDetail({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'done',
+          needs_attention: false,
+          reason: null,
+        },
+      })
+    );
+    const settings = screen.getByRole('region', { name: 'Image settings' });
+    fireEvent.click(
+      await within(settings).findByRole('button', {
+        name: 'Change image settings',
+      })
+    );
+    fireEvent.change(
+      within(settings).getByRole('combobox', { name: 'Aspect ratio' }),
+      { target: { value: '1:1' } }
+    );
+    const [, failed] = within(claim(3)).getAllByTestId('ad-card');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Try again' }));
+    expect(
+      await within(failed).findByRole('button', {
+        name: 'Try again · up to $0.04',
+      })
+    ).toBeInTheDocument();
+    expect(
+      mockGateway.prepareMarketingIdeasGeneration.mock.calls.map(
+        ([call]) => call.body.aspect_ratio
+      )
+    ).toEqual(['1:1', '4:5']);
   });
 
   it('offers to check new images at the quoted maximum', async () => {

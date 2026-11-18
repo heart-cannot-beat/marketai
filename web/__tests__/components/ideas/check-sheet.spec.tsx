@@ -72,8 +72,10 @@ jest.mock('@/hooks/products/useWorkspaceProducts', () => ({
   useWorkspaceProducts: () => ({ refresh: jest.fn() }),
 }));
 
+/** A domain answer as the gateway gives it: 200 `ok`, 201 `created`, 202 `accepted`. */
 function ok<T>(data: T, status = 200) {
-  return { kind: 'ok' as const, status, data, meta: {} };
+  const kind = status === 201 ? 'created' : status === 202 ? 'accepted' : 'ok';
+  return { kind, status, data, meta: {} };
 }
 function refused(code: string, status = 409, params?: unknown) {
   return {
@@ -462,6 +464,42 @@ describe('CheckSheet (#201)', () => {
     const text = container.textContent ?? '';
     for (const id of ['av_1', 'av_3', 'qc_1', 'f1', 'mp_secret'])
       expect(text).not.toContain(id);
+  });
+
+  it('says only why an ad needs redoing, and says so when leaving one out is refused', async () => {
+    const detail = sheetDetail();
+    detail.ads.push(
+      ad('av_8', 'c4', {
+        kept: true,
+        status: 'needs_redo',
+        reasons: [
+          reason('facts_removed', ['f9']),
+          reason('facts_unverified', ['f2']),
+          reason('check_missing'),
+        ],
+      })
+    );
+    await openSheet(detail);
+    const later = screen.getByRole('region', {
+      name: "Can't be downloaded this time (1)",
+    });
+    expect(
+      within(later).getByText('A fact it uses was deleted.')
+    ).toBeInTheDocument();
+    expect(within(later).queryByText("It hasn't been checked yet.")).toBeNull();
+    expect(
+      within(later).queryByText("Some facts it uses aren't checked yet.")
+    ).toBeNull();
+
+    mockGateway.setMarketingAdKept.mockResolvedValue(
+      refused('ad_not_found', 404)
+    );
+    fireEvent.click(
+      within(later).getByRole('button', { name: 'Leave this one out' })
+    );
+    expect(
+      await screen.findByText('This ad is no longer here. Refresh the page.')
+    ).toBeInTheDocument();
   });
 
   it('keeps an unchecked kept ad out of this download and offers its check at the quoted maximum', async () => {

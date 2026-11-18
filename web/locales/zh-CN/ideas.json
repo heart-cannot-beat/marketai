@@ -323,7 +323,6 @@
   "finding-gate-rendered_text_missing": "图里有字没读出来，没法和文案对照",
   "finding-gate-claim_evidence_missing": "图里有说法找不到事实依据",
   "finding-gate-product_reference_missing": "请确认产品外观",
-  "finding-gate-low_confidence": "检查拿不准",
   "finding-gate-supporting_facts_missing": "没有事实支持图里的说法",
   "finding-gate-brand_logo_missing": "原来的 Logo 不在了，没法核对 Logo",
   "finding-check-file_valid": "图片能打开，而且是这一版",
@@ -507,7 +506,7 @@
   "settings-variants-value_one": "1 张",
   "settings-change": "改出图设置",
   "settings-done": "好了",
-  "settings-note": "新出的图用这些设置，已经出的不变。",
+  "settings-note": "同一版广告想法只用一套出图设置：这一版已经出过图的，还按原来的设置出；追加主张或讲法、核对事实之后，新的设置才生效。",
   "settings-unavailable": "还没有能用你自己的 Key 出图的服务商，请到设置里检查 Key。",
   "settings-failed": "没能读到出图服务商，请刷新页面。",
   "guiding-title": "回答 {{count}} 个问题，下一批更准",
@@ -518,5 +517,8 @@
   "guiding-answered": "已回答 {{count}} 个",
   "guiding-answered_one": "已回答 1 个",
   "guiding-own": "用自己的话回答：{{question}}",
-  "guiding-own-placeholder": "或者用自己的话说"
+  "guiding-own-placeholder": "或者用自己的话说",
+  "checks-unavailable-qc_not_configured": "这个工作区还没有设置检查用的模型，请联系管理员。",
+  "checks-unavailable-reason": "现在不能检查：{{reason}}",
+  "check-redo-unavailable": "重出要有能用你自己的 Key 出图的服务商，请到设置里检查 Key。"
 }

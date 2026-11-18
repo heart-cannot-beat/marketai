@@ -222,12 +222,18 @@ export function AddTelling({
   angle,
   open,
   onOpenChange,
+  explain = true,
   ...props
 }: AdditionProps & {
   angle: Angle;
   /** The type picker is open (the edit screen can open it too). */
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Says why adding is not possible now. The ideas page says it once, beside
+   * "another claim", rather than under every claim.
+   */
+  explain?: boolean;
 }) {
   const { t, i18n } = useTranslation('ideas');
   const { t: common } = useTranslation('common');
@@ -318,7 +324,7 @@ export function AddTelling({
           </button>
         </div>
       )}
-      <QuoteState quote={quote} blocked={blocked} />
+      {explain && <QuoteState quote={quote} blocked={blocked} />}
       {problem !== undefined && (
         <p className="text-sm text-red-700 dark:text-red-300" role="alert">
           {ideasProblem(t, problem)}

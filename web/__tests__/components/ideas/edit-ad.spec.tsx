@@ -81,8 +81,10 @@ jest.mock('@/hooks/products/useWorkspaceProducts', () => ({
   useWorkspaceProducts: () => ({ refresh: jest.fn() }),
 }));
 
+/** A domain answer as the gateway gives it: 200 `ok`, 201 `created`, 202 `accepted`. */
 function ok<T>(data: T, status = 200) {
-  return { kind: 'ok' as const, status, data, meta: {} };
+  const kind = status === 201 ? 'created' : status === 202 ? 'accepted' : 'ok';
+  return { kind, status, data, meta: {} };
 }
 const reason = (
   code: string,
@@ -450,6 +452,52 @@ describe('EditAd (#201)', () => {
     expect(
       screen.queryByRole('button', { name: 'Make it again as it is' })
     ).toBeNull();
+  });
+
+  it("treats a crop of an uploaded image as the user's own image", async () => {
+    const detail = ideasDetail({
+      ads: [
+        ad('av_3', 'c3', {
+          origin: 'uploaded',
+          used_product_photo: false,
+          created_at: '2026-11-17T08:00:00+00:00',
+        }),
+        ad('av_5', 'c3', {
+          origin: 'image_edit',
+          source_asset_version_id: 'av_3',
+          used_product_photo: false,
+          created_at: '2026-11-17T09:00:00+00:00',
+        }),
+      ],
+      pending: [],
+    });
+    await openEdit(1, detail);
+    expect(
+      screen.getByText(/Your own image can't be redone or processed by AI/)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Redo this one' })).toBeNull();
+    expect(
+      screen.queryByText('Upscale, remove background or erase')
+    ).toBeNull();
+  });
+
+  it('shows no copy as its own for an ad whose content is no longer in the ideas', async () => {
+    const detail = ideasDetail({
+      ads: [
+        ad('av_1', 'c1', {
+          status: 'needs_redo',
+          reasons: [reason('ideas_changed')],
+        }),
+      ],
+      pending: [],
+    });
+    await openEdit(0, detail);
+    const copy = within(screen.getByRole('region', { name: 'Copy' }));
+    expect(copy.getAllByText('No longer in the ideas')).toHaveLength(2);
+    expect(copy.queryByText('Plug in. Go to bed.')).toBeNull();
+    expect(
+      screen.getByText("It's no longer what its claim says now.")
+    ).toBeInTheDocument();
   });
 
   it('shows another version, offers its check, and goes back to the ideas', async () => {

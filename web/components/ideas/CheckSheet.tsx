@@ -1,6 +1,5 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'next-i18next';
-import classNames from 'classnames';
 import { GuardedLink } from '@/components/workspace/GuardedLink';
 import type { DownloadGrant } from '@/lib/domain-client/blob-transfer';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
@@ -11,6 +10,7 @@ import {
   factKey,
   findingKey,
   leftToTick,
+  mainReasons,
   refusedAds,
   verifyBody,
   type RefusedAd,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/ideas/check-sheet';
 import { ideasProblem } from '@/lib/ideas/ideas-problems';
 import {
+  fromUpload,
   placeOf,
   type IdeasAd,
   type IdeasDetail,
@@ -32,7 +33,7 @@ import { usePaidImage } from '@/hooks/ideas/usePaidImage';
 import { AdThumbnail } from './AdCard';
 import { ChecksButton } from './ChecksButton';
 import { FindingList } from './FindingList';
-import { BUTTON, PaidImageAction } from './PaidImageAction';
+import { BUTTON, PaidImageAction, PRESSED } from './PaidImageAction';
 
 const SECTION =
   'space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900 sm:p-6';
@@ -64,6 +65,8 @@ export interface CheckSheetProps {
   onEdit: (ad: IdeasAd) => void;
   /** Takes an ad out of this download ("I don't want this one"). */
   onDrop: (ad: IdeasAd) => Promise<void> | void;
+  /** Why the last "take it out" was refused, if it was. */
+  keepProblem?: string | null;
 }
 
 /**
@@ -82,6 +85,7 @@ export function CheckSheet({
   onClose,
   onEdit,
   onDrop,
+  keepProblem,
 }: CheckSheetProps) {
   const { t } = useTranslation('ideas');
   const blobClient = useBlobTransferClient();
@@ -284,13 +288,21 @@ export function CheckSheet({
                     <p className="font-semibold">
                       {ad ? adLabel(ad) : t('ideas-ad-image')}
                     </p>
-                    <Reasons reasons={item.reasons} />
+                    <Reasons ad={item} />
                   </div>
                 </li>
               );
             })}
           </ul>
         </section>
+      )}
+      {keepProblem && (
+        <p
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
+          role="alert"
+        >
+          {keepProblem}
+        </p>
       )}
       {phase.kind === 'problem' && (
         <p
@@ -386,6 +398,11 @@ export function CheckSheet({
               ' ' + t('check-findings-clear', { count: clearCount(model) })}
           </p>
         </div>
+        {model.findings.length > 0 && !settings && (
+          <p className="text-sm text-gray-700 dark:text-gray-300" role="note">
+            {t('check-redo-unavailable')}
+          </p>
+        )}
         {model.findings.map(({ ad, checkId, findings: list }) => (
           <div
             key={ad.asset_version_id}
@@ -415,11 +432,7 @@ export function CheckSheet({
                   <button
                     type="button"
                     aria-pressed={on}
-                    className={classNames(
-                      BUTTON,
-                      on &&
-                        'border-gray-900 bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                    )}
+                    className={on ? PRESSED : BUTTON}
                     onClick={() => tickFinding(key, !on)}
                   >
                     {on
@@ -430,7 +443,9 @@ export function CheckSheet({
               }}
             />
             <div className="flex flex-wrap items-start gap-2">
-              <RedoButton ad={ad} commands={commands} settings={settings} />
+              {!fromUpload(detail, ad) && (
+                <RedoButton ad={ad} commands={commands} settings={settings} />
+              )}
               <button
                 type="button"
                 className={BUTTON}
@@ -482,7 +497,7 @@ export function CheckSheet({
                 />
               </li>
             ))}
-            {model.redo.map(({ ad, reasons }) => (
+            {model.redo.map(({ ad }) => (
               <li key={ad.asset_version_id} className={ROW}>
                 <AdThumbnail
                   versionId={ad.asset_version_id}
@@ -495,7 +510,7 @@ export function CheckSheet({
                       {t('ideas-ad-status-needs_redo')}
                     </span>
                   </p>
-                  <Reasons reasons={reasons} />
+                  <Reasons ad={ad} />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -629,9 +644,14 @@ function CheckRow({
   );
 }
 
-function Reasons({ reasons }: { reasons: RefusedAd['reasons'] }) {
+/** Why an ad cannot be downloaded; for one that needs redoing, only why it needs redoing. */
+function Reasons({
+  ad,
+}: {
+  ad: { status: string; reasons?: RefusedAd['reasons'] | null };
+}) {
   const { t } = useTranslation('ideas');
-  const codes = Array.from(new Set(reasons.map((reason) => reason.code)));
+  const codes = mainReasons(ad);
   return (
     <ul className="list-disc pl-5">
       {codes.map((code) => (
@@ -660,7 +680,7 @@ function NotDownloaded({
             <AdThumbnail versionId={ad.asset_version_id} alt={label(ad)} />
             <div className="min-w-0 text-sm">
               <p className="font-semibold">{label(ad)}</p>
-              <Reasons reasons={ad.reasons ?? []} />
+              <Reasons ad={ad} />
             </div>
           </li>
         ))}
@@ -710,7 +730,6 @@ function RedoButton({
 }) {
   const { t } = useTranslation('ideas');
   const paid = usePaidImage(commands);
-  if (ad.origin === 'uploaded') return null;
   return (
     <div className="space-y-1">
       <PaidImageAction

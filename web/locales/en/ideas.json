@@ -323,7 +323,6 @@
   "finding-gate-rendered_text_missing": "Some text in the image couldn't be read, so it couldn't be compared with the copy",
   "finding-gate-claim_evidence_missing": "The image says something the facts don't back up",
   "finding-gate-product_reference_missing": "Please confirm the product looks right",
-  "finding-gate-low_confidence": "The check wasn't sure",
   "finding-gate-supporting_facts_missing": "No fact backs up what the image says",
   "finding-gate-brand_logo_missing": "The logo couldn't be checked: the original logo is no longer available",
   "finding-check-file_valid": "The image file opens and is this version",
@@ -507,7 +506,7 @@
   "settings-variants-value_one": "1 image",
   "settings-change": "Change image settings",
   "settings-done": "Done",
-  "settings-note": "New images use these settings; ads already made stay as they are.",
+  "settings-note": "Each version of the ideas uses one set of image settings: images of this version keep the settings it was first made with; new settings apply after the ideas next change (an added claim or way of telling, or checked facts).",
   "settings-unavailable": "No image provider is ready to make ads with your own key. Check the keys in Settings.",
   "settings-failed": "Couldn't load the image providers. Refresh the page.",
   "guiding-title": "Answer {{count}} questions to make the next ideas fit better",
@@ -518,5 +517,8 @@
   "guiding-answered": "{{count}} answered",
   "guiding-answered_one": "1 answered",
   "guiding-own": "Your own answer to: {{question}}",
-  "guiding-own-placeholder": "Or in your own words"
+  "guiding-own-placeholder": "Or in your own words",
+  "checks-unavailable-qc_not_configured": "Checking isn't set up for this workspace yet. Ask your administrator.",
+  "checks-unavailable-reason": "Checking isn't available right now: {{reason}}",
+  "check-redo-unavailable": "Redoing needs an image provider that works with your own key. Check the keys in Settings."
 }

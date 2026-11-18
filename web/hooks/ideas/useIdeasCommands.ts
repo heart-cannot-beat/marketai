@@ -51,6 +51,8 @@ export type CommandOutcome<T> =
 
 type Answer<T> =
   | { kind: 'ok'; data: T }
+  /** A 201 answer (`create_*`, `prepare_*`, `download_*`, `place_*`). */
+  | { kind: 'created'; data: T }
   | { kind: 'accepted'; data: T }
   | { kind: 'problem'; problem: ProblemDetails }
   | ReconciliationRequired
@@ -77,10 +79,17 @@ export interface IdeasCommands {
   prepareFeedback: (
     body: PrepareFeedback
   ) => Promise<CommandOutcome<FeedbackDraft>>;
-  /** The generation draft of one ad of the ideas at the current revision (#191). */
+  /**
+   * The generation draft of one ad of the ideas at the current revision
+   * (#191). The server keeps one set of drafts per revision, made with one set
+   * of image settings: `settings` are tried in order while it answers that the
+   * drafts were prepared with other settings, and `onPrepared` hears which
+   * ones it took.
+   */
   draftFor: (
     combinationId: string,
-    settings: ImageSettings
+    settings: ImageSettings[],
+    onPrepared?: (revision: number, settings: ImageSettings) => void
   ) => Promise<CommandOutcome<string>>;
   /** Freezes a draft into a preview: the maximum cost to confirm. */
   quoteDraft: (draftId: string) => Promise<CommandOutcome<GenerationPreview>>;
@@ -129,7 +138,11 @@ export function useIdeasCommands(
       } catch {
         return { kind: 'uncertain' };
       }
-      if (result.kind === 'ok' || result.kind === 'accepted') {
+      if (
+        result.kind === 'ok' ||
+        result.kind === 'created' ||
+        result.kind === 'accepted'
+      ) {
         actions.current.delete(identity);
         return { kind: 'done', data: (result as { data: T }).data };
       }
@@ -248,11 +261,16 @@ export function useIdeasCommands(
   const draftFor = useCallback(
     async (
       combinationId: string,
-      settings: ImageSettings
+      candidates: ImageSettings[],
+      onPrepared?: (revision: number, settings: ImageSettings) => void
     ): Promise<CommandOutcome<string>> => {
-      const outcome = await run<Drafts>(
-        `drafts:${revision}:${JSON.stringify(settings)}`,
-        (action) =>
+      const tried = new Set<string>();
+      let outcome: CommandOutcome<Drafts> = { kind: 'uncertain' };
+      for (const settings of candidates) {
+        const key = JSON.stringify(settings);
+        if (tried.has(key)) continue;
+        tried.add(key);
+        outcome = await run<Drafts>(`drafts:${revision}:${key}`, (action) =>
           gateway.prepareMarketingIdeasGeneration({
             workspaceSlug: slug,
             actionInstanceId: action,
@@ -260,7 +278,17 @@ export function useIdeasCommands(
             projectId,
             body: settings,
           })
-      );
+        );
+        if (outcome.kind === 'done') {
+          if (revision !== undefined) onPrepared?.(revision, settings);
+          break;
+        }
+        if (
+          outcome.kind !== 'refused' ||
+          outcome.problem.code !== 'ideas_drafts_already_prepared'
+        )
+          break;
+      }
       if (outcome.kind !== 'done') return outcome;
       const draft = outcome.data.drafts.find(
         (item) => item.combination_id === combinationId

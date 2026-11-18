@@ -8,9 +8,11 @@ import { useFirstBatch } from '@/hooks/ideas/useFirstBatch';
 import {
   useIdeasCommands,
   type IdeasCommands,
-  type ImageSettings,
 } from '@/hooks/ideas/useIdeasCommands';
-import { useImageSettings } from '@/hooks/ideas/useImageSettings';
+import {
+  useImageSettings,
+  type UseImageSettings,
+} from '@/hooks/ideas/useImageSettings';
 import { usePaidImage } from '@/hooks/ideas/usePaidImage';
 import { errorMessage, errorCodeMessage } from '@/lib/i18n/domain-errors';
 import { adsMade, costLabel, costsMore } from '@/lib/ideas/first-batch-view';
@@ -243,6 +245,7 @@ function IdeasProject({
           setScreen({ kind: 'edit', assetVersionId: item.asset_version_id })
         }
         onDrop={(item) => (item.kept ? toggleKept(item) : undefined)}
+        keepProblem={keepProblem}
       />
     );
 
@@ -258,7 +261,7 @@ function IdeasProject({
           detail={detail}
           assetVersionId={screen.assetVersionId}
           commands={commands}
-          settings={image.settings}
+          image={image}
           onClose={() => setScreen({ kind: 'ideas' })}
           onSwitch={(id) => setScreen({ kind: 'edit', assetVersionId: id })}
           onToggleKept={(item) => void toggleKept(item)}
@@ -314,7 +317,8 @@ function IdeasProject({
             combinationId={slot.combinationId}
             failed={slot.kind === 'failed'}
             commands={commands}
-            settings={image.settings}
+            image={image}
+            revision={detail.revision}
           />
         )
       }
@@ -428,6 +432,7 @@ function IdeasProject({
                   angle && (
                     <AddTelling
                       angle={angle}
+                      explain={false}
                       open={telling === angle.id}
                       onOpenChange={(open) =>
                         setTelling(open ? angle.id : null)
@@ -478,13 +483,16 @@ function MakeAd({
   combinationId,
   failed,
   commands,
-  settings,
+  image,
+  revision,
 }: {
   combinationId: string;
   failed: boolean;
   commands: IdeasCommands;
-  settings: ImageSettings | null;
+  image: UseImageSettings;
+  revision: number;
 }) {
+  const settings = image.settings;
   const { t } = useTranslation('ideas');
   const paid = usePaidImage(commands);
   return (
@@ -497,7 +505,13 @@ function MakeAd({
       disabled={!settings}
       onStart={() =>
         settings &&
-        void paid.quote(() => commands.draftFor(combinationId, settings))
+        void paid.quote(() =>
+          commands.draftFor(
+            combinationId,
+            image.candidates(revision),
+            image.prepared
+          )
+        )
       }
     />
   );
