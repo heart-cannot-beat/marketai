@@ -44,6 +44,6 @@
 
 首批确认一次总价之后，由 Worker 受理它自己的后续步骤；这是费用合同里唯一的这类例外，范围和条件见[费用合同 §11](../architecture/subscription-entitlement-usage-cost-ownership.md#11-spend-guardrail)“一次副作用命令的固定顺序”之后的一段（#193；出图之后的单图检查也在其中，#197）。
 
-导出的三个条件怎样逐张判断、什么算“需要重出”、核对时发布什么、怎样下载（#198），写在[营销测试规格](../product/ai-marketing-testing-spec.md) §6 的注和[创意库合同](../product/creative-library-ownership-and-reuse-contract.md) §5.1 里。
+导出的三个条件怎样逐张判断、什么算“需要重出”、核对时发布什么、怎样下载（#198），写在[营销测试规格](../product/ai-marketing-testing-spec.md) §6 的注和[创意库合同](../product/creative-library-ownership-and-reuse-contract.md) §5.1 里。草稿怎样修改、追加和上传，新图沿用还是更新出图意图（#200），也写在营销测试规格 §6 的注里。
 
 新界面由一个环境开关 `NEXT_PUBLIC_MARKETAI_ADS_FIRST` 控制。**开关打开之前，现行界面和现行规格原文仍是线上行为**；被本 ADR 修订的各节已加注说明。每一块合并时，把它实际改变的细节写回对应的合同。

@@ -11,9 +11,11 @@ from typing import Annotated, Literal
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from app.generation.image_tools import ImageToolSpec
 from app.generation.response_models import DownloadGrant
-from .contracts import (Angle, BrandKitRef, CreativeCombination, Document, GuidingQuestion, Identifier,
+from .contracts import (Angle, BrandKitRef, CreativeCombination, Document, Expression, GuidingQuestion, Identifier,
                         PlanningCallSummary, Text, Understanding)
+from .image_editing import ImageCrop
 
 AdLanguage = Annotated[str, Field(min_length=2, max_length=35, pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")]
 IdeasState = Literal["input", "understanding_draft", "ideas_ready"]
@@ -126,11 +128,21 @@ class AdReason(Document):
     finding_ids: list[str] = Field(default_factory=list)
 
 
+#: How an ad's image came to be (#200): made for the ideas, a correction of an ad, an ad processed by a
+#: supplier image tool (upscale, background removal, erasing), a crop or rotation of an ad, or an image the
+#: user uploaded and placed under the ad.
+AdOrigin = Literal["generated", "corrected", "image_tool", "image_edit", "uploaded"]
+
+
 class AdSummary(Document):
     asset_version_id: str
     combination_id: str
     angle_id: str
     expression_id: str
+    origin: AdOrigin = "generated"
+    # For a new version of an ad (``corrected``, ``image_tool``, ``image_edit``): the version it was made
+    # from, which stays an ad of its own so the two can be compared and the old one kept instead.
+    source_asset_version_id: str | None = None
     # Derived from the facts, the photos and the check as they are now, never stored (ADR 0018 §3, #198).
     status: Literal["draft", "exportable", "needs_redo"]
     # Why the ad is not exportable; empty when it is.
@@ -153,11 +165,31 @@ class PendingAd(Document):
     state: Literal["queued", "running", "failed"]
 
 
+class IdeasCallAddition(Document):
+    """What an ``ideas`` call adds instead of drafting the whole ideas (#200)."""
+    kind: Literal["claim", "expression"]
+    # The claim a way of telling is added to.
+    angle_id: str | None = None
+
+
 class IdeasCallSummary(PlanningCallSummary):
     """A drafting call of ads-first ideas: the product understanding, then the ideas (#190).
 
     The plan-first ``PlanningCallSummary`` keeps its own kinds; an ads-first project never has a plan call."""
     kind: Literal["understanding", "ideas"]
+    # Set when the call adds one claim or one way of telling to drafted ideas (#200).
+    addition: IdeasCallAddition | None = None
+
+
+class IdeasImageEdit(Document):
+    """A crop or rotation of one ad (#200): a local Worker job, free of charge. ``unchanged`` when the result
+    was the source itself; ``result_asset_version_id`` is then that existing version."""
+    id: str
+    operation_id: str
+    source_asset_version_id: str
+    result_asset_version_id: str | None = None
+    state: Literal["queued", "succeeded", "unchanged", "failed"]
+    error_code: str | None = None
 
 
 #: ``checking``: every image is made (they are on the ideas page) and each is being checked (#197).
@@ -190,6 +222,8 @@ class IdeasProjectDetail(Document):
     pending: list[PendingAd]
     # The first batch that opened these ideas, if one did (#193).
     first_batch: FirstBatchSummary | None = None
+    # Every crop or rotation of these ideas' ads, oldest first (#200); the new versions are in ``ads``.
+    image_edits: list[IdeasImageEdit] = Field(default_factory=list)
 
 
 class IdeasProjectSummary(Document):
@@ -244,12 +278,90 @@ class IdeasGenerationDrafts(Document):
     drafts: list[IdeasGenerationDraft]
 
 
+class IdeasGuidingAnswer(Document):
+    """The user's answer to a guiding question, in their words: a wish, never a product fact."""
+    question: str = Field(min_length=1, max_length=300)
+    answer: str = Field(min_length=1, max_length=1000)
+
+
+class IdeasAddition(Document):
+    """Add one claim, or one way of telling an existing claim, to drafted ideas (#200, design doc §5.3).
+
+    A claim comes with up to two ways of telling it, one ad each; a way of telling comes with one ad and a
+    picture mechanism its claim does not use yet. Nothing drafted before changes, and no ad made so far."""
+    kind: Literal["claim", "expression"]
+    # ``expression``: the claim (``Angle.id``) to add a way of telling to.
+    angle_id: Identifier | None = None
+    # The user's own claim or way of telling, in their words ("add my own claim").
+    note: str = Field(default="", max_length=1000)
+    guiding_answers: list[IdeasGuidingAnswer] = Field(default_factory=list, max_length=3)
+
+    @model_validator(mode="after")
+    def target(self):
+        if (self.kind == "expression") != (self.angle_id is not None):
+            raise PydanticCustomError("ideas_addition_target", "追加讲法要指明主张；追加主张不指明主张")
+        return self
+
+
 class StartIdeasPlanning(Document):
-    """Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018)."""
+    """Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).
+
+    With ``addition`` (``kind = "ideas"`` only, #200) the call adds one claim or one way of telling to the
+    drafted ideas instead of drafting them again; it costs one planning call, quoted like any other."""
     kind: Literal["understanding", "ideas"]
     strategy_language: Literal["zh-CN", "en-US"] = "en-US"
     execution_mode: Literal["byok", "mock"]
     quote_hash: str = Field(default="", max_length=64)
+    addition: IdeasAddition | None = None
+
+
+class ClaimAddition(Document):
+    """What a drafting call adds as a new claim (#200): the claim and one ad per way of telling it."""
+    angle: Angle
+    combinations: list[CreativeCombination] = Field(min_length=1, max_length=2)
+
+
+class ExpressionAddition(Document):
+    """What a drafting call adds to an existing claim (#200): one way of telling it and its ad."""
+    expression: Expression
+    combination: CreativeCombination
+
+
+class PrepareIdeasFeedback(Document):
+    """Change one ad by making it again (#200): a correction from the user's note and its check's findings,
+    or -- with ``image_tool`` -- a supplier image tool (upscale, remove the background, erase an area).
+
+    Prepares a generation draft only; preview it for the maximum cost and submit it to make the image."""
+    asset_version_id: str = Field(min_length=1, max_length=64)
+    note: str = Field(default="", max_length=1200)
+    provider: Literal["gemini", "openai", "seedream", "mock"]
+    model: str = Field(min_length=1, max_length=200)
+    image_tool: ImageToolSpec | None = None
+
+
+class IdeasFeedbackDraft(Document):
+    """A prepared correction or image tool: preview and submit ``draft_id`` with the generation endpoints."""
+    id: str
+    project_id: str
+    draft_id: str
+    source_asset_version_id: str
+    combination_id: str
+    kind: Literal["correction", "image_tool"]
+    # The findings of the source's check the correction asks to fix.
+    finding_ids: list[str]
+
+
+class CreateIdeasImageEdit(Document):
+    """Crop then rotate one ad clockwise (#200): a new version, made locally and free of charge."""
+    asset_version_id: str = Field(min_length=1, max_length=64)
+    crop: ImageCrop | None = None
+    rotation: Literal[0, 90, 180, 270] = 0
+
+
+class PlaceIdeasUpload(Document):
+    """Place an uploaded image of the product (``create_external_creatives``, rights declared) under one ad."""
+    external_creative_id: str = Field(min_length=1, max_length=64)
+    combination_id: Identifier
 
 
 class IdeasChecksSkipped(Document):

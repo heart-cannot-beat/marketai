@@ -111,6 +111,20 @@ def load_edit(session, ctx, edit_id, *, lock=False):
     return session.scalar(query.with_for_update() if lock else query)
 
 
+def _subject(session, ctx, edit, inputs, *, final=False):
+    """The product and mode the edit's source must still have, once its round (or ads-first ideas, #200)
+    is checked to still allow it; ``final`` also checks the frozen intent before a version is written."""
+    from . import workflow
+    if edit.project_id:
+        from .ideas_revisions import edit_subject
+        return edit_subject(session, ctx, edit, inputs)
+    row = workflow.get_round(session, ctx, edit.round_id)
+    project = editable(session, ctx, row)
+    if final and (digest(inputs) != edit.input_hash or inputs["marketing_intent"] != creative_intent(project, inputs["marketing_intent"]["combination"]["id"])):
+        raise MarketingError("image_edit_changed", "修改依据已变化。", 409)
+    return project.product_id, row.execution_mode
+
+
 @runs_as(WORKER_ROLE)
 async def execute_edit(ctx, edit_id, blob_store):
     from . import workflow
@@ -119,9 +133,7 @@ async def execute_edit(ctx, edit_id, blob_store):
         if not edit or edit.state != "queued":
             return
         inputs = edit.input_json
-        row = workflow.get_round(session, ctx, edit.round_id)
-        project = editable(session, ctx, row)
-        check_source(session, ctx, inputs["source_image"], project.product_id, row.execution_mode)
+        check_source(session, ctx, inputs["source_image"], *_subject(session, ctx, edit, inputs))
     try:
         content = await read_source(blob_store, inputs["source_image"])
         output, (w, h) = await asyncio.to_thread(transform, content, inputs)
@@ -139,11 +151,7 @@ async def execute_edit(ctx, edit_id, blob_store):
             edit = load_edit(session, ctx, edit_id, lock=True)
             if edit.state != "queued":
                 return
-            row = workflow.get_round(session, ctx, edit.round_id)
-            project = editable(session, ctx, row)
-            if digest(inputs) != edit.input_hash or inputs["marketing_intent"] != creative_intent(project, inputs["marketing_intent"]["combination"]["id"]):
-                raise MarketingError("image_edit_changed", "修改依据已变化。", 409)
-            check_source(session, ctx, inputs["source_image"], project.product_id, row.execution_mode)
+            check_source(session, ctx, inputs["source_image"], *_subject(session, ctx, edit, inputs, final=True))
             source = session.get(AssetVersionRecord, edit.source_asset_version_id)
             session.scalar(select(AssetRecord).where(AssetRecord.workspace_id == ctx.workspace_id,
                 AssetRecord.id == source.asset_id).with_for_update())

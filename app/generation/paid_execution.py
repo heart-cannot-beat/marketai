@@ -185,7 +185,8 @@ def _prepare(session, ctx, job_id, item_id):
             if project.state != "plan_confirmed" or project.revision != intent["plan_revision"]:
                 raise SelectionError("marketing_plan_changed", "测试方案已变化，请重新准备修改。")
         feedback = frozen.get("marketing_feedback")
-        if feedback:
+        # An ads-first correction has no round (#200): its intent was checked against the ideas above.
+        if feedback and feedback.get("round_id"):
             from app.marketing.workflow import get_round, scoped, Handoff
             row = get_round(session, ctx, feedback["round_id"])
             if row.state != "reviewing" or scoped(session, ctx, Handoff, round_id=row.id):

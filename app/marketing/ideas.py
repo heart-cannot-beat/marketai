@@ -72,7 +72,12 @@ def project_ads(session, ctx, row):
 
 
 def _ads_by_project(session, ctx, project_ids):
-    """``project_ads`` of several projects in one query (the list reads every row's counts)."""
+    """``project_ads`` of several projects with a fixed number of queries (the list reads every row's counts).
+
+    An ad is a generated image whose recipe intent names the project (a correction or an image tool of an
+    ad included), a crop or rotation of an ad, or an uploaded image placed under an ad (#200). The last two
+    carry a recipe-like record of the intent they stand on (``ideas_revisions``)."""
+    from .ideas_revisions import edited_ads, uploaded_ads
     records = session.execute(select(AssetVersionRecord, GenerationRecipeSnapshotRecord)
         .join(RunItemRecord, (RunItemRecord.id == AssetVersionRecord.producing_run_item_id) & (RunItemRecord.workspace_id == ctx.workspace_id))
         .join(GenerationRunRecord, (GenerationRunRecord.id == RunItemRecord.generation_run_id) & (GenerationRunRecord.workspace_id == ctx.workspace_id))
@@ -85,6 +90,14 @@ def _ads_by_project(session, ctx, project_ids):
         intent = _intent(recipe)
         if intent.get("project_id") in ads and intent.get("flow") == FLOW:
             ads[intent["project_id"]].append((version, recipe))
+    for others in (edited_ads(session, ctx, project_ids), uploaded_ads(session, ctx, project_ids)):
+        for project_id, items in others.items():
+            for version, recipe in items:
+                intent = _intent(recipe)
+                if intent.get("project_id") == project_id and intent.get("flow") == FLOW:
+                    ads[project_id].append((version, recipe))
+    for project_id in ads:
+        ads[project_id].sort(key=lambda pair: (pair[0].created_at, pair[0].id))
     return ads
 
 
@@ -129,14 +142,19 @@ def set_kept(session, ctx, row, asset_version_id: str, kept: bool) -> None:
 
 
 def _ad(version, recipe, keeps, checks=None, statuses=None):
+    from .ideas_revisions import origin
     combination = _intent(recipe).get("combination") or {}
     selection = (recipe.canonical_json or {}).get("selection") or {}
     # Derived, never stored (ADR 0018 §3, #198): draft, exportable or needs_redo, and why it is not exportable.
     derived = (statuses or {}).get(version.id) or {"status": "draft", "reasons": [], "cited_fact_ids": [],
                                                    "appearance_confirmed": False}
+    made = origin(version, recipe)
     return {"asset_version_id": version.id, "combination_id": combination.get("id", ""),
             "angle_id": combination.get("angle_id", ""), "expression_id": combination.get("expression_id", ""),
             **derived, "kept": keeps.get(version.id, False),
+            # How the image came to be and, for a new version of an ad, the version it was made from (#200).
+            "origin": made,
+            "source_asset_version_id": version.parent_version_id if made in ("corrected", "image_tool", "image_edit") else None,
             # The photos the request sent (design §5.2): an ad made without one is marked as such.
             "used_product_photo": bool(selection.get("product_references")),
             "created_at": version.created_at.isoformat() if version.created_at else "",
@@ -192,6 +210,7 @@ def ideas_dict(session, ctx, row) -> dict:
     """The ``IdeasProjectDetail`` of an ads-first project."""
     from . import ideas_checks, ideas_export
     from .first_batch import summaries
+    from .ideas_revisions import edit_summaries
     call = service.latest_call(session, ctx, row.id)
     keeps = _keeps(session, ctx, row)
     ads = project_ads(session, ctx, row)
@@ -201,9 +220,19 @@ def ideas_dict(session, ctx, row) -> dict:
     return {"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
             "market": row.market, "ad_language": row.ad_language, "understanding": row.understanding_json,
             "ideas": row.ideas_json,
-            "latest_call": service.call_dict(call, include_maximum_cost=True) if call else None,
+            "latest_call": call_summary(call) if call else None,
             "ads": [_ad(version, recipe, keeps, checks, statuses) for version, recipe in ads],
-            "pending": pending_ads(session, ctx, row), "first_batch": summaries(session, ctx, [row.id]).get(row.id)}
+            "pending": pending_ads(session, ctx, row), "first_batch": summaries(session, ctx, [row.id]).get(row.id),
+            "image_edits": edit_summaries(session, ctx, row)}
+
+
+def call_summary(call) -> dict:
+    """The ``IdeasCallSummary`` of a drafting call: for an addition (#200), what it adds."""
+    result = service.call_dict(call, include_maximum_cost=True)
+    addition = (call.input_json or {}).get("addition")
+    if call.kind == "ideas" and addition:
+        result["addition"] = {"kind": addition["kind"], "angle_id": addition.get("angle_id")}
+    return result
 
 
 #: The parts of an intent that come from the ideas and shaped the draft's image prompt: an ads-first draft
@@ -423,12 +452,19 @@ def ideas_summaries(session, ctx, rows) -> list[dict]:
     return result
 
 
-def start_ideas_planning(session, ctx, row, revision, kind, mode, quote_hash, strategy_language="en-US"):
+def start_ideas_planning(session, ctx, row, revision, kind, mode, quote_hash, strategy_language="en-US", addition=None):
     """Admit a drafting call of ads-first ideas: the product understanding, or the ideas drawn from it (#190).
 
     Neither needs a checked fact (ADR 0018 §1). The understanding keeps the plan-first checks on quotes and
     claims; the ideas need a drafted understanding. Both are ordinary paid planning calls: one job, one
-    reservation, settled by the Worker, and an explicit retry carries the last rejected draft."""
+    reservation, settled by the Worker, and an explicit retry carries the last rejected draft.
+
+    ``addition`` (kind ``ideas`` only, #200) drafts one more claim, or one more way of telling an existing
+    claim, instead of the whole ideas: see ``start_addition``."""
+    if addition is not None:
+        if kind != "ideas":
+            raise service.MarketingError("addition_kind_invalid", "只能给广告想法追加主张或讲法。")
+        return start_addition(session, ctx, row, revision, mode, quote_hash, addition)
     if kind == "understanding":
         call = service.start_planning(session, ctx, row, revision, "understanding", mode, quote_hash,
                                       ad_language=row.ad_language, strategy_language=strategy_language)
@@ -465,6 +501,200 @@ def start_ideas_planning(session, ctx, row, revision, kind, mode, quote_hash, st
         raise service.MarketingError("planning_input_too_large", "产品资料与结构化理解过长，请精简后再起草方案。")
     service.advance(session, ctx, row, revision, "planning_requested")
     return service.admit_call(session, ctx, row, "ideas", mode, cap, inputs)
+
+
+#: The most ways of telling one claim may have, and the most claims and ads ideas may hold (``Angle``, ``Ideas``).
+MAX_EXPRESSIONS, MAX_ANGLES, MAX_COMBINATIONS = 8, 8, 30
+#: What one addition drafts: a claim with up to two ways of telling, one ad each; or one way of telling with one ad.
+CLAIM_EXPRESSIONS = 2
+
+
+def start_addition(session, ctx, row, revision, mode, quote_hash, addition):
+    """Admit a drafting call that adds to the ideas, never rewriting them (#200, design doc §5.3).
+
+    ``addition``: ``{kind: "claim" | "expression", angle_id, note, guiding_answers}``. A claim comes with up
+    to two ways of telling it, one ad each; a way of telling comes with one ad, and its picture mechanism
+    must differ from every way of telling the claim already has. The note (the user's own claim or way of
+    telling) and the answers to guiding questions are the user's wishes, never product facts.
+
+    The result is merged by the Worker under new ids, so no ad made so far changes content or status. It
+    is an ordinary paid planning call (one job, one reservation, the confirmed planner quote) and an
+    explicit retry carries the last refused addition of the same kind and claim. Refused while the
+    product's first batch is still running: its own image step makes every ad the ideas hold."""
+    from . import brand_kits
+    from .expression_catalog import planner_reference
+    from .first_batch import ENDED
+    from .ideas_contracts import Ideas
+    from .models import MarketingFirstBatchRecord
+    from .planner import system_prompt
+    if row.state != "ideas_ready" or not row.ideas_json:
+        raise service.MarketingError("ideas_not_ready", "请先起草广告主张。", 409)
+    batch = session.scalar(select(MarketingFirstBatchRecord).where(MarketingFirstBatchRecord.workspace_id == ctx.workspace_id,
+                                                                   MarketingFirstBatchRecord.project_id == row.id))
+    if batch is not None and batch.state not in ENDED:
+        raise service.MarketingError("first_batch_running", "首批还没有完成，完成后再追加主张或讲法。", 409)
+    doc = Ideas.model_validate(row.ideas_json)
+    wanted = {"kind": addition["kind"], "angle_id": addition.get("angle_id"), "note": addition.get("note", ""),
+              "guiding_answers": addition.get("guiding_answers", [])}
+    ads = CLAIM_EXPRESSIONS if wanted["kind"] == "claim" else 1
+    if wanted["kind"] == "claim":
+        full = len(doc.angles) >= MAX_ANGLES
+    else:
+        angle = next((a for a in doc.angles if a.id == wanted["angle_id"]), None)
+        if angle is None:
+            raise service.MarketingError("angle_not_found", "找不到要追加讲法的主张。", 404)
+        full = len(angle.expressions) >= MAX_EXPRESSIONS
+    if full or len(doc.combinations) + ads > MAX_COMBINATIONS:
+        raise service.MarketingError("ideas_full", "这些广告想法已经到上限，不能再追加。", 409,
+                                     params={"angles": MAX_ANGLES, "expressions": MAX_EXPRESSIONS, "ads": MAX_COMBINATIONS})
+    cap = service.planner_capability(session, ctx)
+    if mode == "byok" and (not cap["available"] or quote_hash != cap["quote_hash"]):
+        raise service.MarketingError("planner_unavailable", "策划凭据、报价或预算不可用，请刷新配置。")
+    # The ideas keep one language pair and one brand baseline: an addition is written in theirs.
+    inputs = {"source_text": row.source_text, "understanding": row.understanding_json, "market": row.market,
+              "ad_language": doc.ad_language, "strategy_language": doc.strategy_language,
+              "expression_catalog": planner_reference(), "ideas": row.ideas_json, "ideas_hash": service.digest(row.ideas_json),
+              "addition": wanted}
+    if doc.brand_kit:
+        inputs["brand_kit"] = brand_kits.qc_summary(brand_kits.resolve_ref(session, ctx, doc.brand_kit))
+    repair = _addition_repair(session, ctx, row, wanted)
+    if repair:
+        inputs["rejected_plan_feedback"] = repair
+
+    def size():
+        return len((system_prompt("ideas", inputs) + json.dumps(inputs, ensure_ascii=False)).encode("utf-8"))
+    if repair and size() > 96000:
+        repair.pop("rejected_plan", None)
+    if size() > 96000:
+        raise service.MarketingError("planning_input_too_large", "产品资料与结构化理解过长，请精简后再起草方案。")
+    service.advance(session, ctx, row, revision, "planning_requested")
+    return service.admit_call(session, ctx, row, "ideas", mode, cap, inputs)
+
+
+def _addition_repair(session, ctx, row, wanted):
+    """The last refused addition of the same kind and claim, on the same understanding and ideas, as an
+    explicit correction; ``None`` otherwise (a whole-ideas rejection never feeds an addition, and back)."""
+    previous = service.latest_call(session, ctx, row.id)
+    added = (previous.input_json or {}).get("addition") if previous else None
+    if (not added or previous.kind != "ideas" or previous.state != "failed" or previous.error_code != "planner_output_invalid"
+            or (added["kind"], added.get("angle_id")) != (wanted["kind"], wanted["angle_id"])
+            or previous.input_json.get("understanding") != row.understanding_json
+            or previous.input_json.get("ideas") != row.ideas_json):
+        return None
+    output = previous.output_json or {}
+    errors = [{"type": str(e.get("type", "invalid_plan"))[:128], "loc": list(e.get("loc", []))[:12],
+               "msg": str(e.get("msg", e.get("type", "invalid_plan")))[:400]}
+              for e in output.get("validation_errors", [])[:10] if isinstance(e, dict)]
+    if not errors:
+        return None
+    feedback = {"policy": service.REPAIRS["ideas_addition"], "previous_call_id": previous.id, "validation_errors": errors}
+    rejected = output.get("rejected_output")
+    if isinstance(rejected, dict) and len(json.dumps(rejected, ensure_ascii=False).encode()) <= 16000:
+        feedback["rejected_plan"] = rejected
+    return feedback
+
+
+def _fresh(prefix: str, used: set) -> str:
+    """An id no ad of these ideas ever had: ``prefix`` and the smallest free number."""
+    n = 1
+    while f"{prefix}{n}" in used:
+        n += 1
+    used.add(f"{prefix}{n}")
+    return f"{prefix}{n}"
+
+
+def _used_ids(row) -> set:
+    """Every id the ideas hold now; new ids also carry the call's own stem, so an id an earlier image froze is never reused."""
+    doc = row.ideas_json or {}
+    return {*(a["id"] for a in doc.get("angles", [])), *(e["id"] for a in doc.get("angles", []) for e in a.get("expressions", [])),
+            *(c["id"] for c in doc.get("combinations", []))}
+
+
+def added_ideas(row, data, inputs, call_id: str):
+    """An addition as it may be merged into the ideas, and the merged ideas document; ``MarketingError`` when
+    the draft is refused (the call is then ``planner_output_invalid``, nothing is written).
+
+    New ids carry the call's own prefix, so no image made earlier -- even of ideas since redrafted -- ever
+    names them, and no existing claim, way of telling or ad changes: every ad made so far keeps its
+    content and status (#198). The draft is checked like a whole draft: languages, cited facts and
+    inferences, the three elements of each way of telling, and no two ways of telling one claim with the
+    same picture mechanism."""
+    from copy import deepcopy
+    from .contracts import Understanding
+    from .competitor_review import compact
+    from .ideas_contracts import ClaimAddition, ExpressionAddition, Ideas
+    from .languages import english_brief_matches, script_matches
+    from .expression_catalog import normalize_mechanism
+    wanted = inputs["addition"]
+    if row.state != "ideas_ready" or service.digest(row.ideas_json) != inputs["ideas_hash"]:
+        raise service.MarketingError("ideas_changed", "广告想法在起草期间变了，请重新追加。")
+    doc = Ideas.model_validate(row.ideas_json)
+    understanding = Understanding.model_validate(row.understanding_json)
+    facts, inferences = {f.id for f in understanding.facts}, {i.id for i in understanding.inferences}
+    if wanted["kind"] == "claim":
+        value = ClaimAddition.model_validate(data)
+        angle, combinations = value.angle, value.combinations
+        target = None
+        expressions = angle.expressions
+        if len(expressions) > CLAIM_EXPRESSIONS or len(combinations) != len(expressions):
+            raise service.MarketingError("ideas_addition_too_large", "追加的主张最多 2 种讲法、每种讲法 1 张广告。",
+                                         fields=_fields("angle.expressions"))
+        if set(angle.fact_ids) - facts or set(angle.inference_ids) - inferences:
+            raise service.MarketingError("plan_evidence_invalid", "角度引用了不存在的事实或推测。", fields=_fields("angle"))
+        pairs = {(c.angle_id, c.expression_id) for c in combinations}
+        if pairs != {(angle.id, e.id) for e in expressions}:
+            raise service.MarketingError("marketing_combination_invalid", "每种讲法正好一张广告，广告引用这个主张自己的讲法。",
+                                         fields=_fields("combinations"))
+        path = "angle.expressions"
+    else:
+        value = ExpressionAddition.model_validate(data)
+        target = next(a for a in doc.angles if a.id == wanted["angle_id"])
+        angle, expressions, combinations = None, [value.expression], [value.combination]
+        if value.combination.expression_id != value.expression.id:
+            raise service.MarketingError("marketing_combination_invalid", "追加的广告要引用追加的讲法。", fields=_fields("combination"))
+        path = "expression"
+    seen = {normalize_mechanism(e.visual_mechanism) for e in (target.expressions if target else [])}
+    for ei, expression in enumerate(expressions):
+        where = f"{path}.{ei}" if angle is not None else path
+        if set(expression.evidence_basis.fact_ids) - facts:
+            raise service.MarketingError("plan_evidence_invalid", "表达的证据依据引用了不存在的事实。",
+                                         fields=_fields(f"{where}.evidence_basis.fact_ids"))
+        mechanism = normalize_mechanism(expression.visual_mechanism)
+        if mechanism in seen:
+            # The design rule (#200): a new way of telling never repeats the claim's picture mechanism.
+            raise service.MarketingError("expressions_not_distinct",
+                                         "同一主张下的讲法画面机制重复；请换一种画面机制。", fields=_fields(f"{where}.visual_mechanism"))
+        seen.add(mechanism)
+    for ci, combo in enumerate(combinations):
+        where = f"combinations.{ci}" if angle is not None else "combination"
+        if not all(script_matches(text, doc.ad_language) for text in (combo.headline, combo.body_copy)):
+            raise service.MarketingError("copy_language_mismatch", "Ad headline and body copy must use the selected advertising language.",
+                                         fields=_fields(f"{where}.headline", f"{where}.body_copy"))
+        if not english_brief_matches(combo):
+            raise service.MarketingError("image_brief_language_mismatch", "Write the English image brief for every ad.",
+                                         fields=_fields(f"{where}.image_brief"))
+    # New ids under the call's own prefix; the addition's own references follow them.
+    used = _used_ids(row)
+    stem = "x" + call_id.rsplit("_", 1)[-1][:8]
+    angle_id = _fresh(f"a{stem}_", used) if angle is not None else target.id
+    renamed = {e.id: _fresh(f"e{stem}_", used) for e in expressions}
+    new_expressions = [e.model_copy(update={"id": renamed[e.id]}) for e in expressions]
+    new_combinations = [c.model_copy(update={"id": _fresh(f"c{stem}_", used), "angle_id": angle_id,
+                                              "expression_id": renamed[c.expression_id]}) for c in combinations]
+    merged = deepcopy(row.ideas_json)
+    if angle is not None:
+        new_angle = angle.model_copy(update={"id": angle_id, "expressions": new_expressions, "competitor_overlap": []})
+        merged["angles"].append(compact({"angles": [new_angle.model_dump(mode="json")]})["angles"][0])
+        result = ClaimAddition(angle=new_angle, combinations=new_combinations)
+    else:
+        next(a for a in merged["angles"] if a["id"] == angle_id)["expressions"].append(new_expressions[0].model_dump(mode="json"))
+        result = ExpressionAddition(expression=new_expressions[0], combination=new_combinations[0])
+    merged["combinations"].extend(c.model_dump(mode="json") for c in new_combinations)
+    try:
+        Ideas.model_validate(merged)
+    except ValueError as exc:
+        raise service.MarketingError("ideas_full", "追加后超出广告想法的上限或关系无效。") from exc
+    return result, merged
 
 
 def _fields(*paths):
@@ -571,3 +801,49 @@ def example(inputs):
     return {"market": inputs.get("market") or "", "ad_language": ad_language,
             "strategy_language": inputs.get("strategy_language", "en-US"), "angles": angles,
             "combinations": combinations, "style_notes": EXAMPLE_STYLE}
+
+
+def example_addition(inputs):
+    """Controlled Mock addition (#200): a claim with two ways of telling, or one more way of telling a claim,
+    each with a picture mechanism the claim does not use yet. Never a fallback for paid AI."""
+    from .expression_catalog import ENTRIES, normalize_mechanism
+    zh = inputs.get("strategy_language", "en-US") == "zh-CN"
+    ad_language = inputs.get("ad_language", "en-US")
+    headline, body = EXAMPLE_COPY.get(ad_language.split("-")[0].lower(), EXAMPLE_COPY["en"])
+    fact_ids = [f["id"] for f in inputs["understanding"]["facts"]][:3]
+    gap = "" if fact_ids else ("资料中还没有可引用的事实。" if zh else "The source has no fact to cite yet.")
+    wanted = inputs["addition"]
+    taken = set()
+    if wanted["kind"] == "expression":
+        angle = next(a for a in inputs["ideas"]["angles"] if a["id"] == wanted["angle_id"])
+        taken = {normalize_mechanism(e["visual_mechanism"]) for e in angle["expressions"]}
+    entries = [entry for entry in ENTRIES if normalize_mechanism(entry["visual_mechanism"]) not in taken]
+
+    def expression(eid, entry):
+        name = entry["name"]
+        return {"id": eid, "name": name, "description": f"用{name}讲清主张。" if zh else f"Explain the proposition through {name.lower()}.",
+                "fit_reason": "示例建议，需核对产品适用性。" if zh else "A proposed way to explain this claim; confirm product applicability.",
+                "how_to_tell": entry["how_to_tell"], "visual_mechanism": entry["visual_mechanism"],
+                "evidence_basis": {"fact_ids": fact_ids, "gap": gap}}
+
+    def combination(cid, aid, eid, entry, claim_en):
+        return {"id": cid, "angle_id": aid, "expression_id": eid, "elements": {"scene": "Actual product usage environment"},
+                "headline": headline, "body_copy": body,
+                "visual_brief": f"Show the product clearly using {entry['name'].lower()}, without unsupported claims.",
+                "image_brief": {"proposition": claim_en, "expression": entry["name"], "hold_constant": ["Same product identity"],
+                                "checks": ["Accurate product appearance", "No unsupported claims"]},
+                "checks": ["产品外观与资料一致"] if zh else ["Product appearance matches the supplied facts"]}
+
+    if wanted["kind"] == "claim":
+        claim_en = "Another reason to choose it"
+        claim = wanted.get("note") or ("另一个购买理由" if zh else claim_en)
+        chosen = entries[:CLAIM_EXPRESSIONS]
+        return {"angle": {"id": "new", "proposition": claim, "fact_ids": fact_ids,
+                          "rationale": "仅用于验证流程的示例假设。" if zh else "An unvalidated hypothesis for the controlled workflow example.",
+                          "expressions": [expression(f"n{j}", entry) for j, entry in enumerate(chosen, 1)]},
+                "combinations": [combination(f"k{j}", "new", f"n{j}", entry, claim_en) for j, entry in enumerate(chosen, 1)]}
+    angle = next(a for a in inputs["ideas"]["angles"] if a["id"] == wanted["angle_id"])
+    combo = next(c for c in inputs["ideas"]["combinations"] if c["angle_id"] == angle["id"])
+    claim_en = (combo.get("image_brief") or {}).get("proposition") or "The product's buying reason"
+    return {"expression": expression("n1", entries[0]),
+            "combination": combination("k1", angle["id"], "n1", entries[0], claim_en)}

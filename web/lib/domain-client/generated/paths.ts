@@ -432,6 +432,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'create_marketing_ideas_image_edit',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/image-edits',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'create_marketing_image_edit',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/marketing/rounds/:round_id/image-edits',
@@ -1454,6 +1462,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'place_marketing_ideas_upload',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/uploads',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'prepare_marketing_feedback',
     method: 'POST',
     bffPattern:
@@ -1466,6 +1481,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     method: 'POST',
     bffPattern:
       '/api/domain/v1/w/:slug/marketing/projects/:project_id/generation-drafts',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'prepare_marketing_ideas_feedback',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/feedback-drafts',
     pathParams: ['project_id'],
     requiresIdempotency: true,
   },

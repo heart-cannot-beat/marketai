@@ -48,6 +48,7 @@ CURRENT_AGGREGATE_TABLES = {
         "marketing_ad_keeps",
         "marketing_first_batches",
         "marketing_ideas_export_records",
+        "marketing_ideas_uploads",
     },
     "platform": {
         "workspaces",
@@ -361,6 +362,7 @@ def all_protected_tables() -> tuple[str, ...]:
     from migrations.versions.zzm189a1b2c3_marketing_ads_first import NEW_WORKSPACE_OWNED as ADS_FIRST
     from migrations.versions.zzn193a1b2c3_marketing_first_batches import NEW_WORKSPACE_OWNED as FIRST_BATCH
     from migrations.versions.zzp198a1b2c3_marketing_ideas_export_records import NEW_WORKSPACE_OWNED as IDEAS_EXPORT
+    from migrations.versions.zzq200a1b2c3_marketing_ideas_revisions import NEW_WORKSPACE_OWNED as IDEAS_UPLOADS
     from migrations.versions.zn9a0b1c2d3e_marketing_planning import NEW_WORKSPACE_OWNED as MARKETING_0
     from migrations.versions.zo0b1c2d3e4f_marketing_delivery import NEW_WORKSPACE_OWNED as MARKETING_1
     from migrations.versions.zp1c2d3e4f5a_marketing_ai_qc import NEW_WORKSPACE_OWNED as MARKETING_2
@@ -458,6 +460,7 @@ def all_protected_tables() -> tuple[str, ...]:
         + ADS_FIRST
         + FIRST_BATCH
         + IDEAS_EXPORT
+        + IDEAS_UPLOADS
         + NEW_WORKSPACE_OWNED
         + OPERATION_TABLES
         + IDEMPOTENCY_TABLES
@@ -1054,6 +1057,88 @@ class RowLevelSecurityTests(unittest.TestCase):
             "UPDATE marketing_ai_qc_calls SET state = 'failed' WHERE workspace_id = :ws AND project_id IS NOT NULL"),
             {"ws": self.beta})
         self.assertEqual(result.rowcount, 0)
+
+    def test_an_ideas_correction_or_crop_names_only_its_own_workspaces_ideas(self):
+        """Ads-first corrections and crops (#200) are ``marketing_feedback_drafts`` / ``marketing_image_edits`` rows
+        with ``project_id``: bound to the ideas by a Workspace-composite key, naming a round or ideas but never
+        both; the API cannot place one in another Workspace and the Worker cannot finish another's crop."""
+        from sqlalchemy.exc import ProgrammingError
+
+        for table, short in (("marketing_feedback_drafts", "feedback"), ("marketing_image_edits", "image_edit")):
+            with self.owner.connect() as conn:
+                definitions = dict(conn.execute(self.text(
+                    "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                    f" WHERE conrelid = 'public.{table}'::regclass AND contype IN ('f', 'c', 'u')")).all())
+            self.assertEqual(
+                definitions[f"fk_{short}_project"],
+                "FOREIGN KEY (workspace_id, project_id) REFERENCES marketing_projects(workspace_id, id) ON DELETE RESTRICT")
+            self.assertIn("round_id IS NULL", definitions[f"ck_{table}_{short}_subject"])
+            self.assertIn("project_id IS NULL", definitions[f"ck_{table}_{short}_subject"])
+            hashed = "feedback_hash" if short == "feedback" else "input_hash"
+            self.assertEqual(definitions[f"uq_marketing_{short}_project_input"], f"UNIQUE (workspace_id, project_id, {hashed})")
+
+        api = self.scoped_connection(self.engine(API_URL), self.alpha)
+        with self.assertRaises(ProgrammingError) as raised:
+            api.execute(self.text(
+                "INSERT INTO marketing_image_edits (id, workspace_id, round_id, project_id, source_asset_version_id,"
+                " operation_id, input_hash, input_json, state, created_at) VALUES (:id, :ws, NULL, :project, 'av_x',"
+                " 'op_x', :hash, '{}', 'queued', now())"),
+                {"id": f"mied_{uuid.uuid4().hex[:8]}", "ws": self.beta, "project": f"mp_{uuid.uuid4().hex[:8]}",
+                 "hash": "c" * 64})
+        self.assertIn("row-level security", str(raised.exception))
+        worker = self.scoped_connection(self.engine(WORKER_URL), self.alpha)
+        result = worker.execute(self.text(
+            "UPDATE marketing_image_edits SET state = 'failed' WHERE workspace_id = :ws AND project_id IS NOT NULL"),
+            {"ws": self.beta})
+        self.assertEqual(result.rowcount, 0)
+
+    def test_an_ideas_upload_stays_in_its_workspace_and_is_never_rewritten(self):
+        """Ads-first uploads (#200): bound to the ideas, the image and the external creative by Workspace-composite
+        keys; the API adds one only in its own Workspace and never changes or removes one; the Worker and
+        readonly only read."""
+        from sqlalchemy.exc import ProgrammingError
+
+        with self.owner.connect() as conn:
+            definitions = dict(conn.execute(self.text(
+                "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                " WHERE conrelid = 'public.marketing_ideas_uploads'::regclass AND contype IN ('f', 'u')")).all())
+        self.assertEqual(
+            definitions["fk_marketing_ideas_upload_project"],
+            "FOREIGN KEY (workspace_id, project_id) REFERENCES marketing_projects(workspace_id, id) ON DELETE RESTRICT")
+        self.assertEqual(
+            definitions["fk_marketing_ideas_upload_asset_version"],
+            "FOREIGN KEY (workspace_id, asset_version_id) REFERENCES asset_versions(workspace_id, id) ON DELETE RESTRICT")
+        self.assertEqual(
+            definitions["fk_marketing_ideas_upload_external_creative"],
+            "FOREIGN KEY (workspace_id, external_creative_id) REFERENCES external_creatives(workspace_id, id) ON DELETE RESTRICT")
+        self.assertEqual(definitions["uq_marketing_ideas_upload_ad"], "UNIQUE (workspace_id, project_id, asset_version_id)")
+
+        insert = ("INSERT INTO marketing_ideas_uploads (id, workspace_id, project_id, combination_id, external_creative_id,"
+                  " asset_version_id, intent_json, intent_hash, created_at) VALUES (:id, :ws, 'mp_x', 'c1_1', 'exc_x',"
+                  " 'av_x', '{}', :hash, now())")
+        api = self.scoped_connection(self.engine(API_URL), self.alpha)
+        with self.assertRaises(ProgrammingError) as smuggled:
+            with api.begin_nested():
+                api.execute(self.text(insert), {"id": f"miu_{uuid.uuid4().hex[:8]}", "ws": self.beta, "hash": "f" * 64})
+        self.assertIn("row-level security", str(smuggled.exception))
+        # Append-only: the API can neither change nor remove one.
+        for statement in ("UPDATE marketing_ideas_uploads SET intent_hash = 'x' WHERE id = 'miu_x'",
+                          "DELETE FROM marketing_ideas_uploads WHERE id = 'miu_x'"):
+            with self.assertRaises(ProgrammingError) as refused:
+                with api.begin_nested():
+                    api.execute(self.text(statement))
+            self.assertIn("permission denied", str(refused.exception))
+        # The Worker lists uploads among the ads it checks, but never writes one; readonly reads.
+        worker = self.scoped_connection(self.engine(WORKER_URL), self.alpha)
+        self.assertEqual(worker.execute(self.text("SELECT COUNT(*) FROM marketing_ideas_uploads WHERE workspace_id = :ws"),
+                                        {"ws": self.beta}).scalar(), 0)
+        with self.assertRaises(ProgrammingError) as denied:
+            with worker.begin_nested():
+                worker.execute(self.text(insert), {"id": f"miu_{uuid.uuid4().hex[:8]}", "ws": self.alpha, "hash": "e" * 64})
+        self.assertIn("permission denied", str(denied.exception))
+        readonly = self.scoped_connection(self.engine(READONLY_URL), self.alpha)
+        self.assertEqual(readonly.execute(self.text("SELECT COUNT(*) FROM marketing_ideas_uploads WHERE workspace_id = :ws"),
+                                          {"ws": self.beta}).scalar(), 0)
 
     def test_an_ideas_export_record_stays_in_its_workspace_and_is_never_rewritten(self):
         """Ads-first verification and download records (#198): bound to the ideas by a Workspace-composite

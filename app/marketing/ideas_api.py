@@ -16,9 +16,10 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 from . import ideas, service
-from .ideas_contracts import (CreateIdeas, DownloadIdeas, EditIdeasUnderstanding, IdeasCallSummary, IdeasChecksQuote,
-                              IdeasDownload, IdeasGenerationDrafts, IdeasProjectDetail, IdeasProjectPage,
-                              PrepareIdeasGeneration, SetKept, StartIdeasChecks, StartIdeasPlanning, VerifyIdeas)
+from .ideas_contracts import (CreateIdeas, CreateIdeasImageEdit, DownloadIdeas, EditIdeasUnderstanding, IdeasCallSummary,
+                              IdeasChecksQuote, IdeasDownload, IdeasFeedbackDraft, IdeasGenerationDrafts, IdeasProjectDetail,
+                              IdeasProjectPage, PlaceIdeasUpload, PrepareIdeasFeedback, PrepareIdeasGeneration, SetKept,
+                              StartIdeasChecks, StartIdeasPlanning, VerifyIdeas)
 from .models import MarketingProjectRecord, PlanningCallRecord
 
 router = APIRouter(prefix="/marketing/ideas", tags=["marketing"])
@@ -102,8 +103,10 @@ def start_ideas_planning(project_id: str, body: StartIdeasPlanning, request: Req
             return call
         call = _resource_command(session, ctx, request, key, "marketing.ideas.plan", body.model_dump(mode="json"),
             lambda s: ideas.start_ideas_planning(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, body.kind,
-                                                 body.execution_mode, body.quote_hash, body.strategy_language), replay)
-        return service.call_dict(call, include_maximum_cost=True)
+                                                 body.execution_mode, body.quote_hash, body.strategy_language,
+                                                 addition=body.addition.model_dump(mode="json") if body.addition else None),
+            replay)
+        return ideas.call_summary(call)
 
 
 @router.post("/{project_id}/generation-drafts", operation_id="prepare_marketing_ideas_generation",
@@ -198,6 +201,68 @@ def verify_ideas(project_id: str, body: VerifyIdeas, request: Request, response:
         return row
     with tenant_session(ctx) as session:
         row = _resource_command(session, ctx, request, key, "marketing.ideas.verify", body.model_dump(mode="json"), verify,
+                                lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)
+
+
+@router.post("/{project_id}/feedback-drafts", operation_id="prepare_marketing_ideas_feedback",
+             response_model=IdeasFeedbackDraft, status_code=201, openapi_extra={"x-marketai-idempotent": True})
+def prepare_ideas_feedback(project_id: str, body: PrepareIdeasFeedback, request: Request,
+                           ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key)):
+    """Change one ad by making it again, without a round (#200): a correction from the user's note and the
+    findings of its check, or a supplier image tool (upscale, background removal, erasing).
+
+    Nothing is spent here: preview the draft with ``create_generation_preview`` (the maximum cost) and submit
+    it with ``submit_generation_run``. The new image is a new version of the ad, listed in ``ads`` beside the
+    old one, and a draft that needs its own check. A correction is made on the claim and the facts as they
+    are now; an image tool keeps what the source stood on and is refused for an ad that needs redoing."""
+    from . import ideas_revisions
+    with tenant_session(ctx) as session:
+        record = _resource_command(session, ctx, request, key, "marketing.ideas.feedback", body.model_dump(mode="json"),
+            lambda s: ideas_revisions.prepare_feedback(s, ctx, ideas.get_ideas_project(s, ctx, project_id), body),
+            lambda s, resource: ideas_revisions.get_feedback(s, ctx, ideas.get_ideas_project(s, ctx, project_id), resource))
+        return ideas_revisions.feedback_draft(record)
+
+
+@router.post("/{project_id}/image-edits", operation_id="create_marketing_ideas_image_edit", response_model=IdeasProjectDetail,
+             status_code=202, openapi_extra={"x-marketai-idempotent": True})
+def create_ideas_image_edit(project_id: str, body: CreateIdeasImageEdit, request: Request, response: Response,
+                            ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key)):
+    """Crop then rotate one ad, without a round (#200): free of charge, no reservation and no paid call.
+
+    The Worker writes the new version (``image_edits`` says when); it is listed in ``ads`` beside the old one,
+    keeps what the source stood on and needs its own check."""
+    from . import ideas_revisions
+
+    def edit(s):
+        row = ideas.get_ideas_project(s, ctx, project_id)
+        ideas_revisions.prepare_image_edit(s, ctx, row, body)
+        return row
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.image_edit", body.model_dump(mode="json"), edit,
+                                lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)
+
+
+@router.post("/{project_id}/uploads", operation_id="place_marketing_ideas_upload", response_model=IdeasProjectDetail,
+             status_code=201, openapi_extra={"x-marketai-idempotent": True})
+def place_ideas_upload(project_id: str, body: PlaceIdeasUpload, request: Request, response: Response,
+                       ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key)):
+    """Place the user's own image under one ad of these ideas (#200, design doc §5.3).
+
+    Upload it first with ``create_external_creatives`` for the same product, declaring the right to use it.
+    It then appears in ``ads`` (``origin = "uploaded"``) and is kept, checked, verified and downloaded like
+    a generated ad of that claim; it is made without a product photo, so its look needs confirming."""
+    from . import ideas_revisions
+
+    def place(s):
+        row = ideas.get_ideas_project(s, ctx, project_id)
+        ideas_revisions.place_upload(s, ctx, row, body.external_creative_id, body.combination_id)
+        return row
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.upload", body.model_dump(mode="json"), place,
                                 lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
         set_etag(response, row.revision)
         return ideas.ideas_dict(session, ctx, row)

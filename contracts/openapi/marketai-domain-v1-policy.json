@@ -1150,6 +1150,24 @@
     "maxResponseBytes": 262144,
     "forwardConditionalHeaders": false
   },
+  "prepare_marketing_ideas_feedback": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/feedback-drafts",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 8192,
+    "forwardConditionalHeaders": false
+  },
+  "create_marketing_ideas_image_edit": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/image-edits",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "place_marketing_ideas_upload": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/uploads",
+    "maxRequestBytes": 1024,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
   "get_marketing_first_batch_quote": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/first-batch-quote",
     "maxRequestBytes": 0,
