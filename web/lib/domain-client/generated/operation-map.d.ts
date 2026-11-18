@@ -267,7 +267,7 @@ export type DomainOperationMap = {
   };
   create_generation_asset_version_download_intent: {
     pathParams: { version_id: string };
-    queryParams: Record<string, never>;
+    queryParams: { purpose?: string };
     requestBody: never;
     successResponses: {
       201: components['schemas']['app__generation__response_models__DownloadIntentResponse'];

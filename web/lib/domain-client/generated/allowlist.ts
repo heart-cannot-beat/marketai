@@ -611,7 +611,11 @@ export const DOMAIN_ALLOWLIST = [
     fastapiPathTemplate:
       '/api/v1/generation/asset-versions/{version_id}/download-intent',
     pathParams: ['version_id'],
-    querySchema: null,
+    querySchema: z
+      .object({
+        purpose: z.enum(['download', 'display']).optional().default('download'),
+      })
+      .strict(),
     requestBodyValidator: null,
     requestMediaTypes: [],
     maxRequestBytes: 0,

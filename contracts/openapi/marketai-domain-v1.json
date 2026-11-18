@@ -3071,6 +3071,7 @@
       "post": {
         "operationId": "create_generation_asset_version_download_intent",
         "summary": "Create Asset Version Download Intent",
+        "description": "A signed link to one AssetVersion's file, to save it (``purpose =\ndownload``, the default) or to show it on a page (``display``).\n\nShowing is open to every image of the Workspace. Saving is refused for\nan ad of ads-first ideas that may not be exported yet (Issue #219): 409\n``ads_not_exportable`` with the ad's status and reasons, the shape the\nads-first download answers with. Any other image is handed out as\nbefore, whatever the purpose. This keeps the product from offering a\nway to take a draft out; it does not hide the image, which every page\nthat lists it already shows.",
         "parameters": [
           {
             "name": "version_id",
@@ -3078,6 +3079,19 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "purpose",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "download",
+                "display"
+              ],
+              "type": "string",
+              "default": "download"
             }
           },
           {
@@ -16363,6 +16377,52 @@
         },
         "type": "object"
       },
+      "AssetExportBlock": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "needs_redo"
+            ]
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/AssetExportBlockReason"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "description": "Why an AssetVersion may not leave through the creative library\n(Issue #219, ADR 0018 §2): it is an ad of ads-first ideas that is still\na ``draft`` (something it stands on is not checked yet) or\n``needs_redo`` (checking cannot rescue it). Derived on every read by\n``app.marketing.ideas_export``, never stored."
+      },
+      "AssetExportBlockReason": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "description": "One reason an ad of ads-first ideas may not be exported: the same\n``code``/``fact_ids``/``finding_ids`` its ``AdSummary.reasons`` carries\n(``app.marketing.ideas_contracts.AdReason``)."
+      },
       "AssetGalleryFacets": {
         "properties": {
           "providers": {
@@ -17086,6 +17146,16 @@
               }
             ]
           },
+          "export_block": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetExportBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "anyOf": [
               {
@@ -17110,7 +17180,7 @@
           "origin_kind",
           "byte_size"
         ],
-        "description": "Row of ``GET /generation/assets`` (``asset_queries.list_asset_versions``,\nIssue #49 Task 3, spec §0.2).\n\n``id`` is the AssetVersion id -- the exact-version identity the browser\nreviews/regenerates/downloads against, matching\n``app.generation.review``'s exact-version anchor.\n\n``stable_dimension_signature`` and ``mock_evidence`` are always\n``None`` for now -- no column backs either of them yet.\n``contextual_conclusion`` (Task 6, spec §0.7) is populated only when\nthe request supplied ``experiment_context``; otherwise it stays\n``None`` -- it is never a global property of the AssetVersion.\n``effective_review_value`` applies Task 5's supersession-aware\nhead-review rule (``app.generation.review.project_effective_review``,\nspec §0.3); ``latest_qc_state`` is the latest\n``AssetQCAttemptRecord.state``. ``thumbnail`` (Issue #159) is the\nversion's signed thumbnail link, or ``None`` when it has no derivative."
+        "description": "Row of ``GET /generation/assets`` (``asset_queries.list_asset_versions``,\nIssue #49 Task 3, spec §0.2).\n\n``id`` is the AssetVersion id -- the exact-version identity the browser\nreviews/regenerates/downloads against, matching\n``app.generation.review``'s exact-version anchor.\n\n``stable_dimension_signature`` and ``mock_evidence`` are always\n``None`` for now -- no column backs either of them yet.\n``contextual_conclusion`` (Task 6, spec §0.7) is populated only when\nthe request supplied ``experiment_context``; otherwise it stays\n``None`` -- it is never a global property of the AssetVersion.\n``effective_review_value`` applies Task 5's supersession-aware\nhead-review rule (``app.generation.review.project_effective_review``,\nspec §0.3); ``latest_qc_state`` is the latest\n``AssetQCAttemptRecord.state``. ``thumbnail`` (Issue #159) is the\nversion's signed thumbnail link, or ``None`` when it has no derivative.\n``export_block`` (Issue #219) is set only on an ad of ads-first ideas\nthat may not be exported yet: an export package naming it and a\n``purpose=download`` download intent for it are refused, so the page\nmarks the tile and does not offer either. ``None`` on every other image."
       },
       "AttemptCost": {
         "properties": {
@@ -30022,6 +30092,10 @@
                 "type": "null"
               }
             ]
+          },
+          "left_out_drafts": {
+            "type": "integer",
+            "default": 0
           }
         },
         "type": "object",

@@ -139,6 +139,8 @@ test('prepares a quoted upscale draft with source dimensions and no generation c
     expect.objectContaining({
       versionId: 'source-version',
       workspaceSlug: 'alpha',
+      // Shown on the page, not saved (#219).
+      purpose: 'display',
     })
   );
 });

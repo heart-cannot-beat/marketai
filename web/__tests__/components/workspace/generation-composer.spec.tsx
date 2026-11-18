@@ -17,9 +17,11 @@ const gateway = {
   submitGenerationRun: jest.fn(),
   getGenerationDraft: jest.fn(),
   getGenerationPreview: jest.fn(),
+  createGenerationAssetVersionDownloadIntent: jest.fn(),
 };
 let query: Record<string, string> = {};
 let runItems: unknown[] = [];
+let runAssets: unknown[] = [];
 const model = (id: string, available = true) => ({
   id,
   available,
@@ -101,7 +103,9 @@ jest.mock('@/hooks/domain/useDomainQuery', () => ({
           }
         : operation === 'list_generation_runs'
           ? { items: runItems, next_cursor: null }
-          : { items: [], next_cursor: null },
+          : operation === 'list_generation_assets'
+            ? { items: runAssets, next_cursor: null }
+            : { items: [], next_cursor: null },
     problem: undefined,
     isLoading: false,
     refresh,
@@ -113,6 +117,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   query = {};
   runItems = [];
+  runAssets = [];
   providers = [
     provider('gemini', 'Gemini'),
     provider('openai', 'OpenAI'),
@@ -375,4 +380,104 @@ test('while the test page waits on another step the composer stays secondary', a
     )
   );
   expect(filled()).toEqual([]);
+});
+
+// Issue #219: a draft of ads-first ideas does not leave through the workbench.
+describe('saving a run image', () => {
+  const run = {
+    id: 'gr_run',
+    provider: 'openai',
+    model: 'openai-model',
+    execution_mode: 'byok',
+    status: 'succeeded',
+    done: 2,
+    total: 2,
+  };
+  const image = (id: string, export_block: unknown = null) => ({
+    id,
+    provider: 'openai',
+    model: 'openai-model',
+    export_block,
+  });
+  const open = () => {
+    render(<GenerationComposer />);
+    fireEvent.click(
+      screen.getByText('openai · openai-model').closest('button')!
+    );
+    return screen.getAllByRole('button', {
+      name: messages['generation-download'],
+    });
+  };
+
+  test('any image is saved with a link asked for saving; a draft ad is not offered', async () => {
+    runItems = [run];
+    runAssets = [
+      image('av_plain'),
+      image('av_draft', {
+        status: 'draft',
+        reasons: [{ code: 'facts_unverified', fact_ids: ['f1'] }],
+      }),
+      image('av_stale', {
+        status: 'needs_redo',
+        reasons: [{ code: 'facts_changed', fact_ids: ['f1'] }],
+      }),
+    ];
+    gateway.createGenerationAssetVersionDownloadIntent.mockResolvedValue({
+      kind: 'created',
+      data: { download_grant: { url: 'https://storage.example/object' } },
+    });
+    const [plain, draft, stale] = open();
+    expect(plain).toBeEnabled();
+    expect(draft).toBeDisabled();
+    expect(stale).toBeDisabled();
+    expect(
+      screen
+        .getAllByTestId('generation-download-blocked')
+        .map((note) => note.textContent)
+    ).toEqual([
+      messages['generation-download-draft'],
+      messages['generation-download-needs-redo'],
+    ]);
+
+    fireEvent.click(plain);
+    await waitFor(() =>
+      expect(
+        gateway.createGenerationAssetVersionDownloadIntent
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ versionId: 'av_plain', purpose: 'download' })
+      )
+    );
+    fireEvent.click(draft);
+    expect(
+      gateway.createGenerationAssetVersionDownloadIntent
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  test('a refusal the list did not foresee is said in plain words', async () => {
+    runItems = [run];
+    runAssets = [image('av_was_exportable')];
+    gateway.createGenerationAssetVersionDownloadIntent.mockResolvedValue({
+      kind: 'problem',
+      problem: { code: 'ads_not_exportable' },
+    });
+    const [button] = open();
+    fireEvent.click(button);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      messages['error-ads_not_exportable']
+    );
+  });
+
+  test('any other failure keeps its own message', async () => {
+    runItems = [run];
+    runAssets = [image('av_plain')];
+    gateway.createGenerationAssetVersionDownloadIntent.mockResolvedValue({
+      kind: 'problem',
+      problem: { code: 'asset_blob_unavailable' },
+    });
+    const [button] = open();
+    fireEvent.click(button);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      messages['generation-download-failed']
+    );
+  });
 });

@@ -33,6 +33,10 @@ type CommandTransport = {
 
 type ConditionalCommandTransport = Pick<CommandTransport, 'ifMatch'>;
 
+/** What a signed link to an image's file is for (Issue #219): showing the
+ * image on a page, or saving the file. */
+export type AssetLinkPurpose = 'display' | 'download';
+
 export interface DomainGateway {
   resolveMarketingCall(params: {
     workspaceSlug: string;
@@ -1392,10 +1396,18 @@ export interface DomainGateway {
     | ReconciliationRequired
   >;
 
+  /**
+   * A signed link to one image's file. `purpose` says what it is for:
+   * `'display'` to show the image on a page, `'download'` (what the
+   * server assumes when it is left out) to save the file. Saving a draft
+   * of ads-first ideas is refused with `ads_not_exportable`; showing one
+   * never is (Issue #219).
+   */
   createGenerationAssetVersionDownloadIntent(params: {
     workspaceSlug: string;
     actionInstanceId: string;
     versionId: string;
+    purpose?: AssetLinkPurpose;
   }): Promise<
     | DomainResultFor<'create_generation_asset_version_download_intent'>
     | ReconciliationRequired
@@ -5757,14 +5769,16 @@ export class DefaultDomainGateway implements DomainGateway {
     workspaceSlug: string;
     actionInstanceId: string;
     versionId: string;
+    purpose?: AssetLinkPurpose;
   }): Promise<
     | DomainResultFor<'create_generation_asset_version_download_intent'>
     | ReconciliationRequired
   > {
-    const path = buildBffPath(
-      'create_generation_asset_version_download_intent',
-      { slug: params.workspaceSlug, version_id: params.versionId }
-    );
+    const path =
+      buildBffPath('create_generation_asset_version_download_intent', {
+        slug: params.workspaceSlug,
+        version_id: params.versionId,
+      }) + this.buildQuery({ purpose: params.purpose });
     return this.runCommand(
       'create_generation_asset_version_download_intent',
       params.actionInstanceId,

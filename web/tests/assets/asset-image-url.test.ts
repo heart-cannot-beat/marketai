@@ -92,6 +92,13 @@ describe('useAssetImageUrl', () => {
 
     expect(result.current.isLoading).toBe(false);
     expect(mockCreateObjectURL).toHaveBeenCalledWith(blob);
+    // The link is for showing the image: the server refuses a link for
+    // saving a draft of ads-first ideas, never one for showing it (#219).
+    expect(mockExecute).toHaveBeenCalledWith({
+      pathParams: { version_id: 'version-1' },
+      queryParams: { purpose: 'display' },
+      actionInstanceId: 'asset-image:version-1',
+    });
   });
 
   it('revokes the blob URL on unmount', async () => {

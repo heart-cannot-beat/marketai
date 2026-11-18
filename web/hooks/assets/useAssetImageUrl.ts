@@ -115,9 +115,12 @@ export function useAssetImageUrl(
       // request body -- its `requestBody` is `never`
       // (`generated/operation-map.d.ts`), and
       // `callCommandOperation`/`DomainGateway.createGenerationAssetVersionDownloadIntent`
-      // read `versionId` off `pathParams`.
+      // read `versionId` off `pathParams`. The link is for showing the
+      // image, which the server never refuses; a link for saving the file
+      // is refused for a draft of ads-first ideas (Issue #219).
       const outcome = await command.execute({
         pathParams: { version_id: versionId },
+        queryParams: { purpose: 'display' },
         actionInstanceId,
       });
 

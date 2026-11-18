@@ -306,6 +306,7 @@ export const EXPORT_PACKAGE_READY = {
   revision: 2,
   byte_size: 204800,
   zip_hash: 'sha256-abc123def456',
+  left_out_drafts: 0,
 } satisfies ExportPackageDetail;
 
 export const EXPORT_OPERATION_SUCCEEDED = {
@@ -542,7 +543,8 @@ export async function mockAssetsBackend(page: Page): Promise<void> {
 
   for (const versionId of [VERSION_ID, VERSION_ID_2]) {
     await page.route(
-      `**/api/domain/v1/w/${WORKSPACE_SLUG}/generation/asset-versions/${versionId}/download-intent`,
+      // The page says what the link is for (`?purpose=display`, Issue #219).
+      `**/api/domain/v1/w/${WORKSPACE_SLUG}/generation/asset-versions/${versionId}/download-intent*`,
       async (route, request) => {
         const url = new URL(request.url());
         await json(route, 201, {

@@ -6,6 +6,11 @@ import {
 } from '@/hooks/assets/useAssetImageUrl';
 import { ExecutionModeTag } from '@/components/generation/shared/ExecutionModeTag';
 import { reviewStatus } from '@/lib/assets/status-labels';
+import {
+  exportBlockLabel,
+  exportBlockReasons,
+  type AssetExportBlock,
+} from '@/lib/assets/export-block';
 
 export interface AssetCardProps {
   versionId: string;
@@ -18,6 +23,10 @@ export interface AssetCardProps {
    * (`AssetVersionSummary.thumbnail`); `null`/absent loads the original
    * through the download-intent route, as the Lightbox always does. */
   thumbnail?: AssetThumbnailLink | null;
+  /** Why this image may not be exported yet (`AssetVersionSummary.export_block`):
+   * an ad of ads-first ideas that is a draft or needs redoing. The image is
+   * shown and can be reviewed like any other; the card only says it. */
+  exportBlock?: AssetExportBlock | null;
   isSelected: boolean;
   onSelect: (versionId: string) => void;
   onOpen: (versionId: string) => void;
@@ -31,6 +40,7 @@ export const AssetCard = memo(function AssetCard({
   effectiveReview,
   executionMode,
   thumbnail = null,
+  exportBlock = null,
   isSelected,
   onSelect,
   onOpen,
@@ -133,6 +143,20 @@ export const AssetCard = memo(function AssetCard({
           </span>
         )}
       </div>
+      {exportBlock && (
+        <div className="mt-1 px-1">
+          <span
+            className="badge badge-xs badge-warning whitespace-nowrap"
+            data-testid="asset-export-block"
+            data-status={exportBlock.status}
+            title={exportBlockReasons(t, exportBlock).join(
+              t('export-block-reasons-separator')
+            )}
+          >
+            {exportBlockLabel(t, exportBlock)}
+          </span>
+        </div>
+      )}
     </div>
   );
 });

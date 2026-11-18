@@ -936,7 +936,9 @@ function GenerationRunRow({
   const { t } = useTranslation('common');
   const gateway = useDomainGateway();
   const [expanded, setExpanded] = useState(highlighted);
-  const [downloadError, setDownloadError] = useState(false);
+  const [downloadError, setDownloadError] = useState<
+    'failed' | 'not-exportable' | null
+  >(null);
   const assets = useDomainQuery(
     'list_generation_assets',
     { run_id: run.id, limit: '100' },
@@ -958,12 +960,13 @@ function GenerationRunRow({
     return () => clearInterval(timer);
   }, [expanded, run.status, refreshAssets, refreshItems]);
   async function download(id: string) {
-    setDownloadError(false);
+    setDownloadError(null);
     try {
       const result = commandData(
         await gateway.createGenerationAssetVersionDownloadIntent({
           workspaceSlug: current.slug,
           versionId: id,
+          purpose: 'download',
           actionInstanceId: crypto.randomUUID(),
         })
       );
@@ -973,8 +976,14 @@ function GenerationRunRow({
       anchor.rel = 'noopener';
       anchor.download = `${id}.png`;
       anchor.click();
-    } catch {
-      setDownloadError(true);
+    } catch (error) {
+      // The list may be older than the ad's status: the server refuses to
+      // hand out a draft of ads-first ideas whatever this page showed.
+      setDownloadError(
+        error instanceof CommandProblem && error.code === 'ads_not_exportable'
+          ? 'not-exportable'
+          : 'failed'
+      );
     }
   }
   return (
@@ -1037,9 +1046,22 @@ function GenerationRunRow({
               >
                 <span>
                   {asset.provider} · {asset.model}
+                  {asset.export_block && (
+                    <span
+                      className="block text-xs text-amber-800"
+                      data-testid="generation-download-blocked"
+                    >
+                      {t(
+                        asset.export_block.status === 'needs_redo'
+                          ? 'generation-download-needs-redo'
+                          : 'generation-download-draft'
+                      )}
+                    </span>
+                  )}
                 </span>
                 <button
                   className="btn btn-sm btn-outline"
+                  disabled={Boolean(asset.export_block)}
                   onClick={() => download(asset.id)}
                 >
                   {t('generation-download')}
@@ -1049,7 +1071,11 @@ function GenerationRunRow({
           )}
           {downloadError && (
             <p role="alert" className="text-amber-800">
-              {t('generation-download-failed')}
+              {t(
+                downloadError === 'not-exportable'
+                  ? 'error-ads_not_exportable'
+                  : 'generation-download-failed'
+              )}
             </p>
           )}
           <Link

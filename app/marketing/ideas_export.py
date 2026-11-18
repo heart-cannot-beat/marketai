@@ -27,8 +27,9 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
-from app.adapters.persistence.models import LibraryDraftRecord, LibraryEntryRecord, ProductRecord, new_id, utcnow
-from app.generation.models import RunItemRecord
+from app.adapters.persistence.models import (AssetVersionRecord, GenerationRunRecord, LibraryDraftRecord, LibraryEntryRecord,
+                                            ProductRecord, new_id, utcnow)
+from app.generation.models import GenerationRecipeSnapshotRecord, RunItemRecord
 from app.library.contracts import PRODUCT_SOURCE_URL_MAX
 from app.platform.audit import append_event
 from . import ideas, ideas_checks, service
@@ -187,6 +188,66 @@ def ad_status(session, ctx, row, asset_version_id: str) -> dict:
     if asset_version_id not in result:
         raise MarketingError("ad_not_found", "这张广告不属于这些广告想法。", 404)
     return result[asset_version_id]
+
+
+#: How many refused ads one refusal names: the creative library can select every image of a workspace.
+LIBRARY_REFUSALS_LISTED = 50
+_LOOKUP_CHUNK = 500
+
+
+def _ideas_of(session, ctx, asset_version_ids) -> dict:
+    """The ads-first project each of these images was made for, by image id; any other image is left out."""
+    intent = GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']
+    found = {}
+    for start in range(0, len(asset_version_ids), _LOOKUP_CHUNK):
+        found.update(session.execute(select(AssetVersionRecord.id, intent['project_id'].as_string())
+            .join(RunItemRecord, (RunItemRecord.id == AssetVersionRecord.producing_run_item_id) & (RunItemRecord.workspace_id == ctx.workspace_id))
+            .join(GenerationRunRecord, (GenerationRunRecord.id == RunItemRecord.generation_run_id) & (GenerationRunRecord.workspace_id == ctx.workspace_id))
+            .join(GenerationRecipeSnapshotRecord, (GenerationRecipeSnapshotRecord.id == GenerationRunRecord.recipe_snapshot_id) & (GenerationRecipeSnapshotRecord.workspace_id == ctx.workspace_id))
+            .where(AssetVersionRecord.workspace_id == ctx.workspace_id,
+                   AssetVersionRecord.id.in_(asset_version_ids[start:start + _LOOKUP_CHUNK]),
+                   intent['flow'].as_string() == ideas.FLOW)).all())
+    return found
+
+
+def library_refusals(session, ctx, asset_version_ids) -> list[dict]:
+    """Of these images, the ads of ads-first ideas that may not be exported now (#219): each with its status
+    and reasons, as ``ads_not_exportable`` names them, in the order given.
+
+    The creative library hands out any image of the workspace -- one at a time, or in an export package --
+    and this is where it asks whether an image is a draft that may not leave yet (ADR 0018 §2). An image
+    that is not an ad of ads-first ideas is never listed: a round's image, one made in the workbench and an
+    uploaded one are not this rule's concern."""
+    asset_version_ids = list(dict.fromkeys(asset_version_ids))
+    projects = _ideas_of(session, ctx, asset_version_ids)
+    derived = {}
+    for project_id in dict.fromkeys(projects.values()):
+        row = session.scalar(select(MarketingProjectRecord).where(MarketingProjectRecord.workspace_id == ctx.workspace_id,
+            MarketingProjectRecord.id == project_id, MarketingProjectRecord.flow == ideas.FLOW))
+        if row is not None:
+            derived.update(statuses(session, ctx, row))
+    refused = []
+    for asset_id in asset_version_ids:
+        if asset_id not in projects:
+            continue
+        # Ideas that cannot be read cannot show the image was checked: it does not leave.
+        state = derived.get(asset_id) or {"status": "needs_redo", "reasons": [_reason("ideas_changed")]}
+        if state["status"] != "exportable":
+            refused.append({"asset_version_id": asset_id, "status": state["status"], "reasons": state["reasons"]})
+    return refused
+
+
+def refusal_params(refused: list[dict]) -> dict:
+    """The ``params`` of a library refusal: the first ads by name, and how many there are in all."""
+    return {"ads": refused[:LIBRARY_REFUSALS_LISTED], "count": len(refused)}
+
+
+def assert_library_download(session, ctx, asset_version_id: str) -> None:
+    """The creative library may hand this one image out as a file, or ``ads_not_exportable`` (#219)."""
+    refused = library_refusals(session, ctx, [asset_version_id])
+    if refused:
+        raise MarketingError("ads_not_exportable", "这张广告还不能下载：先核对它用到的事实、外观和检查结果，需要重出的请先重出。",
+                             409, params=refusal_params(refused))
 
 
 def _require_understanding(row) -> None:

@@ -808,6 +808,228 @@ describe('BFF domain proxy catch-all — tracer integration (spec §8.1)', () =>
     });
   });
 
+  describe('creative-library downloads and exports (#219)', () => {
+    const IMAGE_LINK =
+      '/api/domain/v1/w/acme/generation/asset-versions/av_1/download-intent';
+    /** `ads_not_exportable` as FastAPI answers it: each refused ad's status and reasons. */
+    const REFUSAL = {
+      type: 'urn:marketai:error:ads-not-exportable',
+      title: 'ads_not_exportable',
+      status: 409,
+      detail: 'ads_not_exportable',
+      instance: '/api/v1/generation/exports',
+      code: 'ads_not_exportable',
+      trace_id: 'trace-219',
+      retryable: false,
+      field_errors: [],
+      params: {
+        ads: [
+          {
+            asset_version_id: 'av_1',
+            status: 'draft',
+            reasons: [
+              { code: 'facts_unverified', fact_ids: ['f1'], finding_ids: [] },
+            ],
+          },
+        ],
+        count: 1,
+      },
+    };
+
+    function commandHeaders(intent: string) {
+      return {
+        host: APP_HOST,
+        origin: APP_ORIGIN,
+        'x-csrf-token': 'csrf-token',
+        'x-intent-id': intent,
+      };
+    }
+
+    async function answering(
+      status: number,
+      contentType: string,
+      body: unknown
+    ): Promise<string[]> {
+      const received: string[] = [];
+      server = await startServer((req, res) => {
+        received.push(req.url ?? '');
+        res.writeHead(status, { 'content-type': contentType });
+        res.end(JSON.stringify(body));
+      });
+      wireDomainProxy(server.url);
+      (getTokenIssuer as jest.Mock).mockReturnValue(fakeTokenIssuer());
+      return received;
+    }
+
+    function imageLink(url: string) {
+      return mockGetRequest({
+        method: 'POST',
+        url,
+        query: {
+          slug: 'acme',
+          path: ['generation', 'asset-versions', 'av_1', 'download-intent'],
+        },
+        headers: commandHeaders('image.link.intent.0001'),
+      });
+    }
+
+    const GRANTED = {
+      intent_id: 'di_1',
+      expires_at: '2099-01-01T00:00:00+00:00',
+      download_grant: {
+        url: 'https://storage.example/object',
+        kind: 'signed_get',
+        headers: {},
+        content_disposition: 'attachment; filename="asset-av_1.png"',
+      },
+    };
+
+    it('forwards what the link is for, and "download" when the page did not say', async () => {
+      const received = await answering(201, 'application/json', GRANTED);
+
+      for (const [url, forwarded] of [
+        [`${IMAGE_LINK}?purpose=display`, 'purpose=display'],
+        [`${IMAGE_LINK}?purpose=download`, 'purpose=download'],
+        [IMAGE_LINK, 'purpose=download'],
+      ]) {
+        const { req, res } = imageLink(url);
+        await handler(req, res);
+        expect(res.statusCode).toBe(201);
+        expect(res._getJSONData()).toEqual(GRANTED);
+        expect(received.pop()).toBe(
+          `/api/v1/generation/asset-versions/av_1/download-intent?${forwarded}`
+        );
+      }
+    });
+
+    it('refuses a purpose the contract does not know before reaching FastAPI', async () => {
+      const received = await answering(201, 'application/json', GRANTED);
+      const { req, res } = imageLink(`${IMAGE_LINK}?purpose=export`);
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res._getJSONData().code).toBe('invalid_query');
+      expect(received).toEqual([]);
+    });
+
+    it('relays the refusal of a draft with each ad and its reasons', async () => {
+      await answering(409, 'application/problem+json', REFUSAL);
+      const { req, res } = imageLink(IMAGE_LINK);
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res._getJSONData()).toMatchObject({
+        code: 'ads_not_exportable',
+        params: REFUSAL.params,
+      });
+    });
+
+    it('relays the refusal of an export package the same way', async () => {
+      await answering(409, 'application/problem+json', REFUSAL);
+      const { req, res } = mockJsonRequest(
+        {
+          method: 'POST',
+          url: '/api/domain/v1/w/acme/generation/exports',
+          query: { slug: 'acme', path: ['generation', 'exports'] },
+          headers: commandHeaders('export.intent.browser.219'),
+        },
+        { selector: { kind: 'explicit', version_ids: ['av_1'] } }
+      );
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res._getJSONData()).toMatchObject({
+        code: 'ads_not_exportable',
+        params: REFUSAL.params,
+      });
+    });
+
+    it('relays a package that left drafts out', async () => {
+      const detail = {
+        package_id: 'xp_1',
+        operation_id: 'op_1',
+        execution_mode: 'byok',
+        state: 'ready',
+        revision: 2,
+        byte_size: 1024,
+        zip_hash: 'a'.repeat(64),
+        left_out_drafts: 4,
+      };
+      await answering(200, 'application/json', detail);
+      const { req, res } = mockGetRequest({
+        method: 'GET',
+        url: '/api/domain/v1/w/acme/generation/exports/xp_1',
+        query: { slug: 'acme', path: ['generation', 'exports', 'xp_1'] },
+        headers: { host: APP_HOST },
+      });
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res._getJSONData()).toEqual(detail);
+    });
+
+    it('relays a gallery page whose tiles say which ads may not be exported', async () => {
+      const item = (id: string, export_block: unknown) => ({
+        id,
+        asset_id: `asset_${id}`,
+        product_id: 'prod_1',
+        run_id: 'gr_1',
+        provider: 'openai',
+        model: 'gpt-image-2',
+        status: 'ready',
+        aspect_ratio: '1:1',
+        stable_dimension_signature: null,
+        tags: {},
+        effective_review_value: null,
+        latest_qc_state: null,
+        contextual_conclusion: null,
+        origin_kind: 'generation',
+        execution_mode: 'byok',
+        mock_evidence: null,
+        byte_size: 1024,
+        thumbnail: null,
+        export_block,
+        created_at: '2026-11-18T00:00:00+00:00',
+      });
+      const page = {
+        items: [
+          item('av_plain', null),
+          item('av_draft', {
+            status: 'draft',
+            reasons: REFUSAL.params.ads[0].reasons,
+          }),
+        ],
+        next_cursor: null,
+        facets: {
+          providers: [],
+          origins: [],
+          modes: [],
+          reviews: [],
+          aspects: [],
+          qc_states: [],
+          tags: [],
+        },
+        allowed_actions: [],
+      };
+      await answering(200, 'application/json', page);
+      const { req, res } = mockGetRequest({
+        method: 'GET',
+        url: '/api/domain/v1/w/acme/generation/assets',
+        query: { slug: 'acme', path: ['generation', 'assets'] },
+        headers: { host: APP_HOST },
+      });
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res._getJSONData()).toEqual(page);
+    });
+  });
+
   describe('Scale evidence readiness (#114)', () => {
     /** What FastAPI's `get_scale_enrollment_evidence` answers for an
      * activated Enrollment before its first Evaluation: the readiness of a

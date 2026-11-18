@@ -272,6 +272,7 @@ export function MarketingReusePicker({
         await gateway.createGenerationAssetVersionDownloadIntent({
           workspaceSlug: current.slug,
           versionId: selected,
+          purpose: 'display',
           actionInstanceId: crypto.randomUUID(),
         })
       );
