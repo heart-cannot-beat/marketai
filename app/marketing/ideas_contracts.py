@@ -242,6 +242,12 @@ class IdeasPhoto(Document):
     reference_version_id: str | None = None
     # The ads whose image request sent this photo.
     asset_version_ids: list[str] = Field(default_factory=list)
+    # Why a checked photo can no longer be used (#233): ``expired`` -- the rights the user declared ran out, and
+    # checking it again (``photo_ids``) is the new declaration that renews it; ``withdrawn`` -- withdrawn,
+    # archived or blocked in the library, which a check never undoes; ``file_gone`` -- its file is gone.
+    unavailable_reason: Literal["expired", "withdrawn", "file_gone"] | None = None
+    # The last day of the rights the user declared for a checked photo (ISO date), checked or since unavailable.
+    valid_to: str | None = None
 
 
 class IdeasLogo(Document):
@@ -257,6 +263,12 @@ class IdeasLogo(Document):
     height: int | None = None
     # The creative-library reference a checked logo became.
     reference_version_id: str | None = None
+    # Why a checked logo can no longer be used (#233): ``expired`` -- the rights the user declared ran out, and
+    # checking it again (``photo_ids``) is the new declaration that renews it; ``withdrawn`` -- withdrawn,
+    # archived or blocked in the library, which a check never undoes; ``file_gone`` -- its file is gone.
+    unavailable_reason: Literal["expired", "withdrawn", "file_gone"] | None = None
+    # The last day of the rights the user declared for a checked logo (ISO date), checked or since unavailable.
+    valid_to: str | None = None
 
 
 class IdeasProjectDetail(Document):

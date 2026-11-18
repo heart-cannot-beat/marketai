@@ -1230,6 +1230,7 @@
   "error-photo_upload_rejected": "这张图没有通过上传检查，不能当作产品照片。",
   "error-photo_upload_not_found": "找不到这张上传的图，请重新上传。",
   "error-photo_already_listed": "这张照片已经在产品照片里了。",
+  "error-photo_withdrawn": "这张照片在素材库里被撤回或归档了，不能再核对或续期；用到它的广告需要重出。",
   "error-product_required": "这些广告想法还没有对应的产品。",
   "error-marketing_download_ads_duplicate": "同一张广告只能列一次。",
   "error-ai_qc_not_found": "找不到这条素材的 AI 检查。",

@@ -9059,6 +9059,8 @@ export interface components {
       width?: number | null;
       height?: number | null;
       reference_version_id?: string | null;
+      unavailable_reason?: ('expired' | 'withdrawn' | 'file_gone') | null;
+      valid_to?: string | null;
     };
     /**
      * @description A photo that may show the product's look (#199; design doc §5.2): one the product's reading found, or
@@ -9084,6 +9086,8 @@ export interface components {
       height?: number | null;
       reference_version_id?: string | null;
       asset_version_ids?: string[];
+      unavailable_reason?: ('expired' | 'withdrawn' | 'file_gone') | null;
+      valid_to?: string | null;
     };
     /** @description A short-lived signed link to a photo's released derivative, the bytes an image request sends (#233). */
     IdeasPhotoDownloadGrant: {

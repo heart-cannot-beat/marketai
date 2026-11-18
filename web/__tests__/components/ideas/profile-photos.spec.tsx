@@ -179,7 +179,7 @@ describe('product profile photos (#229)', () => {
       "Checking a photo means you confirm it's a real photo of this product and that you have the right to use it in ads."
     );
     expect(photos()).toHaveTextContent(
-      "A check lasts one year. After that the photo can't be used any more and the ads made with it need redoing; a check can't be renewed yet."
+      "A check lasts one year, and each checked photo says until when. After that the photo can't be used and the ads made with it need redoing. Renewing is making the declaration again; once renewed, those ads come back as they were, with no redoing."
     );
     expect(within(photos()).getAllByTestId('profile-photo')).toHaveLength(4);
 

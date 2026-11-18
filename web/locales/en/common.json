@@ -1230,6 +1230,7 @@
   "error-photo_upload_rejected": "This image didn't pass the upload checks, so it can't be a product photo.",
   "error-photo_upload_not_found": "We can't find that uploaded image. Upload it again.",
   "error-photo_already_listed": "This photo is already one of the product's photos.",
+  "error-photo_withdrawn": "This photo was withdrawn or archived in the library, so it can't be checked or renewed again; the ads made with it need redoing.",
   "error-product_required": "These ad ideas aren't linked to a product yet.",
   "error-marketing_download_ads_duplicate": "List each ad only once.",
   "error-ai_qc_not_found": "The AI check for this asset could not be found.",
