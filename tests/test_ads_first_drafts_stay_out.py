@@ -21,6 +21,8 @@ made. The product is the fictional Acme Charge Home.
 import asyncio
 import hashlib
 import io
+import unittest
+import uuid
 import zipfile
 from unittest.mock import patch
 
@@ -28,18 +30,23 @@ from sqlalchemy import func, select
 
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import (AssetRecord, AssetVersionRecord, AuditEventRecord, ExperimentEntryRecord,
-                                            JobRecord)
+                                            ExperimentRecord, JobRecord)
 from app.generation import regeneration
 from app.generation.models import GenerationDraftRecord
 from app.marketing import ideas_export
 from app.marketing.handoff_worker import execute_export
 from app.marketing.models import MarketingProjectRecord
 from app.marketing.reuse import ReuseCandidatePage
-from app.marketing.workflow_models import MarketingCreativeReuseRecord, MarketingHandoffRecord
+from app.marketing.workflow_models import MarketingCreativeReuseRecord, MarketingHandoffRecord, MarketingImageEditRecord
 from app.platform.blob_store import CommittedBlobRef
+import tests.test_marketing_evidence_handoff as evidence_tests
+import tests.test_next_round as next_round_tests
 from tests.test_experiment_lifecycle import _draft_context
 from tests.test_library_export_gate import LibraryGateFixtures
 from tests.test_marketing_ideas_export import FACTS
+from tests.test_marketing_ideas_generation import IdeasGenerationFixtures
+from tests.test_marketing_ideas_planning import SOURCE
+from tests.test_marketing_workflow import MarketingWorkflowFixtures
 
 #: The ads the fixture checks so the product card is published; the others stay drafts.
 CHECKED = ["c3_1", "c3_2"]
@@ -463,3 +470,144 @@ class TenantTests(RoundGateFixtures):
         with tenant_session(self.context) as session:
             return session.scalar(select(MarketingProjectRecord.product_id).where(
                 MarketingProjectRecord.workspace_id == self.context.workspace_id, MarketingProjectRecord.flow == "ads_first"))
+
+
+class RoundEditTests(RoundGateFixtures):
+    """A checked ad reused into a round is not cropped or revised there (#225 review): the new image would be a
+    round image the ideas never judge, and it would leave in the handoff after the ad itself needs redoing."""
+    prepare = IdeasGenerationFixtures.prepare
+    prepared = IdeasGenerationFixtures.prepared
+    preview = IdeasGenerationFixtures.preview
+    previewed = IdeasGenerationFixtures.previewed
+    submit = IdeasGenerationFixtures.submit
+    submitted = IdeasGenerationFixtures.submitted
+    execute_items = IdeasGenerationFixtures.execute_items
+
+    def ideas_on_the_tests_own_product(self):
+        """A plan-first test, and ads-first ideas started on that test's own product with one checked ad: the
+        ad is a candidate of the round as ``this_test``, which is the case whose reused creatives are editable."""
+        plan = self.confirmed()
+        with tenant_session(self.context) as session:
+            anchor = session.get(MarketingProjectRecord, plan["id"]).product_id
+        response = self.client.post("/api/v1/marketing/ideas", headers=self.headers(), json={
+            "product_id": anchor, "source_text": SOURCE, "market": "United States", "ad_language": "en-US"})
+        self.assertEqual(response.status_code, 201, response.text)
+        ideas = response.json()
+        self.execute(self.drafted_call(ideas, "understanding"))
+        ideas = self.read_ideas(ideas)
+        self.execute(self.drafted_call(ideas, "ideas"))
+        ideas = self.read_ideas(ideas)
+        self.execute_items(self.submitted(self.prepared(ideas)["drafts"][0]["draft_id"]))
+        ideas = self.read_ideas(ideas)
+        self.start_checks(ideas)
+        self.drain(job_types=("marketing.ai_qc",))
+        ideas = self.read_ideas(ideas)
+        (ad,) = ideas["ads"]
+        self.verify(ideas, fact_ids=[f["id"] for f in ideas["understanding"]["facts"]], ads=[ad["combination_id"]])
+        self.assertEqual(self.ads(ideas)[ad["combination_id"]]["status"], "exportable")
+        self.generate(plan)
+        return ideas, ad["asset_version_id"], self.start_round(plan)
+
+    def test_a_reused_ad_is_neither_cropped_nor_revised_in_the_round_and_says_so(self):
+        ideas, ad, row = self.ideas_on_the_tests_own_product()
+        self.assertEqual((self.listed(row)[ad]["relation"], self.listed(row)[ad]["reuse_block"]), ("this_test", None))
+        row = self.reuse(row, ad)
+        own = next(a["asset_version_id"] for a in row["assets"] if a["asset_version_id"] != ad)
+        response = self.client.get(f"/api/v1/marketing/rounds/{row['id']}", params={"include_reuse_lineage": True})
+        editable = {a["asset_version_id"]: a["editable"] for a in response.json()["data"]["assets"]}
+        self.assertEqual((editable[ad], editable[own]), (False, True))
+        crop = self.command(row, "image-edits", {"asset_version_id": ad, "crop": {"x": 0, "y": 0, "width": 0.5, "height": 1}}, 409)
+        self.assertEqual(crop["code"], "ad_edit_on_ideas_page")
+        revision = self.command(self.current(row), "feedback-drafts", {"asset_version_id": ad, "provider": "mock", "model": "mock-v1",
+                                                                      "note": "Make the background brighter."}, 409)
+        self.assertEqual(revision["code"], "ad_edit_on_ideas_page")
+        self.assertEqual(self.count(MarketingImageEditRecord), 0)
+        # The round's own creative is cropped as before.
+        self.command(self.current(row), "image-edits", {"asset_version_id": own, "crop": {"x": 0, "y": 0, "width": 0.5, "height": 1}}, 202)
+
+
+class EvidenceHandoffGateTests(MarketingWorkflowFixtures):
+    """The round's evidence handoff writes an experiment with the image as its winner (#225 review)."""
+    confirmed = evidence_tests.TestMarketingEvidenceHandoff.confirmed
+    commercial_versions = evidence_tests.TestMarketingEvidenceHandoff.commercial_versions
+    evaluated_real_contract = evidence_tests.TestMarketingEvidenceHandoff.evaluated_real_contract
+    handoff = evidence_tests.TestMarketingEvidenceHandoff.handoff
+
+    def count(self, model):
+        with tenant_session(self.context) as session:
+            return session.scalar(select(func.count()).select_from(model).where(model.workspace_id == self.context.workspace_id))
+
+    def test_an_ad_that_may_not_be_exported_is_not_handed_to_an_experiment_as_a_winner(self):
+        row = self.evaluated_real_contract()
+        _, offer = self.commercial_versions(row)
+        winner = row["evaluation"]["qualified_asset_version_ids"][0]
+        experiments = self.count(ExperimentRecord)
+        # As if this image were an ad of ads-first ideas that stopped being exportable after the round's handoff.
+        refusal = [{"asset_version_id": winner, "status": "needs_redo", "reasons": [{"code": "facts_changed", "fact_ids": ["f1"], "finding_ids": []}]}]
+        with patch("app.marketing.ideas_export.library_refusals", return_value=refusal) as asked:
+            response = self.handoff(row, offer)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual((response.json()["code"], response.json()["params"]), ("ad_not_reusable", {"ads": refusal, "count": 1}))
+        asked.assert_called_once()
+        self.assertEqual(self.count(ExperimentRecord), experiments)
+        # Any other image is handed off as before.
+        self.assertEqual(self.handoff(row, offer).status_code, 201)
+
+
+class ExperimentAndLaunchGateTests(unittest.TestCase):
+    """An experiment asks again when it starts, a launch preview before anything leaves for Meta, and the
+    next round of a decision says why it does not regenerate an ad of ads-first ideas (#225 review). The
+    images are the lifecycle fixtures' generated ones; being an unchecked ad is simulated."""
+
+    @classmethod
+    def setUpClass(cls):
+        next_round_tests.NextRoundTests.setUpClass.__func__(cls)
+
+    def refusing(self, asset_version_id):
+        return [{"asset_version_id": asset_version_id, "status": "draft",
+                 "reasons": [{"code": "facts_unverified", "fact_ids": ["f1"], "finding_ids": []}]}]
+
+    def test_an_experiment_does_not_start_with_an_ad_that_stopped_being_exportable(self):
+        from app.experiments.service import (ExperimentConflict, add_entry_v2, bind_candidate_v2, create_experiment_v2,
+                                             freeze_experiment_v2, start_experiment_v2)
+        ctx = next_round_tests.CTX
+        with tenant_session(ctx) as session:
+            images = next_round_tests._seed_asset_versions(session, f"s19start_{uuid.uuid4().hex[:6]}")
+        experiment = create_experiment_v2(ctx, product_id=next_round_tests.PROD_ID, name="S19 start",
+                                          draft_context=next_round_tests._draft_context())
+        add_entry_v2(ctx, experiment["id"], asset_version_id=images[0], expected_revision=1)
+        add_entry_v2(ctx, experiment["id"], asset_version_id=images[1], expected_revision=2)
+        frozen = freeze_experiment_v2(ctx, experiment["id"], expected_revision=3)
+        for candidate in frozen["candidates"]:
+            bind_candidate_v2(ctx, experiment["id"], candidate["id"], ad_account_id=f"act_s19_{candidate['position']}",
+                              ad_id=f"ad_s19_{uuid.uuid4().hex[:6]}", expected_revision=frozen["revision"])
+        with patch("app.marketing.ideas_export.library_refusals", return_value=self.refusing(images[0])):
+            with self.assertRaises(ExperimentConflict) as caught:
+                start_experiment_v2(ctx, experiment["id"], expected_revision=frozen["revision"])
+        self.assertEqual((caught.exception.code, caught.exception.params["count"]), ("ad_not_reusable", 1))
+        self.assertEqual(start_experiment_v2(ctx, experiment["id"], expected_revision=frozen["revision"])["state"], "running")
+
+    def test_a_launch_preview_does_not_send_an_ad_that_may_not_be_exported(self):
+        from dataclasses import replace
+        from app.launch import service as launch
+        ctx = replace(next_round_tests.CTX, meta_mode="controlled_mock")
+        with patch("app.marketing.ideas_export.library_refusals", return_value=self.refusing("av_s19")):
+            with tenant_session(ctx) as session:
+                with self.assertRaises(launch.LaunchConflict) as caught:
+                    launch.create_multi_candidate_preview(
+                        session, ctx, experiment_id="exp_s19", experiment_version_id="expver_s19", connection_id="mc_s19",
+                        ad_account_id="act_s19", candidates=[{"experiment_version_candidate_id": "evc_s19",
+                                                              "asset_version_id": "av_s19", "creative_config": {}}],
+                        daily_budget_minor=100, currency="USD", campaign_config={})
+        self.assertEqual((caught.exception.code, caught.exception.params["count"]), ("ads_not_exportable", 1))
+
+    def test_the_next_round_of_a_decision_on_an_ad_of_ideas_is_refused_with_a_reason(self):
+        from app.experiments.service import ExperimentConflict, create_next_round
+        closed, decisions = next_round_tests._build_closed_with_decisions(f"s19nr_{uuid.uuid4().hex[:6]}")
+        with patch("app.marketing.ideas_export.ads_of_ideas", side_effect=lambda session, ctx, ids: set(ids)):
+            with self.assertRaises(ExperimentConflict) as caught:
+                create_next_round(next_round_tests.CTX, closed["id"], decisions[0]["id"], intent_kind="same_recipe",
+                                  expected_revision=closed["revision"])
+        self.assertEqual(caught.exception.code, "ad_regenerate_on_ideas_page")
+        self.assertTrue(create_next_round(next_round_tests.CTX, closed["id"], decisions[0]["id"], intent_kind="same_recipe",
+                                          expected_revision=closed["revision"])["id"].startswith("enrr_"))

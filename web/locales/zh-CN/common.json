@@ -1216,6 +1216,7 @@
   "error-ad_needs_redo": "这张广告需要重出，处理图片不能让它可以下载。请提修改意见后重出。",
   "error-ad_not_reusable": "这张广告还没核对完，不能放进测试。先到广告想法页核对它用到的事实、产品外观和检查结果；需要重出的先重出。",
   "error-ad_regenerate_on_ideas_page": "这张图是广告想法里的一张广告，素材库不能重新生成它。要改它，请到广告想法页的“修改这张广告”；改出的新图同样要核对后才能导出。",
+  "error-ad_edit_on_ideas_page": "这张图是广告想法里的一张广告，不能在小轮里修改或裁剪。要改它，请到广告想法页的“修改这张广告”；改出的新图同样要核对后才能导出。",
   "error-external_creative_not_regenerable": "上传的图不能重出，也不能用图片工具处理，可以裁剪旋转。",
   "error-claim_cites_removed_fact": "这个主张用到的事实已被删掉，先改主张，再重出这张广告。",
   "error-feedback_not_found": "找不到这次修改，请刷新后重试。",

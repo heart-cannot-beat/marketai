@@ -2748,6 +2748,8 @@ def start_experiment_v2(
                 ExperimentVersionCandidateRecord.experiment_version_id == version.id,
             ).order_by(ExperimentVersionCandidateRecord.position)
         ).all()
+        # An ad may stop being exportable between freezing and starting (#225).
+        _refuse_unchecked_ads(session, context, [cand.asset_version_id for cand in candidates])
 
         bindings_by_cand = {}
         for cand in candidates:
@@ -3384,7 +3386,7 @@ def create_next_round(
     if intent_kind != "quality_feedback" and qc_attempt_id:
         raise ExperimentError("qc_attempt_id is forbidden for non-quality_feedback intents")
 
-    from ..generation.regeneration import create_regeneration_draft
+    from ..generation.regeneration import RegenerationError, create_regeneration_draft
 
     with tenant_session(context) as session:
         experiment = _get_experiment(session, context, experiment_id)
@@ -3412,13 +3414,19 @@ def create_next_round(
             if qc_attempt.asset_version_id != candidate.asset_version_id:
                 raise ExperimentError("QC attempt does not match candidate's AssetVersion", code="qc_attempt_mismatch")
 
-        draft = create_regeneration_draft(
-            session, context,
-            source_version_id=candidate.asset_version_id,
-            intent_kind=intent_kind,
-            prompt_overrides=prompt_overrides,
-            qc_attempt_id=qc_attempt_id,
-        )
+        try:
+            draft = create_regeneration_draft(
+                session, context,
+                source_version_id=candidate.asset_version_id,
+                intent_kind=intent_kind,
+                prompt_overrides=prompt_overrides,
+                qc_attempt_id=qc_attempt_id,
+            )
+        except RegenerationError as exc:
+            # An ad of ads-first ideas is changed on its ideas page (#225); any other refusal is as before.
+            if exc.code != "ad_regenerate_on_ideas_page":
+                raise
+            raise ExperimentConflict(exc.detail, code="ad_regenerate_on_ideas_page", params=exc.params) from exc
 
         actor_id = context.initiator_id or context.executor
         record = ExperimentNextRoundRecord(

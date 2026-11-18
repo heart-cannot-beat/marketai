@@ -1216,6 +1216,7 @@
   "error-ad_needs_redo": "This ad needs remaking. Editing the image won't make it downloadable, so remake it with your notes instead.",
   "error-ad_not_reusable": "This ad hasn't been checked yet, so it can't go into a test. First check the facts, the product's look and the check results it relies on in your ad ideas; remake it if it needs it.",
   "error-ad_regenerate_on_ideas_page": "This image is an ad in your ad ideas, so the library can't regenerate it. To change it, use “Edit this ad” in your ad ideas; the new image also needs checking before it can be exported.",
+  "error-ad_edit_on_ideas_page": "This image is an ad in your ad ideas, so it can't be edited or cropped in a round. To change it, use “Edit this ad” in your ad ideas; the new image also needs checking before it can be exported.",
   "error-external_creative_not_regenerable": "An image you uploaded can't be remade or changed with the image tools. You can crop or rotate it.",
   "error-claim_cites_removed_fact": "This claim relies on a fact that was deleted. Change the claim before remaking this ad.",
   "error-feedback_not_found": "We can't find that change. Refresh and try again.",

@@ -58,8 +58,9 @@ def prepare(session, ctx, row, body):
     if not match:
         raise MarketingError("asset_not_in_round", "请使用当前小轮的素材。", 404)
     version, recipe, combo = match
-    from .reuse import ensure_editable
+    from .reuse import ensure_editable, ensure_not_an_ad_of_ideas
     ensure_editable(project, recipe)
+    ensure_not_an_ad_of_ideas(session, ctx, version.id)
     inputs = {"algorithm": "crop-rotate-v1", "source_image": source_image(session, ctx, version.id, project.product_id, row.execution_mode),
         "crop": body.crop.model_dump() if body.crop else None, "rotation": body.rotation,
         "marketing_intent": creative_intent(project, combo["id"]), "execution_mode": row.execution_mode}

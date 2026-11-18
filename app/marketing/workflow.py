@@ -668,6 +668,12 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
     # A creative reused from another test or its card is revised or cropped in its own test only (#7).
     project = get_project(session, ctx, row.project_id) if include_reuse_lineage and any(
         r.canonical_json.get("reuse") for _, r, _ in creative_records) else None
+    # An ad of ads-first ideas is changed on its ideas page, never in a round (#225).
+    if project is not None:
+        from .ideas_export import ads_of_ideas
+        ads = ads_of_ideas(session, ctx, [v.id for v, r, _ in creative_records if r.canonical_json.get("reuse")])
+    else:
+        ads = set()
     for version, recipe, combo in creative_records:
         qc, quality, fact = qcs.get(version.id), reviews.get(version.id, []), facts[version.id]
         frozen_references = recipe.canonical_json.get("selection", {}).get("product_references", [])
@@ -680,7 +686,8 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
             "ai_qc": single, "paired_ai_qc": paired, "asset_version_id": version.id, "combination_id": combo["id"], "headline": combo["headline"],
             "body_copy": combo["body_copy"], "required_checks": required_checks(combo, row.snapshot_json["plan"]), "quality": qc.findings_json if qc else None,
             "ready": fact["references_current"] and _quality_ready(qc, quality, fact["blocking"]), "mime_type": version.mime_type,
-            **({"editable": project is None or editable(project, recipe)} if include_reuse_lineage else {})})
+            **({"editable": project is None or (editable(project, recipe) and version.id not in ads)}
+               if include_reuse_lineage else {})})
         executions.append({**fact, "ready": assets[-1]["ready"],
             **({"product_appearance": appearances[appearance_key]} if include_board else {}),
             **{key: {**c, "quality_suggestion": (c["result"] or {}).get("quality_suggestion")} if c else None

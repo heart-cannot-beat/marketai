@@ -247,6 +247,19 @@ def ensure_editable(project, recipe):
             "从其他测试或产品卡片复用的素材，暂时不能在本测试里修改或裁剪；请在原测试里修改，或在这一轮重新生成。")
 
 
+def ensure_not_an_ad_of_ideas(session, ctx, asset_version_id):
+    """Refuse a revision or crop in a round of an ad of ads-first ideas, checked or not (#225).
+
+    Such an ad is changed on its ideas page, where the new image is an ad again and is checked like the
+    others; a round's revision or crop would be a round image no check or verification of the ideas
+    ever sees, and it would leave in the handoff after the ad itself stopped being exportable."""
+    from .ideas_export import ads_of_ideas
+    if ads_of_ideas(session, ctx, [asset_version_id]):
+        raise MarketingError("ad_edit_on_ideas_page",
+            "这张图是广告想法里的一张广告，不能在小轮里修改或裁剪：要改它，请到广告想法页的“修改这张广告”，改出的新图同样要核对后才能导出。",
+            409)
+
+
 def creatives(session, ctx, row, combos):
     result = []
     records = session.execute(select(Reuse, AssetVersionRecord).join(AssetVersionRecord,

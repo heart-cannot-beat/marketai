@@ -133,7 +133,10 @@ S19（#225，新开头的草稿不能经复用或重新生成绕过核对）也�
 | `download_marketing_handoff` | 包里有广告已经不能导出时返回 409 `ads_not_exportable`，包保留为历史 |
 | `create_generation_regeneration_draft`、`create_generation_review_summary_regeneration` | 来源是新开头的广告（不论状态）时返回 409 `ad_regenerate_on_ideas_page` |
 | `get_generation_asset_version` | 形状不变；新开头的广告 `allowed_actions` 里 `regenerate` 不允许（`ad_regenerate_on_ideas_page`），不可导出的 `download` 不允许（`ads_not_exportable`） |
-| `add_experiment_entry`、`update_experiment_entry`、`freeze_experiment` | 不可导出的新开头广告返回 409 `ad_not_reusable` |
+| `add_experiment_entry`、`update_experiment_entry`、`freeze_experiment`、`start_experiment` | 不可导出的新开头广告返回 409 `ad_not_reusable` |
+| `create_marketing_evidence_handoff` | 不可导出的新开头广告返回 409 `ad_not_reusable`（不交给实验当胜出） |
+| `create_marketing_image_edit`、`prepare_marketing_feedback` | 复用进小轮的新开头广告（不论状态）返回 409 `ad_edit_on_ideas_page`；小轮详情里它的 `editable` 为 `false` |
+| `create_meta_launch_preview` | 候选里有不可导出的新开头广告时返回 409 `ads_not_exportable` |
 
 ---
 
