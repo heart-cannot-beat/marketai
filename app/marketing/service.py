@@ -343,7 +343,9 @@ def planner_capability(session, ctx, *, assuming: tuple[str, ...] = ()):
 
 
 #: Per drafting kind, the policy its explicit repair carries; the planner renders each its own correction turn.
-REPAIRS = {"plan": "marketing-explicit-plan-repair-v1", "ideas": "marketing-explicit-ideas-repair-v1"}
+REPAIRS = {"plan": "marketing-explicit-plan-repair-v1", "ideas": "marketing-explicit-ideas-repair-v1",
+           # One more claim or way of telling for drafted ideas (#200): its own correction turn.
+           "ideas_addition": "marketing-explicit-ideas-addition-repair-v1"}
 
 
 def planning_repair_context(session, ctx, row, kind="plan"):
@@ -351,7 +353,9 @@ def planning_repair_context(session, ctx, row, kind="plan"):
     previous = latest_call(session, ctx, row.id)
     if (not previous or previous.kind != kind or previous.state != "failed"
             or previous.error_code != "planner_output_invalid"
-            or previous.input_json.get("understanding") != row.understanding_json):
+            or previous.input_json.get("understanding") != row.understanding_json
+            # A refused addition to ads-first ideas (#200) is repaired only by another addition.
+            or previous.input_json.get("addition")):
         return None
     output = previous.output_json or {}
     errors = [{"type": str(e.get("type", "invalid_plan"))[:128], "loc": list(e.get("loc", []))[:12],

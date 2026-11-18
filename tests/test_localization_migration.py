@@ -126,8 +126,9 @@ class TestLocalizationMigration(unittest.TestCase):
             # zzm189a1b2c3 (ads-first ideas on marketing projects and the keep mark, #189) and
             # zzn193a1b2c3 (the ads-first first batch, #193) and
             # zzo197a1b2c3 (ads-first ideas checks without a round, #197) and
-            # zzp198a1b2c3 (ads-first verification and download records, #198).
-            self.assertIn("zzp198a1b2c3", revisions)
+            # zzp198a1b2c3 (ads-first verification and download records, #198) and
+            # zzq200a1b2c3 (ads-first revisions and uploads without a round, #200).
+            self.assertIn("zzq200a1b2c3", revisions)
 
     def test_downgrade_and_upgrade(self):
         up = self._alembic("upgrade", "head")

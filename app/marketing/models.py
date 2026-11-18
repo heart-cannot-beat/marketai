@@ -123,6 +123,36 @@ class MarketingIdeasExportRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class MarketingIdeasUploadRecord(Base):
+    """An image the user uploaded, placed under one ad of ads-first ideas (#200, design doc §5.3).
+
+    The image is an external creative (#168) of the project's product whose uploader declared the right
+    to use it. ``intent_json`` is the ad's ``ideas_intent`` when the user placed it: the claim, the way of
+    telling, the understanding as it was and the facts the ad cites, so the image is checked, verified and
+    downloaded like a generated one. Never updated or deleted; one image is one ad of the ideas."""
+    __tablename__ = "marketing_ideas_uploads"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id", name="uq_marketing_ideas_uploads_workspace_id"),
+        UniqueConstraint("workspace_id", "project_id", "asset_version_id", name="uq_marketing_ideas_upload_ad"),
+        ForeignKeyConstraint(["workspace_id", "project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
+                             ondelete="RESTRICT", name="fk_marketing_ideas_upload_project"),
+        ForeignKeyConstraint(["workspace_id", "asset_version_id"], ["asset_versions.workspace_id", "asset_versions.id"],
+                             ondelete="RESTRICT", name="fk_marketing_ideas_upload_asset_version"),
+        ForeignKeyConstraint(["workspace_id", "external_creative_id"], ["external_creatives.workspace_id", "external_creatives.id"],
+                             ondelete="RESTRICT", name="fk_marketing_ideas_upload_external_creative"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    combination_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    external_creative_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    asset_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    intent_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    intent_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class MarketingRevisionRecord(Base):
     __tablename__ = "marketing_revisions"
     __table_args__ = (

@@ -107,6 +107,9 @@ describe('DomainGateway operation coverage', () => {
     // 254 -> 257: ads-first verification and download
     // `edit_marketing_ideas_understanding`, `verify_marketing_ideas` and
     // `download_marketing_ideas` (#198).
-    expect(DOMAIN_ALLOWLIST.length).toBe(257);
+    // 257 -> 260: changing and adding ads-first drafts
+    // `prepare_marketing_ideas_feedback`, `create_marketing_ideas_image_edit`
+    // and `place_marketing_ideas_upload` (#200).
+    expect(DOMAIN_ALLOWLIST.length).toBe(260);
   });
 });

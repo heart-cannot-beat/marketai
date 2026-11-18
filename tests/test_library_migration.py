@@ -140,8 +140,9 @@ class LibraryMigrationDowngradeTests(unittest.TestCase):
         # zzm189a1b2c3 (ads-first ideas on marketing projects and the keep mark, #189) and
         # zzn193a1b2c3 (the ads-first first batch, #193) and
         # zzo197a1b2c3 (ads-first ideas checks without a round, #197) and
-        # zzp198a1b2c3 (ads-first verification and download records, #198).
-        self.assertEqual(revision, "zzp198a1b2c3")
+        # zzp198a1b2c3 (ads-first verification and download records, #198) and
+        # zzq200a1b2c3 (ads-first revisions and uploads without a round, #200).
+        self.assertEqual(revision, "zzq200a1b2c3")
         self.assertEqual(event_type, "library.withdrawal.affects_market_asset_binding")
 
 
@@ -247,8 +248,9 @@ class LibraryTemplatesDatasourcesMigrationTests(unittest.TestCase):
         # zzm189a1b2c3 (ads-first ideas on marketing projects and the keep mark, #189) and
         # zzn193a1b2c3 (the ads-first first batch, #193) and
         # zzo197a1b2c3 (ads-first ideas checks without a round, #197) and
-        # zzp198a1b2c3 (ads-first verification and download records, #198).
-        self.assertEqual(revision, "zzp198a1b2c3")
+        # zzp198a1b2c3 (ads-first verification and download records, #198) and
+        # zzq200a1b2c3 (ads-first revisions and uploads without a round, #200).
+        self.assertEqual(revision, "zzq200a1b2c3")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as connection:

@@ -41,6 +41,12 @@ def latest_by_asset(session, ctx, project_id) -> dict:
     return latest
 
 
+def mode_of(version) -> str:
+    """The mode an ad's check runs in: its image's own. An uploaded image (#200) has none -- it is the
+    user's real material, so only a real check counts for it, never the Controlled Mock example."""
+    return version.execution_mode or "byok"
+
+
 def _ad(session, ctx, row, asset_version_id):
     for version, recipe in ideas.project_ads(session, ctx, row):
         if version.id == asset_version_id:
@@ -62,7 +68,7 @@ def quote_and_inputs(session, ctx, row, execution_mode, *, only=None):
     latest = latest_by_asset(session, ctx, row.id)
     candidates, pending, skipped = [], [], []
     for version, recipe in ideas.project_ads(session, ctx, row):
-        if version.execution_mode != execution_mode or (only is not None and version.id not in only):
+        if mode_of(version) != execution_mode or (only is not None and version.id not in only):
             continue
         previous = latest.get(version.id)
         if previous is not None and previous.state in IN_FLIGHT:

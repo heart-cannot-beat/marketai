@@ -1128,6 +1128,34 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'download_marketing_ideas'> | ReconciliationRequired
   >;
+  /** Prepare a correction or an image tool of one ad as a generation draft; preview it for the cost (#200). */
+  prepareMarketingIdeasFeedback(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['prepare_marketing_ideas_feedback']['requestBody'];
+  }): Promise<
+    DomainResultFor<'prepare_marketing_ideas_feedback'> | ReconciliationRequired
+  >;
+  /** Crop then rotate one ad: a free new version made by the Worker (#200). */
+  createMarketingIdeasImageEdit(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['create_marketing_ideas_image_edit']['requestBody'];
+  }): Promise<
+    | DomainResultFor<'create_marketing_ideas_image_edit'>
+    | ReconciliationRequired
+  >;
+  /** Place the user's own uploaded image under one ad of the ideas (#200). */
+  placeMarketingIdeasUpload(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['place_marketing_ideas_upload']['requestBody'];
+  }): Promise<
+    DomainResultFor<'place_marketing_ideas_upload'> | ReconciliationRequired
+  >;
   /** The start button's maximum for the ads-first first batch (#193). */
   getMarketingFirstBatchQuote(params: {
     workspaceSlug: string;
@@ -5113,6 +5141,73 @@ export class DefaultDomainGateway implements DomainGateway {
       'download_marketing_ideas',
       params.actionInstanceId,
       buildBffPath('download_marketing_ideas', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created'
+    );
+  }
+
+  async prepareMarketingIdeasFeedback(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['prepare_marketing_ideas_feedback']['requestBody'];
+  }): Promise<
+    DomainResultFor<'prepare_marketing_ideas_feedback'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'prepare_marketing_ideas_feedback',
+      params.actionInstanceId,
+      buildBffPath('prepare_marketing_ideas_feedback', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created'
+    );
+  }
+
+  async createMarketingIdeasImageEdit(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['create_marketing_ideas_image_edit']['requestBody'];
+  }): Promise<
+    | DomainResultFor<'create_marketing_ideas_image_edit'>
+    | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'create_marketing_ideas_image_edit',
+      params.actionInstanceId,
+      buildBffPath('create_marketing_ideas_image_edit', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      202,
+      'accepted'
+    );
+  }
+
+  async placeMarketingIdeasUpload(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    body: DomainOperationMap['place_marketing_ideas_upload']['requestBody'];
+  }): Promise<
+    DomainResultFor<'place_marketing_ideas_upload'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'place_marketing_ideas_upload',
+      params.actionInstanceId,
+      buildBffPath('place_marketing_ideas_upload', {
         slug: params.workspaceSlug,
         project_id: params.projectId,
       }),

@@ -380,7 +380,8 @@ def check_frozen_selection(session: Session, ctx: TenantContext, recipe: dict):
         if not intent.get("ad_language") or project.plan_json.get("language_confirmation_required"):
             raise SelectionError("ad_language_confirmation_required", "Confirm the advertising language and prepare a fresh preview before new generation.")
     feedback = frozen.get("marketing_feedback")
-    if feedback:
+    # An ads-first correction has no round (#200): its intent was checked against the ideas above.
+    if feedback and feedback.get("round_id"):
         from app.marketing.workflow import get_round, scoped, Handoff
         row = get_round(session, ctx, feedback["round_id"])
         if row.state != "reviewing" or scoped(session, ctx, Handoff, round_id=row.id):
