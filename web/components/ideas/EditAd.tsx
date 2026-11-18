@@ -9,6 +9,7 @@ import {
 } from '@/components/workspace/MarketingVersionHistory';
 import { ideasProblem } from '@/lib/ideas/ideas-problems';
 import { mainReasons } from '@/lib/ideas/check-sheet';
+import { removedFactsOf } from '@/lib/ideas/claim-edit';
 import {
   checkView,
   fromUpload,
@@ -59,6 +60,8 @@ export interface EditAdProps {
   onToggleKept: (ad: IdeasAd) => void;
   /** Opens "another way of telling" for this ad's claim. */
   onAnotherTelling?: (angleId: string) => void;
+  /** Opens "change this claim" for this ad's claim on the ideas page (#224). */
+  onEditClaim?: (angleId: string) => void;
 }
 
 /**
@@ -78,6 +81,7 @@ export function EditAd({
   onSwitch,
   onToggleKept,
   onAnotherTelling,
+  onEditClaim,
 }: EditAdProps) {
   const { t } = useTranslation('ideas');
   const ad = detail.ads.find(
@@ -255,7 +259,15 @@ export function EditAd({
             image={image}
             revision={detail.revision}
             uploaded={uploaded}
-            removedFact={reasons.has('facts_removed')}
+            // What blocks a redo is the claim as it is now still naming a
+            // deleted fact (#224): once the claim is changed it is gone.
+            removedFact={removedFactsOf(detail, ad.angle_id).length > 0}
+            onEditClaim={
+              onEditClaim &&
+              detail.ideas?.angles.some((a) => a.id === ad.angle_id)
+                ? () => onEditClaim(ad.angle_id)
+                : undefined
+            }
             ideasChanged={reasons.has('ideas_changed')}
             hasFindings={findings.length > 0}
           />
@@ -333,6 +345,7 @@ function Redo({
   revision,
   uploaded,
   removedFact,
+  onEditClaim,
   ideasChanged,
   hasFindings,
 }: {
@@ -342,6 +355,7 @@ function Redo({
   revision: number;
   uploaded: boolean;
   removedFact: boolean;
+  onEditClaim?: () => void;
   ideasChanged: boolean;
   hasFindings: boolean;
 }) {
@@ -364,9 +378,16 @@ function Redo({
       </h2>
       {uploaded && <p className="text-sm">{t('edit-uploaded-note')}</p>}
       {removedFact && (
-        <p className="text-sm text-red-900 dark:text-red-200" role="note">
-          {t('ideas-refusal-claim_cites_removed_fact')}
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-red-900 dark:text-red-200" role="note">
+            {t('ideas-refusal-claim_cites_removed_fact')}
+          </p>
+          {onEditClaim && (
+            <button type="button" className={BUTTON} onClick={onEditClaim}>
+              {t('edit-change-claim')}
+            </button>
+          )}
+        </div>
       )}
       {ideasChanged && !removedFact && (
         <p className="text-sm" role="note">
@@ -442,7 +463,8 @@ function Redo({
           />
         </>
       )}
-      {!uploaded && (
+      {/* An image made while the claim names a deleted fact would need redoing too. */}
+      {!uploaded && !removedFact && (
         <div className="space-y-1 border-t border-gray-200 pt-3 dark:border-gray-700">
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {t('edit-again-note')}

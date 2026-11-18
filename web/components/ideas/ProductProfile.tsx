@@ -16,10 +16,13 @@ import type { IdeasDetail } from '@/lib/ideas/ideas-view';
 import {
   factUse,
   MAX_FACTS,
+  withAudience,
   withFactAdded,
   withFactChanged,
   withFactRemoved,
   withUnknownAnswered,
+  withUnsourcedAnswered,
+  withUnsourcedDropped,
   type Fact,
   type FactText,
   type Understanding,
@@ -29,8 +32,11 @@ import { ProfileBrand, ProfilePhotos } from './ProfileAssets';
 /**
  * A product's profile (ADR 0018, design §5.6, #202): what the AI read about
  * a product of the new flow, in one place. Facts can be checked, changed,
- * deleted and added; the AI's guesses stay apart and read as guesses; photos
- * and brand follow. Only what the user checks becomes confirmed content.
+ * deleted and added; claims the AI read without a source are listed apart,
+ * never used, and can be given a source (#224); the AI's guesses stay apart
+ * and read as guesses, the audience among them can be corrected and checked
+ * (#224); photos and brand follow. Only what the user checks becomes
+ * confirmed content.
  *
  * A product made before the new flow has no ad ideas: it keeps its product
  * card, which this view points to.
@@ -111,6 +117,12 @@ function Profile({
             projectId={projectId}
             refresh={refresh}
           />
+          <Unsourced
+            detail={detail}
+            understanding={detail.understanding}
+            projectId={projectId}
+            refresh={refresh}
+          />
           <Guesses
             detail={detail}
             understanding={detail.understanding}
@@ -157,6 +169,7 @@ function useFailureOf() {
       fact_claim_unsupported: 'profile-claim-unsupported',
       planning_in_progress: 'profile-busy',
       fact_not_found: 'profile-fact-gone',
+      verification_empty: 'profile-stale',
     };
     if (own[code])
       return { message: t(own[code]), stale: code === 'fact_not_found' };
@@ -480,7 +493,7 @@ function FactForm({
   onSave,
 }: {
   initial: FactText | null;
-  /** What the fact answers, shown above it. */
+  /** What the fact answers, as a sentence shown above it. */
   context?: string;
   warning: string | null;
   note: string;
@@ -505,11 +518,7 @@ function FactForm({
 
   return (
     <form className="space-y-3" onSubmit={submit} noValidate>
-      {context && (
-        <p className="text-sm font-semibold">
-          {t('profile-answer-context', { unknown: context })}
-        </p>
-      )}
+      {context && <p className="text-sm font-semibold">{context}</p>}
       {warning && (
         <p
           role="note"
@@ -678,7 +687,6 @@ function Guesses({
   }
 
   const lists: [string, string[]][] = [
-    ['profile-guess-audience', [understanding.audience]],
     ['profile-guess-need', [understanding.category_need]],
     ['profile-guess-choice', [understanding.product_choice_reason]],
     ['profile-guess-objections', understanding.objections ?? []],
@@ -696,6 +704,12 @@ function Guesses({
       testId="profile-guesses"
     >
       <div className="space-y-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-950">
+        <Audience
+          detail={detail}
+          understanding={understanding}
+          projectId={projectId}
+          refresh={refresh}
+        />
         <dl className="space-y-4">
           {lists
             .filter(([, items]) => items.some((item) => item?.trim()))
@@ -731,7 +745,7 @@ function Guesses({
                     <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
                       <FactForm
                         initial={null}
-                        context={unknown}
+                        context={t('profile-answer-context', { unknown })}
                         warning={null}
                         note={t('profile-answer-note')}
                         busy={busy}
@@ -765,6 +779,298 @@ function Guesses({
           )}
         </div>
       </div>
+    </Section>
+  );
+}
+
+/**
+ * Who might buy it (#224): an AI guess like the others until the user says it
+ * is right. The words the user checked are what the product's published
+ * details name as the audience; changing them needs checking again, and until
+ * then the published details name the market the user chose.
+ */
+function Audience({
+  detail,
+  understanding,
+  projectId,
+  refresh,
+}: {
+  detail: IdeasDetail;
+  understanding: Understanding;
+  projectId: string;
+  refresh: () => Promise<void>;
+}) {
+  const { t } = useTranslation('ideas');
+  const { editUnderstanding, confirmAudience } = useProfileCommands(
+    projectId,
+    detail
+  );
+  const directory = useProductDirectory();
+  const failureOf = useFailureOf();
+  const ids = useId();
+  const [editing, setEditing] = useState(false);
+  const [words, setWords] = useState(understanding.audience);
+  const [busy, setBusy] = useState<'check' | 'save' | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const checked = detail.audience_confirmed === true;
+
+  async function check() {
+    if (busy) return;
+    setBusy('check');
+    setFailure(null);
+    const failed = failureOf(await confirmAudience());
+    setBusy(null);
+    if (failed) setFailure(failed);
+    else void directory.refresh();
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (busy || !words.trim()) return;
+    if (words.trim() === understanding.audience) {
+      setEditing(false);
+      return;
+    }
+    setBusy('save');
+    setFailure(null);
+    const failed = failureOf(
+      await editUnderstanding(withAudience(understanding, words))
+    );
+    setBusy(null);
+    if (failed) setFailure(failed);
+    else setEditing(false);
+  }
+
+  return (
+    <div className="space-y-2" data-testid="profile-audience">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+          {t('profile-guess-audience')}
+        </h3>
+        <span
+          className={classNames(
+            'inline-block rounded-full px-2 py-px text-xs font-semibold',
+            checked
+              ? 'bg-emerald-100 text-emerald-900'
+              : 'bg-amber-100 text-amber-900'
+          )}
+        >
+          {checked ? t('profile-fact-checked') : t('profile-fact-unchecked')}
+        </span>
+      </div>
+      {editing ? (
+        <form className="space-y-2" onSubmit={save} noValidate>
+          <label className="sr-only" htmlFor={`${ids}-audience`}>
+            {t('profile-guess-audience')}
+          </label>
+          <textarea
+            id={`${ids}-audience`}
+            className="textarea textarea-bordered w-full text-base sm:text-sm"
+            rows={2}
+            maxLength={2000}
+            value={words}
+            onChange={(event) => setWords(event.target.value)}
+          />
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            {t('profile-audience-form-note')}
+          </p>
+          <FailureNote failure={failure} refresh={refresh} />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm min-h-11"
+              disabled={busy !== null || !words.trim()}
+            >
+              {busy === 'save' ? t('profile-saving') : t('profile-form-save')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm min-h-11"
+              disabled={busy !== null}
+              onClick={() => {
+                setEditing(false);
+                setWords(understanding.audience);
+              }}
+            >
+              {t('profile-form-cancel')}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className={classNames('text-sm', !checked && 'italic')}>
+            {understanding.audience}
+          </p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            {checked
+              ? t('profile-audience-note-checked')
+              : t('profile-audience-note')}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {!checked && (
+              <button
+                type="button"
+                className="btn btn-sm min-h-11"
+                disabled={busy !== null}
+                onClick={() => void check()}
+              >
+                {busy === 'check'
+                  ? t('profile-saving')
+                  : t('profile-fact-check')}
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm min-h-11"
+              disabled={busy !== null}
+              aria-label={t('profile-audience-edit-label')}
+              onClick={() => {
+                setFailure(null);
+                setWords(understanding.audience);
+                setEditing(true);
+              }}
+            >
+              {t('profile-audience-edit')}
+            </button>
+          </div>
+          <FailureNote failure={failure} refresh={refresh} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Claims the AI read without a source (design §5.2, #224): listed so the user
+ * sees them, used in no claim and no ad. Given a source, one becomes an
+ * unchecked fact; "don't need it" takes it off the list.
+ */
+function Unsourced({
+  detail,
+  understanding,
+  projectId,
+  refresh,
+}: {
+  detail: IdeasDetail;
+  understanding: Understanding;
+  projectId: string;
+  refresh: () => Promise<void>;
+}) {
+  const { t } = useTranslation('ideas');
+  const { editUnderstanding } = useProfileCommands(projectId, detail);
+  const failureOf = useFailureOf();
+  const [sourcing, setSourcing] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{
+    at: string;
+    failure: Failure;
+  } | null>(null);
+  const claims = understanding.unsupported_claims ?? [];
+  const full = (understanding.facts ?? []).length >= MAX_FACTS;
+  if (claims.length === 0) return null;
+
+  async function attempt(at: string, next: Understanding, material: string) {
+    if (busy) return false;
+    setBusy(at);
+    setFailure(null);
+    const failed = failureOf(await editUnderstanding(next, material));
+    setBusy(null);
+    if (failed) {
+      setFailure({ at, failure: failed });
+      return false;
+    }
+    return true;
+  }
+
+  const failureAt = (at: string) =>
+    failure?.at === at ? failure.failure : null;
+
+  return (
+    <Section
+      title={t('profile-unsourced-title', { number: claims.length })}
+      intro={t('profile-unsourced-intro')}
+      testId="profile-unsourced"
+    >
+      <ul role="list" className="space-y-3">
+        {claims.map((claim) => (
+          <li
+            key={claim.id}
+            className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950"
+          >
+            <p className="text-sm">
+              <span aria-hidden="true" className="mr-2 font-bold">
+                !
+              </span>
+              {claim.text}
+            </p>
+            {sourcing === claim.id ? (
+              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+                <FactForm
+                  initial={{ statement: claim.text, source_quote: '' }}
+                  context={t('profile-unsourced-context', {
+                    claim: claim.text,
+                  })}
+                  warning={null}
+                  note={t('profile-answer-note')}
+                  busy={busy === `source:${claim.id}`}
+                  failure={failureAt(`source:${claim.id}`)}
+                  refresh={refresh}
+                  onCancel={() => setSourcing(null)}
+                  onSave={(text, material) =>
+                    void attempt(
+                      `source:${claim.id}`,
+                      withUnsourcedAnswered(understanding, claim.id, text),
+                      material
+                    ).then((done) => done && setSourcing(null))
+                  }
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm min-h-11"
+                    disabled={busy !== null || full || sourcing !== null}
+                    aria-label={t('profile-unsourced-source-label', {
+                      claim: claim.text,
+                    })}
+                    onClick={() => {
+                      setFailure(null);
+                      setSourcing(claim.id);
+                    }}
+                  >
+                    {t('profile-unsourced-source')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm min-h-11"
+                    disabled={busy !== null}
+                    aria-label={t('profile-unsourced-drop-label', {
+                      claim: claim.text,
+                    })}
+                    onClick={() =>
+                      void attempt(
+                        `drop:${claim.id}`,
+                        withUnsourcedDropped(understanding, claim.id),
+                        ''
+                      )
+                    }
+                  >
+                    {busy === `drop:${claim.id}`
+                      ? t('profile-saving')
+                      : t('profile-unsourced-drop')}
+                  </button>
+                </div>
+                <FailureNote
+                  failure={failureAt(`drop:${claim.id}`)}
+                  refresh={refresh}
+                />
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
     </Section>
   );
 }

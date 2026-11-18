@@ -16,7 +16,7 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.platform.tenancy import TenantContext
 from . import ideas, service
-from .ideas_contracts import (CreateIdeas, CreateIdeasImageEdit, DownloadIdeas, EditIdeasUnderstanding, IdeasCallSummary,
+from .ideas_contracts import (CreateIdeas, CreateIdeasImageEdit, DownloadIdeas, EditIdeasClaim, EditIdeasUnderstanding, IdeasCallSummary,
                               IdeasChecksQuote, IdeasDownload, IdeasFeedbackDraft, IdeasGenerationDrafts, IdeasProjectDetail,
                               IdeasProjectPage, PlaceIdeasUpload, PrepareIdeasFeedback, PrepareIdeasGeneration, SetKept,
                               StartIdeasChecks, StartIdeasPlanning, VerifyIdeas)
@@ -187,12 +187,12 @@ def verify_ideas(project_id: str, body: VerifyIdeas, request: Request, response:
                  ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
                  if_match: str | None = Header(default=None, alias="If-Match")):
     """Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made
-    without a product photo, check findings accepted as they are, and the product photos the user checks
-    or rejects (#199).
+    without a product photo, check findings accepted as they are, the product photos the user checks or
+    rejects (#199), and the audience (#224).
 
-    Only what is named here becomes confirmed; the checked facts and photos are published as the product's
-    version. Ads whose three conditions now hold become ``exportable``; ads made with a rejected photo need
-    making again."""
+    Only what is named here becomes confirmed; the checked facts and photos, and the confirmed audience, are
+    published as the product's version. Ads whose three conditions now hold become ``exportable``; ads made
+    with a rejected photo need making again."""
     from . import ideas_export
     revision = extract_if_match(request)
 
@@ -200,11 +200,55 @@ def verify_ideas(project_id: str, body: VerifyIdeas, request: Request, response:
         row = ideas.get_ideas_project(s, ctx, project_id)
         ideas_export.verify(s, ctx, row, revision, fact_ids=body.fact_ids, appearance=body.appearance_confirmed,
                             findings=[item.model_dump(mode="json") for item in body.accepted_findings],
-                            photo_ids=body.photo_ids, rejected_photo_ids=body.rejected_photo_ids)
+                            photo_ids=body.photo_ids, rejected_photo_ids=body.rejected_photo_ids,
+                            audience=bool(body.audience_confirmed))
         return row
     with tenant_session(ctx) as session:
         row = _resource_command(session, ctx, request, key, "marketing.ideas.verify", body.model_dump(mode="json"), verify,
                                 lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)
+
+
+@router.patch("/{project_id}/claims/{angle_id}", operation_id="edit_marketing_ideas_claim", response_model=IdeasProjectDetail,
+              openapi_extra={"x-marketai-idempotent": True})
+def edit_ideas_claim(project_id: str, angle_id: str, body: EditIdeasClaim, request: Request, response: Response,
+                     ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                     if_match: str | None = Header(default=None, alias="If-Match")):
+    """Change one claim in the user's own words (#224): what it says, why it is worth trying, the facts it names.
+
+    Free of charge. Only facts of the understanding can be named, and the words may state nothing the named
+    facts do not (``claim_unsupported``). The claim's images made before need making again (``ideas_changed``);
+    its copy and image instructions stay as they are. Refused while the first batch is still making ads."""
+    from . import ideas_claims
+
+    def edit(s):
+        return ideas_claims.edit_claim(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, angle_id,
+                                       proposition=body.proposition, rationale=body.rationale, fact_ids=body.fact_ids)
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.edit_claim",
+                                {"angle_id": angle_id, **body.model_dump(mode="json")}, edit,
+                                lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)
+
+
+@router.delete("/{project_id}/claims/{angle_id}", operation_id="delete_marketing_ideas_claim",
+               response_model=IdeasProjectDetail, openapi_extra={"x-marketai-idempotent": True})
+def delete_ideas_claim(project_id: str, angle_id: str, request: Request, response: Response,
+                       ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                       if_match: str | None = Header(default=None, alias="If-Match")):
+    """Take one claim, its ways of telling and its ads out of the ideas (#224); at least two claims stay.
+
+    The images made for it stay listed among ``ads`` and need making again (``ideas_changed``): none of them
+    can be downloaded or exported."""
+    from . import ideas_claims
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.delete_claim", {"angle_id": angle_id},
+            lambda s: ideas_claims.delete_claim(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, angle_id),
+            lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
         set_etag(response, row.revision)
         return ideas.ideas_dict(session, ctx, row)
 

@@ -110,6 +110,8 @@ describe('DomainGateway operation coverage', () => {
     // 257 -> 260: changing and adding ads-first drafts
     // `prepare_marketing_ideas_feedback`, `create_marketing_ideas_image_edit`
     // and `place_marketing_ideas_upload` (#200).
-    expect(DOMAIN_ALLOWLIST.length).toBe(260);
+    // 260 -> 262: changing and deleting a claim of ads-first ideas
+    // `edit_marketing_ideas_claim` and `delete_marketing_ideas_claim` (#224).
+    expect(DOMAIN_ALLOWLIST.length).toBe(262);
   });
 });

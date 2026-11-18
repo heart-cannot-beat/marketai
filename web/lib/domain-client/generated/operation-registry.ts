@@ -2303,6 +2303,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'delete_marketing_ideas_claim',
+    {
+      operationId: 'delete_marketing_ideas_claim',
+      method: 'DELETE',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/claims/{angle_id}',
+      pathParams: ['project_id', 'angle_id'],
+      queryParams: [],
+      requestMediaTypes: [],
+      requiresIdempotency: true,
+      maxRequestBytes: 1024,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'delete_marketing_ideas_claim_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'delete_product_reference',
     {
       operationId: 'delete_product_reference',
@@ -2373,6 +2400,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         201: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'download_marketing_ideas_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'edit_marketing_ideas_claim',
+    {
+      operationId: 'edit_marketing_ideas_claim',
+      method: 'PATCH',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/claims/{angle_id}',
+      pathParams: ['project_id', 'angle_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 16384,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'edit_marketing_ideas_claim_200' },
           locationShapes: [],
         },
         422: {

@@ -88,7 +88,7 @@
 - **D6 广告清单。** 一个项目的广告通过出图配方里的 `marketing_intent.project_id` 找，不依赖小轮。查询写在 `app/marketing/ideas.py::project_ads`，S1 提供，后面各块共用。
 - **D7 费用。** 首批总价是各步最高费用之和，再加一次策划调用的最高费用，确认一次。多出的一次只用于应用拒收主张草稿时重新起草一次（#193 维护者决定）。每一步仍然单独预留、单独结算，没用上的不收费。预留总额不超过确认的数字，超过就停下来。
 - **D8 供应商。** 第 1 步保证只有 OpenAI Key 时全程能跑。只有 Gemini Key 时，在开始之前提示“目前需要 OpenAI 的 Key”。
-- **D9 新接口一览。** 全部做完后接口数从 242 变成 260（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200）。
+- **D9 新接口一览。** 全部做完后接口数从 242 变成 262（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200；S18 多两个改主张、删主张的接口，#224）。
 
 | 块 | operation_id | 路径 |
 | --- | --- | --- |
@@ -110,10 +110,14 @@
 | S12 | `prepare_marketing_ideas_feedback` | `POST /marketing/ideas/{project_id}/feedback-drafts`（按意见重出，带 `image_tool` 时是放大、去背景、擦掉一块；只准备出图草稿，用现有的预览报价、提交出图） |
 | S12 | `create_marketing_ideas_image_edit` | `POST /marketing/ideas/{project_id}/image-edits`（裁剪旋转，免费） |
 | S12 | `place_marketing_ideas_upload` | `POST /marketing/ideas/{project_id}/uploads`（把上传的图放在某个讲法下） |
+| S18 | `edit_marketing_ideas_claim` | `PATCH /marketing/ideas/{project_id}/claims/{angle_id}`（用户自己改主张的说法、理由和引用的事实，不花钱） |
+| S18 | `delete_marketing_ideas_claim` | `DELETE /marketing/ideas/{project_id}/claims/{angle_id}`（删掉一个主张和它的广告，至少留两个主张） |
 
 S12（#200）原计划加两个，实际加了三个：上传的图要有一个放进广告想法的入口。“追加主张或讲法”不是新接口，是 `start_marketing_ideas_planning` 的 `addition`。S11（#199）没有加接口：照片的列表在 `get_marketing_ideas` 的 `photos` 里，核对和否定照片是 `verify_marketing_ideas` 的 `photo_ids` 和 `rejected_photo_ids`。
 
-S17（#219，素材库的导出包和下载不交出没核对的草稿）不加新接口（总数仍是上面写的 260），改了五个现有接口的形状：
+S18（#224）加了上面两个接口。确认受众不是新接口：`verify_marketing_ideas` 加 `audience_confirmed`。没有出处的说法也不是新接口：产品理解加 `unsupported_claims`，补充出处、不用了走 `edit_marketing_ideas_understanding`。
+
+S17（#219，素材库的导出包和下载不交出没核对的草稿）不加新接口（当时总数是 260），改了五个现有接口的形状：
 
 | 接口 | 改了什么 |
 | --- | --- |

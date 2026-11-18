@@ -208,7 +208,11 @@ describe('ProductProfile (#202)', () => {
     expect(
       within(block).getByText('Owners want charging to need no attention.')
     ).toBeInTheDocument();
-    expect(within(block).queryByText(/^Checked$|^Not checked yet$/)).toBeNull();
+    // Only the audience can be checked (#224); no other guess carries a mark.
+    const audience = within(block).getByTestId('profile-audience');
+    expect(within(block).getAllByText(/^Checked$|^Not checked yet$/)).toEqual([
+      within(audience).getByText('Not checked yet'),
+    ]);
     expect(
       within(facts()).queryByText('Electric car owners with a driveway.')
     ).toBeNull();
@@ -355,9 +359,9 @@ describe('ProductProfile (#202)', () => {
       "2 ads use this fact. Once it's deleted, they need to be made again"
     );
     // Every claim's ways of telling cite this fact in the fixture: the honest
-    // answer is that making them again is not enough.
+    // answer is that making them again is not enough, and where to change them.
     expect(question).toHaveTextContent(
-      "3 claims are built on this fact directly. Once it's deleted, their ads stay “needs redoing”: making them again won't fix that until the claim itself is changed"
+      "3 claims are built on this fact directly. Once it's deleted, their ads stay “needs redoing” until you change or delete those claims on the ideas page (under “More” on each claim)."
     );
     expect(mockGateway.editMarketingIdeasUnderstanding).not.toHaveBeenCalled();
 
@@ -590,6 +594,197 @@ describe('ProductProfile (#202)', () => {
       screen.getByRole('link', { name: 'Open the product card' })
     ).toHaveAttribute('href', '/w/acme/products');
     expect(mockGateway.getMarketingIdeas).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductProfile: audience and claims without a source (#224)', () => {
+  const unsourced = [
+    { id: 'u1', text: 'Charges 3x faster than a wall socket' },
+    { id: 'u2', text: 'The quietest home charger on the market' },
+  ];
+  const audienceBlock = () => screen.getByTestId('profile-audience');
+  const unsourcedBlock = () =>
+    screen.getByRole('region', { name: /^Claims without a source/ });
+
+  it('checks the audience as worded now, and says what the published details name', async () => {
+    const detail = detailWithUses({ audience_confirmed: false });
+    await renderProfile(detail);
+    expect(
+      within(audienceBlock()).getByText(
+        "Until you check it, the product's published details name the market you chose as the audience."
+      )
+    ).toBeInTheDocument();
+    mockGateway.verifyMarketingIdeas.mockResolvedValue(
+      ok({ ...detail, revision: 4, audience_confirmed: true })
+    );
+    fireEvent.click(
+      within(audienceBlock()).getByRole('button', { name: 'This is right' })
+    );
+    await waitFor(() =>
+      expect(within(audienceBlock()).getByText('Checked')).toBeInTheDocument()
+    );
+    expect(mockGateway.verifyMarketingIdeas).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedRevision: 3,
+        body: { audience_confirmed: true },
+      })
+    );
+    expect(
+      within(audienceBlock()).queryByRole('button', { name: 'This is right' })
+    ).toBeNull();
+    expect(
+      within(audienceBlock()).getByText(
+        "The product's published details name this audience. Change the words and it needs checking again."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('edits the audience in the user words: it needs checking again', async () => {
+    const detail = detailWithUses({ audience_confirmed: true });
+    await renderProfile(detail);
+    fireEvent.click(
+      within(audienceBlock()).getByRole('button', {
+        name: 'Edit who might buy it',
+      })
+    );
+    fireEvent.change(within(audienceBlock()).getByRole('textbox'), {
+      target: { value: '  Renters who park on the street  ' },
+    });
+    expect(
+      within(audienceBlock()).getByText('Once saved, it needs checking again.')
+    ).toBeInTheDocument();
+    mockGateway.editMarketingIdeasUnderstanding.mockImplementation(
+      async ({ body }: { body: { understanding: Understanding } }) =>
+        ok({
+          ...answered(detail, body.understanding),
+          audience_confirmed: false,
+        })
+    );
+    fireEvent.click(
+      within(audienceBlock()).getByRole('button', { name: 'Save' })
+    );
+    await within(audienceBlock()).findByText('Renters who park on the street');
+    const call = mockGateway.editMarketingIdeasUnderstanding.mock.calls[0][0];
+    expect(call.body.understanding).toEqual({
+      ...detail.understanding,
+      audience: 'Renters who park on the street',
+    });
+    expect(
+      within(audienceBlock()).getByText('Not checked yet')
+    ).toBeInTheDocument();
+  });
+
+  it('lists what the AI read without a source, apart from the facts', async () => {
+    const base = detailWithUses();
+    await renderProfile({
+      ...base,
+      understanding: { ...base.understanding!, unsupported_claims: unsourced },
+    });
+    const block = unsourcedBlock();
+    expect(
+      within(block).getByRole('heading', {
+        name: 'Claims without a source (2)',
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(block).getByText('Charges 3x faster than a wall socket')
+    ).toBeInTheDocument();
+    expect(
+      within(facts()).queryByText('Charges 3x faster than a wall socket')
+    ).toBeNull();
+    expect(
+      within(block).getByText(/so no claim or ad uses them/)
+    ).toBeInTheDocument();
+  });
+
+  it('nothing to list: no empty section', async () => {
+    await renderProfile();
+    expect(
+      screen.queryByRole('region', { name: /^Claims without a source/ })
+    ).toBeNull();
+  });
+
+  it('adding a source turns one into an unchecked fact and takes it off the list', async () => {
+    const base = detailWithUses();
+    const detail = {
+      ...base,
+      understanding: { ...base.understanding!, unsupported_claims: unsourced },
+    };
+    await renderProfile(detail);
+    fireEvent.click(
+      within(unsourcedBlock()).getByRole('button', {
+        name: 'Add a source for “Charges 3x faster than a wall socket”',
+      })
+    );
+    const block = unsourcedBlock();
+    expect(
+      within(block).getByText(
+        'Without a source: Charges 3x faster than a wall socket'
+      )
+    ).toBeInTheDocument();
+    // The claim's words start the fact; the user adds where it is written.
+    expect(within(block).getByLabelText(/^Fact/)).toHaveValue(
+      'Charges 3x faster than a wall socket'
+    );
+    fireEvent.change(within(block).getByLabelText(/^Source words/), {
+      target: { value: 'In our lab test it charged 3x faster.' },
+    });
+    fireEvent.change(within(block).getByLabelText(/^Add material/), {
+      target: { value: 'Lab report: In our lab test it charged 3x faster.' },
+    });
+    mockGateway.editMarketingIdeasUnderstanding.mockImplementation(
+      async ({ body }: { body: { understanding: Understanding } }) =>
+        ok(answered(detail, body.understanding))
+    );
+    fireEvent.click(within(block).getByRole('button', { name: 'Save' }));
+    await within(facts()).findByText('Charges 3x faster than a wall socket');
+    const call = mockGateway.editMarketingIdeasUnderstanding.mock.calls[0][0];
+    expect(call.body.source_addition).toBe(
+      'Lab report: In our lab test it charged 3x faster.'
+    );
+    expect(call.body.understanding.unsupported_claims).toEqual([unsourced[1]]);
+    expect(call.body.understanding.facts.at(-1)).toEqual({
+      id: expect.stringMatching(/^fact-[a-zA-Z0-9]+$/),
+      statement: 'Charges 3x faster than a wall socket',
+      source_quote: 'In our lab test it charged 3x faster.',
+      confirmation: 'unconfirmed',
+    });
+    expect(
+      within(unsourcedBlock()).queryByText(
+        'Charges 3x faster than a wall socket'
+      )
+    ).toBeNull();
+  });
+
+  it("don't need it takes one off the list and adds nothing", async () => {
+    const base = detailWithUses();
+    const detail = {
+      ...base,
+      understanding: { ...base.understanding!, unsupported_claims: unsourced },
+    };
+    await renderProfile(detail);
+    mockGateway.editMarketingIdeasUnderstanding.mockImplementation(
+      async ({ body }: { body: { understanding: Understanding } }) =>
+        ok(answered(detail, body.understanding))
+    );
+    fireEvent.click(
+      within(unsourcedBlock()).getByRole('button', {
+        name: "Don't need “The quietest home charger on the market”",
+      })
+    );
+    await waitFor(() =>
+      expect(
+        within(unsourcedBlock()).queryByText(
+          'The quietest home charger on the market'
+        )
+      ).toBeNull()
+    );
+    const call = mockGateway.editMarketingIdeasUnderstanding.mock.calls[0][0];
+    expect(call.body.understanding).toEqual({
+      ...detail.understanding,
+      unsupported_claims: [unsourced[0]],
+    });
+    expect(call.body.source_addition).toBeUndefined();
   });
 });
 

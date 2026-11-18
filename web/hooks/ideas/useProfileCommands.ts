@@ -36,13 +36,16 @@ export interface ProfileCommands {
   ) => Promise<ProfileOutcome>;
   /** The user read this fact and says it is true: it becomes checked. */
   checkFact: (factId: string) => Promise<ProfileOutcome>;
+  /** The user says the audience, as worded now, is right (#224). */
+  confirmAudience: () => Promise<ProfileOutcome>;
 }
 
 /**
- * The product profile's two commands (ADR 0018, #198, #202):
- * `edit_marketing_ideas_understanding` and `verify_marketing_ideas`. Both
- * carry the revision the user saw (If-Match); the answer is the project as it
- * is now, written into the ideas page's cache so both views agree.
+ * The product profile's two commands (ADR 0018, #198, #202, #224):
+ * `edit_marketing_ideas_understanding` and `verify_marketing_ideas` (a fact,
+ * or the audience). Both carry the revision the user saw (If-Match); the
+ * answer is the project as it is now, written into the ideas page's cache
+ * so both views agree.
  */
 export function useProfileCommands(
   projectId: string,
@@ -121,5 +124,20 @@ export function useProfileCommands(
     [current.slug, gateway, projectId, revision, run]
   );
 
-  return { editUnderstanding, checkFact };
+  const audience = detail?.understanding?.audience;
+  const confirmAudience = useCallback(
+    () =>
+      run(`audience:${revision}:${audience}`, (action) =>
+        gateway.verifyMarketingIdeas({
+          workspaceSlug: current.slug,
+          actionInstanceId: action,
+          expectedRevision: revision,
+          projectId,
+          body: { audience_confirmed: true },
+        })
+      ),
+    [audience, current.slug, gateway, projectId, revision, run]
+  );
+
+  return { editUnderstanding, checkFact, confirmAudience };
 }

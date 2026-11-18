@@ -1229,6 +1229,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: false,
   },
   {
+    operationId: 'delete_marketing_ideas_claim',
+    method: 'DELETE',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/claims/:angle_id',
+    fastapiPathTemplate:
+      '/api/v1/marketing/ideas/{project_id}/claims/{angle_id}',
+    pathParams: ['project_id', 'angle_id'],
+    querySchema: null,
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 1024,
+    maxResponseBytes: 524288,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'delete_product_reference',
     method: 'DELETE',
     bffPattern:
@@ -1272,6 +1288,22 @@ export const DOMAIN_ALLOWLIST = [
     maxResponseBytes: 262144,
     requiresIdempotency: true,
     forwardConditionalHeaders: false,
+  },
+  {
+    operationId: 'edit_marketing_ideas_claim',
+    method: 'PATCH',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/claims/:angle_id',
+    fastapiPathTemplate:
+      '/api/v1/marketing/ideas/{project_id}/claims/{angle_id}',
+    pathParams: ['project_id', 'angle_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.edit_marketing_ideas_claim,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 16384,
+    maxResponseBytes: 524288,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
   },
   {
     operationId: 'edit_marketing_ideas_understanding',

@@ -223,6 +223,7 @@ def ideas_dict(session, ctx, row) -> dict:
     statuses = ideas_export.statuses(session, ctx, row, ads, calls, states)
     return {"id": row.id, "revision": row.revision, "state": row.state, "product_id": row.product_id,
             "market": row.market, "ad_language": row.ad_language, "understanding": row.understanding_json,
+            "audience_confirmed": ideas_export.confirmed_audience(session, ctx, row) is not None,
             "ideas": row.ideas_json,
             "latest_call": call_summary(call) if call else None,
             "ads": [_ad(version, recipe, keeps, checks, statuses) for version, recipe in ads],
@@ -268,8 +269,7 @@ def ideas_intent(row, combination_id: str) -> dict:
 
 def _ad_parts(row, combination_id: str):
     """The ideas, combination, claim, way of telling and understanding behind one ad, or ``LookupError``."""
-    from .contracts import Understanding
-    from .ideas_contracts import Ideas
+    from .ideas_contracts import Ideas, IdeasUnderstanding
     if row.state != "ideas_ready" or not row.ideas_json:
         raise LookupError(combination_id)
     doc = Ideas.model_validate(row.ideas_json)
@@ -278,7 +278,7 @@ def _ad_parts(row, combination_id: str):
         raise LookupError(combination_id)
     angle = next(a for a in doc.angles if a.id == combo.angle_id)
     expression = next(e for e in angle.expressions if e.id == combo.expression_id)
-    return doc, combo, angle, expression, Understanding.model_validate(row.understanding_json)
+    return doc, combo, angle, expression, IdeasUnderstanding.model_validate(row.understanding_json)
 
 
 def _cited(angle, expression, understanding) -> set:
@@ -488,13 +488,15 @@ def start_ideas_planning(session, ctx, row, revision, kind, mode, quote_hash, st
             raise service.MarketingError("addition_kind_invalid", "只能给广告想法追加主张或讲法。")
         return start_addition(session, ctx, row, revision, mode, quote_hash, addition)
     if kind == "understanding":
+        # Ads-first understandings also list what the AI read without a source (#224).
         call = service.start_planning(session, ctx, row, revision, "understanding", mode, quote_hash,
-                                      ad_language=row.ad_language, strategy_language=strategy_language)
+                                      ad_language=row.ad_language, strategy_language=strategy_language, flow=FLOW)
         # The new understanding comes back unchecked, so what this project had checked leaves the product's
         # published version now, when the user asks for it (#198). A call that fails leaves the facts
         # checked here and the version one step behind until the next check: never ahead of the facts.
-        if any(fact.get("confirmation") == "confirmed" for fact in (row.understanding_json or {}).get("facts", [])):
-            from . import ideas_export
+        from . import ideas_export
+        if (any(fact.get("confirmation") == "confirmed" for fact in (row.understanding_json or {}).get("facts", []))
+                or ideas_export.confirmed_audience(session, ctx, row) is not None):  # a confirmed audience too (#224)
             ideas_export.publish_verified(session, ctx, row, excluding=row.id)
         return call
     if row.state not in DRAFTABLE or not row.understanding_json:
@@ -642,16 +644,15 @@ def added_ideas(row, data, inputs, call_id: str):
     inferences, the three elements of each way of telling, and no two ways of telling one claim with the
     same picture mechanism."""
     from copy import deepcopy
-    from .contracts import Understanding
     from .competitor_review import compact
-    from .ideas_contracts import ClaimAddition, ExpressionAddition, Ideas
+    from .ideas_contracts import ClaimAddition, ExpressionAddition, Ideas, IdeasUnderstanding
     from .languages import english_brief_matches, script_matches
     from .expression_catalog import normalize_mechanism
     wanted = inputs["addition"]
     if row.state != "ideas_ready" or service.digest(row.ideas_json) != inputs["ideas_hash"]:
         raise service.MarketingError("ideas_changed", "广告想法在起草期间变了，请重新追加。")
     doc = Ideas.model_validate(row.ideas_json)
-    understanding = Understanding.model_validate(row.understanding_json)
+    understanding = IdeasUnderstanding.model_validate(row.understanding_json)
     facts, inferences = {f.id for f in understanding.facts}, {i.id for i in understanding.inferences}
     if wanted["kind"] == "claim":
         value = ClaimAddition.model_validate(data)
@@ -695,6 +696,12 @@ def added_ideas(row, data, inputs, call_id: str):
         if not english_brief_matches(combo):
             raise service.MarketingError("image_brief_language_mismatch", "Write the English image brief for every ad.",
                                          fields=_fields(f"{where}.image_brief"))
+    parts = [*(_said_by_angle(angle, "angle") if angle is not None else ()),
+             *(part for ei, expression in enumerate(expressions)
+               for part in _said_by_expression(expression, f"{path}.{ei}" if angle is not None else path)),
+             *(part for ci, combo in enumerate(combinations)
+               for part in _said_by_combination(combo, f"combinations.{ci}" if angle is not None else "combination"))]
+    _refuse_unsourced(understanding, parts)
     # New ids under the call's own prefix; the addition's own references follow them.
     used = _used_ids(row)
     stem = "x" + call_id.rsplit("_", 1)[-1][:8]
@@ -723,13 +730,51 @@ def _fields(*paths):
     return [f"body.ideas.{path}" for path in paths]
 
 
+# What a claim, a way of telling and an ad say to the buyer or the image model (#224). Why a claim is worth
+# trying, what evidence a way of telling lacks and the check lists may name an unsourced claim to say it is
+# missing; these may not use one.
+def _said_by_angle(angle, path):
+    return [(f"{path}.proposition", angle.proposition)]
+
+
+def _said_by_expression(expression, path):
+    return [(f"{path}.name", expression.name), (f"{path}.how_to_tell", expression.how_to_tell)]
+
+
+def _said_by_combination(combo, path):
+    brief = combo.image_brief
+    return [(f"{path}.headline", combo.headline), (f"{path}.body_copy", combo.body_copy),
+            (f"{path}.visual_brief", combo.visual_brief),
+            *((f"{path}.elements.{key}", value) for key, value in combo.elements.items()),
+            *(((f"{path}.image_brief.proposition", brief.proposition), (f"{path}.image_brief.expression", brief.expression))
+              if brief else ())]
+
+
+def unsourced_fields(understanding, parts) -> list[str]:
+    """Of ``parts`` (``[(path, text)]``), the ones that use a claim the understanding lists as unsourced (#224)."""
+    from .claims import unsourced_uses
+    listed = [(item.id, item.text) for item in getattr(understanding, "unsupported_claims", [])]
+    if not listed:
+        return []
+    support = "\n".join(f"{fact.statement}\n{fact.source_quote}" for fact in understanding.facts)
+    return [path for path, text in parts if text and unsourced_uses(text, listed, support)]
+
+
+def _refuse_unsourced(understanding, parts) -> None:
+    """A draft that uses an unsourced claim is refused as a whole (design doc §5.2, honesty rule 5)."""
+    used = unsourced_fields(understanding, parts)
+    if used:
+        raise service.MarketingError("unsourced_claim_used", "主张、讲法和文案不能用没有出处的说法。", fields=_fields(*used))
+
+
 def checked_ideas(row, value, inputs):
     """Drafted ideas as they may be stored, or ``MarketingError``: the whole draft is refused, never trimmed.
 
     Design doc §6: a way of telling that repeats another, or lacks one of its three elements, is rewritten
     by the system before any image -- here, the call is ``planner_output_invalid`` and an explicit retry
     carries the errors. The project's market and the product's brand baseline are the application's."""
-    from .contracts import BrandKitRef, Understanding
+    from .contracts import BrandKitRef
+    from .ideas_contracts import IdeasUnderstanding
     from .languages import english_brief_matches, english_text, script_matches
     from .plan_review import indistinct_expressions
     if value.ad_language != inputs.get("ad_language") or value.strategy_language != inputs.get("strategy_language", "en-US"):
@@ -739,7 +784,7 @@ def checked_ideas(row, value, inputs):
             or any(count > FIRST_BATCH["combinations"] for count in pairs.values())):
         raise service.MarketingError("ideas_first_batch_too_large",
                                      "首批最多 3 个主张、每个主张 2 种讲法、每种讲法 1 张广告。")
-    understanding = Understanding.model_validate(row.understanding_json)
+    understanding = IdeasUnderstanding.model_validate(row.understanding_json)
     facts, inferences = {f.id for f in understanding.facts}, {i.id for i in understanding.inferences}
     for ai, angle in enumerate(value.angles):
         if set(angle.fact_ids) - facts or set(angle.inference_ids) - inferences:
@@ -765,6 +810,11 @@ def checked_ideas(row, value, inputs):
     if not english_text(value.style_notes):
         raise service.MarketingError("image_brief_language_mismatch", "Write the visual style notes in English for the image model.",
                                      fields=_fields("style_notes"))
+    _refuse_unsourced(understanding, [
+        *(part for ai, angle in enumerate(value.angles) for part in _said_by_angle(angle, f"angles.{ai}")),
+        *(part for ai, angle in enumerate(value.angles) for ei, expression in enumerate(angle.expressions)
+          for part in _said_by_expression(expression, f"angles.{ai}.expressions.{ei}")),
+        *(part for ci, combo in enumerate(value.combinations) for part in _said_by_combination(combo, f"combinations.{ci}"))])
     brand = inputs.get("brand_kit")
     return value.model_copy(update={"market": row.market,
                                     "brand_kit": BrandKitRef.model_validate(brand["ref"]) if brand else None})
