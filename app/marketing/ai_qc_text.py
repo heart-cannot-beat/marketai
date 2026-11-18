@@ -52,6 +52,14 @@ SENTENCES = {
         "en-US": "product_reference images are real product photos whose source and product identity the user confirmed; use them only "
             "to check visible appearance, ports and use, never to infer certification or hidden performance.",
         "zh-CN": "product_reference 是用户确认来源与产品身份的实物参考图，只用来核对可见外观、接口和使用，不能据此推断认证或隐藏性能。"},
+    # Ads-first drafts may use photos the user has not checked yet (#199). The check compares the image with
+    # the photos' exact bytes either way; whether they show the real product is the user's check, not this one.
+    "product_reference_unverified": {
+        "en-US": "product_reference images are photos of the product found on its page or in the user's upload; the user has not "
+            "checked them yet. Treat them as the product's look for this check, and use them only to check visible "
+            "appearance, ports and use, never to infer certification or hidden performance.",
+        "zh-CN": "product_reference 是从产品页或用户上传中找到的产品照片，用户还没有核对。这次检查把它们当作产品的外观，"
+            "只用来核对可见外观、接口和使用，不能据此推断认证或隐藏性能。"},
     "product_compare": {
         "en-US": "For product_fidelity, compare target and product_reference item by item: body outline, colors, port shapes and hole "
             "positions, interlock positions and brand markings, and write the concrete features of both the target and the real photo in visual_evidence.",
@@ -193,11 +201,15 @@ def single_prompt(checks, language, schema, transcribe=False):
         *(("transcribe",) if transcribe else ()), *CLOSING], language, schema)
 
 
-def ideas_single_prompt(checks, language, schema):
-    """An ads-first ad draft (#197): the single-image check against the facts it was drafted on, not confirmed facts."""
+def ideas_single_prompt(checks, language, schema, *, unverified_photos=False):
+    """An ads-first ad draft (#197): the single-image check against the facts it was drafted on, not confirmed facts.
+
+    ``unverified_photos`` (#199): the image was made with photos nobody has checked yet, and the prompt says so
+    instead of calling them confirmed. A check of an image made with checked photos keeps its exact prompt."""
+    product = ["product_reference_unverified" if unverified_photos and key == "product_reference" else key for key in PRODUCT]
     return _join([*(("language",) if "language_correct" in checks else ()),
         *(("brand_single", "readable") if "brand_style" in checks else ()),
-        "role_ideas", "untrusted", "target_single", *PRODUCT, *OUTPUT, "no_reference", "facts_ideas", "semantic",
+        "role_ideas", "untrusted", "target_single", *product, *OUTPUT, "no_reference", "facts_ideas", "semantic",
         "transcribe_ideas", *CLOSING], language, schema)
 
 

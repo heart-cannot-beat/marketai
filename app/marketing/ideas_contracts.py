@@ -18,6 +18,8 @@ from .contracts import (Angle, BrandKitRef, CreativeCombination, Document, Expre
 from .image_editing import ImageCrop
 
 AdLanguage = Annotated[str, Field(min_length=2, max_length=35, pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")]
+#: A product photo of ads-first ideas (#199): the SHA-256 of the derivative an image request sends.
+PhotoId = Annotated[str, Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")]
 IdeasState = Literal["input", "understanding_draft", "ideas_ready"]
 
 
@@ -155,6 +157,8 @@ class AdSummary(Document):
     kept: bool
     # Whether the image request sent a product photo; the ideas page marks one made without (#196).
     used_product_photo: bool
+    # The photos the image request sent, as ``IdeasPhoto.photo_id`` (#199): the main photo first.
+    photo_ids: list[str] = Field(default_factory=list)
     created_at: str
     # The newest automatic check of this image, if one was started (#197).
     check: IdeasAdCheck | None = None
@@ -208,6 +212,34 @@ class FirstBatchSummary(Document):
     reason: FirstBatchStopReason | None = None
 
 
+class IdeasPhoto(Document):
+    """A photo the product's reading found that may show the product's look (#199; design doc §5.2).
+
+    Ads may be drafted with it before anyone checks it; an ad made with it is exportable only once the user
+    checks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.
+    Show it with ``create_product_intake_image_download_intent(intake_id, image_id)``."""
+    # The content hash of the photo's controlled derivative, the bytes an image request sends.
+    photo_id: str
+    # ``unavailable``: the user checked it, but the creative-library reference it became can no longer be
+    # used (withdrawn, archived, its rights expired). Like ``rejected``, nothing new is made with it and
+    # every ad made with it needs making again. The newest decision on the product's photo counts, in
+    # whichever of the product's ideas it was made.
+    status: Literal["unverified", "verified", "rejected", "unavailable"]
+    # What the reading took the photo for: the main photo, another angle, or a close-up.
+    role: Literal["main", "angle", "detail"]
+    # From the product page (or an image link the user pasted), or from the user's upload.
+    source: Literal["product_page", "upload"]
+    source_url: str | None = None
+    intake_id: str
+    image_id: str
+    width: int | None = None
+    height: int | None = None
+    # The creative-library reference a checked photo became.
+    reference_version_id: str | None = None
+    # The ads whose image request sent this photo.
+    asset_version_ids: list[str] = Field(default_factory=list)
+
+
 class IdeasProjectDetail(Document):
     id: str
     revision: int
@@ -224,6 +256,9 @@ class IdeasProjectDetail(Document):
     first_batch: FirstBatchSummary | None = None
     # Every crop or rotation of these ideas' ads, oldest first (#200); the new versions are in ``ads``.
     image_edits: list[IdeasImageEdit] = Field(default_factory=list)
+    # The photos the product's reading found, in the page's order, each with its checking (#199). Empty
+    # for ideas no first batch opened.
+    photos: list[IdeasPhoto] = Field(default_factory=list)
 
 
 class IdeasProjectSummary(Document):
@@ -515,6 +550,17 @@ class VerifyIdeas(Document):
     # Ads made without a product photo: the user confirms the product in the image looks right.
     appearance_confirmed: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(default_factory=list, max_length=60)
     accepted_findings: list[AcceptedFindings] = Field(default_factory=list, max_length=60)
+    # ``IdeasPhoto.photo_id`` of photos the user confirms are this product's real photos and may be used in
+    # ads (#199): they become creative-library references and part of the product's published version.
+    photo_ids: list[PhotoId] = Field(default_factory=list, max_length=20)
+    # Photos the user says are not this product, or may not be used: ads made with one need making again.
+    rejected_photo_ids: list[PhotoId] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def _one_decision_per_photo(self):
+        if set(self.photo_ids) & set(self.rejected_photo_ids):
+            raise PydanticCustomError("photo_decision_conflict", "同一张照片不能既核对又否定")
+        return self
 
 
 class DownloadIdeas(Document):

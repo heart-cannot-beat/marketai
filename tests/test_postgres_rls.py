@@ -1143,7 +1143,7 @@ class RowLevelSecurityTests(unittest.TestCase):
     def test_an_ideas_export_record_stays_in_its_workspace_and_is_never_rewritten(self):
         """Ads-first verification and download records (#198): bound to the ideas by a Workspace-composite
         key; the API can add one only in its own Workspace and can never change or remove one; the Worker
-        has no access at all."""
+        only reads its own Workspace's (#199)."""
         from sqlalchemy.exc import ProgrammingError
 
         with self.owner.connect() as conn:
@@ -1189,13 +1189,23 @@ class RowLevelSecurityTests(unittest.TestCase):
                     api.execute(self.text(statement), {"id": record})
             self.assertIn("permission denied", str(refused.exception))
 
-        # Another Workspace's API session sees none of it; the Worker has no access; readonly reads its own.
+        # Another Workspace's API session sees none of it. The Worker reads its own Workspace's records (#199:
+        # a first batch leaves out the photos the user rejected) and never writes one; readonly reads its own.
         other = self.scoped_connection(self.engine(API_URL), self.beta)
         self.assertEqual(other.execute(self.text("SELECT COUNT(*) FROM marketing_ideas_export_records")).scalar(), 0)
         worker = self.scoped_connection(self.engine(WORKER_URL), self.alpha)
-        with self.assertRaises(ProgrammingError) as denied:
-            worker.execute(self.text("SELECT COUNT(*) FROM marketing_ideas_export_records"))
-        self.assertIn("permission denied", str(denied.exception))
+        self.assertEqual(worker.execute(self.text(
+            "SELECT COUNT(*) FROM marketing_ideas_export_records WHERE id = :id"), {"id": record}).scalar(), 1)
+        self.assertEqual(self.scoped_connection(self.engine(WORKER_URL), self.beta).execute(self.text(
+            "SELECT COUNT(*) FROM marketing_ideas_export_records")).scalar(), 0)
+        for statement, values in (
+                (insert, {"id": f"mie_{uuid.uuid4().hex[:8]}", "ws": self.alpha, "project": project, "hash": "a" * 64}),
+                ("UPDATE marketing_ideas_export_records SET content_hash = 'x' WHERE id = :id", {"id": record}),
+                ("DELETE FROM marketing_ideas_export_records WHERE id = :id", {"id": record})):
+            with self.assertRaises(ProgrammingError) as denied:
+                with worker.begin_nested():
+                    worker.execute(self.text(statement), values)
+            self.assertIn("permission denied", str(denied.exception))
         readonly = self.scoped_connection(self.engine(READONLY_URL), self.alpha)
         self.assertEqual(readonly.execute(self.text(
             "SELECT COUNT(*) FROM marketing_ideas_export_records WHERE id = :id"), {"id": record}).scalar(), 1)

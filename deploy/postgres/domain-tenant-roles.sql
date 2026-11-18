@@ -838,11 +838,13 @@ BEGIN
     EXECUTE 'GRANT SELECT ON public.marketing_first_batches TO marketai_domain_readonly';
   END IF;
   -- Ads-first verification and download records (#198): append-only. The API records what the user
-  -- checked and what was downloaded and reads it to derive each ad's status; readonly reads it; the
-  -- Worker gets nothing, because no Job reads or writes a verification or a download.
+  -- checked and what was downloaded and reads it to derive each ad's status; readonly reads it. The
+  -- Worker reads it (#199): a first batch's advance picks the product photos of its images and must leave
+  -- out a photo the user rejected, and a run item refuses before dispatch a photo rejected since its
+  -- preview. The Worker never writes a verification or a download.
   IF to_regclass('public.marketing_ideas_export_records') IS NOT NULL THEN
     EXECUTE 'GRANT SELECT, INSERT ON public.marketing_ideas_export_records TO marketai_domain_api';
-    EXECUTE 'GRANT SELECT ON public.marketing_ideas_export_records TO marketai_domain_readonly';
+    EXECUTE 'GRANT SELECT ON public.marketing_ideas_export_records TO marketai_domain_worker, marketai_domain_readonly';
   END IF;
   -- Ads-first uploads (#200): an uploaded image placed under one ad of the ideas, append-only. The API
   -- records the placement; the Worker reads it because a first batch's check step and every check's last

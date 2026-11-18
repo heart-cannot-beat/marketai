@@ -187,17 +187,20 @@ def verify_ideas(project_id: str, body: VerifyIdeas, request: Request, response:
                  ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
                  if_match: str | None = Header(default=None, alias="If-Match")):
     """Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made
-    without a product photo, and check findings accepted as they are.
+    without a product photo, check findings accepted as they are, and the product photos the user checks
+    or rejects (#199).
 
-    Only what is named here becomes confirmed; the checked facts are published as the product's version.
-    Ads whose three conditions now hold become ``exportable``."""
+    Only what is named here becomes confirmed; the checked facts and photos are published as the product's
+    version. Ads whose three conditions now hold become ``exportable``; ads made with a rejected photo need
+    making again."""
     from . import ideas_export
     revision = extract_if_match(request)
 
     def verify(s):
         row = ideas.get_ideas_project(s, ctx, project_id)
         ideas_export.verify(s, ctx, row, revision, fact_ids=body.fact_ids, appearance=body.appearance_confirmed,
-                            findings=[item.model_dump(mode="json") for item in body.accepted_findings])
+                            findings=[item.model_dump(mode="json") for item in body.accepted_findings],
+                            photo_ids=body.photo_ids, rejected_photo_ids=body.rejected_photo_ids)
         return row
     with tenant_session(ctx) as session:
         row = _resource_command(session, ctx, request, key, "marketing.ideas.verify", body.model_dump(mode="json"), verify,
