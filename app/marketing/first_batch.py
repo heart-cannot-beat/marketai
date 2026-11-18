@@ -757,9 +757,16 @@ def resume(session, ctx, batch, *, quote_hash: str, selected_variant: str | None
         if len(supplemented) > SOURCE_LIMIT:
             raise service.MarketingError("source_invalid", "请粘贴不超过 16000 字的产品资料。",
                                          params={"limit": SOURCE_LIMIT}, fields=["body.additional_text"])
+        checked = any(fact.get("confirmation") == "confirmed" for fact in (row.understanding_json or {}).get("facts", []))
         # More material means a new understanding; the refused ideas went with the old one.
         service.advance(session, ctx, row, row.revision, "source_supplemented", state="input", source_text=supplemented,
                         understanding_json=None, ideas_json=None)
+        if checked:
+            # The new understanding comes back unchecked, so what the user had checked in the old one leaves
+            # the product's published version here, in the API's own command (#198): the Worker that drafts
+            # the new understanding cannot publish.
+            from . import ideas_export
+            ideas_export.publish_verified(session, ctx, row)
     batch.confirmed_max_cost = offer["maximum_cost"]
     batch.state, batch.attention_json, batch.updated_at = RESUME_STATE[attention["step"]], None, utcnow()
     append_event(session, event_type="marketing.first_batch_resumed", resource_type=RESOURCE_TYPE, resource_id=batch.id,

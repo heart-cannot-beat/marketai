@@ -28,7 +28,7 @@ from app.marketing import ideas, ideas_export, planner
 from app.marketing.ai_qc_models import MarketingAIQCRecord
 from app.marketing.ideas_contracts import IdeasDownload, IdeasProjectDetail
 from app.marketing.models import MarketingIdeasExportRecord, MarketingProjectRecord, MarketingRevisionRecord
-from tests.test_marketing_first_batch import EXAMPLE, check_report
+from tests.test_marketing_first_batch import EXAMPLE, check_report, one_claim
 from tests.test_marketing_ideas_checks import IdeasChecksFixtures
 from tests.test_marketing_ideas_generation import IdeasGenerationFixtures
 from tests.test_marketing_product_references import ProductPhotoFixtures
@@ -698,6 +698,29 @@ class ProductVersionTests(IdeasExportFixtures):
         self.assertEqual((versions[-1].content_json["selling_points"], versions[-1].content_json["description"]),
                          ([], "Acme Charge Home"))
         self.execute(call)
+        after = self.read_ideas(project)
+        self.assertTrue(all(fact["confirmation"] == "unconfirmed" for fact in after["understanding"]["facts"]))
+        self.assertEqual(len(self.product_versions(project)[0]), 2)
+
+    def test_continuing_a_stopped_first_batch_with_more_material_takes_its_checked_facts_out_of_the_version(self):
+        """More material means a new understanding, drafted from scratch and unchecked (#193): what the user
+        had checked in the old one must leave the product's published version when they continue."""
+        with patch("app.marketing.ideas.example", side_effect=one_claim):
+            stopped = self.started_and_drained()
+        self.assertEqual((stopped["state"], stopped["attention"]["reason"]), ("needs_attention", "too_few_claims"))
+        project = self.read_ideas({"id": stopped["project_id"]})
+        self.verify(project, fact_ids=["f1"])
+        (first,), _ = self.product_versions(project)
+        self.assertEqual(first.content_json["selling_points"], [FACTS[0]["statement"]])
+        resumed = self.resume(stopped, additional_text="Acme Charge Home fits a 32 A home circuit.")
+        self.assertEqual(resumed["state"], "understanding")
+        versions, _ = self.product_versions(project)
+        self.assertEqual([version.state for version in versions], ["superseded", "effective"])
+        self.assertEqual((versions[-1].content_json["selling_points"], versions[-1].content_json["description"]),
+                         ([], "Acme Charge Home"))
+        # The batch goes on as before: a new understanding, every fact unchecked, and no further version.
+        self.drain()
+        self.assertEqual(self.batch(stopped["id"])["state"], "done")
         after = self.read_ideas(project)
         self.assertTrue(all(fact["confirmation"] == "unconfirmed" for fact in after["understanding"]["facts"]))
         self.assertEqual(len(self.product_versions(project)[0]), 2)
