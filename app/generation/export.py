@@ -54,6 +54,7 @@ __all__ = [
     "build_manifest",
     "resolve_export_blob_ref",
     "left_out_drafts",
+    "record_handout",
 ]
 
 
@@ -235,6 +236,19 @@ def _accepted_replay(
     if package is None:
         return None
     return {"package_id": package.id, "operation_id": operation.id, "state": operation.state}
+
+
+def record_handout(session: Session, ctx: TenantContext, package_id: str, intent_id: str) -> None:
+    """Record the ads of ads-first ideas a new link to this package hands out
+    (Issue #219): one download record per project, as the ads-first download
+    writes. Any other image in the package leaves no such record."""
+    from app.marketing import ideas_export
+
+    package = get_export_package(session, ctx, package_id)
+    ideas_export.record_library_download(
+        session, ctx, list((package.selected_versions_json or {}).get("version_ids") or []), intent_id,
+        path={"path": "export_package", "export_package_id": package.id},
+    )
 
 
 def left_out_drafts(package: ExportPackageRecord) -> list[str]:

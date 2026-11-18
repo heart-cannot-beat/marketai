@@ -14,11 +14,12 @@ from unittest.mock import patch
 from sqlalchemy import func, select
 
 from app.adapters.persistence.database import tenant_session
-from app.adapters.persistence.models import AssetVersionRecord, DownloadIntentRecord, JobRecord, OperationRecord
+from app.adapters.persistence.models import (AssetVersionRecord, AuditEventRecord, DownloadIntentRecord, JobRecord,
+                                            OperationRecord)
 from app.generation.models import ExportPackageRecord
 from app.generation.response_models import AssetGalleryPage, DownloadIntentResponse, ExportPackageDetail
 from app.marketing import ideas_export
-from app.marketing.models import MarketingProjectRecord
+from app.marketing.models import MarketingIdeasExportRecord, MarketingProjectRecord
 from tests.test_marketing_ideas_export import ADS_OF, IdeasExportFixtures
 from tests.test_marketing_ideas_revisions import RevisionFixtures
 from tests.test_marketing_workflow import MarketingWorkflowFixtures
@@ -395,6 +396,79 @@ class OtherImagesTests(LibraryGateFixtures):
         self.link(ads[0], "display")
         package = self.built({"kind": "all_successful"})
         self.assertEqual((package["left_out_drafts"], sorted(self.packaged(package["package_id"]))), (6, images))
+
+
+class DownloadRecordTests(LibraryGateFixtures):
+    """A checked ad the library hands out leaves the same record the ads-first download leaves (#219,
+    maintainer decision 2): which ads, the facts each stood on, the check it passed and the file's hash."""
+
+    def library_records(self, project):
+        return [record for record in self.records(project, "download") if "library" in record.content_json]
+
+    def expected(self, project, asset_version_id, intent_id):
+        ad = self.ads(project)
+        ad = next(item for item in ad.values() if item["asset_version_id"] == asset_version_id)
+        with tenant_session(self.context) as session:
+            sha = session.get(AssetVersionRecord, asset_version_id).content_sha256
+        return {"asset_version_id": asset_version_id, "intent_id": intent_id, "content_sha256": sha,
+                "cited_fact_ids": ad["cited_fact_ids"], "check_id": ad["check"]["id"]}
+
+    def test_saving_a_checked_ad_records_what_it_stood_on_once(self):
+        project = self.checked_ads()
+        self.verify_everything(project)
+        asset_id = self.ids(project, ["c3_1"])[0]
+        handed = self.link(asset_id, key="save-c3-1")
+        (record,) = self.library_records(project)
+        self.assertEqual(record.content_json["ads"], [self.expected(project, asset_id, handed["intent_id"])])
+        self.assertEqual(record.content_json["ads"][0]["cited_fact_ids"], ["f3"])
+        self.assertEqual(record.content_json["library"], {"path": "asset_download"})
+        with tenant_session(self.context) as session:
+            row = session.get(MarketingProjectRecord, project["id"])
+            self.assertEqual(record.content_json["understanding_hash"], ideas_export.digest(row.understanding_json))
+            self.assertEqual(record.project_revision, row.revision)
+        self.assertEqual(record.actor_id, self.context.initiator_id)
+        # The same request again is the same download; showing the image is no download at all.
+        self.link(asset_id, key="save-c3-1")
+        self.link(asset_id, "display")
+        self.assertEqual(len(self.library_records(project)), 1)
+        # A second save is a second download.
+        self.link(asset_id)
+        self.assertEqual(len(self.library_records(project)), 2)
+        with tenant_session(self.context) as session:
+            events = session.scalars(select(AuditEventRecord).where(
+                AuditEventRecord.workspace_id == self.context.workspace_id, AuditEventRecord.resource_id == project["id"],
+                AuditEventRecord.event_type == "marketing.ideas_downloaded")).all()
+        self.assertEqual([event.details_json["record_id"] for event in events],
+                         [record.id for record in self.library_records(project)])
+
+    def test_a_package_link_records_the_ads_in_it_and_nothing_else(self):
+        project = self.checked_ads()
+        self.verify_everything(project)
+        others = self.plan_first_images()
+        chosen = self.ids(project, ["c1_1", "c2_2"])
+        package = self.built({"kind": "explicit", "version_ids": [others[0], *chosen]})
+        # Building the package hands nothing out; its link does.
+        self.assertEqual(self.library_records(project), [])
+        handed = self.package_link(package["package_id"], key="zip-link")
+        (record,) = self.library_records(project)
+        self.assertEqual(record.content_json["ads"], [self.expected(project, asset_id, handed["intent_id"]) for asset_id in chosen])
+        self.assertEqual(record.content_json["library"], {"path": "export_package", "export_package_id": package["package_id"]})
+        self.package_link(package["package_id"], key="zip-link")
+        self.assertEqual(len(self.library_records(project)), 1)
+        self.package_link(package["package_id"])
+        self.assertEqual(len(self.library_records(project)), 2)
+
+    def test_old_flow_images_leave_no_ads_first_record(self):
+        images = self.plan_first_images()
+        self.link(images[0])
+        package = self.built({"kind": "explicit", "version_ids": images})
+        self.package_link(package["package_id"])
+        self.assertEqual(self.count(MarketingIdeasExportRecord), 0)
+
+    def test_a_refused_hand_out_records_nothing(self):
+        project = self.checked_ads()
+        self.refused_ads(self.link(self.ids(project, ["c1_1"])[0], expect=409))
+        self.assertEqual(self.records(project, "download"), [])
 
 
 class RevisedAdsTests(LibraryGateFixtures, RevisionFixtures):

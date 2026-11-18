@@ -1097,12 +1097,20 @@ async def create_asset_version_download_intent(
 
     with tenant_session(context) as session:
         committed_ref = resolve_asset_blob_ref(session, context, version_id)
+        on_create = None
         if purpose == "download":
             # Asked again on every call, a replay included: an ad may stop
             # being exportable between two requests with the same key.
             from app.marketing import ideas_export
 
             ideas_export.assert_library_download(session, context, version_id)
+
+            def on_create(inner_session, record):
+                # A checked ad saved from the library leaves the record the
+                # ads-first download leaves; once per intent, never on a replay.
+                ideas_export.record_library_download(
+                    inner_session, context, [version_id], record.id, path={"path": "asset_download"},
+                )
         intent = create_or_replay_download_intent(
             session,
             idempotency_key=idempotency_key,
@@ -1111,6 +1119,7 @@ async def create_asset_version_download_intent(
             owner_kind="asset_version",
             owner_id=version_id,
             committed_ref=committed_ref,
+            on_create=on_create,
         )
         expires_at = intent.expires_at
         if expires_at.tzinfo is None:
@@ -1226,6 +1235,11 @@ async def create_export_download_intent(
             owner_kind="export_package",
             owner_id=export_package_id,
             committed_ref=committed_ref,
+            # The ads of ads-first ideas in the package leave the record the
+            # ads-first download leaves; once per intent (Issue #219).
+            on_create=lambda inner_session, record: export_module.record_handout(
+                inner_session, context, export_package_id, record.id,
+            ),
         )
         expires_at = intent.expires_at
         if expires_at.tzinfo is None:

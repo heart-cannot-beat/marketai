@@ -228,6 +228,32 @@ def _ideas_of(session, ctx, asset_version_ids) -> dict:
     return found
 
 
+def _judge(session, ctx, asset_version_ids) -> tuple[dict, dict]:
+    """Each image's ads-first projects (``_ideas_of``), and per project whose ideas can be read what judging
+    its ads needs: the project, each ad's status (``statuses``), each ad's newest check and the ads."""
+    owners = _ideas_of(session, ctx, asset_version_ids)
+    judged = {}
+    for project_id in dict.fromkeys(project for projects in owners.values() for project in projects):
+        row = session.scalar(select(MarketingProjectRecord).where(MarketingProjectRecord.workspace_id == ctx.workspace_id,
+            MarketingProjectRecord.id == project_id, MarketingProjectRecord.flow == ideas.FLOW))
+        if row is None:
+            continue
+        try:
+            ads = ideas.project_ads(session, ctx, row)
+            calls = ideas_checks.latest_by_asset(session, ctx, row.id)
+            judged[project_id] = SimpleNamespace(row=row, statuses=statuses(session, ctx, row, ads, calls), calls=calls,
+                                                 versions={version.id: version for version, _ in ads})
+        except (ValueError, LookupError, StopIteration, TypeError):
+            # Stored ideas a later contract no longer reads: their images are refused (needs_redo), while
+            # every other image of the page or the package is judged, or left alone, as usual.
+            continue
+    return owners, judged
+
+
+#: An image of ideas that cannot be read cannot show it was checked: it does not leave.
+_UNREADABLE = {"status": "needs_redo", "reasons": [_reason("ideas_changed")]}
+
+
 def library_refusals(session, ctx, asset_version_ids) -> list[dict]:
     """Of these images, the ads of ads-first ideas that may not be exported now (#219): each with its status
     and reasons, as ``ads_not_exportable`` names them, in the order given.
@@ -238,29 +264,57 @@ def library_refusals(session, ctx, asset_version_ids) -> list[dict]:
     uploaded one nobody placed under an ad are not this rule's concern. An image that is an ad of more than
     one project's ideas leaves only when every one of them says it may."""
     asset_version_ids = list(dict.fromkeys(asset_version_ids))
-    projects = _ideas_of(session, ctx, asset_version_ids)
-    derived = {}
-    for project_id in dict.fromkeys(project for owners in projects.values() for project in owners):
-        row = session.scalar(select(MarketingProjectRecord).where(MarketingProjectRecord.workspace_id == ctx.workspace_id,
-            MarketingProjectRecord.id == project_id, MarketingProjectRecord.flow == ideas.FLOW))
-        if row is None:
-            continue
-        try:
-            derived[project_id] = statuses(session, ctx, row)
-        except (ValueError, LookupError, StopIteration, TypeError):
-            # Stored ideas a later contract no longer reads: their images are refused below (needs_redo),
-            # while every other image of the page or the package is judged, or left alone, as usual.
-            continue
-    # Ideas that cannot be read cannot show the image was checked: it does not leave.
-    unreadable = {"status": "needs_redo", "reasons": [_reason("ideas_changed")]}
+    return _refused(asset_version_ids, *_judge(session, ctx, asset_version_ids))
+
+
+def _refused(asset_version_ids, owners, judged) -> list[dict]:
     refused = []
     for asset_id in asset_version_ids:
-        for project_id in projects.get(asset_id, ()):
-            state = derived.get(project_id, {}).get(asset_id) or unreadable
+        for project_id in owners.get(asset_id, ()):
+            project = judged.get(project_id)
+            state = (project.statuses.get(asset_id) if project else None) or _UNREADABLE
             if state["status"] != "exportable":
                 refused.append({"asset_version_id": asset_id, "status": state["status"], "reasons": state["reasons"]})
                 break
     return refused
+
+
+def record_library_download(session, ctx, asset_version_ids, intent_id: str, *, path: dict) -> list[str]:
+    """Record what the creative library just handed out under ``intent_id`` (#219, maintainer decision 2).
+
+    For each ads-first project with an ad among these images, one download record like the one the
+    ads-first download writes (``download_intent``): which ads, the facts each stood on, the check it
+    passed and the file's hash, plus where in the library it left (``path``). Any other image leaves no
+    record here. Called once per new download intent, in its transaction; an ad that is not exportable
+    any more is refused rather than recorded. Returns the record ids."""
+    asset_version_ids = list(dict.fromkeys(asset_version_ids))
+    owners, judged = _judge(session, ctx, asset_version_ids)
+    refused = _refused(asset_version_ids, owners, judged)
+    if refused:
+        raise MarketingError("ads_not_exportable", "这些广告还不能下载：先核对它们用到的事实、外观和检查结果，需要重出的请先重出。",
+                             409, params=refusal_params(refused))
+    per_project = {}
+    for asset_id in asset_version_ids:
+        for project_id in owners.get(asset_id, ()):
+            per_project.setdefault(project_id, []).append(asset_id)
+    recorded = []
+    for project_id, ids in per_project.items():
+        project = judged[project_id]
+        content = {"ads": [{"asset_version_id": asset_id, "intent_id": intent_id,
+                            "content_sha256": project.versions[asset_id].content_sha256,
+                            "cited_fact_ids": project.statuses[asset_id]["cited_fact_ids"],
+                            "check_id": project.calls[asset_id].id} for asset_id in ids],
+                   "understanding_hash": digest(project.row.understanding_json), "library": path}
+        record = Record(id=new_id("mie"), workspace_id=ctx.workspace_id, project_id=project_id, kind="download",
+                        project_revision=project.row.revision, actor_id=_actor(ctx), content_json=content,
+                        content_hash=digest(content), created_at=utcnow())
+        session.add(record)
+        append_event(session, event_type="marketing.ideas_downloaded", resource_type="marketing_project", resource_id=project_id,
+                     details={"record_id": record.id, "revision": project.row.revision, "asset_version_ids": ids,
+                              "library": path})
+        recorded.append(record.id)
+    session.flush()
+    return recorded
 
 
 def refusal_params(refused: list[dict]) -> dict:
