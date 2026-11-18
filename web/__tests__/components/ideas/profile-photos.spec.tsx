@@ -451,3 +451,58 @@ describe('product profile photos (#229)', () => {
     );
   });
 });
+
+describe('product profile photos beside the audience (#224)', () => {
+  it('checking the audience and then a photo: two separate checks, each at the revision it saw', async () => {
+    const detail = photoDetail();
+    await renderProfile(detail);
+    const audience = screen.getByTestId('profile-audience');
+    const afterAudience = {
+      ...detail,
+      revision: detail.revision + 1,
+      audience_confirmed: true,
+    };
+    mockGateway.verifyMarketingIdeas.mockResolvedValueOnce(ok(afterAudience));
+    fireEvent.click(
+      within(audience).getByRole('button', { name: 'This is right' })
+    );
+    await waitFor(() =>
+      expect(within(audience).getByText('Checked')).toBeInTheDocument()
+    );
+    // The photos are as they were.
+    expect(
+      within(card('Photo 1 · Main photo')).getByText('Not checked yet')
+    ).toBeInTheDocument();
+
+    mockGateway.verifyMarketingIdeas.mockResolvedValueOnce(
+      ok(decided(afterAudience, 'p1', 'verified'))
+    );
+    const first = card('Photo 1 · Main photo');
+    fireEvent.click(
+      within(first).getByRole('button', { name: 'Check this photo' })
+    );
+    fireEvent.click(
+      within(
+        within(first).getByRole('group', { name: 'Check this photo' })
+      ).getByRole('button', { name: 'Yes, check it' })
+    );
+    await waitFor(() =>
+      expect(within(first).getByText('Checked')).toBeInTheDocument()
+    );
+    // The audience stays checked; neither check carries the other's decision.
+    expect(within(audience).getByText('Checked')).toBeInTheDocument();
+    const [audienceCall, photoCall] =
+      mockGateway.verifyMarketingIdeas.mock.calls.map((call) => call[0]);
+    expect(audienceCall).toEqual(
+      expect.objectContaining({
+        expectedRevision: 3,
+        body: { audience_confirmed: true },
+      })
+    );
+    expect(photoCall.expectedRevision).toBe(4);
+    expect(photoCall.body).toEqual(
+      expect.objectContaining({ photo_ids: ['p1'], rejected_photo_ids: [] })
+    );
+    expect(photoCall.body).not.toHaveProperty('audience_confirmed');
+  });
+});

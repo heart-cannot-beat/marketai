@@ -18,7 +18,11 @@ from app.marketing.claims import literal_claims, unsourced_uses
 from app.marketing.contracts import Understanding
 from app.marketing.ideas_contracts import Ideas, IdeasProjectDetail, IdeasUnderstanding
 from app.marketing.models import MarketingProjectRecord, MarketingRevisionRecord, PlanningCallRecord
+from tests.test_ads_first_drafts_stay_out import RoundGateFixtures
+from tests.test_experiment_lifecycle import _draft_context
+from tests.test_marketing_ideas_checks import IMAGE_JOBS
 from tests.test_marketing_ideas_export import FACTS, claims, understood
+from tests.test_marketing_ideas_photos import PhotoFixtures
 from tests.test_marketing_ideas_revisions import RevisionFixtures
 
 UNSOURCED = [{"id": "u1", "text": "Charges 3x faster than a wall socket"},
@@ -34,7 +38,9 @@ def with_unsourced(kind, inputs):
     return result
 
 
-class ClaimFixtures(RevisionFixtures):
+class ClaimCommands:
+    """The claim commands and one new image of an ad, for any fixture with the first batch's ads."""
+
     def angle(self, project, angle_id):
         return next(a for a in self.read_ideas(project)["ideas"]["angles"] if a["id"] == angle_id)
 
@@ -68,8 +74,21 @@ class ClaimFixtures(RevisionFixtures):
         response = self.client.post(f"/api/v1/marketing/ideas/{project['id']}/generation-drafts",
                                     headers=self.headers(current["revision"]), json={"provider": "mock", "model": "mock-v1"})
         self.assertEqual(response.status_code, 201, response.text)
-        self.make(next(d["draft_id"] for d in response.json()["drafts"] if d["combination_id"] == combination_id))
+        draft_id = next(d["draft_id"] for d in response.json()["drafts"] if d["combination_id"] == combination_id)
+        draft = self.client.get(f"/api/v1/generation/drafts/{draft_id}").json()
+        preview = self.client.post(f"/api/v1/generation/drafts/{draft_id}/previews", headers=self.headers(draft["revision"]))
+        self.assertEqual(preview.status_code, 201, preview.text)
+        run = self.client.post("/api/v1/generation/runs", headers=self.headers(draft["revision"]),
+                               json={"preview_id": preview.json()["id"], "preview_hash": preview.json()["preview_hash"]})
+        self.assertEqual(run.status_code, 202, run.text)
+        self.drain(job_types=IMAGE_JOBS)
         return next(ad for ad in self.read_ideas(project)["ads"] if ad["asset_version_id"] not in before)
+
+    def intent_of(self, project, asset_version_id):
+        with tenant_session(self.context) as session:
+            row = session.get(MarketingProjectRecord, project["id"])
+            return next(ideas.intent_of(recipe) for version, recipe in ideas.project_ads(session, self.context, row)
+                        if version.id == asset_version_id)
 
     def ad_by_id(self, project, asset_version_id):
         return next(ad for ad in self.read_ideas(project)["ads"] if ad["asset_version_id"] == asset_version_id)
@@ -120,6 +139,10 @@ class ClaimFixtures(RevisionFixtures):
                                     headers=self.headers(self.read_ideas(project)["revision"]))
         self.assertEqual(response.status_code, 200, response.text)
         return next(item for item in response.json()["ads"] if item["asset_version_id"] == asset_version_id)
+
+
+class ClaimFixtures(ClaimCommands, RevisionFixtures):
+    pass
 
 
 # -- change a claim ------------------------------------------------------------------------------------
@@ -470,3 +493,128 @@ class BoundaryTests(ClaimFixtures):
         self.assertEqual((after["revision"], after["ideas"], after["audience_confirmed"]),
                          (before["revision"], before["ideas"], False))
         self.assertEqual(self.records(project, "verification"), [])
+
+
+# -- the gates of #225 and #219 ------------------------------------------------------------------------
+
+
+class ClaimGateTests(ClaimCommands, RoundGateFixtures):
+    """A changed or deleted claim makes its images need redoing (#224); every way out that asks the ads' status
+    -- reuse into a round, the round's handoff, an experiment, the creative library's download (#219, #225) --
+    then refuses them like any other ad that needs redoing."""
+
+    def ideas_and_round(self):
+        """The fixture's ideas and round, with the first batch ended so its claims may be changed."""
+        ideas, project, row = super().ideas_and_round()
+        self.drain(job_types=("marketing.first_batch",))
+        self.assertEqual(self.read_ideas(ideas)["first_batch"]["state"], "done")
+        return ideas, project, row
+
+    def blocked(self, row, asset_version_id):
+        block = self.listed(row)[asset_version_id]["reuse_block"]
+        self.assertEqual(block["status"], "needs_redo")
+        self.assertIn("ideas_changed", [reason["code"] for reason in block["reasons"]])
+        self.refused(self.reuse(row, asset_version_id, expect=409), "ad_not_reusable")
+        self.assertEqual(self.link(asset_version_id, expect=409)["code"], "ads_not_exportable")
+
+    def test_an_ad_checked_when_reused_is_not_handed_off_once_its_claim_changed(self):
+        ideas, _, row = self.ideas_and_round()
+        checked, other = self.ids(ideas, ["c3_1", "c3_2"])
+        row = self.approved(self.reuse(row, checked))
+        self.edit_claim(ideas, "a3", proposition="Safe to leave in the driveway")
+        refused = self.refused(self.handoff(row, expect=409), "ads_not_exportable")
+        self.assertEqual((list(refused), refused[checked]["status"]), ([checked], "needs_redo"))
+        self.nothing_handed_off(row)
+        self.blocked(row, other)
+
+    def test_the_images_of_a_deleted_claim_go_nowhere(self):
+        ideas, _, row = self.ideas_and_round()
+        checked, other = self.ids(ideas, ["c3_1", "c3_2"])
+        row = self.approved(self.reuse(row, checked))
+        self.delete_claim(ideas, "a3")
+        self.refused(self.handoff(row, expect=409), "ads_not_exportable")
+        self.blocked(row, other)
+        experiment = self.client.post("/api/v1/experiments", headers=self.headers(), json={
+            "product_id": ideas["product_id"], "name": "Acme Charge Home ads", "draft_context": _draft_context()}).json()
+        response = self.client.post(f"/api/v1/experiments/{experiment['id']}/entries", headers=self.headers(),
+                                    json={"asset_version_id": other, "expected_revision": 1, "marketing_vars": {}})
+        self.assertEqual(response.status_code, 409, response.text)
+        self.refused(response.json(), "ad_not_reusable")
+
+    def test_an_image_on_a_fact_its_claim_no_longer_names_goes_nowhere(self):
+        ideas, _, row = self.ideas_and_round()
+        # Claim 3 also names f4: a new image of it stands on f3 (through the guess i1) and f4.
+        self.edit_claim(ideas, "a3", fact_ids=["f4"])
+        new = self.remake(ideas, "c3_1")
+        self.assertEqual(self.intent_of(ideas, new["asset_version_id"])["cited_fact_ids"], ["f3", "f4"])
+        self.start_checks(ideas)
+        self.drain(job_types=("marketing.ai_qc",))
+        current = self.ad_by_id(ideas, new["asset_version_id"])
+        self.verify(ideas, fact_ids=["f4"], findings=[])
+        response = self.client.post(f"/api/v1/marketing/ideas/{ideas['id']}/verification", headers=self.headers(
+            self.read_ideas(ideas)["revision"]), json={"appearance_confirmed": [new["asset_version_id"]], "accepted_findings": [
+                {"asset_version_id": new["asset_version_id"], "check_id": current["check"]["id"],
+                 "finding_ids": [f["check_id"] for f in current["check"]["findings"]]}]})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(self.ad_by_id(ideas, new["asset_version_id"])["status"], "exportable")
+        self.assertNotIn("reuse_block", {k for k, v in self.listed(row)[new["asset_version_id"]].items() if v})
+        # Same words, f4 taken off: the image stands on a fact the claim no longer names.
+        self.edit_claim(ideas, "a3", fact_ids=[])
+        self.assertEqual(self.reasons(self.ad_by_id(ideas, new["asset_version_id"])), ["ideas_changed"])
+        self.blocked(row, new["asset_version_id"])
+
+
+# -- the audience beside the photos of #229 -------------------------------------------------------------
+
+
+class AudienceAndPhotoTests(PhotoFixtures):
+    """One verification takes facts, looks, findings, photos and the audience (#199, #224): together or apart,
+    the published version holds each of them, and none undoes another."""
+
+    def audience_only(self, project):
+        response = self.client.post(f"/api/v1/marketing/ideas/{project['id']}/verification", json={"audience_confirmed": True},
+                                    headers=self.headers(self.read_ideas(project)["revision"]))
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def test_facts_a_photo_and_the_audience_in_one_verification(self):
+        project = self.made()
+        main = self.photos(project)["main"]["photo_id"]
+        audience = self.read_ideas(project)["understanding"]["audience"]
+        current = self.read_ideas(project)
+        response = self.client.post(f"/api/v1/marketing/ideas/{project['id']}/verification", headers=self.headers(current["revision"]),
+                                    json={"fact_ids": ["f1"], "photo_ids": [main], "audience_confirmed": True})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["audience_confirmed"])
+        self.assertEqual(self.photos(project)["main"]["status"], "verified")
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], len(version.content_json["reference_bindings"]),
+                          version.content_json["selling_points"]), (audience, 1, [FACTS[0]["statement"]]))
+        (record,) = self.records(project, "verification")
+        self.assertEqual((record.content_json["audience"]["text"], [p["photo_id"] for p in record.content_json["photos"]]),
+                         (audience, [main]))
+
+    def test_the_audience_and_the_photos_checked_apart_keep_each_other(self):
+        project = self.made()
+        main = self.photos(project)["main"]["photo_id"]
+        audience = self.read_ideas(project)["understanding"]["audience"]
+        self.audience_only(project)
+        self.assertEqual(self.published_version(project)[0], None)
+        # A photo alone publishes a version; it names the audience the user confirmed.
+        self.decide(project, photo_ids=[main])
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], len(version.content_json["reference_bindings"])), (audience, 1))
+        # Rejecting the photo takes it out and leaves the audience; changing the audience leaves the photos alone.
+        self.decide(project, rejected=[main])
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], version.content_json.get("reference_bindings")), (audience, None))
+        self.decide(project, photo_ids=[main])
+
+        def renamed(understanding):
+            understanding["audience"] = "Drivers who park in a shared driveway"
+        self.edit_facts(project, renamed)
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], len(version.content_json["reference_bindings"])),
+                         ("United States", 1))
+        self.assertEqual(self.photos(project)["main"]["status"], "verified")
+        self.assertFalse(self.read_ideas(project)["audience_confirmed"])
