@@ -171,10 +171,14 @@ def reference_condition(session, ctx, version_id) -> tuple[str | None, str | Non
                                                             LibraryEntryRecord.id == version.entry_id))
     rights = (version.content_json or {}).get("rights") or {}
     valid_to = rights.get("valid_to") if isinstance(rights.get("valid_to"), str) else None
-    if version.state != "effective" or version.eligibility == "blocked" or entry is None or entry.lifecycle != "active":
+    if version.eligibility == "blocked" or entry is None or entry.lifecycle != "active" or version.state == "withdrawn":
         return "withdrawn", valid_to
     if check_rights_eligible(rights):
+        # Also a version a renewal of the same reference superseded (the same bytes checked for another
+        # product): checking it again here takes the renewed version.
         return "expired", valid_to
+    if version.state != "effective":
+        return "withdrawn", valid_to
     obj = session.scalar(select(ReferenceObjectRecord).where(ReferenceObjectRecord.workspace_id == ctx.workspace_id,
         ReferenceObjectRecord.id == (version.content_json or {}).get("object_id")))
     if not _usable(obj, ctx):

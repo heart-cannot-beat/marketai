@@ -17,6 +17,7 @@ from app.adapters.persistence.models import GenerationRunRecord, LibraryVersionR
 from app.library import service as library
 from app.marketing import product_references
 from app.marketing.models import MarketingIdeasExportRecord
+from tests.test_marketing_ideas_added_photos import HOME
 from tests.test_marketing_ideas_logo import LogoFixtures
 
 YESTERDAY = (date.today() - timedelta(days=1)).isoformat()
@@ -134,6 +135,26 @@ class RenewalTests(RenewalFixtures):
         items = self.references(project["product_id"])
         self.assertEqual([(item["role"], item["available"], item["reference_version_id"]) for item in items],
                          [("logo", True, renewed["reference_version_id"])])
+
+    def test_the_same_bytes_renewed_for_one_product_are_renewed_by_checking_them_for_another(self):
+        project, checked = self.made_with_photo()
+        other = self.understood_ideas()
+        object_id, _ = self.uploaded(HOME)
+        self.add_photo(other, object_id)
+        self.decide(other, photo_ids=[checked["photo_id"]])
+        self.assertEqual(self.read_ideas(other)["photos"][0]["reference_version_id"], checked["reference_version_id"])
+        self.expire(checked["reference_version_id"])
+        renewed = self.decide(project, photo_ids=[checked["photo_id"]])["photos"][0]
+        # The other product's check named the expired version: it says so and offers renewing ...
+        there = self.read_ideas(other)["photos"][0]
+        self.assertEqual((there["status"], there["unavailable_reason"]), ("unavailable", "expired"))
+        # ... and checking it there takes the renewed reference, with no third version.
+        again = self.decide(other, photo_ids=[checked["photo_id"]])["photos"][0]
+        self.assertEqual((again["status"], again["reference_version_id"]), ("verified", renewed["reference_version_id"]))
+        with tenant_session(self.context) as session:
+            self.assertEqual(session.scalar(select(func.count()).select_from(LibraryVersionRecord).where(
+                LibraryVersionRecord.workspace_id == self.context.workspace_id,
+                LibraryVersionRecord.origin_command == "ideas_photo_renewal")), 1)
 
     def test_a_plan_first_image_on_the_expired_reference_stays_strict(self):
         project, checked = self.made_with_photo()
