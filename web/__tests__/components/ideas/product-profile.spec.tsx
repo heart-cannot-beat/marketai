@@ -634,7 +634,7 @@ describe('ProductProfile: audience and claims without a source (#224)', () => {
     ).toBeNull();
     expect(
       within(audienceBlock()).getByText(
-        "The product's published details name this audience. Change the words and it needs checking again."
+        "A checked audience goes into the product's published details. Change the words and it needs checking again."
       )
     ).toBeInTheDocument();
   });

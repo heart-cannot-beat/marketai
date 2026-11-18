@@ -560,7 +560,7 @@
   "claim-delete-too-few": "Keep at least two claims. Change this one instead, or add another claim before deleting it.",
   "edit-change-claim": "Change this claim",
   "profile-audience-note": "Until you check it, the product's published details name the market you chose as the audience.",
-  "profile-audience-note-checked": "The product's published details name this audience. Change the words and it needs checking again.",
+  "profile-audience-note-checked": "A checked audience goes into the product's published details. Change the words and it needs checking again.",
   "profile-audience-edit": "Edit",
   "profile-audience-edit-label": "Edit who might buy it",
   "profile-audience-form-note": "Once saved, it needs checking again.",

@@ -291,6 +291,21 @@ describe('changing a claim (#224)', () => {
       expect(mockGateway.getMarketingIdeas).toHaveBeenCalledTimes(2)
     );
   });
+  it('while the first batch still makes ads, claims are not changed', async () => {
+    await renderPage(
+      withImages({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'generating',
+          needs_attention: false,
+          reason: null,
+        },
+      })
+    );
+    expect(
+      within(claim(1)).queryByRole('button', { name: 'More for claim 1' })
+    ).toBeNull();
+  });
 });
 
 describe('deleting a claim (#224)', () => {

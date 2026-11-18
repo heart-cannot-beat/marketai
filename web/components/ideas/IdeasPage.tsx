@@ -453,22 +453,26 @@ function IdeasProject({
                         commands={commands}
                         answers={answers}
                       />
-                      <ClaimMenu
-                        angle={angle}
-                        number={group.number}
-                        detail={detail}
-                        commands={commands}
-                        panel={
-                          claimPanel?.angleId === angle.id
-                            ? claimPanel.panel
-                            : null
-                        }
-                        onPanelChange={(panel) =>
-                          setClaimPanel(
-                            panel ? { angleId: angle.id, panel } : null
-                          )
-                        }
-                      />
+                      {/* While the first batch still makes ads it holds the
+                          claims as they were confirmed (#224). */}
+                      {batchEnded && (
+                        <ClaimMenu
+                          angle={angle}
+                          number={group.number}
+                          detail={detail}
+                          commands={commands}
+                          panel={
+                            claimPanel?.angleId === angle.id
+                              ? claimPanel.panel
+                              : null
+                          }
+                          onPanelChange={(panel) =>
+                            setClaimPanel(
+                              panel ? { angleId: angle.id, panel } : null
+                            )
+                          }
+                        />
+                      )}
                     </>
                   )
                 }

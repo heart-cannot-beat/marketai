@@ -560,7 +560,7 @@
   "claim-delete-too-few": "至少要留两个主张。可以改这个主张，或先再加一个主张再删。",
   "edit-change-claim": "改这个主张",
   "profile-audience-note": "核对之前，产品资料里的受众写的是你选的投放市场。",
-  "profile-audience-note-checked": "产品资料里的受众写的是这一条。改了文字要重新核对。",
+  "profile-audience-note-checked": "核对过的受众会写进发布的产品资料。改了文字要重新核对。",
   "profile-audience-edit": "改",
   "profile-audience-edit-label": "改“可能卖给谁”",
   "profile-audience-form-note": "保存以后，要重新核对。",
