@@ -364,6 +364,7 @@ def all_protected_tables() -> tuple[str, ...]:
     from migrations.versions.zzn193a1b2c3_marketing_first_batches import NEW_WORKSPACE_OWNED as FIRST_BATCH
     from migrations.versions.zzp198a1b2c3_marketing_ideas_export_records import NEW_WORKSPACE_OWNED as IDEAS_EXPORT
     from migrations.versions.zzq200a1b2c3_marketing_ideas_revisions import NEW_WORKSPACE_OWNED as IDEAS_UPLOADS
+    from migrations.versions.zzr233a1b2c3_marketing_product_photos import NEW_WORKSPACE_OWNED as PRODUCT_PHOTOS
     from migrations.versions.zn9a0b1c2d3e_marketing_planning import NEW_WORKSPACE_OWNED as MARKETING_0
     from migrations.versions.zo0b1c2d3e4f_marketing_delivery import NEW_WORKSPACE_OWNED as MARKETING_1
     from migrations.versions.zp1c2d3e4f5a_marketing_ai_qc import NEW_WORKSPACE_OWNED as MARKETING_2
@@ -462,6 +463,7 @@ def all_protected_tables() -> tuple[str, ...]:
         + FIRST_BATCH
         + IDEAS_EXPORT
         + IDEAS_UPLOADS
+        + PRODUCT_PHOTOS
         + NEW_WORKSPACE_OWNED
         + OPERATION_TABLES
         + IDEMPOTENCY_TABLES
