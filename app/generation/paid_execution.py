@@ -178,7 +178,7 @@ def _prepare(session, ctx, job_id, item_id):
         intent = frozen.get("marketing_intent")
         if intent and intent.get("flow") == "ads_first":
             from app.marketing.ideas import check_intent
-            check_intent(session, ctx, intent)
+            check_intent(session, ctx, intent, frozen.get("product_references", []))
         elif intent:
             from app.marketing.service import get_project
             project = get_project(session, ctx, intent["project_id"])

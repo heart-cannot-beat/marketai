@@ -451,7 +451,9 @@ def _read(session, ctx, batch) -> bool:
 def _product_draft(session, ctx, batch, intake) -> str:
     """The reading as a creative-library product draft, not published (design D3); its ``prod_`` anchor.
 
-    What the AI read stays a proposal: nothing is marked confirmed, and no photo is bound yet (S11)."""
+    What the AI read stays a proposal: nothing is marked confirmed, and no photo is bound. The reading's
+    photos make drafts unchecked (``product_references.for_ideas``) and enter the published version only
+    when the user checks them (#199)."""
     from app.library import service as library
     from app.library.contracts import ENTRY_PRODUCT
     from app.products.intake_service import proposed_content

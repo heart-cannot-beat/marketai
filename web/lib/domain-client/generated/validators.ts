@@ -218,6 +218,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       appearance_confirmed: { type: 'boolean', default: false },
       kept: { type: 'boolean' },
       used_product_photo: { type: 'boolean' },
+      photo_ids: { items: { type: 'string' }, type: 'array' },
       created_at: { type: 'string' },
       check: {
         anyOf: [
@@ -7964,6 +7965,29 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'A crop or rotation of one ad (#200): a local Worker job, free of charge. ``unchanged`` when the result\nwas the source itself; ``result_asset_version_id`` is then that existing version.',
   },
+  IdeasPhoto: {
+    properties: {
+      photo_id: { type: 'string' },
+      status: {
+        type: 'string',
+        enum: ['unverified', 'verified', 'rejected', 'unavailable'],
+      },
+      role: { type: 'string', enum: ['main', 'angle', 'detail'] },
+      source: { type: 'string', enum: ['product_page', 'upload'] },
+      source_url: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      intake_id: { type: 'string' },
+      image_id: { type: 'string' },
+      width: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      height: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      reference_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      asset_version_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['photo_id', 'status', 'role', 'source', 'intake_id', 'image_id'],
+    description:
+      "A photo the product's reading found that may show the product's look (#199; design doc §5.2).\n\nAds may be drafted with it before anyone checks it; an ad made with it is exportable only once the user\nchecks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.\nShow it with ``create_product_intake_image_download_intent(intake_id, image_id)``.",
+  },
   IdeasProjectDetail: {
     properties: {
       id: { type: 'string' },
@@ -8003,6 +8027,10 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       },
       image_edits: {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
     },
@@ -13591,6 +13619,26 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         type: 'array',
         maxItems: 60,
       },
+      photo_ids: {
+        items: {
+          type: 'string',
+          maxLength: 64,
+          minLength: 64,
+          pattern: '^[0-9a-f]{64}$',
+        },
+        type: 'array',
+        maxItems: 20,
+      },
+      rejected_photo_ids: {
+        items: {
+          type: 'string',
+          maxLength: 64,
+          minLength: 64,
+          pattern: '^[0-9a-f]{64}$',
+        },
+        type: 'array',
+        maxItems: 20,
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -16284,6 +16332,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
         type: 'array',
       },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -16356,6 +16408,10 @@ const SCHEMAS: Record<string, object> = {
       },
       image_edits: {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
     },
@@ -17472,6 +17528,10 @@ const SCHEMAS: Record<string, object> = {
       },
       image_edits: {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
     },
@@ -19319,6 +19379,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
         type: 'array',
       },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -20808,6 +20872,10 @@ const SCHEMAS: Record<string, object> = {
       },
       image_edits: {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
     },
@@ -22555,6 +22623,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
         type: 'array',
       },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -22880,6 +22952,10 @@ const SCHEMAS: Record<string, object> = {
       },
       image_edits: {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
     },
@@ -23376,6 +23452,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasImageEdit' },
         type: 'array',
       },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -23414,6 +23494,26 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/AcceptedFindings' },
         type: 'array',
         maxItems: 60,
+      },
+      photo_ids: {
+        items: {
+          type: 'string',
+          maxLength: 64,
+          minLength: 64,
+          pattern: '^[0-9a-f]{64}$',
+        },
+        type: 'array',
+        maxItems: 20,
+      },
+      rejected_photo_ids: {
+        items: {
+          type: 'string',
+          maxLength: 64,
+          minLength: 64,
+          pattern: '^[0-9a-f]{64}$',
+        },
+        type: 'array',
+        maxItems: 20,
       },
     },
     additionalProperties: false,

@@ -146,7 +146,7 @@ def prepare_feedback(session, ctx, row, body) -> Feedback:
     from app.providers.router import get_provider
     from .feedback import generation_ratio
     from .languages import guidance_matches
-    from .product_references import from_product_set
+    from .product_references import for_ideas
     _ready(session, ctx, row)
     version, recipe = _ad(session, ctx, row, body.asset_version_id)
     if _uploaded(recipe):
@@ -185,12 +185,15 @@ def prepare_feedback(session, ctx, row, body) -> Feedback:
         check_id, corrections = _corrections(session, ctx, row, version, source_intent)
         if not corrections and not note:
             raise MarketingError("feedback_required", "请补充希望调整的内容。")
-        # A correction is made on the facts and photos as they are now (#198): the product's current photo set.
-        references = from_product_set(session, ctx, row)
+        # A correction is made on the facts and photos as they are now (#198, #199): checked photos first, then
+        # unchecked ones, never a rejected one -- so redoing an ad whose photo was rejected sends another.
+        references = for_ideas(session, ctx, row)
     frozen = {"project_id": row.id, "source_asset_version_id": version.id, "source_sha256": version.content_sha256,
               "combination_id": combination_id, "check_id": check_id, "corrections": corrections, "note": note,
               "request_note": body.note.strip(), "provider": body.provider, "model": body.model,
-              **({"image_tool": tool} if tool else {}), "prompt_policy": PROMPT_POLICY}
+              **({"image_tool": tool} if tool else {}), "prompt_policy": PROMPT_POLICY,
+              # The same request on other photos is another correction, never the earlier draft (#199).
+              **({} if tool else {"photo_ids": [ref.get("content_sha256", "") for ref in references]})}
     hashed = digest(frozen)
     _lock(session, ctx, row)  # two identical requests at once prepare one draft
     previous = session.scalar(select(Feedback).where(Feedback.workspace_id == ctx.workspace_id,
@@ -249,6 +252,7 @@ def resolve(session, ctx, record, draft) -> dict:
     if selectors.get("prompt") != _prompt(session, ctx, row, frozen, intent,
                                           references=bool(selectors.get("product_references"))):
         raise MarketingError("ideas_prompt_changed", "这张广告的出图说明被改过。新开头的广告只按主张和修改意见出图，请重新准备。", 409)
+    ideas.assert_photos_usable(session, ctx, row, selectors.get("product_references"))
     return {"intent": intent, "feedback": {"id": record.id, "hash": record.feedback_hash, **frozen}}
 
 

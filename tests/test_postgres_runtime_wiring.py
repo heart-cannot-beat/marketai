@@ -1051,6 +1051,19 @@ class PostgresRuntimeWiringTests(unittest.TestCase):
             }
         self.assertEqual(privileges, {"SELECT": True, "INSERT": True, "UPDATE": True, "DELETE": False})
 
+        # A first batch picks the product photos of its images and leaves out the ones the user rejected, and
+        # a run item refuses a photo rejected since its preview (#199): the Worker reads the ads-first
+        # verification records, and records no verification or download itself.
+        with self.worker.connect() as connection:
+            privileges = {
+                privilege: connection.scalar(
+                    self.text("SELECT has_table_privilege(current_user, 'public.marketing_ideas_export_records', :privilege)"),
+                    {"privilege": privilege},
+                )
+                for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE")
+            }
+        self.assertEqual(privileges, {"SELECT": True, "INSERT": False, "UPDATE": False, "DELETE": False})
+
     def test_process_startup_checks_the_role_it_really_connected_as(self) -> None:
         import subprocess
         import sys
