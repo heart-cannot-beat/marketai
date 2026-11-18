@@ -22,6 +22,9 @@ export function useMarketingImageSource(assetVersionId: string, open: boolean) {
       const result = await gateway.createGenerationAssetVersionDownloadIntent({
         workspaceSlug: current.slug,
         versionId: assetVersionId,
+        // Shown on the page, not saved: a draft of ads-first ideas may be
+        // shown, but a link for saving one is refused (Issue #219).
+        purpose: 'display',
         actionInstanceId: crypto.randomUUID(),
       });
       if (!('data' in result) || !result.data?.download_grant)

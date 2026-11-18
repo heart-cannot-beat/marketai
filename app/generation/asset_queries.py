@@ -458,6 +458,7 @@ def list_asset_versions(
         _version_summary(session, ctx, version, asset, experiment_context=experiment_context)
         for version, asset in page_rows
     ]
+    _attach_export_blocks(session, ctx, items)
     facets = _compute_facets(session, from_clause, wheres)
     allowed_actions = _compute_collection_actions(session, ctx, from_clause, wheres)
 
@@ -467,6 +468,26 @@ def list_asset_versions(
         "facets": facets,
         "allowed_actions": allowed_actions,
     }
+
+
+def _attach_export_blocks(session: Session, ctx: TenantContext, items: list[dict]) -> None:
+    """Set each gallery item's ``export_block`` (Issue #219): why an ad of
+    ads-first ideas may not be exported yet, or ``None``.
+
+    The gallery lists such an ad like any other image -- a draft is meant
+    to be seen -- but it does not leave through the library until it is
+    checked (ADR 0018 §2), so the page needs to know which tiles those are
+    before it offers to export or save them. The judgement is
+    ``app.marketing.ideas_export``'s: an image that is not an ad of
+    ads-first ideas, and an ad that may be exported, both carry ``None``."""
+    from app.marketing import ideas_export
+
+    blocks = {
+        refused["asset_version_id"]: {"status": refused["status"], "reasons": refused["reasons"]}
+        for refused in ideas_export.library_refusals(session, ctx, [item["id"] for item in items])
+    }
+    for item in items:
+        item["export_block"] = blocks.get(item["id"])
 
 
 def _version_summary(

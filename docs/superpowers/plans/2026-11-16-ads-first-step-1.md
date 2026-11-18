@@ -113,6 +113,16 @@
 
 S12（#200）原计划加两个，实际加了三个：上传的图要有一个放进广告想法的入口。“追加主张或讲法”不是新接口，是 `start_marketing_ideas_planning` 的 `addition`。
 
+S17（#219，素材库的导出包和下载不交出没核对的草稿）不加新接口（总数仍是上面写的 260），改了五个现有接口的形状：
+
+| 接口 | 改了什么 |
+| --- | --- |
+| `create_generation_asset_version_download_intent` | 多一个查询参数 `purpose`（`download` 或 `display`，默认 `download`）；`download` 遇到不可导出的新开头广告返回 409 `ads_not_exportable` |
+| `create_generation_export_package` | 勾选的素材里有不可导出的新开头广告时返回 409 `ads_not_exportable`；按规则选的不把它们放进包里。202 的回应和 `Location` 不变 |
+| `create_generation_export_download_intent` | 包里有广告已经不能导出时返回 409 `ads_not_exportable` |
+| `get_generation_export_package` | 回应多一个 `left_out_drafts`（按规则选时没放进包里的广告数） |
+| `list_generation_assets` | 每一项多一个 `export_block`（不可导出的新开头广告的状态和原因，其余为空） |
+
 ---
 
 ## S0：合同和 ADR

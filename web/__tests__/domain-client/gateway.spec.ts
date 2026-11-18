@@ -274,6 +274,40 @@ describe('DefaultDomainGateway — mutating operations', () => {
     }
   });
 
+  it('says what a link to an image is for, and says nothing when it was not told', async () => {
+    const granted = () =>
+      jsonResponse(201, {
+        intent_id: 'di_1',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        download_grant: {
+          url: 'https://storage.example/object',
+          kind: 'signed_get',
+          headers: {},
+          content_disposition: 'attachment',
+        },
+      });
+    const fetchMock = jest.fn().mockImplementation(async () => granted());
+    const { gateway } = makeGateway(fetchMock);
+    const base =
+      '/api/domain/v1/w/acme/generation/asset-versions/av_1/download-intent';
+
+    for (const [purpose, path] of [
+      ['display', `${base}?purpose=display`],
+      ['download', `${base}?purpose=download`],
+      [undefined, base],
+    ] as const) {
+      fetchMock.mockClear();
+      const result = await gateway.createGenerationAssetVersionDownloadIntent({
+        workspaceSlug: 'acme',
+        actionInstanceId: `image:${purpose ?? 'unsaid'}`,
+        versionId: 'av_1',
+        ...(purpose ? { purpose } : {}),
+      });
+      expect(result.kind).toBe('created');
+      expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([path]);
+    }
+  });
+
   it('refreshes the CSRF token once on csrf_validation_failed and retries the same request', async () => {
     const fetchMock = jest
       .fn()

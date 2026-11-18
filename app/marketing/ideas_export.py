@@ -27,8 +27,9 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
-from app.adapters.persistence.models import LibraryDraftRecord, LibraryEntryRecord, ProductRecord, new_id, utcnow
-from app.generation.models import RunItemRecord
+from app.adapters.persistence.models import (AssetVersionRecord, GenerationRunRecord, LibraryDraftRecord, LibraryEntryRecord,
+                                            ProductRecord, new_id, utcnow)
+from app.generation.models import GenerationRecipeSnapshotRecord, RunItemRecord
 from app.library.contracts import PRODUCT_SOURCE_URL_MAX
 from app.platform.audit import append_event
 from . import ideas, ideas_checks, service
@@ -187,6 +188,146 @@ def ad_status(session, ctx, row, asset_version_id: str) -> dict:
     if asset_version_id not in result:
         raise MarketingError("ad_not_found", "这张广告不属于这些广告想法。", 404)
     return result[asset_version_id]
+
+
+#: How many refused ads one refusal names: the creative library can select every image of a workspace.
+LIBRARY_REFUSALS_LISTED = 50
+_LOOKUP_CHUNK = 500
+
+
+def _ideas_of(session, ctx, asset_version_ids) -> dict:
+    """The ads-first projects each of these images is an ad of, by image id; any other image is left out.
+
+    The same three kinds of ad ``ideas.project_ads`` lists: a generated image whose recipe intent names
+    an ads-first project (a correction or an image tool of an ad included), a crop or rotation of an ad,
+    and an uploaded image placed under an ad (#200)."""
+    from .workflow_models import MarketingImageEditRecord as Edit
+    from .models import MarketingIdeasUploadRecord as Upload
+    intent = GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']
+    ads_first = ((MarketingProjectRecord.workspace_id == ctx.workspace_id) & (MarketingProjectRecord.flow == ideas.FLOW))
+    found = {}
+    for start in range(0, len(asset_version_ids), _LOOKUP_CHUNK):
+        chunk = asset_version_ids[start:start + _LOOKUP_CHUNK]
+        generated = session.execute(select(AssetVersionRecord.id, intent['project_id'].as_string())
+            .join(RunItemRecord, (RunItemRecord.id == AssetVersionRecord.producing_run_item_id) & (RunItemRecord.workspace_id == ctx.workspace_id))
+            .join(GenerationRunRecord, (GenerationRunRecord.id == RunItemRecord.generation_run_id) & (GenerationRunRecord.workspace_id == ctx.workspace_id))
+            .join(GenerationRecipeSnapshotRecord, (GenerationRecipeSnapshotRecord.id == GenerationRunRecord.recipe_snapshot_id) & (GenerationRecipeSnapshotRecord.workspace_id == ctx.workspace_id))
+            .where(AssetVersionRecord.workspace_id == ctx.workspace_id, AssetVersionRecord.id.in_(chunk),
+                   intent['flow'].as_string() == ideas.FLOW)).all()
+        edited = session.execute(select(Edit.result_asset_version_id, Edit.project_id)
+            .join(MarketingProjectRecord, (MarketingProjectRecord.id == Edit.project_id) & ads_first)
+            .where(Edit.workspace_id == ctx.workspace_id, Edit.state == "succeeded",
+                   Edit.result_asset_version_id.in_(chunk))).all()
+        uploaded = session.execute(select(Upload.asset_version_id, Upload.project_id)
+            .join(MarketingProjectRecord, (MarketingProjectRecord.id == Upload.project_id) & ads_first)
+            .where(Upload.workspace_id == ctx.workspace_id, Upload.asset_version_id.in_(chunk))).all()
+        for asset_id, project_id in (*generated, *edited, *uploaded):
+            found.setdefault(asset_id, [])
+            if project_id not in found[asset_id]:
+                found[asset_id].append(project_id)
+    return found
+
+
+def _judge(session, ctx, asset_version_ids) -> tuple[dict, dict]:
+    """Each image's ads-first projects (``_ideas_of``), and per project whose ideas can be read what judging
+    its ads needs: the project, each ad's status (``statuses``), each ad's newest check and the ads."""
+    owners = _ideas_of(session, ctx, asset_version_ids)
+    judged = {}
+    for project_id in dict.fromkeys(project for projects in owners.values() for project in projects):
+        row = session.scalar(select(MarketingProjectRecord).where(MarketingProjectRecord.workspace_id == ctx.workspace_id,
+            MarketingProjectRecord.id == project_id, MarketingProjectRecord.flow == ideas.FLOW))
+        if row is None:
+            continue
+        try:
+            ads = ideas.project_ads(session, ctx, row)
+            calls = ideas_checks.latest_by_asset(session, ctx, row.id)
+            judged[project_id] = SimpleNamespace(row=row, statuses=statuses(session, ctx, row, ads, calls), calls=calls,
+                                                 versions={version.id: version for version, _ in ads})
+        except (ValueError, LookupError, StopIteration, TypeError):
+            # Stored ideas a later contract no longer reads: their images are refused (needs_redo), while
+            # every other image of the page or the package is judged, or left alone, as usual.
+            continue
+    return owners, judged
+
+
+#: An image of ideas that cannot be read cannot show it was checked: it does not leave.
+_UNREADABLE = {"status": "needs_redo", "reasons": [_reason("ideas_changed")]}
+
+
+def library_refusals(session, ctx, asset_version_ids) -> list[dict]:
+    """Of these images, the ads of ads-first ideas that may not be exported now (#219): each with its status
+    and reasons, as ``ads_not_exportable`` names them, in the order given.
+
+    The creative library hands out any image of the workspace -- one at a time, or in an export package --
+    and this is where it asks whether an image is a draft that may not leave yet (ADR 0018 §2). An image
+    that is not an ad of ads-first ideas is never listed: a round's image, one made in the workbench and an
+    uploaded one nobody placed under an ad are not this rule's concern. An image that is an ad of more than
+    one project's ideas leaves only when every one of them says it may."""
+    asset_version_ids = list(dict.fromkeys(asset_version_ids))
+    return _refused(asset_version_ids, *_judge(session, ctx, asset_version_ids))
+
+
+def _refused(asset_version_ids, owners, judged) -> list[dict]:
+    refused = []
+    for asset_id in asset_version_ids:
+        for project_id in owners.get(asset_id, ()):
+            project = judged.get(project_id)
+            state = (project.statuses.get(asset_id) if project else None) or _UNREADABLE
+            if state["status"] != "exportable":
+                refused.append({"asset_version_id": asset_id, "status": state["status"], "reasons": state["reasons"]})
+                break
+    return refused
+
+
+def record_library_download(session, ctx, asset_version_ids, intent_id: str, *, path: dict) -> list[str]:
+    """Record what the creative library just handed out under ``intent_id`` (#219, maintainer decision 2).
+
+    For each ads-first project with an ad among these images, one download record like the one the
+    ads-first download writes (``download_intent``): which ads, the facts each stood on, the check it
+    passed and the file's hash, plus where in the library it left (``path``). Any other image leaves no
+    record here. Called once per new download intent, in its transaction; an ad that is not exportable
+    any more is refused rather than recorded. Returns the record ids."""
+    asset_version_ids = list(dict.fromkeys(asset_version_ids))
+    owners, judged = _judge(session, ctx, asset_version_ids)
+    refused = _refused(asset_version_ids, owners, judged)
+    if refused:
+        raise MarketingError("ads_not_exportable", "这些广告还不能下载：先核对它们用到的事实、外观和检查结果，需要重出的请先重出。",
+                             409, params=refusal_params(refused))
+    per_project = {}
+    for asset_id in asset_version_ids:
+        for project_id in owners.get(asset_id, ()):
+            per_project.setdefault(project_id, []).append(asset_id)
+    recorded = []
+    for project_id, ids in per_project.items():
+        project = judged[project_id]
+        content = {"ads": [{"asset_version_id": asset_id, "intent_id": intent_id,
+                            "content_sha256": project.versions[asset_id].content_sha256,
+                            "cited_fact_ids": project.statuses[asset_id]["cited_fact_ids"],
+                            "check_id": project.calls[asset_id].id} for asset_id in ids],
+                   "understanding_hash": digest(project.row.understanding_json), "library": path}
+        record = Record(id=new_id("mie"), workspace_id=ctx.workspace_id, project_id=project_id, kind="download",
+                        project_revision=project.row.revision, actor_id=_actor(ctx), content_json=content,
+                        content_hash=digest(content), created_at=utcnow())
+        session.add(record)
+        append_event(session, event_type="marketing.ideas_downloaded", resource_type="marketing_project", resource_id=project_id,
+                     details={"record_id": record.id, "revision": project.row.revision, "asset_version_ids": ids,
+                              "library": path})
+        recorded.append(record.id)
+    session.flush()
+    return recorded
+
+
+def refusal_params(refused: list[dict]) -> dict:
+    """The ``params`` of a library refusal: the first ads by name, and how many there are in all."""
+    return {"ads": refused[:LIBRARY_REFUSALS_LISTED], "count": len(refused)}
+
+
+def assert_library_download(session, ctx, asset_version_id: str) -> None:
+    """The creative library may hand this one image out as a file, or ``ads_not_exportable`` (#219)."""
+    refused = library_refusals(session, ctx, [asset_version_id])
+    if refused:
+        raise MarketingError("ads_not_exportable", "这张广告还不能下载：先核对它用到的事实、外观和检查结果，需要重出的请先重出。",
+                             409, params=refusal_params(refused))
 
 
 def _require_understanding(row) -> None:

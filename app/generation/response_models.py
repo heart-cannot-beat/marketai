@@ -462,6 +462,27 @@ class GenerationCapabilities(BaseModel):
 # --------------------------------------------------------------------------
 
 
+class AssetExportBlockReason(BaseModel):
+    """One reason an ad of ads-first ideas may not be exported: the same
+    ``code``/``fact_ids``/``finding_ids`` its ``AdSummary.reasons`` carries
+    (``app.marketing.ideas_contracts.AdReason``)."""
+
+    code: str
+    fact_ids: list[str] = Field(default_factory=list)
+    finding_ids: list[str] = Field(default_factory=list)
+
+
+class AssetExportBlock(BaseModel):
+    """Why an AssetVersion may not leave through the creative library
+    (Issue #219, ADR 0018 §2): it is an ad of ads-first ideas that is still
+    a ``draft`` (something it stands on is not checked yet) or
+    ``needs_redo`` (checking cannot rescue it). Derived on every read by
+    ``app.marketing.ideas_export``, never stored."""
+
+    status: Literal["draft", "needs_redo"]
+    reasons: list[AssetExportBlockReason] = Field(default_factory=list)
+
+
 class AssetVersionSummary(BaseModel):
     """Row of ``GET /generation/assets`` (``asset_queries.list_asset_versions``,
     Issue #49 Task 3, spec §0.2).
@@ -480,6 +501,10 @@ class AssetVersionSummary(BaseModel):
     spec §0.3); ``latest_qc_state`` is the latest
     ``AssetQCAttemptRecord.state``. ``thumbnail`` (Issue #159) is the
     version's signed thumbnail link, or ``None`` when it has no derivative.
+    ``export_block`` (Issue #219) is set only on an ad of ads-first ideas
+    that may not be exported yet: an export package naming it and a
+    ``purpose=download`` download intent for it are refused, so the page
+    marks the tile and does not offer either. ``None`` on every other image.
     """
 
     id: str
@@ -500,6 +525,7 @@ class AssetVersionSummary(BaseModel):
     mock_evidence: dict[str, Any] | None = None
     byte_size: int
     thumbnail: AssetThumbnailLink | None = None
+    export_block: AssetExportBlock | None = None
     created_at: str | None = None
 
 
@@ -728,6 +754,9 @@ class ExportPackageDetail(BaseModel):
     revision: int
     byte_size: int | None = None
     zip_hash: str | None = None
+    #: Ads of ads-first ideas a preset selector matched but left out of this
+    #: package because they could not be exported yet (Issue #219).
+    left_out_drafts: int = 0
 
 
 class ExportManifestEntry(BaseModel):

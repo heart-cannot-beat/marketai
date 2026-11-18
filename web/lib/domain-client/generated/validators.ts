@@ -498,6 +498,30 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     },
     type: 'object',
   },
+  AssetExportBlock: {
+    properties: {
+      status: { type: 'string', enum: ['draft', 'needs_redo'] },
+      reasons: {
+        items: { $ref: '#/components/schemas/AssetExportBlockReason' },
+        type: 'array',
+      },
+    },
+    type: 'object',
+    required: ['status'],
+    description:
+      'Why an AssetVersion may not leave through the creative library\n(Issue #219, ADR 0018 §2): it is an ad of ads-first ideas that is still\na ``draft`` (something it stands on is not checked yet) or\n``needs_redo`` (checking cannot rescue it). Derived on every read by\n``app.marketing.ideas_export``, never stored.',
+  },
+  AssetExportBlockReason: {
+    properties: {
+      code: { type: 'string' },
+      fact_ids: { items: { type: 'string' }, type: 'array' },
+      finding_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    type: 'object',
+    required: ['code'],
+    description:
+      'One reason an ad of ads-first ideas may not be exported: the same\n``code``/``fact_ids``/``finding_ids`` its ``AdSummary.reasons`` carries\n(``app.marketing.ideas_contracts.AdReason``).',
+  },
   AssetGalleryFacets: {
     properties: {
       providers: {
@@ -765,6 +789,12 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
           { type: 'null' },
         ],
       },
+      export_block: {
+        anyOf: [
+          { $ref: '#/components/schemas/AssetExportBlock' },
+          { type: 'null' },
+        ],
+      },
       created_at: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     },
     type: 'object',
@@ -781,7 +811,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'byte_size',
     ],
     description:
-      "Row of ``GET /generation/assets`` (``asset_queries.list_asset_versions``,\nIssue #49 Task 3, spec §0.2).\n\n``id`` is the AssetVersion id -- the exact-version identity the browser\nreviews/regenerates/downloads against, matching\n``app.generation.review``'s exact-version anchor.\n\n``stable_dimension_signature`` and ``mock_evidence`` are always\n``None`` for now -- no column backs either of them yet.\n``contextual_conclusion`` (Task 6, spec §0.7) is populated only when\nthe request supplied ``experiment_context``; otherwise it stays\n``None`` -- it is never a global property of the AssetVersion.\n``effective_review_value`` applies Task 5's supersession-aware\nhead-review rule (``app.generation.review.project_effective_review``,\nspec §0.3); ``latest_qc_state`` is the latest\n``AssetQCAttemptRecord.state``. ``thumbnail`` (Issue #159) is the\nversion's signed thumbnail link, or ``None`` when it has no derivative.",
+      "Row of ``GET /generation/assets`` (``asset_queries.list_asset_versions``,\nIssue #49 Task 3, spec §0.2).\n\n``id`` is the AssetVersion id -- the exact-version identity the browser\nreviews/regenerates/downloads against, matching\n``app.generation.review``'s exact-version anchor.\n\n``stable_dimension_signature`` and ``mock_evidence`` are always\n``None`` for now -- no column backs either of them yet.\n``contextual_conclusion`` (Task 6, spec §0.7) is populated only when\nthe request supplied ``experiment_context``; otherwise it stays\n``None`` -- it is never a global property of the AssetVersion.\n``effective_review_value`` applies Task 5's supersession-aware\nhead-review rule (``app.generation.review.project_effective_review``,\nspec §0.3); ``latest_qc_state`` is the latest\n``AssetQCAttemptRecord.state``. ``thumbnail`` (Issue #159) is the\nversion's signed thumbnail link, or ``None`` when it has no derivative.\n``export_block`` (Issue #219) is set only on an ad of ads-first ideas\nthat may not be exported yet: an export package naming it and a\n``purpose=download`` download intent for it are refused, so the page\nmarks the tile and does not offer either. ``None`` on every other image.",
   },
   AttemptCost: {
     properties: { amount: { type: 'string' }, currency: { type: 'string' } },
@@ -6188,6 +6218,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       revision: { type: 'integer' },
       byte_size: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
       zip_hash: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      left_out_drafts: { type: 'integer', default: 0 },
     },
     type: 'object',
     required: [
@@ -18478,6 +18509,7 @@ const SCHEMAS: Record<string, object> = {
       revision: { type: 'integer' },
       byte_size: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
       zip_hash: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      left_out_drafts: { type: 'integer', default: 0 },
     },
     type: 'object',
     required: [

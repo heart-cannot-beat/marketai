@@ -46,6 +46,12 @@ export-package download-intent route below it follows the exact same
 pattern against ``app.generation.export.resolve_export_blob_ref`` (Issue
 #49 Task 9).
 
+The asset-version route serves two purposes with one capability (Issue
+#219): a page shows an image with it, and a person saves one with it. The
+caller says which (``purpose``). Showing is never refused; saving a draft of
+ads-first ideas is (ADR 0018 §2: a draft does not leave), and so is an
+export package that holds one -- see ``app.generation.export``.
+
 ``POST /exports`` (Issue #49 Task 9) returns 202 with
 ``{ package_id, operation_id, state }`` plus a ``Location`` header pointing
 at the Operation -- ``app.generation.export_worker.handle_export_package``
@@ -56,6 +62,7 @@ package's own state for refresh recovery.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -517,6 +524,7 @@ def get_export_package(
             "revision": package.revision,
             "byte_size": package.byte_size or None,
             "zip_hash": package.zip_hash or None,
+            "left_out_drafts": len(export_module.left_out_drafts(package)),
         }
 
 
@@ -1058,9 +1066,20 @@ def create_review_summary_regeneration(
 async def create_asset_version_download_intent(
     version_id: str,
     request: Request,
+    purpose: Literal["download", "display"] = Query(default="download"),
     context: TenantContext = Depends(request_tenant_context),
     idempotency_key: str = Depends(_idempotency_key),
 ):
+    """A signed link to one AssetVersion's file, to save it (``purpose =
+    download``, the default) or to show it on a page (``display``).
+
+    Showing is open to every image of the Workspace. Saving is refused for
+    an ad of ads-first ideas that may not be exported yet (Issue #219): 409
+    ``ads_not_exportable`` with the ad's status and reasons, the shape the
+    ads-first download answers with. Any other image is handed out as
+    before, whatever the purpose. This keeps the product from offering a
+    way to take a draft out; it does not hide the image, which every page
+    that lists it already shows."""
     # The committed ref is always resolved server-side, never supplied by
     # the browser (spec §0.1) -- and resolved fresh on every call, replays
     # included, so a replay still fails closed if the AssetVersion's blob
@@ -1069,13 +1088,29 @@ async def create_asset_version_download_intent(
         "POST",
         "create_generation_asset_version_download_intent",
         request.url.path,
-        {},
+        # ``download`` is what a request without a purpose always meant: its
+        # fingerprint stays the one issued before the purpose existed.
+        {} if purpose == "download" else {"purpose": purpose},
         None,
         {},
     )
 
     with tenant_session(context) as session:
         committed_ref = resolve_asset_blob_ref(session, context, version_id)
+        on_create = None
+        if purpose == "download":
+            # Asked again on every call, a replay included: an ad may stop
+            # being exportable between two requests with the same key.
+            from app.marketing import ideas_export
+
+            ideas_export.assert_library_download(session, context, version_id)
+
+            def on_create(inner_session, record):
+                # A checked ad saved from the library leaves the record the
+                # ads-first download leaves; once per intent, never on a replay.
+                ideas_export.record_library_download(
+                    inner_session, context, [version_id], record.id, path={"path": "asset_download"},
+                )
         intent = create_or_replay_download_intent(
             session,
             idempotency_key=idempotency_key,
@@ -1084,6 +1119,7 @@ async def create_asset_version_download_intent(
             owner_kind="asset_version",
             owner_id=version_id,
             committed_ref=committed_ref,
+            on_create=on_create,
         )
         expires_at = intent.expires_at
         if expires_at.tzinfo is None:
@@ -1199,6 +1235,11 @@ async def create_export_download_intent(
             owner_kind="export_package",
             owner_id=export_package_id,
             committed_ref=committed_ref,
+            # The ads of ads-first ideas in the package leave the record the
+            # ads-first download leaves; once per intent (Issue #219).
+            on_create=lambda inner_session, record: export_module.record_handout(
+                inner_session, context, export_package_id, record.id,
+            ),
         )
         expires_at = intent.expires_at
         if expires_at.tzinfo is None:

@@ -16,6 +16,7 @@ own records.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import timedelta
 
 from sqlalchemy.orm import Session
@@ -90,6 +91,7 @@ def create_or_replay_download_intent(
     owner_id: str,
     committed_ref: CommittedBlobRef,
     ttl_seconds: int = DEFAULT_DOWNLOAD_TTL_SECONDS,
+    on_create: Callable[[Session, DownloadIntentRecord], None] | None = None,
 ) -> DownloadIntentRecord:
     """Idempotent DownloadIntent creation for a server-resolved CommittedBlobRef.
 
@@ -106,6 +108,10 @@ def create_or_replay_download_intent(
     reaching here (spec §0.1: "Intent creation ... revalidate the live
     storage revision") -- this function only makes *persisting the intent
     metadata* idempotent, not the resolution step that precedes it.
+
+    ``on_create`` runs once, in the same transaction, when the intent is
+    first created -- never on a replay -- so a caller can append evidence of
+    what this intent hands out exactly once (Issue #219).
     """
 
     def _create(inner_session: Session) -> tuple[str, str, DownloadIntentRecord]:
@@ -119,6 +125,8 @@ def create_or_replay_download_intent(
             committed_blob_ref_version=committed_ref.storage_version_id,
             ttl_seconds=ttl_seconds,
         )
+        if on_create is not None:
+            on_create(inner_session, record)
         return ("download_intent", intent_id, record)
 
     def _replay(
