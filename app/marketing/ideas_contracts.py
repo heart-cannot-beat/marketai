@@ -633,6 +633,20 @@ class EditIdeasClaim(Document):
     fact_ids: list[Identifier] = Field(default_factory=list, max_length=30)
 
 
+class EditIdeasCopy(Document):
+    """Change one ad's headline and body copy in the user's own words (#228, design doc §5.3), as a whole.
+    Free of charge; nothing is drafted by AI.
+
+    The copy belongs to one place of the ideas -- a claim told one way (a combination) -- and the image model
+    renders it into every picture made there, so an image never follows a change: the images made there before
+    need making again (``ideas_changed``) and a new one is made with ``prepare_marketing_ideas_generation``.
+    An uploaded image keeps its own words and is left as it is. Both texts use the ads' language; they may
+    state no number, price or certification the facts the place cites do not, and no listed unsourced claim.
+    The claim, the way of telling, the facts they name and the English image brief stay as they are."""
+    headline: Text
+    body_copy: Text
+
+
 class AcceptedFindings(Document):
     """Findings of one ad's check the user accepts as they are ("this is fine")."""
     asset_version_id: str = Field(min_length=1, max_length=64)

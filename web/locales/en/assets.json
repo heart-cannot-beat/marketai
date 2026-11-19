@@ -72,7 +72,7 @@
   "export-block-reason-check_uncertain": "Its check result isn't certain yet",
   "export-block-reason-findings_open": "Findings of its check haven't been handled",
   "export-block-reason-check_outdated": "The facts its check compared against have changed, so it needs checking again",
-  "export-block-reason-ideas_changed": "Its content is no longer what the claim says now",
+  "export-block-reason-ideas_changed": "Its content no longer matches the claim and copy as they are now",
   "export-block-reason-facts_changed": "A fact it cites was changed after the image was made",
   "export-block-reason-facts_removed": "A fact it cites was removed",
   "export-block-reason-photo_unavailable": "A product photo it used can no longer be used",

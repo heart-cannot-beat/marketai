@@ -2495,6 +2495,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'edit_marketing_ideas_copy',
+    {
+      operationId: 'edit_marketing_ideas_copy',
+      method: 'PATCH',
+      pathTemplate:
+        '/api/v1/marketing/ideas/{project_id}/combinations/{combination_id}',
+      pathParams: ['project_id', 'combination_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 16384,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'edit_marketing_ideas_copy_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'edit_marketing_ideas_understanding',
     {
       operationId: 'edit_marketing_ideas_understanding',

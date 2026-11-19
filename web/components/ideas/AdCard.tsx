@@ -30,6 +30,8 @@ interface AdCardProps {
   onEdit?: (item: IdeasAd) => void;
   /** Where the ad's automatic check stands (#197). */
   check?: CheckView;
+  /** The ads' language, for the headline an ad without an image shows. */
+  language?: string;
   /** The findings still to handle, each shown by name (#201). */
   findings?: IdeasFinding[];
   /**
@@ -69,6 +71,7 @@ export function AdCard({
   retryLabel,
   makeAction,
   renewHref,
+  language,
 }: AdCardProps) {
   const { t } = useTranslation('ideas');
   const title = useFindingTitle();
@@ -107,6 +110,14 @@ export function AdCard({
         {slot.telling && (
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {slot.telling.description}
+          </p>
+        )}
+        {/* An ad without an image shows its copy: after the copy changed (#228)
+            this is where the page shows the new words. */}
+        {slot.kind !== 'ad' && slot.headline && (
+          <p className="text-sm">
+            <span className="font-medium">{t('ideas-ad-headline')}</span>{' '}
+            <span lang={language}>{slot.headline}</span>
           </p>
         )}
         {slot.kind === 'ad' && slot.ad.origin !== 'generated' && (

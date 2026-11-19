@@ -8997,6 +8997,89 @@
         }
       }
     },
+    "/api/v1/marketing/ideas/{project_id}/combinations/{combination_id}": {
+      "patch": {
+        "operationId": "edit_marketing_ideas_copy",
+        "summary": "Edit Ideas Copy",
+        "description": "Change one ad's headline and body copy in the user's own words (#228). Free of charge.\n\nThe words must use the ads' language (``copy_language_mismatch``) and state nothing the facts this ad\ncites do not -- no number, price or certification they lack, no listed unsourced claim\n(``copy_unsupported``) -- and fit the image prompt (``ad_copy_too_long``). The images made for this ad\nbefore need making again (``ideas_changed``); an uploaded image keeps its own words and stays as it is.\nThe claim, the way of telling and their facts do not change. Refused while the first batch is still\nmaking ads.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "combination_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditIdeasCopy"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasProjectDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/ideas/{project_id}/download-intent": {
       "post": {
         "operationId": "download_marketing_ideas",
@@ -27510,6 +27593,27 @@
           "rationale"
         ],
         "description": "Change one claim in the user's own words (#224, design doc §5.7): what it says, why it is worth\ntrying and the facts it stands on, as a whole. Free of charge; nothing is drafted by AI.\n\nEvery fact named must be a fact of the understanding now: each has a source, and neither a removed fact\nnor an unsourced claim can be named. The words may state no number, price or certification the named\nfacts do not, and no listed unsourced claim. Each way of telling the claim keeps only the facts the claim\nstill names. The claim's ads, their copy and their image instructions stay as they are; the images made\nbefore need making again (``ideas_changed``), and a new image is made on the claim as it is now."
+      },
+      "EditIdeasCopy": {
+        "properties": {
+          "headline": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          },
+          "body_copy": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "headline",
+          "body_copy"
+        ],
+        "description": "Change one ad's headline and body copy in the user's own words (#228, design doc §5.3), as a whole.\nFree of charge; nothing is drafted by AI.\n\nThe copy belongs to one place of the ideas -- a claim told one way (a combination) -- and the image model\nrenders it into every picture made there, so an image never follows a change: the images made there before\nneed making again (``ideas_changed``) and a new one is made with ``prepare_marketing_ideas_generation``.\nAn uploaded image keeps its own words and is left as it is. Both texts use the ads' language; they may\nstate no number, price or certification the facts the place cites do not, and no listed unsourced claim.\nThe claim, the way of telling, the facts they name and the English image brief stay as they are."
       },
       "EditIdeasUnderstanding": {
         "properties": {

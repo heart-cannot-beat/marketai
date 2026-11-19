@@ -28,6 +28,7 @@ import type { ProblemDetails } from '@/lib/domain-client/result-types';
 import { AdImage, AdThumbnail } from './AdCard';
 import { ChecksButton } from './ChecksButton';
 import { FindingList } from './FindingList';
+import { EditCopy } from './EditCopy';
 import { BUTTON, PaidImageAction, PRESSED } from './PaidImageAction';
 
 const SECTION =
@@ -53,6 +54,8 @@ const QUICK_NOTES = [
 export interface EditAdProps {
   /** Where a product photo whose check ran out is renewed (#233). */
   renewHref?: string;
+  /** The product profile, where a source for the copy's words is added (#228). */
+  profileHref?: string;
   projectId: string;
   detail: IdeasDetail;
   assetVersionId: string;
@@ -87,6 +90,7 @@ export function EditAd({
   onAnotherTelling,
   onEditClaim,
   renewHref,
+  profileHref,
 }: EditAdProps) {
   const { t } = useTranslation('ideas');
   const ad = detail.ads.find(
@@ -96,6 +100,9 @@ export function EditAd({
     () => versionsOf(detail, assetVersionId),
     [detail, assetVersionId]
   );
+  // The image whose copy was just changed here: the copy offers one image
+  // with the new copy, so "make it again" below would offer the same (#228).
+  const [copySavedOn, setCopySavedOn] = useState<string | null>(null);
   if (!ad)
     return (
       <div className="mx-auto max-w-5xl space-y-4" data-testid="edit-ad">
@@ -188,27 +195,17 @@ export function EditAd({
             <h2 id="edit-copy" className="text-base font-semibold">
               {t('edit-copy-title')}
             </h2>
-            <dl className="space-y-2 text-sm">
-              <div>
-                <dt className="font-medium text-gray-600 dark:text-gray-400">
-                  {t('edit-copy-headline')}
-                </dt>
-                <dd lang={detail.ad_language} className="text-base">
-                  {place.headline ?? t('edit-copy-gone')}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-gray-600 dark:text-gray-400">
-                  {t('edit-copy-body')}
-                </dt>
-                <dd lang={detail.ad_language}>
-                  {place.bodyCopy ?? t('edit-copy-gone')}
-                </dd>
-              </div>
-            </dl>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t('edit-copy-note')}
-            </p>
+            <EditCopy
+              // Another version is another image: its own form (#228).
+              key={ad.asset_version_id}
+              detail={detail}
+              ad={ad}
+              commands={commands}
+              image={image}
+              profileHref={profileHref}
+              uploaded={uploaded}
+              onSaved={() => setCopySavedOn(ad.asset_version_id)}
+            />
           </section>
 
           <section className={SECTION} aria-labelledby="edit-check">
@@ -274,6 +271,7 @@ export function EditAd({
                 : undefined
             }
             ideasChanged={reasons.has('ideas_changed')}
+            again={copySavedOn !== ad.asset_version_id}
             photoGone={reasons.has('photo_unavailable')}
             renewHref={
               renewHref && renewRestores(detail, ad) ? renewHref : undefined
@@ -356,6 +354,7 @@ function Redo({
   removedFact,
   onEditClaim,
   ideasChanged,
+  again: offerAgain,
   photoGone,
   renewHref,
   hasFindings,
@@ -368,6 +367,8 @@ function Redo({
   removedFact: boolean;
   onEditClaim?: () => void;
   ideasChanged: boolean;
+  /** Offer "make it again"; not where the copy just offered the same image (#228). */
+  again: boolean;
   /** A product photo it used was rejected or may no longer be used (#229). */
   photoGone: boolean;
   /** Where to renew it, when its check only ran out (#233). */
@@ -495,7 +496,7 @@ function Redo({
         </>
       )}
       {/* An image made while the claim names a deleted fact would need redoing too. */}
-      {!uploaded && !removedFact && (
+      {!uploaded && !removedFact && offerAgain && (
         <div className="space-y-1 border-t border-gray-200 pt-3 dark:border-gray-700">
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {t('edit-again-note')}

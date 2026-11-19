@@ -288,11 +288,10 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
     current, photo_sets = {}, {}
 
     def now(combination_id):
-        """The content the ideas hold for this combination now, and every fact id its claim cites."""
+        """The intent the ideas hold for this combination now, and every fact id its claim cites."""
         if combination_id not in current:
             try:
-                current[combination_id] = (ideas.content_of(ideas.ideas_intent(row, combination_id)),
-                                           ideas.citations(row, combination_id))
+                current[combination_id] = (ideas.ideas_intent(row, combination_id), ideas.citations(row, combination_id))
             except LookupError:
                 current[combination_id] = None
         return current[combination_id]
@@ -305,7 +304,8 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
         snapshot = {fact["id"]: fact for fact in (intent.get("understanding") or {}).get("facts", [])}
         cited = list(intent.get("cited_fact_ids") or [])
         # Redrafted ideas reuse combination ids: an image whose content is not the ideas' is another ad's (#212).
-        same = held is not None and held[0] == ideas.content_of(intent)
+        # An uploaded image's own words are the user's: a change of the copy leaves it as it is (#228).
+        same = held is not None and ideas.same_content(held[0], intent)
         # An image stands on the facts its claim names now, no fewer (#224): one made on a fact the claim no
         # longer names (the user changed the claim; the fact itself is still there) is not the ad the claim
         # describes any more. A removed fact is said below.

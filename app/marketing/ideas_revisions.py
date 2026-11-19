@@ -22,7 +22,9 @@ writes it again from this module's record and refuses one a client changed (``id
 
 **Uploads** (``place_upload``): an external creative of the product (#168), whose uploader declared the
 right to use it, is placed under one ad of the ideas. The placement freezes that ad's intent, so the
-uploaded image is listed, kept, checked, verified and downloaded like a generated ad of that claim.
+uploaded image is listed, kept, checked, verified and downloaded like a generated ad of that claim. Its
+picture and its words are the user's own, so changing the ad's copy leaves it -- and a crop of it -- as it
+is (``ideas.same_content``, #228); any other change of its place still counts.
 """
 from __future__ import annotations
 
@@ -72,7 +74,7 @@ def _current_content(row, intent) -> None:
         now = ideas.ideas_intent(row, (intent.get("combination") or {}).get("id", ""))
     except LookupError:
         now = None
-    if now is None or ideas.content_of(now) != ideas.content_of(intent):
+    if now is None or not ideas.same_content(now, intent):
         raise MarketingError("ideas_changed", "这张广告已不是当前主张的内容：请按当前的主张重新出图。", 409)
 
 

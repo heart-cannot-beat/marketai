@@ -72,7 +72,7 @@
   "export-block-reason-check_uncertain": "检查结果还不确定",
   "export-block-reason-findings_open": "检查发现的问题还没处理",
   "export-block-reason-check_outdated": "检查对照的事实已经变了，要重新检查",
-  "export-block-reason-ideas_changed": "它的内容已经不是现在的主张了",
+  "export-block-reason-ideas_changed": "它的内容已经不是现在的主张和文案了",
   "export-block-reason-facts_changed": "它引用的事实在出图之后被改过",
   "export-block-reason-facts_removed": "它引用的事实已经被删掉",
   "export-block-reason-photo_unavailable": "它用到的产品照片已经不能用了",

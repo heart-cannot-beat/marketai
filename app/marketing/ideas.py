@@ -15,7 +15,7 @@ from sqlalchemy import select
 from app.adapters.persistence.models import (AssetVersionRecord, GenerationRunRecord, LibraryEntryRecord, ProductRecord,
                                             new_id, utcnow)
 from app.generation.models import GenerationRecipeSnapshotRecord, RunItemRecord
-from app.generation.selection import SelectionError
+from app.generation.selection import MAX_PROMPT_LENGTH, SelectionError
 from app.platform.audit import append_event
 from . import service
 from .models import MarketingAdKeepRecord, MarketingProjectRecord
@@ -301,8 +301,28 @@ def _content(intent) -> dict:
     return {key: intent.get(key) for key in CONTENT_KEYS}
 
 
-#: The content of an intent that decides whether an image is still the ad the ideas describe (#198).
-content_of = _content
+#: An ad's copy (#228): the words the image model renders into the picture (``service.image_brief``).
+COPY_KEYS = ("headline", "body_copy")
+
+
+def _without_copy(content: dict) -> dict:
+    combination = content.get("combination")
+    if not isinstance(combination, dict):
+        return content
+    return {**content, "combination": {key: value for key, value in combination.items() if key not in COPY_KEYS}}
+
+
+def same_content(now: dict, intent: dict) -> bool:
+    """Whether the image made on ``intent`` is still the ad whose intent is ``now`` in the ideas (#198).
+
+    Its content (``CONTENT_KEYS``) must equal the ideas'. An uploaded image -- and a crop of one, which keeps
+    its intent -- is the user's own picture with the user's own words: the copy of the place it was put under
+    never described it, so the copy is left out of its comparison and changing the copy leaves it as it is
+    (#228). Every other change still counts, for it as for any image."""
+    current, made = _content(now), _content(intent)
+    if "upload" in intent:
+        current, made = _without_copy(current), _without_copy(made)
+    return current == made
 
 
 def _current_intent(project, intent):
@@ -311,7 +331,7 @@ def _current_intent(project, intent):
         current = ideas_intent(project, (intent.get("combination") or {}).get("id", ""))
     except LookupError:
         current = None
-    if current is None or _content(current) != _content(intent):
+    if current is None or not same_content(current, intent):
         raise SelectionError("ideas_changed", "广告想法已变化，请按当前的主张重新准备这张广告。")
     return current
 
@@ -426,7 +446,7 @@ def generation_drafts(session, ctx, row, revision, provider, model, format_confi
             raise service.MarketingError("image_brief_language_mismatch", "Write the English image brief for every ad.")
         intent = ideas_intent(row, combo.id)
         prompt = _prompt(combo, intent, kit, logo=bool(logo), references=bool(references))
-        if len(prompt) > 4000:
+        if len(prompt) > MAX_PROMPT_LENGTH:
             raise service.MarketingError("ad_brief_too_long", "这张广告的画面说明太长，请重新起草主张。")
         draft = create_draft(session, ctx, product_id=row.product_id, provider=provider, model=model,
             execution_mode="mock" if provider == "mock" else "byok", combination_strategy={"mode": "single"},

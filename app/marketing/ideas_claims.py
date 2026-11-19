@@ -6,9 +6,9 @@ something else, or stands on other facts, is not the ad the claim describes any 
 again (``ideas_changed``). Deleting a claim takes its ways of telling and ads out of the ideas; the images
 made for them stay ads of the project, needing making again, and are never handed out.
 
-The claim's ads keep their copy and image instructions: changing the copy is #228's, and a new image of the
-claim is made the usual way (``prepare_marketing_ideas_generation``), checked against the claim as it is now
-and standing on the facts it names now.
+The claim's ads keep their copy and image instructions (the copy is changed by ``ideas_copy``, #228), and a
+new image of the claim is made the usual way (``prepare_marketing_ideas_generation``), checked against the
+claim as it is now and standing on the facts it names now.
 """
 from __future__ import annotations
 
@@ -29,8 +29,9 @@ GAP = {"zh-CN": "改主张时去掉了这里原来引用的事实，暂时没有
        "en-US": "The facts this stood on were taken off the claim when it was edited; nothing supports it yet."}
 
 
-def _editable(session, ctx, row):
-    """Ideas whose claims the user may change now: drafted, and not still being made by the first batch."""
+def editable(session, ctx, row):
+    """Ideas the user may change now -- a claim (#224) or an ad's copy (#228): drafted, and not still being
+    made by the first batch."""
     from .first_batch import ENDED
     from .models import MarketingFirstBatchRecord
     service.ensure_active(session, ctx)
@@ -40,7 +41,7 @@ def _editable(session, ctx, row):
                                                                    MarketingFirstBatchRecord.project_id == row.id))
     if batch is not None and batch.state not in ENDED:
         # The first batch makes an image for every ad the ideas hold, as they were when it was confirmed.
-        raise MarketingError("first_batch_running", "首批还没有完成，完成后再改主张。", 409)
+        raise MarketingError("first_batch_running", "首批还没有完成，完成后再改。", 409)
     return Ideas.model_validate(row.ideas_json)
 
 
@@ -51,7 +52,8 @@ def _angle(doc, angle_id):
     raise MarketingError("angle_not_found", "找不到这个主张。", 404)
 
 
-def _unchanged(row, revision):
+def unchanged(row, revision):
+    """Nothing to change: the ideas as they are, at the revision the user saw (no revision is spent)."""
     if row.revision != revision:
         raise MarketingError("stale_marketing_revision", "内容已更新，请刷新后重试。", 409)
     return row
@@ -70,7 +72,7 @@ def edit_claim(session, ctx, row, revision, angle_id: str, *, proposition: str, 
     facts do not -- or a listed unsourced claim (``claim_unsupported``). Each way of telling keeps only the
     facts the claim still names; one left with none says so in its evidence gap. Nothing changed: no
     revision is spent."""
-    doc = _editable(session, ctx, row)
+    doc = editable(session, ctx, row)
     index, angle = _angle(doc, angle_id)
     understanding = IdeasUnderstanding.model_validate(row.understanding_json)
     facts = {fact.id: fact for fact in understanding.facts}
@@ -103,7 +105,7 @@ def edit_claim(session, ctx, row, revision, angle_id: str, *, proposition: str, 
             basis["gap"] = gap
     Ideas.model_validate(merged)
     if merged == row.ideas_json:
-        return _unchanged(row, revision)
+        return unchanged(row, revision)
     before = row.ideas_json["angles"][index]
     affected = _claim_ads(session, ctx, row, angle_id)
     service.advance(session, ctx, row, revision, "claim_edited", ideas_json=merged)
@@ -122,7 +124,7 @@ def delete_claim(session, ctx, row, revision, angle_id: str):
     Refused when it would leave fewer than two claims (``claims_too_few``). The images made for the claim
     stay ads of these ideas -- listed, kept or not as the user left them -- and need making again
     (``ideas_changed``): their claim is gone, so none can be downloaded or exported."""
-    doc = _editable(session, ctx, row)
+    doc = editable(session, ctx, row)
     _angle(doc, angle_id)
     if len(doc.angles) <= MIN_CLAIMS:
         raise MarketingError("claims_too_few", "至少要留两个主张：可以改这个主张，或先再加一个主张再删。", 409,

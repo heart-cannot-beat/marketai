@@ -88,7 +88,7 @@
 - **D6 广告清单。** 一个项目的广告通过出图配方里的 `marketing_intent.project_id` 找，不依赖小轮。查询写在 `app/marketing/ideas.py::project_ads`，S1 提供，后面各块共用。
 - **D7 费用。** 首批总价是各步最高费用之和，再加一次策划调用的最高费用，确认一次。多出的一次只用于应用拒收主张草稿时重新起草一次（#193 维护者决定）。每一步仍然单独预留、单独结算，没用上的不收费。预留总额不超过确认的数字，超过就停下来。
 - **D8 供应商。** 第 1 步保证只有 OpenAI Key 时全程能跑。只有 Gemini Key 时，在开始之前提示“目前需要 OpenAI 的 Key”。
-- **D9 新接口一览。** 全部做完后接口数从 242 变成 264（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200；S18 多两个改主张、删主张的接口，#224；S22 多两个产品照片的接口，#233）。
+- **D9 新接口一览。** 全部做完后接口数从 242 变成 265（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200；S18 多两个改主张、删主张的接口，#224；S22 多两个产品照片的接口，#233；S20 多一个改文案的接口，#228）。
 
 | 块 | operation_id | 路径 |
 | --- | --- | --- |
@@ -112,6 +112,7 @@
 | S12 | `place_marketing_ideas_upload` | `POST /marketing/ideas/{project_id}/uploads`（把上传的图放在某个讲法下） |
 | S18 | `edit_marketing_ideas_claim` | `PATCH /marketing/ideas/{project_id}/claims/{angle_id}`（用户自己改主张的说法、理由和引用的事实，不花钱） |
 | S18 | `delete_marketing_ideas_claim` | `DELETE /marketing/ideas/{project_id}/claims/{angle_id}`（删掉一个主张和它的广告，至少留两个主张） |
+| S20 | `edit_marketing_ideas_copy` | `PATCH /marketing/ideas/{project_id}/combinations/{combination_id}`（用户自己改一张广告的标题和正文，不花钱，#228） |
 | S22 | `add_marketing_ideas_photo` | `POST /marketing/ideas/{project_id}/photos`（把通过上传门禁的图加成产品照片，#233） |
 | S22 | `create_marketing_ideas_photo_download_intent` | `POST /marketing/ideas/{project_id}/photos/{photo_id}/download-intent`（照片区显示照片用：加的照片没有录入，核对前也没有创意库版本） |
 
@@ -605,6 +606,11 @@ class IdeasApiTests(MarketingIdeasFixtures):
 ### S22 照片核对的续期（#233，第三个 PR）
 
 - **做成的样子：** `IdeasPhoto` / `IdeasLogo` 加 `valid_to` 和 `unavailable_reason`（`expired` / `withdrawn` / `file_gone`）。核对一张权利已过期的照片或 Logo 就是续期：创意库新加 `renew_reference_in_transaction`，把同一个参考图带用户的新声明再发布一次；被撤回、归档的不能续期（409 `photo_withdrawn`）。续期后，用这份字节出过的广告直接恢复，不用重出（`ideas_export._renewed`）。产品资料上每张核对过的照片写“核对有效到某天”，过期的写哪天过期并给“续期这张照片”，被撤回的只说明原因。广告想法页和修改页对只因为照片核对过期而需要重出的广告，说明去产品资料续期、续期后直接恢复，并给入口（维护者 2026-11-19 的决定）。不加接口，没有迁移。
+
+### S20 改一张广告的标题和正文（#228）
+
+- **做成的样子：** 新接口 `edit_marketing_ideas_copy`（`PATCH /marketing/ideas/{project_id}/combinations/{combination_id}`，请求体 `EditIdeasCopy {headline, body_copy}`，整份替换），带 `If-Match` 和幂等键，Owner 和 Member 都能调用，不调 AI、不花钱，返回 `IdeasProjectDetail`，不带 `Location`。只改这一格（主张 × 讲法）的标题和正文，主张、讲法、引用的事实和英文出图说明不变。拒绝：空的或超过 2000 字（`validation_error`）；不是广告语言（`copy_language_mismatch`）；文案里有这一格引用的事实找不到的数字、价格、认证编号，或用了产品资料列出的没有出处的说法（`copy_unsupported`，`params.claims` 列出这些说法）；放进出图说明后超过 4000 字的上限（`ad_copy_too_long`，`params.over` 是超出的字数）；找不到这一格（404 `combination_not_found`）；首批没完成、起草进行中、修订号过期（409）。保存沿用 `service.advance` 留版本快照（`copy_edited`），另写审计事件 `marketing.ideas_copy_edited`。这一格下出图的图变成需要重出（`ideas_changed`）；**上传的图和它的裁剪不受文案影响**（`ideas.same_content`：比较内容时不看标题和正文，其余照旧；结论写在 #228 上），裁剪上传图的入口和 Worker 执行前的判断用同一条规则。“修改这张广告”的文案换成两个输入框，输入时预览跟着变；保存前写明这个讲法下几张图要重出、其中几张是留下的；保存后先按新文案准备出图并报价，按钮写“按新文案出一张 · 最多 $X”，点击就是确认。广告想法页上，一格的图都已不是当前内容时，这一格多出一个空位，显示新标题和“出这张图”；旧图不再借用新标题作图片说明。上传的图在修改页只显示文案、不给输入框。没有迁移，没有新的数据库权限，接口总数 264 → 265。
+- **没做的：** 让 AI 按意见改写文案（一次付费的策划调用），需要的话另开一块。
 
 ### S15 前端：竞品独立页面，素材库和设置接入
 

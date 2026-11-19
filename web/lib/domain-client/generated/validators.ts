@@ -4859,6 +4859,17 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       "Change one claim in the user's own words (#224, design doc §5.7): what it says, why it is worth\ntrying and the facts it stands on, as a whole. Free of charge; nothing is drafted by AI.\n\nEvery fact named must be a fact of the understanding now: each has a source, and neither a removed fact\nnor an unsourced claim can be named. The words may state no number, price or certification the named\nfacts do not, and no listed unsourced claim. Each way of telling the claim keeps only the facts the claim\nstill names. The claim's ads, their copy and their image instructions stay as they are; the images made\nbefore need making again (``ideas_changed``), and a new image is made on the claim as it is now.",
   },
+  EditIdeasCopy: {
+    properties: {
+      headline: { type: 'string', maxLength: 2000, minLength: 1 },
+      body_copy: { type: 'string', maxLength: 2000, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['headline', 'body_copy'],
+    description:
+      "Change one ad's headline and body copy in the user's own words (#228, design doc §5.3), as a whole.\nFree of charge; nothing is drafted by AI.\n\nThe copy belongs to one place of the ideas -- a claim told one way (a combination) -- and the image model\nrenders it into every picture made there, so an image never follows a change: the images made there before\nneed making again (``ideas_changed``) and a new one is made with ``prepare_marketing_ideas_generation``.\nAn uploaded image keeps its own words and is left as it is. Both texts use the ads' language; they may\nstate no number, price or certification the facts the place cites do not, and no listed unsourced claim.\nThe claim, the way of telling, the facts they name and the English image brief stay as they are.",
+  },
   EditIdeasUnderstanding: {
     properties: {
       understanding: { $ref: '#/components/schemas/IdeasUnderstanding' },
@@ -17942,6 +17953,84 @@ const SCHEMAS: Record<string, object> = {
     description:
       "Change one claim in the user's own words (#224, design doc §5.7): what it says, why it is worth\ntrying and the facts it stands on, as a whole. Free of charge; nothing is drafted by AI.\n\nEvery fact named must be a fact of the understanding now: each has a source, and neither a removed fact\nnor an unsourced claim can be named. The words may state no number, price or certification the named\nfacts do not, and no listed unsourced claim. Each way of telling the claim keeps only the facts the claim\nstill names. The claim's ads, their copy and their image instructions stay as they are; the images made\nbefore need making again (``ideas_changed``), and a new image is made on the claim as it is now.",
   },
+  edit_marketing_ideas_copy_200: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
+          { type: 'null' },
+        ],
+      },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  edit_marketing_ideas_copy_request: {
+    properties: {
+      headline: { type: 'string', maxLength: 2000, minLength: 1 },
+      body_copy: { type: 'string', maxLength: 2000, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['headline', 'body_copy'],
+    description:
+      "Change one ad's headline and body copy in the user's own words (#228, design doc §5.3), as a whole.\nFree of charge; nothing is drafted by AI.\n\nThe copy belongs to one place of the ideas -- a claim told one way (a combination) -- and the image model\nrenders it into every picture made there, so an image never follows a change: the images made there before\nneed making again (``ideas_changed``) and a new one is made with ``prepare_marketing_ideas_generation``.\nAn uploaded image keeps its own words and is left as it is. Both texts use the ads' language; they may\nstate no number, price or certification the facts the place cites do not, and no listed unsourced claim.\nThe claim, the way of telling, the facts they name and the English image brief stay as they are.",
+  },
   edit_marketing_ideas_understanding_200: {
     properties: {
       id: { type: 'string' },
@@ -24708,6 +24797,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['edit_marketing_ideas_claim_request'],
     ],
     [
+      'edit_marketing_ideas_copy_200',
+      VALIDATOR_FUNCTIONS['edit_marketing_ideas_copy_200'],
+    ],
+    [
+      'edit_marketing_ideas_copy_request',
+      VALIDATOR_FUNCTIONS['edit_marketing_ideas_copy_request'],
+    ],
+    [
       'edit_marketing_ideas_understanding_200',
       VALIDATOR_FUNCTIONS['edit_marketing_ideas_understanding_200'],
     ],
@@ -25897,6 +25994,11 @@ export const REQUEST_VALIDATORS = {
     'edit_marketing_ideas_claim_request'
   ] as ValidateFunction<
     DomainOperationMap['edit_marketing_ideas_claim']['requestBody']
+  >,
+  edit_marketing_ideas_copy: VALIDATOR_FUNCTIONS[
+    'edit_marketing_ideas_copy_request'
+  ] as ValidateFunction<
+    DomainOperationMap['edit_marketing_ideas_copy']['requestBody']
   >,
   edit_marketing_ideas_understanding: VALIDATOR_FUNCTIONS[
     'edit_marketing_ideas_understanding_request'

@@ -2680,6 +2680,33 @@ export interface paths {
     patch: operations['edit_marketing_ideas_claim'];
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/combinations/{combination_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Edit Ideas Copy
+     * @description Change one ad's headline and body copy in the user's own words (#228). Free of charge.
+     *
+     *     The words must use the ads' language (``copy_language_mismatch``) and state nothing the facts this ad
+     *     cites do not -- no number, price or certification they lack, no listed unsourced claim
+     *     (``copy_unsupported``) -- and fit the image prompt (``ad_copy_too_long``). The images made for this ad
+     *     before need making again (``ideas_changed``); an uploaded image keeps its own words and stays as it is.
+     *     The claim, the way of telling and their facts do not change. Refused while the first batch is still
+     *     making ads.
+     */
+    patch: operations['edit_marketing_ideas_copy'];
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/download-intent': {
     parameters: {
       query?: never;
@@ -7449,6 +7476,21 @@ export interface components {
       proposition: string;
       rationale: string;
       fact_ids?: string[];
+    };
+    /**
+     * @description Change one ad's headline and body copy in the user's own words (#228, design doc §5.3), as a whole.
+     *     Free of charge; nothing is drafted by AI.
+     *
+     *     The copy belongs to one place of the ideas -- a claim told one way (a combination) -- and the image model
+     *     renders it into every picture made there, so an image never follows a change: the images made there before
+     *     need making again (``ideas_changed``) and a new one is made with ``prepare_marketing_ideas_generation``.
+     *     An uploaded image keeps its own words and is left as it is. Both texts use the ads' language; they may
+     *     state no number, price or certification the facts the place cites do not, and no listed unsourced claim.
+     *     The claim, the way of telling, the facts they name and the English image brief stay as they are.
+     */
+    EditIdeasCopy: {
+      headline: string;
+      body_copy: string;
     };
     /**
      * @description Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.
@@ -17989,6 +18031,45 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['EditIdeasClaim'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  edit_marketing_ideas_copy: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+        combination_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EditIdeasCopy'];
       };
     };
     responses: {

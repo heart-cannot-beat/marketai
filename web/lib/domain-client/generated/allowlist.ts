@@ -1336,6 +1336,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'edit_marketing_ideas_copy',
+    method: 'PATCH',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/combinations/:combination_id',
+    fastapiPathTemplate:
+      '/api/v1/marketing/ideas/{project_id}/combinations/{combination_id}',
+    pathParams: ['project_id', 'combination_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.edit_marketing_ideas_copy,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 16384,
+    maxResponseBytes: 524288,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'edit_marketing_ideas_understanding',
     method: 'PATCH',
     bffPattern:
