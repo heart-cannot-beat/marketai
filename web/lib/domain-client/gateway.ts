@@ -1113,6 +1113,27 @@ export interface DomainGateway {
     | DomainResultFor<'edit_marketing_ideas_understanding'>
     | ReconciliationRequired
   >;
+  /** Change one claim in the user's own words: what it says, why, the facts it names (#224). Free. */
+  editMarketingIdeasClaim(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    angleId: string;
+    body: DomainOperationMap['edit_marketing_ideas_claim']['requestBody'];
+  }): Promise<
+    DomainResultFor<'edit_marketing_ideas_claim'> | ReconciliationRequired
+  >;
+  /** Take one claim and its ads out of the ideas; its images stay, needing redoing (#224). */
+  deleteMarketingIdeasClaim(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    angleId: string;
+  }): Promise<
+    DomainResultFor<'delete_marketing_ideas_claim'> | ReconciliationRequired
+  >;
   /** Record what the user checked before a download: facts, looks, findings (#198). */
   verifyMarketingIdeas(params: {
     workspaceSlug: string;
@@ -5130,6 +5151,57 @@ export class DefaultDomainGateway implements DomainGateway {
       }),
       'PATCH',
       params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async editMarketingIdeasClaim(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    angleId: string;
+    body: DomainOperationMap['edit_marketing_ideas_claim']['requestBody'];
+  }): Promise<
+    DomainResultFor<'edit_marketing_ideas_claim'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'edit_marketing_ideas_claim',
+      params.actionInstanceId,
+      buildBffPath('edit_marketing_ideas_claim', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+        angle_id: params.angleId,
+      }),
+      'PATCH',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async deleteMarketingIdeasClaim(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    angleId: string;
+  }): Promise<
+    DomainResultFor<'delete_marketing_ideas_claim'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'delete_marketing_ideas_claim',
+      params.actionInstanceId,
+      buildBffPath('delete_marketing_ideas_claim', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+        angle_id: params.angleId,
+      }),
+      'DELETE',
+      undefined,
       200,
       'ok',
       { ifMatch: params.expectedRevision }

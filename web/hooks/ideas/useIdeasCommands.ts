@@ -24,6 +24,7 @@ export type IdeasAddition = components['schemas']['IdeasAddition'];
 export type ImageEditBody = components['schemas']['CreateIdeasImageEdit'];
 export type ChecksQuote = components['schemas']['IdeasChecksQuote'];
 type VerifyBody = components['schemas']['VerifyIdeas'];
+type EditClaimBody = components['schemas']['EditIdeasClaim'];
 type CallSummary = components['schemas']['IdeasCallSummary'];
 type Drafts = components['schemas']['IdeasGenerationDrafts'];
 type OperationRef = components['schemas']['OperationRef'];
@@ -104,6 +105,13 @@ export interface IdeasCommands {
     externalCreativeId: string,
     combinationId: string
   ) => Promise<CommandOutcome<IdeasDetail>>;
+  /** Changes one claim in the user's own words; free (#224). */
+  editClaim: (
+    angleId: string,
+    body: EditClaimBody
+  ) => Promise<CommandOutcome<IdeasDetail>>;
+  /** Deletes one claim; its images stay, needing redoing (#224). */
+  deleteClaim: (angleId: string) => Promise<CommandOutcome<IdeasDetail>>;
   /** Asks the server for the ideas again. */
   refresh: () => Promise<void>;
 }
@@ -398,6 +406,43 @@ export function useIdeasCommands(
     [gateway, projectId, run, slug, store]
   );
 
+  const editClaim = useCallback(
+    async (angleId: string, body: EditClaimBody) =>
+      store(
+        await run<IdeasDetail>(
+          `claim:${revision}:${angleId}:${JSON.stringify(body)}`,
+          (action) =>
+            gateway.editMarketingIdeasClaim({
+              workspaceSlug: slug,
+              actionInstanceId: action,
+              expectedRevision: revision,
+              projectId,
+              angleId,
+              body,
+            })
+        )
+      ),
+    [gateway, projectId, revision, run, slug, store]
+  );
+
+  const deleteClaim = useCallback(
+    async (angleId: string) =>
+      store(
+        await run<IdeasDetail>(
+          `claim-delete:${revision}:${angleId}`,
+          (action) =>
+            gateway.deleteMarketingIdeasClaim({
+              workspaceSlug: slug,
+              actionInstanceId: action,
+              expectedRevision: revision,
+              projectId,
+              angleId,
+            })
+        )
+      ),
+    [gateway, projectId, revision, run, slug, store]
+  );
+
   return {
     verify,
     download,
@@ -409,6 +454,8 @@ export function useIdeasCommands(
     submitPreview,
     editImage,
     placeUpload,
+    editClaim,
+    deleteClaim,
     refresh,
   };
 }

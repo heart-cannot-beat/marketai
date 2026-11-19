@@ -279,6 +279,8 @@ function ReadFacts({
 }) {
   const { t } = useTranslation('ideas');
   const facts = detail?.understanding?.facts ?? [];
+  // Read but not sourced (design §5.2, #224): listed, never used.
+  const unsourced = detail?.understanding?.unsupported_claims ?? [];
   const claims = detail?.ideas?.angles ?? [];
   if (facts.length === 0)
     return (
@@ -309,6 +311,21 @@ function ReadFacts({
           </li>
         ))}
       </ul>
+      {unsourced.length > 0 && (
+        <ul role="list" className="space-y-2" data-testid="reading-unsourced">
+          {unsourced.map((claim) => (
+            <li key={claim.id} className="text-sm">
+              <span
+                aria-hidden="true"
+                className="mr-2 font-bold text-amber-700"
+              >
+                !
+              </span>
+              {t('reading-unsourced', { claim: claim.text })}
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
         {t('reading-facts-unchecked')}
       </p>

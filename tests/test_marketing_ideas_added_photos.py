@@ -221,6 +221,25 @@ class AddingPhotosTests(AddedPhotoFixtures):
         project = self.checked_ads()
         self.assertEqual(self.add_photo(project, "refobj_missing", expect=404)["code"], "photo_upload_not_found")
 
+    def test_an_added_photo_and_the_audience_go_in_one_verification_or_apart(self):
+        project = self.checked_ads()
+        photo = self.own_photo(project)
+        audience = self.read_ideas(project)["understanding"]["audience"]
+        current = self.read_ideas(project)
+        together = self.client.post(f"/api/v1/marketing/ideas/{project['id']}/verification",
+                                    headers=self.headers(current["revision"]),
+                                    json={"photo_ids": [photo["photo_id"]], "audience_confirmed": True})
+        self.assertEqual(together.status_code, 200, together.text)
+        self.assertTrue(together.json()["audience_confirmed"])
+        self.assertEqual([p["status"] for p in together.json()["photos"]], ["verified"])
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], len(version.content_json["reference_bindings"])), (audience, 1))
+        # Apart: rejecting the photo afterwards leaves the confirmed audience.
+        self.decide(project, rejected=[photo["photo_id"]])
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], version.content_json.get("reference_bindings")), (audience, None))
+        self.assertTrue(self.read_ideas(project)["audience_confirmed"])
+
     def test_a_photo_added_in_one_ideas_is_the_products_in_every_ideas_of_it(self):
         project = self.checked_ads()
         photo = self.own_photo(project)

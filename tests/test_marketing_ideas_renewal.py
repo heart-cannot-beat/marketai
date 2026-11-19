@@ -100,6 +100,28 @@ class RenewalTests(RenewalFixtures):
         later = self.draft_references(self.feedback(project, "c3_1")["draft_id"])
         self.assertEqual([ref["reference_version_id"] for ref in later], [renewed["reference_version_id"]])
 
+    def test_a_renewal_and_the_audience_go_in_one_verification_or_apart(self):
+        project, checked = self.made_with_photo()
+        audience = self.read_ideas(project)["understanding"]["audience"]
+        self.expire(checked["reference_version_id"])
+        current = self.read_ideas(project)
+        together = self.client.post(f"/api/v1/marketing/ideas/{project['id']}/verification",
+                                    headers=self.headers(current["revision"]),
+                                    json={"photo_ids": [checked["photo_id"]], "audience_confirmed": True})
+        self.assertEqual(together.status_code, 200, together.text)
+        self.assertTrue(together.json()["audience_confirmed"])
+        renewed = together.json()["photos"][0]
+        self.assertEqual((renewed["status"], renewed["valid_to"]), ("verified", NEXT_YEAR))
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], [b["reference_version_id"] for b in version.content_json["reference_bindings"]]),
+                         (audience, [renewed["reference_version_id"]]))
+        # Apart: the audience confirmed before a renewal stays through it.
+        self.expire(renewed["reference_version_id"])
+        again = self.decide(project, photo_ids=[checked["photo_id"]])["photos"][0]
+        self.assertEqual(again["status"], "verified")
+        self.assertTrue(self.read_ideas(project)["audience_confirmed"])
+        self.assertEqual(self.published_version(project)[0].content_json["audience"], audience)
+
     def test_checking_a_photo_whose_rights_still_run_changes_nothing(self):
         project, checked = self.made_with_photo()
         again = self.decide(project, photo_ids=[checked["photo_id"]])["photos"][0]
