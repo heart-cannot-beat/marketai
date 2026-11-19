@@ -301,9 +301,6 @@ def _content(intent) -> dict:
     return {key: intent.get(key) for key in CONTENT_KEYS}
 
 
-#: The content of an intent that decides whether an image is still the ad the ideas describe (#198).
-content_of = _content
-
 #: An ad's copy (#228): the words the image model renders into the picture (``service.image_brief``).
 COPY_KEYS = ("headline", "body_copy")
 
