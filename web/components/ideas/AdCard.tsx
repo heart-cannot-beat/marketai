@@ -8,6 +8,7 @@ import type {
   IdeasAd,
   IdeasFinding,
 } from '@/lib/ideas/ideas-view';
+import { GuardedLink } from '@/components/workspace/GuardedLink';
 import { photoGone } from '@/lib/ideas/photos';
 import { useFindingTitle } from './FindingList';
 
@@ -44,6 +45,11 @@ interface AdCardProps {
    * or one that failed outside the first batch (#200, #201).
    */
   makeAction?: ReactNode;
+  /**
+   * Where to renew the product photo whose check ran out (#233), when that
+   * is all this ad needs: renewing brings it back with no redoing.
+   */
+  renewHref?: string;
 }
 
 /**
@@ -62,6 +68,7 @@ export function AdCard({
   onRetry,
   retryLabel,
   makeAction,
+  renewHref,
 }: AdCardProps) {
   const { t } = useTranslation('ideas');
   const title = useFindingTitle();
@@ -114,11 +121,24 @@ export function AdCard({
         )}
         {slot.kind === 'ad' &&
           slot.ad.status === 'needs_redo' &&
-          photoGone(slot.ad) && (
+          photoGone(slot.ad) &&
+          (renewHref ? (
+            <div className="space-y-1 text-sm">
+              <p className="text-amber-800 dark:text-amber-300">
+                {t('ideas-ad-photo-expired')}
+              </p>
+              <GuardedLink
+                href={renewHref}
+                className="link font-medium underline-offset-2"
+              >
+                {t('ideas-photo-renew-link')}
+              </GuardedLink>
+            </div>
+          ) : (
             <p className="text-sm text-red-800 dark:text-red-300">
               {t('ideas-ad-photo-gone')}
             </p>
-          )}
+          ))}
         {slot.kind === 'ad' && check === 'checking' && (
           <p
             className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"

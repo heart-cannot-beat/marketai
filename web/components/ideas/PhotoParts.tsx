@@ -293,3 +293,6 @@ export function useCheckDay() {
   return (value: string) =>
     formatDate(i18n.language, `${value}T00:00:00Z`, { timeZone: 'UTC' });
 }
+
+/** The product photos on the product profile, which links point to (#233). */
+export const PRODUCT_PHOTOS_ANCHOR = 'product-photos';

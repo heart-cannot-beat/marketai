@@ -604,7 +604,7 @@ class IdeasApiTests(MarketingIdeasFixtures):
 
 ### S22 照片核对的续期（#233，第三个 PR）
 
-- **做成的样子：** `IdeasPhoto` / `IdeasLogo` 加 `valid_to` 和 `unavailable_reason`（`expired` / `withdrawn` / `file_gone`）。核对一张权利已过期的照片或 Logo 就是续期：创意库新加 `renew_reference_in_transaction`，把同一个参考图带用户的新声明再发布一次；被撤回、归档的不能续期（409 `photo_withdrawn`）。续期后，用这份字节出过的广告直接恢复，不用重出（`ideas_export._renewed`）。产品资料上每张核对过的照片写“核对有效到某天”，过期的写哪天过期并给“续期这张照片”，被撤回的只说明原因。不加接口（仍是 262），没有迁移。
+- **做成的样子：** `IdeasPhoto` / `IdeasLogo` 加 `valid_to` 和 `unavailable_reason`（`expired` / `withdrawn` / `file_gone`）。核对一张权利已过期的照片或 Logo 就是续期：创意库新加 `renew_reference_in_transaction`，把同一个参考图带用户的新声明再发布一次；被撤回、归档的不能续期（409 `photo_withdrawn`）。续期后，用这份字节出过的广告直接恢复，不用重出（`ideas_export._renewed`）。产品资料上每张核对过的照片写“核对有效到某天”，过期的写哪天过期并给“续期这张照片”，被撤回的只说明原因。广告想法页和修改页对只因为照片核对过期而需要重出的广告，说明去产品资料续期、续期后直接恢复，并给入口（维护者 2026-11-19 的决定）。不加接口，没有迁移。
 
 ### S15 前端：竞品独立页面，素材库和设置接入
 

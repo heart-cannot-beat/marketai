@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { useTranslation } from 'next-i18next';
 import classNames from 'classnames';
 import { useDomainQuery } from '@/hooks/domain/useDomainQuery';
+import { useArrivalScroll } from '@/hooks/ideas/useArrivalScroll';
 import { useIdeasCommands } from '@/hooks/ideas/useIdeasCommands';
 import {
   useIdeasPhotoUpload,
@@ -26,6 +27,7 @@ import {
   PhotoStatusBadge,
   PhotoThumbnail,
   RejectPhotoQuestion,
+  PRODUCT_PHOTOS_ANCHOR,
   renewable,
   useCheckDay,
   useCheckDeclaration,
@@ -61,15 +63,21 @@ function Section({
   intro,
   children,
   testId,
+  anchor,
 }: {
   title: string;
   intro: string;
   children: ReactNode;
   testId: string;
+  /** Links may open the page here (#233). */
+  anchor?: string;
 }) {
   const heading = useId();
+  const ref = useArrivalScroll<HTMLElement>(anchor ?? '', Boolean(anchor));
   return (
     <section
+      ref={ref}
+      id={anchor}
       aria-labelledby={heading}
       className="space-y-3"
       data-testid={testId}
@@ -178,6 +186,7 @@ function CandidatePhotos({
       title={t('profile-photos-title')}
       intro={t('profile-photos-intro')}
       testId="profile-photos"
+      anchor={PRODUCT_PHOTOS_ANCHOR}
     >
       <p className="text-sm text-gray-600 dark:text-gray-400">
         {t('profile-photos-expiry')}

@@ -468,6 +468,78 @@ describe('an ad whose photo was rejected (#229)', () => {
   });
 });
 
+/** The answer once p1's check ran out (#233), or p1 was withdrawn in the library. */
+function unusable(
+  why: 'expired' | 'withdrawn',
+  detail = photoDetail()
+): Detail {
+  return {
+    ...rejected(detail),
+    photos: detail.photos!.map((item) =>
+      item.photo_id === 'p1'
+        ? {
+            ...item,
+            status: 'unavailable' as const,
+            unavailable_reason: why,
+            valid_to: '2026-11-17',
+          }
+        : item
+    ),
+  };
+}
+
+async function renderIdeas(detail: Detail) {
+  mockGateway.getMarketingIdeas.mockResolvedValue(ok(detail));
+  render(
+    <Fresh>
+      <IdeasPage product={product()} />
+    </Fresh>
+  );
+  const cards = await screen.findAllByTestId('ad-card');
+  return cards.find((item) =>
+    within(item).queryByRole('img', { name: 'Plug in. Go to bed.' })
+  )!;
+}
+
+describe('an ad whose photo check ran out (#233)', () => {
+  it('the ideas page and the edit screen say to renew the photo, not to redo the ad', async () => {
+    const card = await renderIdeas(unusable('expired'));
+    expect(within(card).getByText('Needs redoing')).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        'The check of a product photo it used ran out. Renew that photo on the product profile and this ad comes back as it was, with no redoing.'
+      )
+    ).toBeInTheDocument();
+    expect(within(card).queryByText(/Use “Edit” to make it again/)).toBeNull();
+    expect(
+      within(card).getByRole('link', { name: 'Renew the photo' })
+    ).toHaveAttribute('href', '/w/acme/p/prod_home/profile#product-photos');
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
+    const edit = await screen.findByTestId('edit-ad');
+    expect(
+      within(edit).getByText(
+        "The check of a product photo this ad used ran out, so it can't be downloaded now. Renew that photo on the product profile and this ad comes back as it was: no redoing, nothing to pay."
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(edit).getByRole('link', { name: 'Renew the photo' })
+    ).toHaveAttribute('href', '/w/acme/p/prod_home/profile#product-photos');
+  });
+
+  it('a photo withdrawn in the library still says to make the ad again', async () => {
+    const card = await renderIdeas(unusable('withdrawn'));
+    expect(
+      within(card).getByText(
+        "A product photo it used was rejected or can't be used any more. Use “Edit” to make it again without that photo."
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(card).queryByRole('link', { name: 'Renew the photo' })
+    ).toBeNull();
+  });
+});
+
 describe('one photo, one state on both screens (#229)', () => {
   it('a photo checked on the product profile is no longer asked before downloading', async () => {
     mockGateway.getMarketingIdeas.mockResolvedValue(ok(photoDetail()));
