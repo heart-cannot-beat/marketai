@@ -409,7 +409,7 @@
   "edit-copy-preview": "预览",
   "edit-copy-preview-empty": "（还没写）",
   "edit-copy-preview-note": "图里的字不会自己变：保存后按新文案再出一张，新图里才是这段文案。",
-  "edit-copy-redo": "保存后，这个讲法下已经出的 {{count}} 张图都要按新文案重出，重出之前不能下载。",
+  "edit-copy-redo": "保存后，这个讲法下已经出的 {{count}} 张图要按新文案重出，重出之前不能下载。",
   "edit-copy-redo_one": "保存后，这个讲法下已经出的这张图要按新文案重出，重出之前不能下载。",
   "edit-copy-kept": "其中 {{count}} 张是你留下的。",
   "edit-copy-kept_one": "其中 {{count}} 张是你留下的。",
