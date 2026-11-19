@@ -8843,6 +8843,160 @@
         }
       }
     },
+    "/api/v1/marketing/ideas/{project_id}/claims/{angle_id}": {
+      "patch": {
+        "operationId": "edit_marketing_ideas_claim",
+        "summary": "Edit Ideas Claim",
+        "description": "Change one claim in the user's own words (#224): what it says, why it is worth trying, the facts it names.\n\nFree of charge. Only facts of the understanding can be named, and the words may state nothing the named\nfacts do not (``claim_unsupported``). The claim's images made before need making again (``ideas_changed``);\nits copy and image instructions stay as they are. Refused while the first batch is still making ads.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "angle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditIdeasClaim"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasProjectDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete_marketing_ideas_claim",
+        "summary": "Delete Ideas Claim",
+        "description": "Take one claim, its ways of telling and its ads out of the ideas (#224); at least two claims stay.\n\nThe images made for it stay listed among ``ads`` and need making again (``ideas_changed``): none of them\ncan be downloaded or exported.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "angle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasProjectDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/ideas/{project_id}/download-intent": {
       "post": {
         "operationId": "download_marketing_ideas",
@@ -9312,7 +9466,7 @@
       "post": {
         "operationId": "verify_marketing_ideas",
         "summary": "Verify Ideas",
-        "description": "Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made\nwithout a product photo, check findings accepted as they are, and the product photos the user checks\nor rejects (#199).\n\nOnly what is named here becomes confirmed; the checked facts and photos are published as the product's\nversion. Ads whose three conditions now hold become ``exportable``; ads made with a rejected photo need\nmaking again.",
+        "description": "Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made\nwithout a product photo, check findings accepted as they are, the product photos the user checks or\nrejects (#199), and the audience (#224).\n\nOnly what is named here becomes confirmed; the checked facts and photos, and the confirmed audience, are\npublished as the product's version. Ads whose three conditions now hold become ``exportable``; ads made\nwith a rejected photo need making again.",
         "parameters": [
           {
             "name": "project_id",
@@ -27183,10 +27337,41 @@
           "display_label"
         ]
       },
+      "EditIdeasClaim": {
+        "properties": {
+          "proposition": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "type": "array",
+            "maxItems": 30
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "proposition",
+          "rationale"
+        ],
+        "description": "Change one claim in the user's own words (#224, design doc §5.7): what it says, why it is worth\ntrying and the facts it stands on, as a whole. Free of charge; nothing is drafted by AI.\n\nEvery fact named must be a fact of the understanding now: each has a source, and neither a removed fact\nnor an unsourced claim can be named. The words may state no number, price or certification the named\nfacts do not, and no listed unsourced claim. Each way of telling the claim keeps only the facts the claim\nstill names. The claim's ads, their copy and their image instructions stay as they are; the images made\nbefore need making again (``ideas_changed``), and a new image is made on the claim as it is now."
+      },
       "EditIdeasUnderstanding": {
         "properties": {
           "understanding": {
-            "$ref": "#/components/schemas/Understanding"
+            "$ref": "#/components/schemas/IdeasUnderstanding"
           },
           "source_addition": {
             "anyOf": [
@@ -27205,7 +27390,7 @@
         "required": [
           "understanding"
         ],
-        "description": "Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product's source."
+        "description": "Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product's source.\n\n``unsupported_claims`` (#224) can only lose items: the server keeps each listed claim the document still\nnames by id, as the AI wrote it, and ignores any other. \"Add a source\" removes one and adds the fact it\nbecomes (unchecked); \"don't need it\" removes one."
       },
       "EditProject": {
         "properties": {
@@ -33958,7 +34143,17 @@
           "understanding": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Understanding"
+                "$ref": "#/components/schemas/IdeasUnderstanding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "audience_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
               },
               {
                 "type": "null"
@@ -34110,6 +34305,91 @@
           "kept_count",
           "updated_at"
         ]
+      },
+      "IdeasUnderstanding": {
+        "properties": {
+          "product_name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1
+          },
+          "category_need": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          },
+          "product_choice_reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          },
+          "audience": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          },
+          "situations": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1
+          },
+          "objections": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/Fact"
+            },
+            "type": "array",
+            "maxItems": 30
+          },
+          "inferences": {
+            "items": {
+              "$ref": "#/components/schemas/Inference"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "minItems": 1
+          },
+          "unknowns": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30
+          },
+          "unsupported_claims": {
+            "items": {
+              "$ref": "#/components/schemas/UnsupportedClaim"
+            },
+            "type": "array",
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_name",
+          "category_need",
+          "product_choice_reason",
+          "audience",
+          "situations",
+          "inferences"
+        ],
+        "description": "The product understanding of ads-first ideas: the plan-first ``Understanding`` and the claims the AI\nread without a source (#224). The plan-first document is unchanged; this list is optional, so an\nunderstanding drafted before it reads as having none."
       },
       "IdentityProbeResponse": {
         "properties": {
@@ -46023,6 +46303,28 @@
           "inferences"
         ]
       },
+      "UnsupportedClaim": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "description": "Something the AI read about the product that no source quote supports (design doc §5.2, #224): a\ncertification, a measurement, a performance or price claim, a comparison. Listed so the user sees it,\nnever used: no claim, way of telling or ad copy may say it (``claims.unsourced_uses``)."
+      },
       "UntestedSummary": {
         "properties": {
           "count": {
@@ -46466,6 +46768,16 @@
             },
             "type": "array",
             "maxItems": 20
+          },
+          "audience_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

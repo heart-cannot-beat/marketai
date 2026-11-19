@@ -1138,6 +1138,18 @@
     "maxResponseBytes": 524288,
     "forwardConditionalHeaders": true
   },
+  "edit_marketing_ideas_claim": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/claims/:angle_id",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
+  "delete_marketing_ideas_claim": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/claims/:angle_id",
+    "maxRequestBytes": 1024,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
   "verify_marketing_ideas": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/verification",
     "maxRequestBytes": 32768,

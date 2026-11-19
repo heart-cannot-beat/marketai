@@ -2649,6 +2649,37 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/claims/{angle_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete Ideas Claim
+     * @description Take one claim, its ways of telling and its ads out of the ideas (#224); at least two claims stay.
+     *
+     *     The images made for it stay listed among ``ads`` and need making again (``ideas_changed``): none of them
+     *     can be downloaded or exported.
+     */
+    delete: operations['delete_marketing_ideas_claim'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit Ideas Claim
+     * @description Change one claim in the user's own words (#224): what it says, why it is worth trying, the facts it names.
+     *
+     *     Free of charge. Only facts of the understanding can be named, and the words may state nothing the named
+     *     facts do not (``claim_unsupported``). The claim's images made before need making again (``ideas_changed``);
+     *     its copy and image instructions stay as they are. Refused while the first batch is still making ads.
+     */
+    patch: operations['edit_marketing_ideas_claim'];
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/download-intent': {
     parameters: {
       query?: never;
@@ -2823,12 +2854,12 @@ export interface paths {
     /**
      * Verify Ideas
      * @description Record what the user checked before a download (ADR 0018 §3, #198): facts, the look of ads made
-     *     without a product photo, check findings accepted as they are, and the product photos the user checks
-     *     or rejects (#199).
+     *     without a product photo, check findings accepted as they are, the product photos the user checks or
+     *     rejects (#199), and the audience (#224).
      *
-     *     Only what is named here becomes confirmed; the checked facts and photos are published as the product's
-     *     version. Ads whose three conditions now hold become ``exportable``; ads made with a rejected photo need
-     *     making again.
+     *     Only what is named here becomes confirmed; the checked facts and photos, and the confirmed audience, are
+     *     published as the product's version. Ads whose three conditions now hold become ``exportable``; ads made
+     *     with a rejected photo need making again.
      */
     post: operations['verify_marketing_ideas'];
     delete?: never;
@@ -7344,14 +7375,33 @@ export interface components {
       display_label: string;
     };
     /**
+     * @description Change one claim in the user's own words (#224, design doc §5.7): what it says, why it is worth
+     *     trying and the facts it stands on, as a whole. Free of charge; nothing is drafted by AI.
+     *
+     *     Every fact named must be a fact of the understanding now: each has a source, and neither a removed fact
+     *     nor an unsourced claim can be named. The words may state no number, price or certification the named
+     *     facts do not, and no listed unsourced claim. Each way of telling the claim keeps only the facts the claim
+     *     still names. The claim's ads, their copy and their image instructions stay as they are; the images made
+     *     before need making again (``ideas_changed``), and a new image is made on the claim as it is now.
+     */
+    EditIdeasClaim: {
+      proposition: string;
+      rationale: string;
+      fact_ids?: string[];
+    };
+    /**
      * @description Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.
      *
      *     ``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A
      *     fact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out
      *     removes it. ``source_addition`` adds material for a new quote to the product's source.
+     *
+     *     ``unsupported_claims`` (#224) can only lose items: the server keeps each listed claim the document still
+     *     names by id, as the AI wrote it, and ignores any other. "Add a source" removes one and adds the fact it
+     *     becomes (unchecked); "don't need it" removes one.
      */
     EditIdeasUnderstanding: {
-      understanding: components['schemas']['Understanding'];
+      understanding: components['schemas']['IdeasUnderstanding'];
       source_addition?: string | null;
     };
     EditProject: {
@@ -9014,7 +9064,8 @@ export interface components {
       product_id: string;
       market: string;
       ad_language: string;
-      understanding: components['schemas']['Understanding'] | null;
+      understanding: components['schemas']['IdeasUnderstanding'] | null;
+      audience_confirmed?: boolean | null;
       ideas: components['schemas']['Ideas'] | null;
       latest_call: components['schemas']['IdeasCallSummary'] | null;
       ads: components['schemas']['AdSummary'][];
@@ -9037,6 +9088,23 @@ export interface components {
       kept_count: number;
       updated_at: string;
       first_batch?: components['schemas']['FirstBatchSummary'] | null;
+    };
+    /**
+     * @description The product understanding of ads-first ideas: the plan-first ``Understanding`` and the claims the AI
+     *     read without a source (#224). The plan-first document is unchanged; this list is optional, so an
+     *     understanding drafted before it reads as having none.
+     */
+    IdeasUnderstanding: {
+      product_name: string;
+      category_need: string;
+      product_choice_reason: string;
+      audience: string;
+      situations: string[];
+      objections?: string[];
+      facts?: components['schemas']['Fact'][];
+      inferences: components['schemas']['Inference'][];
+      unknowns?: string[];
+      unsupported_claims?: components['schemas']['UnsupportedClaim'][];
     };
     /**
      * @description The verified TenantContext, echoed back for the tracer round trip.
@@ -12096,6 +12164,15 @@ export interface components {
       inferences: components['schemas']['Inference'][];
       unknowns?: string[];
     };
+    /**
+     * @description Something the AI read about the product that no source quote supports (design doc §5.2, #224): a
+     *     certification, a measurement, a performance or price claim, a comparison. Listed so the user sees it,
+     *     never used: no claim, way of telling or ad copy may say it (``claims.unsourced_uses``).
+     */
+    UnsupportedClaim: {
+      id: string;
+      text: string;
+    };
     /** @description Combinations a scale does not generate (shown on the plan card). */
     UntestedSummary: {
       count: number;
@@ -12200,6 +12277,7 @@ export interface components {
       accepted_findings?: components['schemas']['AcceptedFindings'][];
       photo_ids?: string[];
       rejected_photo_ids?: string[];
+      audience_confirmed?: boolean | null;
     };
     Vocabulary: {
       factors?: components['schemas']['VocabularyFactor'][];
@@ -17753,6 +17831,80 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdeasChecksQuote'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  delete_marketing_ideas_claim: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+        angle_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  edit_marketing_ideas_claim: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+        angle_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EditIdeasClaim'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
         };
       };
       /** @description Validation Error */

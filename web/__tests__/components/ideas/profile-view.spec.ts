@@ -1,11 +1,21 @@
 import {
   factUse,
   newFactId,
+  withAudience,
   withFactAdded,
   withFactChanged,
   withFactRemoved,
   withUnknownAnswered,
+  withUnsourcedAnswered,
+  withUnsourcedDropped,
 } from '@/lib/ideas/profile-view';
+import {
+  claimChanged,
+  claimFactIds,
+  claimFormStart,
+  claimImages,
+  removedFactsOf,
+} from '@/lib/ideas/claim-edit';
 import { ad, ideasDetail } from './fixtures';
 
 /** The documents the product profile sends back (#202). */
@@ -92,5 +102,111 @@ describe('profile view', () => {
       id: 'fact-w',
       confirmation: 'unconfirmed',
     });
+  });
+});
+
+/** Claims without a source and the audience (#224). */
+describe('unsourced claims and the audience', () => {
+  const base = ideasDetail().understanding!;
+  const understanding = {
+    ...base,
+    unsupported_claims: [
+      { id: 'u1', text: 'Charges 3x faster than a wall socket' },
+      { id: 'u2', text: 'The quietest home charger on the market' },
+    ],
+  };
+
+  it('a source turns one into an unchecked fact and takes only it off the list', () => {
+    const next = withUnsourcedAnswered(
+      understanding,
+      'u1',
+      { statement: ' 3x faster ', source_quote: 'Lab test: 3x faster.' },
+      'fact-lab'
+    );
+    expect(next.unsupported_claims).toEqual([
+      understanding.unsupported_claims[1],
+    ]);
+    expect(next.facts!.at(-1)).toEqual({
+      id: 'fact-lab',
+      statement: '3x faster',
+      source_quote: 'Lab test: 3x faster.',
+      confirmation: 'unconfirmed',
+    });
+  });
+
+  it("don't need it takes one off and adds nothing", () => {
+    const next = withUnsourcedDropped(understanding, 'u2');
+    expect(next.unsupported_claims).toEqual([
+      understanding.unsupported_claims[0],
+    ]);
+    expect(next.facts).toBe(understanding.facts);
+  });
+
+  it('a new fact never takes an unsourced claim id', () => {
+    const ids = ['u1', 'abc'];
+    expect(newFactId(understanding, () => ids.shift()!)).toBe('fact-u1');
+  });
+
+  it('the audience in the user words, trimmed', () => {
+    expect(withAudience(understanding, '  Renters  ').audience).toBe('Renters');
+  });
+});
+
+/** What changing or deleting a claim touches (#224). */
+describe('claim edit', () => {
+  const detail = ideasDetail({
+    ads: [ad('av_1', 'c1', { kept: true }), ad('av_2', 'c2'), ad('av_3', 'c3')],
+  });
+  const first = detail.ideas!.angles[0];
+
+  it('a claim names its own facts and its ways of telling facts', () => {
+    const angle = {
+      ...first,
+      fact_ids: ['f3'],
+      expressions: first.expressions.map((e) => ({
+        ...e,
+        evidence_basis: { fact_ids: ['f1', 'f9'], gap: '' },
+      })),
+    };
+    expect(claimFactIds(angle)).toEqual(['f3', 'f1', 'f9']);
+    const named = {
+      ...detail,
+      ideas: {
+        ...detail.ideas!,
+        angles: [angle, ...detail.ideas!.angles.slice(1)],
+      },
+    };
+    expect(removedFactsOf(named, first.id)).toEqual(['f9']);
+    // The form starts from the facts that still exist, in the profile's order.
+    expect(claimFormStart(named, angle).fact_ids).toEqual(['f1', 'f3']);
+    // A deleted fact the claim names is a change on its own.
+    expect(claimChanged(named, angle, claimFormStart(named, angle))).toBe(true);
+  });
+
+  it('nothing changed is nothing to send', () => {
+    expect(claimChanged(detail, first, claimFormStart(detail, first))).toBe(
+      false
+    );
+    expect(
+      claimChanged(detail, first, {
+        ...claimFormStart(detail, first),
+        proposition: ` ${first.proposition} `,
+      })
+    ).toBe(false);
+    expect(
+      claimChanged(detail, first, {
+        ...claimFormStart(detail, first),
+        fact_ids: [],
+      })
+    ).toBe(true);
+  });
+
+  it('counts the images made for a claim and the kept ones', () => {
+    const images = claimImages(detail, 'a1');
+    expect(images.ads.map((item) => item.asset_version_id)).toEqual([
+      'av_1',
+      'av_2',
+    ]);
+    expect(images.kept).toBe(1);
   });
 });

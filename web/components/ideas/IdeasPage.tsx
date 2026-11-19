@@ -33,6 +33,7 @@ import {
 import { AdCard } from './AdCard';
 import { ChecksButton } from './ChecksButton';
 import { CheckSheet } from './CheckSheet';
+import { ClaimMenu, type ClaimPanel } from './ClaimMenu';
 import { EditAd } from './EditAd';
 import { AddClaim, AddTelling } from './IdeasAdditions';
 import {
@@ -62,10 +63,12 @@ type Screen =
  * settings and optional guiding questions beside them; and a bottom bar with
  * how many are kept, which leads to the check before downloading.
  *
- * Left for later on purpose: taking ads to a test (step 2), changing or
- * removing a claim and the image model's own instructions (no server path
- * yet). Product photos are checked in the check before downloading and on
- * the product profile (#229).
+ * Each claim's "More" changes or deletes it in the user's own words (#224).
+ * Product photos are checked in the check before downloading and on the
+ * product profile (#229).
+ *
+ * Left for later on purpose: taking ads to a test (step 2) and the image
+ * model's own instructions (no server path yet).
  */
 export function IdeasPage({ product }: { product: WorkspaceProduct }) {
   const { t } = useTranslation('ideas');
@@ -99,6 +102,11 @@ function IdeasProject({
   const [screen, setScreen] = useState<Screen>({ kind: 'ideas' });
   const [uploading, setUploading] = useState(false);
   const [telling, setTelling] = useState<string | null>(null);
+  // One claim's "More" is open at a time (#224).
+  const [claimPanel, setClaimPanel] = useState<{
+    angleId: string;
+    panel: ClaimPanel;
+  } | null>(null);
   const [picked, setPicked] = useState<Record<string, string[]>>({});
   const [own, setOwn] = useState<Record<string, string>>({});
   const profileHref = productViewHref(
@@ -269,6 +277,10 @@ function IdeasProject({
           onAnotherTelling={(angleId) =>
             setTelling(telling === angleId ? null : angleId)
           }
+          onEditClaim={(angleId) => {
+            setClaimPanel({ angleId, panel: 'edit' });
+            setScreen({ kind: 'ideas' });
+          }}
         />
         {angle && telling === angle.id && (
           <div className="mx-auto max-w-5xl">
@@ -431,17 +443,39 @@ function IdeasProject({
                 card={card}
                 more={
                   angle && (
-                    <AddTelling
-                      angle={angle}
-                      explain={false}
-                      open={telling === angle.id}
-                      onOpenChange={(open) =>
-                        setTelling(open ? angle.id : null)
-                      }
-                      detail={detail}
-                      commands={commands}
-                      answers={answers}
-                    />
+                    <>
+                      <AddTelling
+                        angle={angle}
+                        explain={false}
+                        open={telling === angle.id}
+                        onOpenChange={(open) =>
+                          setTelling(open ? angle.id : null)
+                        }
+                        detail={detail}
+                        commands={commands}
+                        answers={answers}
+                      />
+                      {/* While the first batch still makes ads it holds the
+                          claims as they were confirmed (#224). */}
+                      {batchEnded && (
+                        <ClaimMenu
+                          angle={angle}
+                          number={group.number}
+                          detail={detail}
+                          commands={commands}
+                          panel={
+                            claimPanel?.angleId === angle.id
+                              ? claimPanel.panel
+                              : null
+                          }
+                          onPanelChange={(panel) =>
+                            setClaimPanel(
+                              panel ? { angleId: angle.id, panel } : null
+                            )
+                          }
+                        />
+                      )}
+                    </>
                   )
                 }
               />

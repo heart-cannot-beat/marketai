@@ -543,6 +543,12 @@ export type DomainOperationMap = {
       200: components['schemas']['CompetitorDiscoveryDecisionResult'];
     };
   };
+  delete_marketing_ideas_claim: {
+    pathParams: { project_id: string; angle_id: string };
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
+  };
   delete_product_reference: {
     pathParams: { product_id: string; item_id: string };
     queryParams: Record<string, never>;
@@ -562,6 +568,12 @@ export type DomainOperationMap = {
     queryParams: Record<string, never>;
     requestBody: components['schemas']['DownloadIdeas'];
     successResponses: { 201: components['schemas']['IdeasDownload'] };
+  };
+  edit_marketing_ideas_claim: {
+    pathParams: { project_id: string; angle_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['EditIdeasClaim'];
+    successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
   };
   edit_marketing_ideas_understanding: {
     pathParams: { project_id: string };

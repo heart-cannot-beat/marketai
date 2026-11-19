@@ -617,6 +617,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'delete_marketing_ideas_claim',
+    method: 'DELETE',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/claims/:angle_id',
+    pathParams: ['project_id', 'angle_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'delete_product_reference',
     method: 'DELETE',
     bffPattern:
@@ -638,6 +646,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     bffPattern:
       '/api/domain/v1/w/:slug/marketing/ideas/:project_id/download-intent',
     pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'edit_marketing_ideas_claim',
+    method: 'PATCH',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/claims/:angle_id',
+    pathParams: ['project_id', 'angle_id'],
     requiresIdempotency: true,
   },
   {

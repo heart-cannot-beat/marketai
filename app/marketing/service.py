@@ -375,7 +375,8 @@ def planning_repair_context(session, ctx, row, kind="plan"):
     return feedback
 
 
-def start_planning(session, ctx, row, revision, kind, mode, quote_hash, direction=None, decision_question="", ad_language=None, strategy_language="en-US"):
+def start_planning(session, ctx, row, revision, kind, mode, quote_hash, direction=None, decision_question="", ad_language=None, strategy_language="en-US",
+                   flow=None):
     if kind == "plan" and row.state not in ("understanding_confirmed", "plan_draft", "plan_confirmed"):
         raise MarketingError("understanding_not_confirmed", "请先确认 AI 对产品的理解。")
     if direction == "optimize_elements" and not decision_question.strip():
@@ -389,6 +390,9 @@ def start_planning(session, ctx, row, revision, kind, mode, quote_hash, directio
     inputs = {"source_text": row.source_text, "understanding": row.understanding_json,
         "ad_language": ad_language or previous_plan.get("ad_language", "en-US"),
         "strategy_language": strategy_language}
+    if flow == "ads_first" and kind == "understanding":
+        # An ads-first understanding also lists the claims read without a source (#224); plan-first inputs are unchanged.
+        inputs["flow"] = flow
     if kind == "plan":
         from .progression import planning_history
         from .expression_catalog import planner_reference
