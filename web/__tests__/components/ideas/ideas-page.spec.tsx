@@ -178,7 +178,7 @@ describe('IdeasPage (#196)', () => {
     expect(within(claim(2)).getAllByText('Not made yet.')).toHaveLength(2);
   });
 
-  it('marks an ad made without a product photo, and points to the product photos', async () => {
+  it('marks an ad made without a product photo, and offers to add one (#233)', async () => {
     await renderPage();
     const second = claim(2);
     const cards = within(second).getAllByTestId('ad-card');
@@ -188,8 +188,14 @@ describe('IdeasPage (#196)', () => {
     expect(within(cards[1]).queryByText('No product photo used')).toBeNull();
     expect(screen.getAllByText('No product photo used')).toHaveLength(1);
     expect(
-      screen.getByRole('link', { name: 'See the product photos' })
-    ).toHaveAttribute('href', '/w/acme/p/prod_home/profile');
+      screen.getByText(
+        'Some ads were made without a product photo. Add a product photo so the product in them looks more like the real thing.'
+      )
+    ).toBeInTheDocument();
+    // Straight to adding a photo on the product's profile.
+    expect(
+      screen.getByRole('link', { name: 'Add a product photo' })
+    ).toHaveAttribute('href', '/w/acme/p/prod_home/profile#add-photo');
   });
 
   it('suggests no photo when every ad used one', async () => {
@@ -199,7 +205,7 @@ describe('IdeasPage (#196)', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('No product photo used')).toBeNull();
     expect(
-      screen.queryByRole('link', { name: 'See the product photos' })
+      screen.queryByRole('link', { name: 'Add a product photo' })
     ).toBeNull();
   });
 

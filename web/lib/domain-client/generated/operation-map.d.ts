@@ -19,6 +19,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['AddExperimentEntryRequest'];
     successResponses: { 201: components['schemas']['ExperimentEntryMutation'] };
   };
+  add_marketing_ideas_photo: {
+    pathParams: { project_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['AddIdeasPhoto'];
+    successResponses: { 201: components['schemas']['IdeasProjectDetail'] };
+  };
   add_product_reference: {
     pathParams: { product_id: string };
     queryParams: Record<string, never>;
@@ -376,6 +382,12 @@ export type DomainOperationMap = {
     queryParams: Record<string, never>;
     requestBody: components['schemas']['CreateIdeasImageEdit'];
     successResponses: { 202: components['schemas']['IdeasProjectDetail'] };
+  };
+  create_marketing_ideas_photo_download_intent: {
+    pathParams: { project_id: string; photo_id: string };
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: { 201: components['schemas']['IdeasPhotoDownloadGrant'] };
   };
   create_marketing_image_edit: {
     pathParams: { round_id: string };

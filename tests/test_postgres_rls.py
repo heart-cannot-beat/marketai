@@ -49,6 +49,7 @@ CURRENT_AGGREGATE_TABLES = {
         "marketing_first_batches",
         "marketing_ideas_export_records",
         "marketing_ideas_uploads",
+        "marketing_product_photos",
     },
     "platform": {
         "workspaces",
@@ -363,6 +364,7 @@ def all_protected_tables() -> tuple[str, ...]:
     from migrations.versions.zzn193a1b2c3_marketing_first_batches import NEW_WORKSPACE_OWNED as FIRST_BATCH
     from migrations.versions.zzp198a1b2c3_marketing_ideas_export_records import NEW_WORKSPACE_OWNED as IDEAS_EXPORT
     from migrations.versions.zzq200a1b2c3_marketing_ideas_revisions import NEW_WORKSPACE_OWNED as IDEAS_UPLOADS
+    from migrations.versions.zzr233a1b2c3_marketing_product_photos import NEW_WORKSPACE_OWNED as PRODUCT_PHOTOS
     from migrations.versions.zn9a0b1c2d3e_marketing_planning import NEW_WORKSPACE_OWNED as MARKETING_0
     from migrations.versions.zo0b1c2d3e4f_marketing_delivery import NEW_WORKSPACE_OWNED as MARKETING_1
     from migrations.versions.zp1c2d3e4f5a_marketing_ai_qc import NEW_WORKSPACE_OWNED as MARKETING_2
@@ -461,6 +463,7 @@ def all_protected_tables() -> tuple[str, ...]:
         + FIRST_BATCH
         + IDEAS_EXPORT
         + IDEAS_UPLOADS
+        + PRODUCT_PHOTOS
         + NEW_WORKSPACE_OWNED
         + OPERATION_TABLES
         + IDEMPOTENCY_TABLES
@@ -1138,6 +1141,59 @@ class RowLevelSecurityTests(unittest.TestCase):
         self.assertIn("permission denied", str(denied.exception))
         readonly = self.scoped_connection(self.engine(READONLY_URL), self.alpha)
         self.assertEqual(readonly.execute(self.text("SELECT COUNT(*) FROM marketing_ideas_uploads WHERE workspace_id = :ws"),
+                                          {"ws": self.beta}).scalar(), 0)
+
+    def test_a_photo_added_to_a_product_stays_in_its_workspace_and_is_never_rewritten(self):
+        """Photos the user adds to an ads-first product (#233): bound to the product, the ideas and the gated
+        reference object by Workspace-composite keys; the API adds one only in its own Workspace and never
+        changes or removes one; the Worker and readonly only read their own Workspace's."""
+        from sqlalchemy.exc import ProgrammingError
+
+        with self.owner.connect() as conn:
+            definitions = dict(conn.execute(self.text(
+                "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                " WHERE conrelid = 'public.marketing_product_photos'::regclass AND contype IN ('f', 'u', 'c')")).all())
+            objects = dict(conn.execute(self.text(
+                "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                " WHERE conrelid = 'public.reference_objects'::regclass AND contype = 'u'")).all())
+        self.assertEqual(
+            definitions["fk_marketing_product_photo_product"],
+            "FOREIGN KEY (workspace_id, product_id) REFERENCES products(workspace_id, id) ON DELETE RESTRICT")
+        self.assertEqual(
+            definitions["fk_marketing_product_photo_project"],
+            "FOREIGN KEY (workspace_id, project_id) REFERENCES marketing_projects(workspace_id, id) ON DELETE RESTRICT")
+        self.assertEqual(
+            definitions["fk_marketing_product_photo_object"],
+            "FOREIGN KEY (workspace_id, reference_object_id) REFERENCES reference_objects(workspace_id, id) ON DELETE RESTRICT")
+        self.assertEqual(definitions["uq_marketing_product_photo_object"],
+                         "UNIQUE (workspace_id, product_id, reference_object_id)")
+        self.assertIn("'logo'", definitions["ck_marketing_product_photos_photo_role"])
+        self.assertEqual(objects["uq_reference_objects_workspace_id"], "UNIQUE (workspace_id, id)")
+
+        insert = ("INSERT INTO marketing_product_photos (id, workspace_id, product_id, project_id, reference_object_id,"
+                  " role, created_at) VALUES (:id, :ws, 'prod_x', 'mp_x', 'refobj_x', 'main', now())")
+        api = self.scoped_connection(self.engine(API_URL), self.alpha)
+        with self.assertRaises(ProgrammingError) as smuggled:
+            with api.begin_nested():
+                api.execute(self.text(insert), {"id": f"mpp_{uuid.uuid4().hex[:8]}", "ws": self.beta})
+        self.assertIn("row-level security", str(smuggled.exception))
+        # Append-only: the API can neither change nor remove one.
+        for statement in ("UPDATE marketing_product_photos SET role = 'detail' WHERE id = 'mpp_x'",
+                          "DELETE FROM marketing_product_photos WHERE id = 'mpp_x'"):
+            with self.assertRaises(ProgrammingError) as refused:
+                with api.begin_nested():
+                    api.execute(self.text(statement))
+            self.assertIn("permission denied", str(refused.exception))
+        # The Worker drafts images with the product's photos, but never adds one; readonly reads.
+        worker = self.scoped_connection(self.engine(WORKER_URL), self.alpha)
+        self.assertEqual(worker.execute(self.text("SELECT COUNT(*) FROM marketing_product_photos WHERE workspace_id = :ws"),
+                                        {"ws": self.beta}).scalar(), 0)
+        with self.assertRaises(ProgrammingError) as denied:
+            with worker.begin_nested():
+                worker.execute(self.text(insert), {"id": f"mpp_{uuid.uuid4().hex[:8]}", "ws": self.alpha})
+        self.assertIn("permission denied", str(denied.exception))
+        readonly = self.scoped_connection(self.engine(READONLY_URL), self.alpha)
+        self.assertEqual(readonly.execute(self.text("SELECT COUNT(*) FROM marketing_product_photos WHERE workspace_id = :ws"),
                                           {"ws": self.beta}).scalar(), 0)
 
     def test_an_ideas_export_record_stays_in_its_workspace_and_is_never_rewritten(self):

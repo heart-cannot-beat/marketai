@@ -121,6 +121,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'add_marketing_ideas_photo',
+    {
+      operationId: 'add_marketing_ideas_photo',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/photos',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 1024,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'add_marketing_ideas_photo_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'add_product_reference',
     {
       operationId: 'add_product_reference',
@@ -1619,6 +1646,36 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         202: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'create_marketing_ideas_image_edit_202' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'create_marketing_ideas_photo_download_intent',
+    {
+      operationId: 'create_marketing_ideas_photo_download_intent',
+      method: 'POST',
+      pathTemplate:
+        '/api/v1/marketing/ideas/{project_id}/photos/{photo_id}/download-intent',
+      pathParams: ['project_id', 'photo_id'],
+      queryParams: [],
+      requestMediaTypes: [],
+      requiresIdempotency: true,
+      maxRequestBytes: 0,
+      maxResponseBytes: 16384,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: {
+            validatorId: 'create_marketing_ideas_photo_download_intent_201',
+          },
           locationShapes: [],
         },
         422: {

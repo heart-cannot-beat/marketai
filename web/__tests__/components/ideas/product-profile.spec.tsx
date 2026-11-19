@@ -52,6 +52,11 @@ jest.mock('@/lib/domain-client/gateway-provider', () => ({
 /** What each read the photo and brand blocks make answers. */
 const mockReads: Record<string, unknown> = {};
 const mockRefreshRead = jest.fn().mockResolvedValue(undefined);
+// The photo area's own upload (#233) needs the browser's storage client; nothing here uploads.
+jest.mock('@/lib/domain-client/upload-deps', () => ({
+  useBlobTransferClient: () => ({ downloadBlob: jest.fn() }),
+  useFileDigest: () => jest.fn(),
+}));
 jest.mock('@/hooks/domain/useDomainQuery', () => ({
   useDomainQuery: (
     operation: string,

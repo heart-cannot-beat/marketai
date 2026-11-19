@@ -236,11 +236,13 @@ class FirstBatchSummary(Document):
 
 
 class IdeasPhoto(Document):
-    """A photo the product's reading found that may show the product's look (#199; design doc §5.2).
+    """A photo that may show the product's look (#199; design doc §5.2): one the product's reading found, or
+    one the user added to the product (``add_marketing_ideas_photo``, #233).
 
     Ads may be drafted with it before anyone checks it; an ad made with it is exportable only once the user
     checks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.
-    Show it with ``create_product_intake_image_download_intent(intake_id, image_id)``."""
+    Show it with ``create_marketing_ideas_photo_download_intent(photo_id)``; a reading's photo also with
+    ``create_product_intake_image_download_intent(intake_id, image_id)``."""
     # The content hash of the photo's controlled derivative, the bytes an image request sends.
     photo_id: str
     # ``unavailable``: the user checked it, but the creative-library reference it became can no longer be
@@ -248,13 +250,15 @@ class IdeasPhoto(Document):
     # every ad made with it needs making again. The newest decision on the product's photo counts, in
     # whichever of the product's ideas it was made.
     status: Literal["unverified", "verified", "rejected", "unavailable"]
-    # What the reading took the photo for: the main photo, another angle, or a close-up.
+    # What the reading (or the user, adding it) took the photo for: the main photo, another angle, or a close-up.
     role: Literal["main", "angle", "detail"]
-    # From the product page (or an image link the user pasted), or from the user's upload.
-    source: Literal["product_page", "upload"]
+    # From the product page (or an image link the user pasted), from an image the user gave the reading, or
+    # added to the product by the user afterwards (``added``, #233).
+    source: Literal["product_page", "upload", "added"]
     source_url: str | None = None
-    intake_id: str
-    image_id: str
+    # The reading that found it; none for a photo the user added.
+    intake_id: str | None = None
+    image_id: str | None = None
     width: int | None = None
     height: int | None = None
     # The creative-library reference a checked photo became.
@@ -424,6 +428,26 @@ class PlaceIdeasUpload(Document):
     """Place an uploaded image of the product (``create_external_creatives``, rights declared) under one ad."""
     external_creative_id: str = Field(min_length=1, max_length=64)
     combination_id: Identifier
+
+
+class AddIdeasPhoto(Document):
+    """Add a photo to the product of these ideas (#233, design doc §5.2): an image the user uploaded that passed
+    the reference upload gate (``create_library_reference_object``), and what it shows. No rights are declared
+    here: checking the photo declares them, as for a photo the reading found."""
+    reference_object_id: str = Field(min_length=1, max_length=64)
+    # The whole product (the main photo), another angle of it, or a close-up.
+    role: Literal["main", "angle", "detail"] = "detail"
+
+
+class IdeasPhotoDownloadGrant(Document):
+    """A short-lived signed link to a photo's released derivative, the bytes an image request sends (#233)."""
+    photo_id: str
+    download_url: str
+    expires_at: str
+    mime_type: str
+    byte_size: int
+    width: int
+    height: int
 
 
 class IdeasChecksSkipped(Document):

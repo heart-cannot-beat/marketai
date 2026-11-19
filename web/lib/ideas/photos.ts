@@ -2,8 +2,9 @@ import type { components } from '@/lib/domain-client/generated/domain-v1';
 import type { IdeasAd, IdeasDetail } from './ideas-view';
 
 /**
- * The product photos of ad ideas (ADR 0018 §3, design §5.3, #199, #229):
- * the photos the product's reading found, each with the user's checking.
+ * The product photos of ad ideas (ADR 0018 §3, design §5.3, #199, #229,
+ * #233): the photos the product's reading found and the ones the user added
+ * to the product, each with the user's checking.
  * Both the check before downloading and the product profile read them from
  * the same `get_marketing_ideas` answer, so a photo reads the same on both.
  *
@@ -15,6 +16,8 @@ import type { IdeasAd, IdeasDetail } from './ideas-view';
 
 export type IdeasPhoto = components['schemas']['IdeasPhoto'];
 export type PhotoStatus = IdeasPhoto['status'];
+/** What a photo shows: the whole product, another angle, or a close-up. */
+export type PhotoRole = IdeasPhoto['role'];
 
 /** The ads of these ideas made with this photo, in the ideas' order. */
 export function adsWithPhoto(detail: IdeasDetail, photoId: string): IdeasAd[] {

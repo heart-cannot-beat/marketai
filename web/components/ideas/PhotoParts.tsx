@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { useTranslation } from 'next-i18next';
 import classNames from 'classnames';
 import type { CommandOutcome } from '@/hooks/ideas/useIdeasCommands';
+import { useIdeasPhotoUrl } from '@/hooks/ideas/useIdeasPhotoUrl';
 import { useIntakeImageUrl } from '@/hooks/products/useIntakeImageUrl';
 import { errorMessage } from '@/lib/i18n/domain-errors';
 import type { IdeasPhoto, PhotoStatus } from '@/lib/ideas/photos';
@@ -18,21 +19,81 @@ const THUMBNAIL = {
   lg: 'w-full max-w-60',
 } as const;
 
-/** The photo itself: the reading's released copy, never a link to keep. */
+/**
+ * The photo itself: its released copy, never a link to keep. A photo the
+ * reading found is read through its reading; one the user added (#233)
+ * through the ideas it belongs to.
+ */
 export function PhotoThumbnail({
   photo,
+  projectId,
   alt,
   size = 'sm',
 }: {
   photo: IdeasPhoto;
+  projectId: string;
   alt: string;
   size?: keyof typeof THUMBNAIL;
 }) {
-  const { t } = useTranslation('ideas');
-  const { blobUrl, failed } = useIntakeImageUrl(
-    photo.intake_id,
-    photo.image_id
+  return photo.intake_id && photo.image_id ? (
+    <ReadingPhoto
+      intakeId={photo.intake_id}
+      imageId={photo.image_id}
+      alt={alt}
+      size={size}
+    />
+  ) : (
+    <AddedPhoto
+      projectId={projectId}
+      photoId={photo.photo_id}
+      alt={alt}
+      size={size}
+    />
   );
+}
+
+function ReadingPhoto({
+  intakeId,
+  imageId,
+  alt,
+  size,
+}: {
+  intakeId: string;
+  imageId: string;
+  alt: string;
+  size: keyof typeof THUMBNAIL;
+}) {
+  const { blobUrl, failed } = useIntakeImageUrl(intakeId, imageId);
+  return <Picture url={blobUrl} failed={failed} alt={alt} size={size} />;
+}
+
+function AddedPhoto({
+  projectId,
+  photoId,
+  alt,
+  size,
+}: {
+  projectId: string;
+  photoId: string;
+  alt: string;
+  size: keyof typeof THUMBNAIL;
+}) {
+  const { blobUrl, failed } = useIdeasPhotoUrl(projectId, photoId);
+  return <Picture url={blobUrl} failed={failed} alt={alt} size={size} />;
+}
+
+function Picture({
+  url: blobUrl,
+  failed,
+  alt,
+  size,
+}: {
+  url: string | null;
+  failed: boolean;
+  alt: string;
+  size: keyof typeof THUMBNAIL;
+}) {
+  const { t } = useTranslation('ideas');
   return (
     <div
       className={classNames(

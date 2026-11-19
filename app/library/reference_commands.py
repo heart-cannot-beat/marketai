@@ -166,7 +166,8 @@ def create_reference_from_upload_intent(
         if same_content is not None:
             if same_content.state == STATE_REJECTED:
                 raise ReferenceCommandError(
-                    "该文件此前已被上传门禁拒绝，不接受重复上传"
+                    "该文件此前已被上传门禁拒绝，不接受重复上传",
+                    code="reference_previously_rejected",
                 )
             # Same bytes already live in this Workspace (§7.1 object reuse):
             # re-run (or short-circuit) the gate on the existing identity

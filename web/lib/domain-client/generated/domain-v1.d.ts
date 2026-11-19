@@ -2775,6 +2775,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/photos': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add Ideas Photo
+     * @description Add the user's own photo to the product of these ideas (#233, design doc §5.2).
+     *
+     *     Upload it first like any reference (an Upload Intent of purpose ``reference_asset``, then
+     *     ``create_library_reference_object``) and wait for its gate. Once released, it is listed in ``photos``
+     *     (``source = "added"``) in every ads-first project of the product, drafts images and is checked or
+     *     rejected like a photo the product's reading found; until the user checks it, its ads are drafts.
+     *     409 ``photo_upload_checking`` while the gate is still checking it, ``photo_upload_rejected`` (with the
+     *     gate's ``failure_code``) when it did not pass, ``photo_already_listed`` when the product has it already.
+     */
+    post: operations['add_marketing_ideas_photo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/ideas/{project_id}/photos/{photo_id}/download-intent': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create Ideas Photo Download Intent
+     * @description A short-lived signed link to one photo of these ideas (#233): its released derivative, the bytes an image
+     *     request sends, never the uploaded original. Any photo listed in ``photos``, checked or not.
+     */
+    post: operations['create_marketing_ideas_photo_download_intent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/planning': {
     parameters: {
       query?: never;
@@ -4572,6 +4620,19 @@ export interface components {
         [key: string]: unknown;
       };
       expected_revision: number;
+    };
+    /**
+     * @description Add a photo to the product of these ideas (#233, design doc §5.2): an image the user uploaded that passed
+     *     the reference upload gate (``create_library_reference_object``), and what it shows. No rights are declared
+     *     here: checking the photo declares them, as for a photo the reading found.
+     */
+    AddIdeasPhoto: {
+      reference_object_id: string;
+      /**
+       * @default detail
+       * @enum {string}
+       */
+      role: 'main' | 'angle' | 'detail';
     };
     AddProductReference: {
       reference_object_id?: string | null;
@@ -9034,11 +9095,13 @@ export interface components {
       error_code?: string | null;
     };
     /**
-     * @description A photo the product's reading found that may show the product's look (#199; design doc §5.2).
+     * @description A photo that may show the product's look (#199; design doc §5.2): one the product's reading found, or
+     *     one the user added to the product (``add_marketing_ideas_photo``, #233).
      *
      *     Ads may be drafted with it before anyone checks it; an ad made with it is exportable only once the user
      *     checks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.
-     *     Show it with ``create_product_intake_image_download_intent(intake_id, image_id)``.
+     *     Show it with ``create_marketing_ideas_photo_download_intent(photo_id)``; a reading's photo also with
+     *     ``create_product_intake_image_download_intent(intake_id, image_id)``.
      */
     IdeasPhoto: {
       photo_id: string;
@@ -9047,14 +9110,24 @@ export interface components {
       /** @enum {string} */
       role: 'main' | 'angle' | 'detail';
       /** @enum {string} */
-      source: 'product_page' | 'upload';
+      source: 'product_page' | 'upload' | 'added';
       source_url?: string | null;
-      intake_id: string;
-      image_id: string;
+      intake_id?: string | null;
+      image_id?: string | null;
       width?: number | null;
       height?: number | null;
       reference_version_id?: string | null;
       asset_version_ids?: string[];
+    };
+    /** @description A short-lived signed link to a photo's released derivative, the bytes an image request sends (#233). */
+    IdeasPhotoDownloadGrant: {
+      photo_id: string;
+      download_url: string;
+      expires_at: string;
+      mime_type: string;
+      byte_size: number;
+      width: number;
+      height: number;
     };
     IdeasProjectDetail: {
       id: string;
@@ -18054,6 +18127,77 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  add_marketing_ideas_photo: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AddIdeasPhoto'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasProjectDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  create_marketing_ideas_photo_download_intent: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+        photo_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IdeasPhotoDownloadGrant'];
         };
       };
       /** @description Validation Error */

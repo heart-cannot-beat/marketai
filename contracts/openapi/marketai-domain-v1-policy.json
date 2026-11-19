@@ -1180,6 +1180,18 @@
     "maxResponseBytes": 524288,
     "forwardConditionalHeaders": false
   },
+  "add_marketing_ideas_photo": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/photos",
+    "maxRequestBytes": 1024,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
+  "create_marketing_ideas_photo_download_intent": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/photos/:photo_id/download-intent",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 16384,
+    "forwardConditionalHeaders": false
+  },
   "get_marketing_first_batch_quote": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/first-batch-quote",
     "maxRequestBytes": 0,

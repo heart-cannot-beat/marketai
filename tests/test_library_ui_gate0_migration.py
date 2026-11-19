@@ -155,8 +155,9 @@ class Gate0MigrationTests(unittest.TestCase):
         # zzn193a1b2c3 (the ads-first first batch, #193) and
         # zzo197a1b2c3 (ads-first ideas checks without a round, #197) and
         # zzp198a1b2c3 (ads-first verification and download records, #198) and
-        # zzq200a1b2c3 (ads-first revisions and uploads without a round, #200).
-        self.assertEqual(revision, "zzq200a1b2c3")
+        # zzq200a1b2c3 (ads-first revisions and uploads without a round, #200) and
+        # zzr233a1b2c3 (photos the user adds to an ads-first product, #233).
+        self.assertEqual(revision, "zzr233a1b2c3")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as conn:

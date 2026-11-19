@@ -89,6 +89,7 @@ jest.mock('@/hooks/domain/useDomainQuery', () => ({
 const mockDownloadBlob = jest.fn();
 jest.mock('@/lib/domain-client/upload-deps', () => ({
   useBlobTransferClient: () => ({ downloadBlob: mockDownloadBlob }),
+  useFileDigest: () => jest.fn(),
 }));
 const mockSaveBlob = jest.fn();
 jest.mock('@/lib/ideas/save-file', () => ({

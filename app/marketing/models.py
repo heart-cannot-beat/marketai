@@ -153,6 +153,38 @@ class MarketingIdeasUploadRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class MarketingProductPhotoRecord(Base):
+    """A photo the user added to a product of ads-first ideas (#233, design doc §5.2 and §5.7).
+
+    The image went through the reference upload gate like any library upload (``reference_objects``); this
+    row says it is a photo of this product, what the user said it shows (``role``) and in which ideas they
+    added it. Until the user checks it, it is an unchecked photo like the ones the product's reading found:
+    it may only make drafts. The rights are declared when it is checked, never here. One image is one photo
+    of a product; a row is never updated or deleted."""
+    __tablename__ = "marketing_product_photos"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id", name="uq_marketing_product_photos_workspace_id"),
+        UniqueConstraint("workspace_id", "product_id", "reference_object_id", name="uq_marketing_product_photo_object"),
+        Index("ix_marketing_product_photos_product", "workspace_id", "product_id"),
+        ForeignKeyConstraint(["workspace_id", "product_id"], ["products.workspace_id", "products.id"],
+                             ondelete="RESTRICT", name="fk_marketing_product_photo_product"),
+        ForeignKeyConstraint(["workspace_id", "project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
+                             ondelete="RESTRICT", name="fk_marketing_product_photo_project"),
+        ForeignKeyConstraint(["workspace_id", "reference_object_id"], ["reference_objects.workspace_id", "reference_objects.id"],
+                             ondelete="RESTRICT", name="fk_marketing_product_photo_object"),
+        CheckConstraint("role IN ('main', 'angle', 'detail', 'logo')", name="photo_role"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
+    product_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The ideas the user added it from; the photo is the product's, every ads-first project of it sees it.
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    reference_object_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class MarketingRevisionRecord(Base):
     __tablename__ = "marketing_revisions"
     __table_args__ = (

@@ -112,6 +112,8 @@ describe('DomainGateway operation coverage', () => {
     // and `place_marketing_ideas_upload` (#200).
     // 260 -> 262: changing and deleting a claim of ads-first ideas
     // `edit_marketing_ideas_claim` and `delete_marketing_ideas_claim` (#224).
-    expect(DOMAIN_ALLOWLIST.length).toBe(262);
+    // 262 -> 264: the user's own product photos `add_marketing_ideas_photo`
+    // and `create_marketing_ideas_photo_download_intent` (#233).
+    expect(DOMAIN_ALLOWLIST.length).toBe(264);
   });
 });

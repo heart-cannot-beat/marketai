@@ -2425,6 +2425,8 @@ class ReferenceObjectRecord(Base):
     __tablename__ = "reference_objects"
     __table_args__ = (
         UniqueConstraint("workspace_id", "content_sha256", name="uq_reference_object_workspace_content"),
+        # A row of another table may name an object only of its own Workspace (#233).
+        UniqueConstraint("workspace_id", "id", name="uq_reference_objects_workspace_id"),
         CheckConstraint("state IN ('quarantined','rejected','released')", name="reference_object_state_enum"),
         CheckConstraint("byte_size > 0", name="reference_object_byte_size_positive"),
     )

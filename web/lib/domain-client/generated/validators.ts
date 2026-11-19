@@ -249,6 +249,21 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['asset_version_id', 'expected_revision'],
   },
+  AddIdeasPhoto: {
+    properties: {
+      reference_object_id: { type: 'string', maxLength: 64, minLength: 1 },
+      role: {
+        type: 'string',
+        enum: ['main', 'angle', 'detail'],
+        default: 'detail',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['reference_object_id'],
+    description:
+      'Add a photo to the product of these ideas (#233, design doc §5.2): an image the user uploaded that passed\nthe reference upload gate (``create_library_reference_object``), and what it shows. No rights are declared\nhere: checking the photo declares them, as for a photo the reading found.',
+  },
   AddProductReference: {
     properties: {
       reference_object_id: {
@@ -7994,10 +8009,10 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         enum: ['unverified', 'verified', 'rejected', 'unavailable'],
       },
       role: { type: 'string', enum: ['main', 'angle', 'detail'] },
-      source: { type: 'string', enum: ['product_page', 'upload'] },
+      source: { type: 'string', enum: ['product_page', 'upload', 'added'] },
       source_url: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-      intake_id: { type: 'string' },
-      image_id: { type: 'string' },
+      intake_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      image_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       width: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
       height: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
       reference_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
@@ -8005,9 +8020,33 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     },
     additionalProperties: false,
     type: 'object',
-    required: ['photo_id', 'status', 'role', 'source', 'intake_id', 'image_id'],
+    required: ['photo_id', 'status', 'role', 'source'],
     description:
-      "A photo the product's reading found that may show the product's look (#199; design doc §5.2).\n\nAds may be drafted with it before anyone checks it; an ad made with it is exportable only once the user\nchecks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.\nShow it with ``create_product_intake_image_download_intent(intake_id, image_id)``.",
+      "A photo that may show the product's look (#199; design doc §5.2): one the product's reading found, or\none the user added to the product (``add_marketing_ideas_photo``, #233).\n\nAds may be drafted with it before anyone checks it; an ad made with it is exportable only once the user\nchecks it (``verify_marketing_ideas`` ``photo_ids``), and needs making again once the user rejects it.\nShow it with ``create_marketing_ideas_photo_download_intent(photo_id)``; a reading's photo also with\n``create_product_intake_image_download_intent(intake_id, image_id)``.",
+  },
+  IdeasPhotoDownloadGrant: {
+    properties: {
+      photo_id: { type: 'string' },
+      download_url: { type: 'string' },
+      expires_at: { type: 'string' },
+      mime_type: { type: 'string' },
+      byte_size: { type: 'integer' },
+      width: { type: 'integer' },
+      height: { type: 'integer' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'photo_id',
+      'download_url',
+      'expires_at',
+      'mime_type',
+      'byte_size',
+      'width',
+      'height',
+    ],
+    description:
+      "A short-lived signed link to a photo's released derivative, the bytes an image request sends (#233).",
   },
   IdeasProjectDetail: {
     properties: {
@@ -14458,6 +14497,84 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['asset_version_id', 'expected_revision'],
   },
+  add_marketing_ideas_photo_201: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
+          { type: 'null' },
+        ],
+      },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  add_marketing_ideas_photo_request: {
+    properties: {
+      reference_object_id: { type: 'string', maxLength: 64, minLength: 1 },
+      role: {
+        type: 'string',
+        enum: ['main', 'angle', 'detail'],
+        default: 'detail',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['reference_object_id'],
+    description:
+      'Add a photo to the product of these ideas (#233, design doc §5.2): an image the user uploaded that passed\nthe reference upload gate (``create_library_reference_object``), and what it shows. No rights are declared\nhere: checking the photo declares them, as for a photo the reading found.',
+  },
   add_product_reference_200: {
     properties: {
       product_id: { type: 'string' },
@@ -16554,6 +16671,30 @@ const SCHEMAS: Record<string, object> = {
     required: ['asset_version_id'],
     description:
       'Crop then rotate one ad clockwise (#200): a new version, made locally and free of charge.',
+  },
+  create_marketing_ideas_photo_download_intent_201: {
+    properties: {
+      photo_id: { type: 'string' },
+      download_url: { type: 'string' },
+      expires_at: { type: 'string' },
+      mime_type: { type: 'string' },
+      byte_size: { type: 'integer' },
+      width: { type: 'integer' },
+      height: { type: 'integer' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'photo_id',
+      'download_url',
+      'expires_at',
+      'mime_type',
+      'byte_size',
+      'width',
+      'height',
+    ],
+    description:
+      "A short-lived signed link to a photo's released derivative, the bytes an image request sends (#233).",
   },
   create_marketing_image_edit_202: {
     properties: {
@@ -23897,6 +24038,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['add_experiment_entry_request'],
     ],
     [
+      'add_marketing_ideas_photo_201',
+      VALIDATOR_FUNCTIONS['add_marketing_ideas_photo_201'],
+    ],
+    [
+      'add_marketing_ideas_photo_request',
+      VALIDATOR_FUNCTIONS['add_marketing_ideas_photo_request'],
+    ],
+    [
       'add_product_reference_200',
       VALIDATOR_FUNCTIONS['add_product_reference_200'],
     ],
@@ -24274,6 +24423,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'create_marketing_ideas_image_edit_request',
       VALIDATOR_FUNCTIONS['create_marketing_ideas_image_edit_request'],
+    ],
+    [
+      'create_marketing_ideas_photo_download_intent_201',
+      VALIDATOR_FUNCTIONS['create_marketing_ideas_photo_download_intent_201'],
     ],
     [
       'create_marketing_image_edit_202',
@@ -25330,6 +25483,11 @@ export const REQUEST_VALIDATORS = {
     'add_experiment_entry_request'
   ] as ValidateFunction<
     DomainOperationMap['add_experiment_entry']['requestBody']
+  >,
+  add_marketing_ideas_photo: VALIDATOR_FUNCTIONS[
+    'add_marketing_ideas_photo_request'
+  ] as ValidateFunction<
+    DomainOperationMap['add_marketing_ideas_photo']['requestBody']
   >,
   add_product_reference: VALIDATOR_FUNCTIONS[
     'add_product_reference_request'
