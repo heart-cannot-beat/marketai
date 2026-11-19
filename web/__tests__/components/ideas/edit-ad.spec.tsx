@@ -423,7 +423,15 @@ describe('EditAd (#201)', () => {
   });
 
   it('says why an ad that needs redoing cannot be processed, and why a removed fact blocks redoing', async () => {
-    await openEdit(3);
+    // Its claim still names the deleted fact f9 (#224).
+    const detail = editDetail();
+    detail.ideas = {
+      ...detail.ideas!,
+      angles: detail.ideas!.angles.map((angle) =>
+        angle.id === 'a2' ? { ...angle, fact_ids: ['f2', 'f9'] } : angle
+      ),
+    };
+    await openEdit(3, detail);
     expect(
       screen.getAllByText(
         "This ad needs redoing, so cropping or processing it won't make it downloadable. Redo it with a note instead."
@@ -432,11 +440,31 @@ describe('EditAd (#201)', () => {
     expect(screen.queryByText('Crop and rotate')).toBeNull();
     expect(
       screen.getByText(
-        "This claim still uses a fact that was deleted, so a new image would need redoing too. Changing a claim isn't available yet; use another ad of this product for now."
+        'This claim still uses a fact that was deleted, so a new image would need redoing too. Change the claim first and take that fact off.'
       )
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Redo this one' })).toBeNull();
+    // Making it again as it is would need redoing too.
+    expect(
+      screen.queryByRole('button', { name: 'Make it again as it is' })
+    ).toBeNull();
     expect(screen.getByText('A fact it uses was deleted.')).toBeInTheDocument();
+    // The way out: change the claim, on the ideas page with its form open.
+    fireEvent.click(screen.getByRole('button', { name: 'Change this claim' }));
+    const form = await screen.findByRole('form', { name: 'Change claim 2' });
+    expect(form).toHaveTextContent(
+      'This claim still names a deleted fact. Saving takes it off.'
+    );
+  });
+
+  it('lets an image of a claim changed since be redone once its claim no longer names the deleted fact', async () => {
+    await openEdit(3);
+    expect(
+      screen.queryByText(/This claim still uses a fact that was deleted/)
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Make it again as it is' })
+    ).toBeInTheDocument();
   });
 
   it('lets an uploaded image be cropped, never redone or processed', async () => {

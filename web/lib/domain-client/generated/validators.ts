@@ -4838,9 +4838,30 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'display_label',
     ],
   },
+  EditIdeasClaim: {
+    properties: {
+      proposition: { type: 'string', maxLength: 2000, minLength: 1 },
+      rationale: { type: 'string', maxLength: 2000, minLength: 1 },
+      fact_ids: {
+        items: {
+          type: 'string',
+          maxLength: 64,
+          minLength: 1,
+          pattern: '^[a-zA-Z0-9_-]+$',
+        },
+        type: 'array',
+        maxItems: 30,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['proposition', 'rationale'],
+    description:
+      "Change one claim in the user's own words (#224, design doc §5.7): what it says, why it is worth\ntrying and the facts it stands on, as a whole. Free of charge; nothing is drafted by AI.\n\nEvery fact named must be a fact of the understanding now: each has a source, and neither a removed fact\nnor an unsourced claim can be named. The words may state no number, price or certification the named\nfacts do not, and no listed unsourced claim. Each way of telling the claim keeps only the facts the claim\nstill names. The claim's ads, their copy and their image instructions stay as they are; the images made\nbefore need making again (``ideas_changed``), and a new image is made on the claim as it is now.",
+  },
   EditIdeasUnderstanding: {
     properties: {
-      understanding: { $ref: '#/components/schemas/Understanding' },
+      understanding: { $ref: '#/components/schemas/IdeasUnderstanding' },
       source_addition: {
         anyOf: [{ type: 'string', maxLength: 8000 }, { type: 'null' }],
       },
@@ -4849,7 +4870,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['understanding'],
     description:
-      "Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product's source.",
+      'Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product\'s source.\n\n``unsupported_claims`` (#224) can only lose items: the server keeps each listed claim the document still\nnames by id, as the AI wrote it, and ignores any other. "Add a source" removes one and adds the fact it\nbecomes (unchecked); "don\'t need it" removes one.',
   },
   EditProject: {
     properties: {
@@ -8057,10 +8078,11 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -8151,6 +8173,58 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'kept_count',
       'updated_at',
     ],
+  },
+  IdeasUnderstanding: {
+    properties: {
+      product_name: { type: 'string', maxLength: 160, minLength: 1 },
+      category_need: { type: 'string', maxLength: 2000, minLength: 1 },
+      product_choice_reason: { type: 'string', maxLength: 2000, minLength: 1 },
+      audience: { type: 'string', maxLength: 2000, minLength: 1 },
+      situations: {
+        items: { type: 'string', maxLength: 2000, minLength: 1 },
+        type: 'array',
+        maxItems: 20,
+        minItems: 1,
+      },
+      objections: {
+        items: { type: 'string', maxLength: 2000, minLength: 1 },
+        type: 'array',
+        maxItems: 20,
+      },
+      facts: {
+        items: { $ref: '#/components/schemas/Fact' },
+        type: 'array',
+        maxItems: 30,
+      },
+      inferences: {
+        items: { $ref: '#/components/schemas/Inference' },
+        type: 'array',
+        maxItems: 30,
+        minItems: 1,
+      },
+      unknowns: {
+        items: { type: 'string', maxLength: 2000, minLength: 1 },
+        type: 'array',
+        maxItems: 30,
+      },
+      unsupported_claims: {
+        items: { $ref: '#/components/schemas/UnsupportedClaim' },
+        type: 'array',
+        maxItems: 20,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'product_name',
+      'category_need',
+      'product_choice_reason',
+      'audience',
+      'situations',
+      'inferences',
+    ],
+    description:
+      'The product understanding of ads-first ideas: the plan-first ``Understanding`` and the claims the AI\nread without a source (#224). The plan-first document is unchanged; this list is optional, so an\nunderstanding drafted before it reads as having none.',
   },
   IdentityProbeResponse: {
     properties: {
@@ -13494,6 +13568,22 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'inferences',
     ],
   },
+  UnsupportedClaim: {
+    properties: {
+      id: {
+        type: 'string',
+        maxLength: 64,
+        minLength: 1,
+        pattern: '^[a-zA-Z0-9_-]+$',
+      },
+      text: { type: 'string', maxLength: 2000, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'text'],
+    description:
+      'Something the AI read about the product that no source quote supports (design doc §5.2, #224): a\ncertification, a measurement, a performance or price claim, a comparison. Listed so the user sees it,\nnever used: no claim, way of telling or ad copy may say it (``claims.unsourced_uses``).',
+  },
   UntestedSummary: {
     properties: {
       count: { type: 'integer' },
@@ -13716,6 +13806,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         type: 'array',
         maxItems: 20,
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
     },
     additionalProperties: false,
     type: 'object',
@@ -14440,10 +14531,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -16462,10 +16554,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -16544,10 +16637,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -17608,6 +17702,73 @@ const SCHEMAS: Record<string, object> = {
     description:
       "``accept`` adds the advertiser as a competitor confirmed by the page\nID from its ads (no resolve, no charge); ``reject`` keeps it out of the\nproduct's later scans. ``reason`` is optional.",
   },
+  delete_marketing_ideas_claim_200: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
+          { type: 'null' },
+        ],
+      },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
   delete_product_reference_200: {
     properties: {
       product_id: { type: 'string' },
@@ -17679,6 +17840,94 @@ const SCHEMAS: Record<string, object> = {
     description:
       'The ads to download: every one must be exportable, and only these are handed out.',
   },
+  edit_marketing_ideas_claim_200: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['input', 'understanding_draft', 'ideas_ready'],
+      },
+      product_id: { type: 'string' },
+      market: { type: 'string' },
+      ad_language: { type: 'string' },
+      understanding: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
+          { type: 'null' },
+        ],
+      },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
+      ideas: {
+        anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
+      },
+      latest_call: {
+        anyOf: [
+          { $ref: '#/components/schemas/IdeasCallSummary' },
+          { type: 'null' },
+        ],
+      },
+      ads: { items: { $ref: '#/components/schemas/AdSummary' }, type: 'array' },
+      pending: {
+        items: { $ref: '#/components/schemas/PendingAd' },
+        type: 'array',
+      },
+      first_batch: {
+        anyOf: [
+          { $ref: '#/components/schemas/FirstBatchSummary' },
+          { type: 'null' },
+        ],
+      },
+      image_edits: {
+        items: { $ref: '#/components/schemas/IdeasImageEdit' },
+        type: 'array',
+      },
+      photos: {
+        items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'state',
+      'product_id',
+      'market',
+      'ad_language',
+      'understanding',
+      'ideas',
+      'latest_call',
+      'ads',
+      'pending',
+    ],
+  },
+  edit_marketing_ideas_claim_request: {
+    properties: {
+      proposition: { type: 'string', maxLength: 2000, minLength: 1 },
+      rationale: { type: 'string', maxLength: 2000, minLength: 1 },
+      fact_ids: {
+        items: {
+          type: 'string',
+          maxLength: 64,
+          minLength: 1,
+          pattern: '^[a-zA-Z0-9_-]+$',
+        },
+        type: 'array',
+        maxItems: 30,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['proposition', 'rationale'],
+    description:
+      "Change one claim in the user's own words (#224, design doc §5.7): what it says, why it is worth\ntrying and the facts it stands on, as a whole. Free of charge; nothing is drafted by AI.\n\nEvery fact named must be a fact of the understanding now: each has a source, and neither a removed fact\nnor an unsourced claim can be named. The words may state no number, price or certification the named\nfacts do not, and no listed unsourced claim. Each way of telling the claim keeps only the facts the claim\nstill names. The claim's ads, their copy and their image instructions stay as they are; the images made\nbefore need making again (``ideas_changed``), and a new image is made on the claim as it is now.",
+  },
   edit_marketing_ideas_understanding_200: {
     properties: {
       id: { type: 'string' },
@@ -17692,10 +17941,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -17747,7 +17997,7 @@ const SCHEMAS: Record<string, object> = {
   },
   edit_marketing_ideas_understanding_request: {
     properties: {
-      understanding: { $ref: '#/components/schemas/Understanding' },
+      understanding: { $ref: '#/components/schemas/IdeasUnderstanding' },
       source_addition: {
         anyOf: [{ type: 'string', maxLength: 8000 }, { type: 'null' }],
       },
@@ -17756,7 +18006,7 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['understanding'],
     description:
-      "Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product's source.",
+      'Change what the AI read about the product (#198): facts, guesses and unknowns, as one document.\n\n``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A\nfact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out\nremoves it. ``source_addition`` adds material for a new quote to the product\'s source.\n\n``unsupported_claims`` (#224) can only lose items: the server keeps each listed claim the document still\nnames by id, as the AI wrote it, and ignores any other. "Add a source" removes one and adds the fact it\nbecomes (unchecked); "don\'t need it" removes one.',
   },
   edit_marketing_project_200: {
     properties: {
@@ -19545,10 +19795,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -21044,10 +21295,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -22797,10 +23049,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -23132,10 +23385,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -23634,10 +23888,11 @@ const SCHEMAS: Record<string, object> = {
       ad_language: { type: 'string' },
       understanding: {
         anyOf: [
-          { $ref: '#/components/schemas/Understanding' },
+          { $ref: '#/components/schemas/IdeasUnderstanding' },
           { type: 'null' },
         ],
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
       ideas: {
         anyOf: [{ $ref: '#/components/schemas/Ideas' }, { type: 'null' }],
       },
@@ -23729,6 +23984,7 @@ const SCHEMAS: Record<string, object> = {
         type: 'array',
         maxItems: 20,
       },
+      audience_confirmed: { anyOf: [{ type: 'boolean' }, { type: 'null' }] },
     },
     additionalProperties: false,
     type: 'object',
@@ -24410,6 +24666,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['decide_competitor_discovery_request'],
     ],
     [
+      'delete_marketing_ideas_claim_200',
+      VALIDATOR_FUNCTIONS['delete_marketing_ideas_claim_200'],
+    ],
+    [
       'delete_product_reference_200',
       VALIDATOR_FUNCTIONS['delete_product_reference_200'],
     ],
@@ -24424,6 +24684,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'download_marketing_ideas_request',
       VALIDATOR_FUNCTIONS['download_marketing_ideas_request'],
+    ],
+    [
+      'edit_marketing_ideas_claim_200',
+      VALIDATOR_FUNCTIONS['edit_marketing_ideas_claim_200'],
+    ],
+    [
+      'edit_marketing_ideas_claim_request',
+      VALIDATOR_FUNCTIONS['edit_marketing_ideas_claim_request'],
     ],
     [
       'edit_marketing_ideas_understanding_200',
@@ -25610,6 +25878,11 @@ export const REQUEST_VALIDATORS = {
     'download_marketing_ideas_request'
   ] as ValidateFunction<
     DomainOperationMap['download_marketing_ideas']['requestBody']
+  >,
+  edit_marketing_ideas_claim: VALIDATOR_FUNCTIONS[
+    'edit_marketing_ideas_claim_request'
+  ] as ValidateFunction<
+    DomainOperationMap['edit_marketing_ideas_claim']['requestBody']
   >,
   edit_marketing_ideas_understanding: VALIDATOR_FUNCTIONS[
     'edit_marketing_ideas_understanding_request'

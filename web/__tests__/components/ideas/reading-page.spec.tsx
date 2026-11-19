@@ -211,6 +211,31 @@ describe('ReadingPage (#195)', () => {
     await waitFor(() => expect(mockRefreshProducts).toHaveBeenCalled());
   });
 
+  it('lists what was read without a source, saying no ad will use it (#224)', async () => {
+    const detail = ideasDetail();
+    mockGateway.getMarketingIdeas.mockResolvedValue(
+      ok({
+        ...detail,
+        understanding: {
+          ...detail.understanding!,
+          unsupported_claims: [
+            { id: 'u1', text: 'Charges 3x faster than a wall socket' },
+          ],
+        },
+      })
+    );
+    await renderPage(batch({ ...READ, state: 'ideas' }));
+    const unsourced = await screen.findByTestId('reading-unsourced');
+    expect(unsourced).toHaveTextContent(
+      '“Charges 3x faster than a wall socket” has no source, so no ad will use it.'
+    );
+    expect(
+      within(screen.getByTestId('reading-facts')).queryByText(
+        /Charges 3x faster/
+      )
+    ).toBeNull();
+  });
+
   it('says a fact came from the uploaded images when only images were pasted', async () => {
     mockGateway.getProductIntake.mockResolvedValue(
       intake({ url: null as unknown as string, text_chars: 0, upload_count: 2 })

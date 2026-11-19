@@ -124,6 +124,25 @@ class LogoTests(LogoFixtures):
         self.assertEqual(kit["current"]["content"]["logo"]["item_id"], item["item_id"])
         self.save_kit(project["product_id"], item["item_id"], expect=422)
 
+    def test_a_logo_and_the_audience_go_in_one_verification_or_apart(self):
+        project = self.checked_ads()
+        logo = self.own_logo(project)
+        audience = self.read_ideas(project)["understanding"]["audience"]
+        current = self.read_ideas(project)
+        together = self.client.post(f"/api/v1/marketing/ideas/{project['id']}/verification",
+                                    headers=self.headers(current["revision"]),
+                                    json={"photo_ids": [logo["photo_id"]], "audience_confirmed": True})
+        self.assertEqual(together.status_code, 200, together.text)
+        self.assertTrue(together.json()["audience_confirmed"])
+        self.assertEqual(together.json()["logos"][0]["status"], "verified")
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], [b["purpose"] for b in version.content_json["reference_bindings"]]),
+                         (audience, ["logo"]))
+        # Apart: rejecting the logo afterwards leaves the confirmed audience.
+        self.decide(project, rejected=[logo["photo_id"]])
+        version, _ = self.published_version(project)
+        self.assertEqual((version.content_json["audience"], version.content_json.get("reference_bindings")), (audience, None))
+
     def test_the_same_image_is_either_a_photo_or_the_logo(self):
         project = self.checked_ads()
         logo = self.own_logo(project)

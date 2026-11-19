@@ -39,7 +39,7 @@ from app.generation.models import GenerationRecipeSnapshotRecord, RunItemRecord
 from app.library.contracts import PRODUCT_SOURCE_URL_MAX
 from app.platform.audit import append_event
 from . import ideas, ideas_checks, service
-from .contracts import Understanding
+from .ideas_contracts import IdeasUnderstanding
 from .models import MarketingIdeasExportRecord as Record, MarketingProjectRecord
 from .product_references import references_current
 from .service import MarketingError, digest
@@ -257,12 +257,16 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
         intent = ideas.intent_of(recipe)
         reasons = []
         held = now((intent.get("combination") or {}).get("id", ""))
-        # Redrafted ideas reuse combination ids: an image whose content is not the ideas' is another ad's (#212).
-        same = held is not None and held[0] == ideas.content_of(intent)
-        if not same:
-            reasons.append(_reason("ideas_changed"))
         snapshot = {fact["id"]: fact for fact in (intent.get("understanding") or {}).get("facts", [])}
         cited = list(intent.get("cited_fact_ids") or [])
+        # Redrafted ideas reuse combination ids: an image whose content is not the ideas' is another ad's (#212).
+        same = held is not None and held[0] == ideas.content_of(intent)
+        # An image stands on the facts its claim names now, no fewer (#224): one made on a fact the claim no
+        # longer names (the user changed the claim; the fact itself is still there) is not the ad the claim
+        # describes any more. A removed fact is said below.
+        dropped = same and any(fid in facts and fid not in held[1] for fid in cited)
+        if not same or dropped:
+            reasons.append(_reason("ideas_changed"))
         # What the claim cites now but this image was not made on: a removed fact the claim still names (an
         # image made after the removal froze one citation fewer), an id reused for another fact, an
         # inference pointed at another fact, ideas redrafted in the same words on other facts.
@@ -478,7 +482,7 @@ def _actor(ctx):
     return ctx.initiator_id or ctx.executor
 
 
-def edit_understanding(session, ctx, row, revision, understanding: Understanding, source_addition: str | None = None):
+def edit_understanding(session, ctx, row, revision, understanding: IdeasUnderstanding, source_addition: str | None = None):
     """Change what the AI read about the product: facts, guesses, unknowns; the ideas stay as they are.
 
     A fact is checked only by ``verify``: the ``confirmation`` sent here is ignored. A fact that reads as
@@ -486,7 +490,12 @@ def edit_understanding(session, ctx, row, revision, understanding: Understanding
     fact become ``needs_redo`` on their own (``statuses`` compares each image's recipe with the facts),
     and ads that cite neither are untouched. A quote must be found in the product's source material;
     ``source_addition`` adds material the user supplies for a quote, never replacing what was read.
-    A checked fact that was changed or removed leaves the product's published version too."""
+    A checked fact that was changed or removed leaves the product's published version too, and so does a
+    confirmed audience whose words changed (#224).
+
+    The claims the AI read without a source (#224) are the AI's list: an edit can only take items off it.
+    Each stored item the document still names by id stays as the AI wrote it; anything else sent is ignored.
+    "Add a source" takes one off and adds the fact it becomes (unchecked, like any new fact)."""
     _require_understanding(row)
     source = row.source_text
     if source_addition and source_addition.strip():
@@ -500,15 +509,27 @@ def edit_understanding(session, ctx, row, revision, understanding: Understanding
         before = stored.get(fact.id)
         kept = bool(before) and before.get("confirmation") == "confirmed" and _text(before) == (fact.statement, fact.source_quote)
         facts.append(fact.model_copy(update={"confirmation": "confirmed" if kept else "unconfirmed"}))
-    document = understanding.model_copy(update={"facts": facts}).model_dump(mode="json")
-    if document == row.understanding_json and source == row.source_text:
+    named = {item.id for item in understanding.unsupported_claims}
+    listed = [item for item in row.understanding_json.get("unsupported_claims", []) if item["id"] in named]
+    try:
+        value = IdeasUnderstanding.model_validate({**understanding.model_dump(mode="json"),
+                                                  "facts": [fact.model_dump(mode="json") for fact in facts],
+                                                  "unsupported_claims": listed})
+    except ValueError:  # a new fact took the id of a listed claim
+        raise MarketingError("marketing_fact_ids_duplicate", "事实、推测与没有出处的说法的标识不能重复。") from None
+    document = value.model_dump(mode="json")
+    # An understanding drafted before #224 has no unsourced list: reading it as an empty one changes nothing.
+    if document == {"unsupported_claims": [], **row.understanding_json} and source == row.source_text:
         if row.revision != revision:
             raise MarketingError("stale_marketing_revision", "内容已更新，请刷新后重试。", 409)
         return row
     after = {fact["id"]: fact for fact in document["facts"]}
     details = {"changed": sorted(fid for fid in after if fid in stored and _text(after[fid]) != _text(stored[fid])),
                "removed": sorted(fid for fid in stored if fid not in after),
-               "added": sorted(fid for fid in after if fid not in stored), "source_added": source != row.source_text}
+               "added": sorted(fid for fid in after if fid not in stored), "source_added": source != row.source_text,
+               "unsupported_removed": sorted(item["id"] for item in row.understanding_json.get("unsupported_claims", [])
+                                             if item["id"] not in named),
+               "audience_changed": document["audience"] != row.understanding_json.get("audience")}
     service.advance(session, ctx, row, revision, "understanding_edited", understanding_json=document,
                     **({"source_text": source} if source != row.source_text else {}))
     append_event(session, event_type="marketing.ideas_facts_edited", resource_type="marketing_project", resource_id=row.id,
@@ -543,16 +564,18 @@ def _photo_binding(photo, primary: bool) -> dict:
                                       "added_at": photo.get("decided_at") or ""}}}
 
 
-def verified_content(name: str, source_url, statements: list, markets: list, photos: list = (), logos: list = ()) -> dict:
+def verified_content(name: str, source_url, statements: list, markets: list, photos: list = (),
+                     audiences: list = (), logos: list = ()) -> dict:
     """The product version a verification publishes: nothing the user did not check or choose.
 
     The checked facts are its description and selling points. A product version must name an audience
-    (creative-library contract §5.1), and the only audience the user has chosen is the market on the
-    start page; the AI's guess about the buyers stays a proposal in the library Draft. The name is the
-    product's own, and ``source_url`` the link the user pasted. ``photos`` (#199): the checked photos, the
-    main one first, as verified reference bindings; ``logos`` (#233): the checked logos, as logo bindings."""
+    (creative-library contract §5.1): the audience the user confirmed (``audiences``, #224) when there is
+    one, else the market the user chose on the start page; an AI guess about the buyers nobody confirmed
+    stays a proposal in the library Draft. The name is the product's own, and ``source_url`` the link the
+    user pasted. ``photos`` (#199): the checked photos, the main one first, as verified reference bindings;
+    ``logos`` (#233): the checked logos, as logo bindings."""
     content = {"name": name, "description": "\n".join(statements) or name, "selling_points": statements,
-               "audience": ", ".join(markets)}
+               "audience": "\n".join(audiences) if audiences else ", ".join(markets)}
     if (isinstance(source_url, str) and source_url.strip().lower().startswith(("http://", "https://"))
             and len(source_url) <= PRODUCT_SOURCE_URL_MAX):
         content["source_url"] = source_url.strip()
@@ -573,7 +596,26 @@ def _checked_photos(session, ctx, row, pending=()) -> list:
                   key=lambda item: (item.get("rank") or 10_000, item["photo_id"]))
 
 
-def publish_verified(session, ctx, row, *, excluding: str | None = None, pending=()) -> str | None:
+def confirmed_audience(session, ctx, row, pending: str | None = None) -> str | None:
+    """The audience these ideas' understanding states now, if the user confirmed those very words (#224).
+
+    A confirmation records the audience's words as they were (``verify``); once the words change, by an
+    edit or a new drafting of the understanding, it no longer counts -- and counts again only if the user
+    confirms the new words. ``pending``: words a verification of ``row`` is about to record."""
+    audience = (row.understanding_json or {}).get("audience")
+    if not audience:
+        return None
+    if pending == audience:
+        return audience
+    for content in session.scalars(select(Record.content_json).where(
+            Record.workspace_id == ctx.workspace_id, Record.project_id == row.id, Record.kind == "verification")).all():
+        if (content.get("audience") or {}).get("text") == audience:
+            return audience
+    return None
+
+
+def publish_verified(session, ctx, row, *, excluding: str | None = None, pending=(),
+                     pending_audience: str | None = None) -> str | None:
     """Publish what the user has checked as the product's creative-library version; its id, or ``None``.
 
     The version holds the facts checked in every ads-first project of the product, oldest project first,
@@ -581,7 +623,10 @@ def publish_verified(session, ctx, row, *, excluding: str | None = None, pending
     newest decision on each photo, from whichever project). ``excluding`` leaves one project's facts out:
     its understanding is about to be drafted again and will come back unchecked (photos stay: they do not
     come from the understanding). ``pending``: this project's photo decisions a verification is about to
-    record (``photo_decisions``).
+    record (``photo_decisions``); ``pending_audience``: the audience words it is about to confirm.
+
+    The audience is the one the user confirmed in each project whose understanding still says it (#224),
+    else, as before, the markets of the projects that have something checked.
 
     Only checked content goes in (``verified_content``): the library Draft keeps the AI's whole proposal
     and is not touched. A rejected photo is left out, so a photo checked before and rejected now (in any
@@ -597,7 +642,7 @@ def publish_verified(session, ctx, row, *, excluding: str | None = None, pending
         LibraryEntryRecord.id == product.product_profile_entry_id)) if product and product.product_profile_entry_id else None
     if entry is None or entry.lifecycle != "active":
         return None
-    statements, markets = [], []
+    statements, markets, audiences = [], [], []
     # Photos are the product's: the newest decision on each, whichever project made it (``photo_decisions``).
     photos = _checked_photos(session, ctx, row, pending)
     photo_projects = {photo["project_id"] for photo in photos}
@@ -607,9 +652,15 @@ def publish_verified(session, ctx, row, *, excluding: str | None = None, pending
         checked = [fact["statement"] for fact in (project.understanding_json or {}).get("facts", [])
                    if fact.get("confirmation") == "confirmed"] if project.id != excluding else []
         statements += [statement for statement in dict.fromkeys(checked) if statement not in statements]
-        # The audience is the market of each project that has something checked: a project's market is the
-        # user's choice, but it joins the published version only together with that project's checked content.
-        if (checked or project.id in photo_projects) and project.market and project.market not in markets:
+        # The audience the user confirmed in this project, while the understanding still says it (#224).
+        audience = confirmed_audience(session, ctx, project, pending_audience if project.id == row.id else None) \
+            if project.id != excluding else None
+        if audience and audience not in audiences:
+            audiences.append(audience)
+        # Without a confirmed audience it is the market of each project that has something checked: a project's
+        # market is the user's choice, but it joins the published version only together with that project's
+        # checked content.
+        if (checked or project.id in photo_projects or audience) and project.market and project.market not in markets:
             markets.append(project.market)
     markets = markets or ([row.market] if row.market else [])
     if not markets or (not statements and not photos and not entry.current_version_id):
@@ -623,7 +674,7 @@ def publish_verified(session, ctx, row, *, excluding: str | None = None, pending
     draft = session.scalar(select(LibraryDraftRecord).where(LibraryDraftRecord.workspace_id == ctx.workspace_id,
                                                             LibraryDraftRecord.entry_id == entry.id))
     content = verified_content(entry.display_name, ((draft.content_json if draft else None) or {}).get("source_url"),
-                               statements, markets, photos, logos)
+                               statements, markets, photos, audiences, logos)
     try:
         version = library.publish_content_in_transaction(
             session, ctx, entry.id, content, origin_command=library.COMMAND_IDEAS_VERIFICATION,
@@ -692,7 +743,8 @@ def _photo_decisions_to_record(session, ctx, row, photo_ids, rejected_photo_ids)
     return lines
 
 
-def verify(session, ctx, row, revision, *, fact_ids=(), appearance=(), findings=(), photo_ids=(), rejected_photo_ids=()):
+def verify(session, ctx, row, revision, *, fact_ids=(), appearance=(), findings=(), photo_ids=(), rejected_photo_ids=(),
+           audience=False):
     """Record one "check before download" (design doc §5.3): what the user confirms, nothing more.
 
     ``fact_ids``: facts the user read and confirms as true -- they become checked. ``appearance``: ads made
@@ -700,13 +752,15 @@ def verify(session, ctx, row, revision, *, fact_ids=(), appearance=(), findings=
     findings of its newest check the user accepts as they are (``{asset_version_id, check_id,
     finding_ids}``); a check that changed since the user looked is refused. ``photo_ids`` (#199): photos
     the product's reading found that the user confirms show this product and may be used in ads;
-    ``rejected_photo_ids``: photos the user says are not (the two never overlap). The checked facts and
-    photos are published as the product's version. Returns the verification record."""
+    ``rejected_photo_ids``: photos the user says are not (the two never overlap). ``audience`` (#224): the
+    user says the audience the understanding states now is right; its words are recorded, and the product's
+    version names it as the audience until they change. The checked facts and photos are published as the
+    product's version. Returns the verification record."""
     _require_understanding(row)
     fact_ids, appearance = list(dict.fromkeys(fact_ids)), sorted(set(appearance))
     photo_ids, rejected_photo_ids = list(dict.fromkeys(photo_ids)), list(dict.fromkeys(rejected_photo_ids))
-    if not (fact_ids or appearance or findings or photo_ids or rejected_photo_ids):
-        raise MarketingError("verification_empty", "请至少核对一条事实、一张照片、一张广告的外观或一条检查结果。")
+    if not (fact_ids or appearance or findings or photo_ids or rejected_photo_ids or audience):
+        raise MarketingError("verification_empty", "请至少核对一条事实、一张照片、受众、一张广告的外观或一条检查结果。")
     understanding = row.understanding_json
     facts = {fact["id"]: fact for fact in understanding.get("facts", [])}
     missing = [fid for fid in fact_ids if fid not in facts]
@@ -733,23 +787,27 @@ def verify(session, ctx, row, revision, *, fact_ids=(), appearance=(), findings=
     document = {**understanding, "facts": [{**fact, "confirmation": "confirmed"} if fact["id"] in fact_ids else fact
                                            for fact in understanding.get("facts", [])]}
     # A checked fact still needs its quote in the source material.
-    service.validate_understanding(row, Understanding.model_validate(document))
+    service.validate_understanding(row, IdeasUnderstanding.model_validate(document))
     photos = _photo_decisions_to_record(session, ctx, row, photo_ids, rejected_photo_ids)
     service.advance(session, ctx, row, revision, "verified", understanding_json=document)
+    # The audience's words as the user confirmed them: a later edit of the words undoes the confirmation.
+    audience_line = {"text": understanding["audience"], "hash": digest(understanding["audience"])} if audience else None
     content = {"facts": [{"id": fid, "hash": fact_hash(facts[fid])} for fid in fact_ids], "appearance": appearance,
                "findings": [{"asset_version_id": asset_id, "check_id": call_id, "finding_ids": sorted(ids)}
                             for (asset_id, call_id), ids in sorted(accepted.items())],
-               **({"photos": photos} if photos else {})}
+               **({"photos": photos} if photos else {}), **({"audience": audience_line} if audience_line else {})}
     now, actor = utcnow(), _actor(ctx)
     pending = [{**line, "actor_id": actor, "decided_at": _stamp(now)} for line in photos]
     record = Record(id=new_id("mie"), workspace_id=ctx.workspace_id, project_id=row.id, kind="verification",
                     project_revision=row.revision, actor_id=actor, content_json=content, content_hash=digest(content),
-                    library_version_id=publish_verified(session, ctx, row, pending=pending), created_at=now)
+                    library_version_id=publish_verified(session, ctx, row, pending=pending,
+                                                        pending_audience=audience_line["text"] if audience_line else None),
+                    created_at=now)
     session.add(record)
     append_event(session, event_type="marketing.ideas_verified", resource_type="marketing_project", resource_id=row.id,
                  details={"record_id": record.id, "revision": row.revision, "fact_ids": fact_ids, "appearance": appearance,
                           "findings": content["findings"], "photo_ids": photo_ids, "rejected_photo_ids": rejected_photo_ids,
-                          "library_version_id": record.library_version_id})
+                          "audience_confirmed": bool(audience_line), "library_version_id": record.library_version_id})
     session.flush()
     return record
 
