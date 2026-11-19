@@ -525,7 +525,9 @@ describe('EditAd (#201)', () => {
     expect(copy.getAllByText('No longer in the ideas')).toHaveLength(2);
     expect(copy.queryByText('Plug in. Go to bed.')).toBeNull();
     expect(
-      screen.getByText("It's no longer what its claim says now.")
+      screen.getByText(
+        'It no longer matches its claim and copy as they are now.'
+      )
     ).toBeInTheDocument();
   });
 
