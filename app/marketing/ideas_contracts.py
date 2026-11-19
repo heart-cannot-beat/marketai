@@ -267,6 +267,21 @@ class IdeasPhoto(Document):
     asset_version_ids: list[str] = Field(default_factory=list)
 
 
+class IdeasLogo(Document):
+    """A logo the user added to the product (``add_marketing_ideas_photo`` with ``role = "logo"``, #233).
+
+    It is never sent as a photo of the product's look. Checking it (``verify_marketing_ideas`` ``photo_ids``)
+    declares that it is the brand's logo and the user may use it in ads; it then becomes part of the
+    product's published version as a logo, which the product's brand baseline can choose. Rejecting it
+    takes it out again. Show it with ``create_marketing_ideas_photo_download_intent(photo_id)``."""
+    photo_id: str
+    status: Literal["unverified", "verified", "rejected", "unavailable"]
+    width: int | None = None
+    height: int | None = None
+    # The creative-library reference a checked logo became.
+    reference_version_id: str | None = None
+
+
 class IdeasProjectDetail(Document):
     id: str
     revision: int
@@ -287,9 +302,11 @@ class IdeasProjectDetail(Document):
     first_batch: FirstBatchSummary | None = None
     # Every crop or rotation of these ideas' ads, oldest first (#200); the new versions are in ``ads``.
     image_edits: list[IdeasImageEdit] = Field(default_factory=list)
-    # The photos the product's reading found, in the page's order, each with its checking (#199). Empty
-    # for ideas no first batch opened.
+    # The photos the product's reading found, in the page's order, each with its checking (#199), then the ones
+    # the user added to the product (#233).
     photos: list[IdeasPhoto] = Field(default_factory=list)
+    # The logos the user added to the product, in the order they were added, each with its checking (#233).
+    logos: list[IdeasLogo] = Field(default_factory=list)
 
 
 class IdeasProjectSummary(Document):
@@ -435,8 +452,9 @@ class AddIdeasPhoto(Document):
     the reference upload gate (``create_library_reference_object``), and what it shows. No rights are declared
     here: checking the photo declares them, as for a photo the reading found."""
     reference_object_id: str = Field(min_length=1, max_length=64)
-    # The whole product (the main photo), another angle of it, or a close-up.
-    role: Literal["main", "angle", "detail"] = "detail"
+    # The whole product (the main photo), another angle of it, a close-up -- or the brand's logo, which never
+    # stands in for the product's look and is listed in ``logos`` (#233).
+    role: Literal["main", "angle", "detail", "logo"] = "detail"
 
 
 class IdeasPhotoDownloadGrant(Document):
@@ -620,9 +638,11 @@ class VerifyIdeas(Document):
     appearance_confirmed: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(default_factory=list, max_length=60)
     accepted_findings: list[AcceptedFindings] = Field(default_factory=list, max_length=60)
     # ``IdeasPhoto.photo_id`` of photos the user confirms are this product's real photos and may be used in
-    # ads (#199): they become creative-library references and part of the product's published version.
+    # ads (#199): they become creative-library references and part of the product's published version. An
+    # ``IdeasLogo.photo_id`` here confirms the brand's logo, which the user may use in ads (#233).
     photo_ids: list[PhotoId] = Field(default_factory=list, max_length=20)
-    # Photos the user says are not this product, or may not be used: ads made with one need making again.
+    # Photos the user says are not this product, or may not be used: ads made with one need making again. A
+    # logo here is not the brand's, or may not be used.
     rejected_photo_ids: list[PhotoId] = Field(default_factory=list, max_length=20)
     # The user read the audience the understanding states now and says it is right (#224). Its words are
     # recorded; the product's published version names it as the audience until those words change. Absent

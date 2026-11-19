@@ -20,6 +20,7 @@ import {
   type IdeasPhoto,
 } from '@/lib/ideas/photos';
 import { AddPhoto } from './AddPhoto';
+import { ProfileLogos } from './ProfileLogos';
 import {
   PhotoFailureNote,
   PhotoStatusBadge,
@@ -468,7 +469,15 @@ function PublishedPhotos({
   );
 }
 
-export function ProfileBrand({ productId }: { productId: string }) {
+export function ProfileBrand({
+  productId,
+  projectId,
+  detail,
+}: {
+  productId: string;
+  projectId: string;
+  detail: IdeasDetail;
+}) {
   const { t } = useTranslation('ideas');
   const directory = useProductDirectory();
   // The brand baseline belongs to the product; a product the list does not
@@ -484,11 +493,12 @@ export function ProfileBrand({ productId }: { productId: string }) {
       intro={t('profile-brand-intro')}
       testId="profile-brand"
     >
+      <ProfileLogos projectId={projectId} detail={detail} />
       <div className="rounded-xl border border-gray-200 px-4 pb-4 dark:border-gray-700 [&>details]:mt-0 [&>details]:border-t-0">
         <ProductBrandKitSettings product={summary} />
       </div>
       <p className="text-xs text-gray-600 dark:text-gray-400">
-        {t('profile-brand-logo-later')}
+        {t('profile-brand-logo-note')}
       </p>
     </Section>
   );

@@ -4632,7 +4632,7 @@ export interface components {
        * @default detail
        * @enum {string}
        */
-      role: 'main' | 'angle' | 'detail';
+      role: 'main' | 'angle' | 'detail' | 'logo';
     };
     AddProductReference: {
       reference_object_id?: string | null;
@@ -9095,6 +9095,22 @@ export interface components {
       error_code?: string | null;
     };
     /**
+     * @description A logo the user added to the product (``add_marketing_ideas_photo`` with ``role = "logo"``, #233).
+     *
+     *     It is never sent as a photo of the product's look. Checking it (``verify_marketing_ideas`` ``photo_ids``)
+     *     declares that it is the brand's logo and the user may use it in ads; it then becomes part of the
+     *     product's published version as a logo, which the product's brand baseline can choose. Rejecting it
+     *     takes it out again. Show it with ``create_marketing_ideas_photo_download_intent(photo_id)``.
+     */
+    IdeasLogo: {
+      photo_id: string;
+      /** @enum {string} */
+      status: 'unverified' | 'verified' | 'rejected' | 'unavailable';
+      width?: number | null;
+      height?: number | null;
+      reference_version_id?: string | null;
+    };
+    /**
      * @description A photo that may show the product's look (#199; design doc §5.2): one the product's reading found, or
      *     one the user added to the product (``add_marketing_ideas_photo``, #233).
      *
@@ -9146,6 +9162,7 @@ export interface components {
       first_batch?: components['schemas']['FirstBatchSummary'] | null;
       image_edits?: components['schemas']['IdeasImageEdit'][];
       photos?: components['schemas']['IdeasPhoto'][];
+      logos?: components['schemas']['IdeasLogo'][];
     };
     IdeasProjectPage: {
       items: components['schemas']['IdeasProjectSummary'][];

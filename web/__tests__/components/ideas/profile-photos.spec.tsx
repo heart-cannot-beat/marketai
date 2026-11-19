@@ -448,11 +448,16 @@ describe('product profile photos (#229)', () => {
     expect(within(photos()).queryByRole('button')).toBeNull();
   });
 
-  it('the brand says a checked photo is not a logo', async () => {
+  it('the brand says a checked photo is not a logo, and a logo can be uploaded there (#233)', async () => {
     await renderProfile();
-    expect(screen.getByRole('region', { name: 'Brand' })).toHaveTextContent(
-      "A logo is picked from your own uploaded images, which can't be added here yet. Product photos you check aren't used as a logo."
+    const brand = screen.getByRole('region', { name: 'Brand' });
+    expect(brand).toHaveTextContent(
+      "The brand baseline's logo is chosen from the checked logos above; product photos are never used as a logo."
     );
+    expect(brand).not.toHaveTextContent(/can't be added here yet/);
+    expect(
+      within(brand).getByRole('group', { name: 'Upload a logo' })
+    ).toBeInTheDocument();
   });
 });
 

@@ -217,6 +217,19 @@ def photo_list(session, ctx, row, ads) -> list[dict]:
     return result
 
 
+def logo_list(session, ctx, row, decisions=None) -> list[dict]:
+    """The ``IdeasLogo`` list (#233): the logos the user added to the product, each with its checking."""
+    from .product_references import added_logos
+    logos = added_logos(session, ctx, row.product_id)
+    if not logos:
+        return []
+    decisions = photo_decisions(session, ctx, row) if decisions is None else decisions
+    states = photo_states(session, ctx, row, found=logos, verified=[], decisions=decisions)
+    return [{"photo_id": logo["photo_id"], "status": states[logo["photo_id"]], "width": logo["width"], "height": logo["height"],
+             "reference_version_id": decisions.get(logo["photo_id"], {}).get("reference_version_id")
+             if states[logo["photo_id"]] == "verified" else None} for logo in logos]
+
+
 def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
     """Each ad's status, why it is not exportable, the facts it stands on and whether its look is confirmed."""
     ads = ideas.project_ads(session, ctx, row) if ads is None else ads
@@ -525,6 +538,19 @@ def edit_understanding(session, ctx, row, revision, understanding: IdeasUndersta
     return row
 
 
+def _logo_binding(logo) -> dict:
+    """A checked logo as the product version's reference binding, the way the product's reference set reads one
+    (``reference_sets``): a logo shared by every model, never a photo of the product's look (#233)."""
+    from app.products.reference_sets import METADATA
+    item_id = f"pritem_{logo['photo_id'][:24]}"
+    # No note: the brand baseline names a logo by its note, and where it came from is the reference's own
+    # rights evidence (``marketing_product_photo:<id>``).
+    return {"reference_version_id": logo["reference_version_id"], "purpose": "logo", "viewpoint": item_id, "priority": 0,
+            "note": "",
+            "conditions": {METADATA: {"item_id": item_id, "model_variant": "", "role": "logo", "identity_status": "unverified",
+                                      "added_by": logo.get("actor_id"), "added_at": logo.get("decided_at") or ""}}}
+
+
 def _photo_binding(photo, primary: bool) -> dict:
     """A checked photo as the product version's reference binding, the way the product's photo set reads it
     (``reference_sets``): a verified photo of the real product, of the one model the version has."""
@@ -539,21 +565,23 @@ def _photo_binding(photo, primary: bool) -> dict:
 
 
 def verified_content(name: str, source_url, statements: list, markets: list, photos: list = (),
-                     audiences: list = ()) -> dict:
+                     audiences: list = (), logos: list = ()) -> dict:
     """The product version a verification publishes: nothing the user did not check or choose.
 
     The checked facts are its description and selling points. A product version must name an audience
     (creative-library contract §5.1): the audience the user confirmed (``audiences``, #224) when there is
     one, else the market the user chose on the start page; an AI guess about the buyers nobody confirmed
     stays a proposal in the library Draft. The name is the product's own, and ``source_url`` the link the
-    user pasted. ``photos`` (#199): the checked photos, the main one first, as verified reference bindings."""
+    user pasted. ``photos`` (#199): the checked photos, the main one first, as verified reference bindings;
+    ``logos`` (#233): the checked logos, as logo bindings."""
     content = {"name": name, "description": "\n".join(statements) or name, "selling_points": statements,
                "audience": "\n".join(audiences) if audiences else ", ".join(markets)}
     if (isinstance(source_url, str) and source_url.strip().lower().startswith(("http://", "https://"))
             and len(source_url) <= PRODUCT_SOURCE_URL_MAX):
         content["source_url"] = source_url.strip()
-    if photos:
-        content["reference_bindings"] = [_photo_binding(photo, index == 0) for index, photo in enumerate(photos)]
+    bindings = [_photo_binding(photo, index == 0) for index, photo in enumerate(photos)] + [_logo_binding(logo) for logo in logos]
+    if bindings:
+        content["reference_bindings"] = bindings
     return content
 
 
@@ -637,13 +665,16 @@ def publish_verified(session, ctx, row, *, excluding: str | None = None, pending
     markets = markets or ([row.market] if row.market else [])
     if not markets or (not statements and not photos and not entry.current_version_id):
         return None
+    # Logos (#233) are bound as logos, never as the product's look.
+    logos = [photo for photo in photos if photo.get("role") == "logo"]
+    photos = [photo for photo in photos if photo.get("role") != "logo"]
     # One main photo: the first one the reading called the main photo, else the first checked.
     main = next((photo for photo in photos if photo.get("role") == "main"), photos[0] if photos else None)
     photos = [main, *(photo for photo in photos if photo is not main)] if main else []
     draft = session.scalar(select(LibraryDraftRecord).where(LibraryDraftRecord.workspace_id == ctx.workspace_id,
                                                             LibraryDraftRecord.entry_id == entry.id))
     content = verified_content(entry.display_name, ((draft.content_json if draft else None) or {}).get("source_url"),
-                               statements, markets, photos, audiences)
+                               statements, markets, photos, audiences, logos)
     try:
         version = library.publish_content_in_transaction(
             session, ctx, entry.id, content, origin_command=library.COMMAND_IDEAS_VERIFICATION,
@@ -668,8 +699,9 @@ def _photo_rights(photo, today) -> dict:
     from app.products.intake_service import RIGHTS_VALIDITY, _rights_for
     if photo.get("intake_image") is not None:
         return _rights_for(photo["intake_image"], photo["page_url"], today)
-    return {"scope": "user_upload", "valid_to": (today + RIGHTS_VALIDITY).isoformat(),
-            "evidence": f"marketing_product_photo:{photo['added_id']}"}
+    # A logo is the brand's own design (``owned_brand_asset``, contract §7.2), a photo the user's own upload.
+    return {"scope": "owned_brand_asset" if photo["role"] == "logo" else "user_upload",
+            "valid_to": (today + RIGHTS_VALIDITY).isoformat(), "evidence": f"marketing_product_photo:{photo['added_id']}"}
 
 
 def _photo_decisions_to_record(session, ctx, row, photo_ids, rejected_photo_ids) -> list:
@@ -680,10 +712,10 @@ def _photo_decisions_to_record(session, ctx, row, photo_ids, rejected_photo_ids)
     that it shows this product and may be used in ads (``_photo_rights``). ``photo_not_found`` names photos
     these ideas do not list."""
     from app.library import service as library
-    from .product_references import candidates
+    from .product_references import added_logos, candidates
     if not (photo_ids or rejected_photo_ids):
         return []
-    found = {photo["photo_id"]: photo for photo in candidates(session, ctx, row)}
+    found = {photo["photo_id"]: photo for photo in [*candidates(session, ctx, row), *added_logos(session, ctx, row.product_id)]}
     unknown = [pid for pid in (*photo_ids, *rejected_photo_ids) if pid not in found]
     if unknown:
         raise MarketingError("photo_not_found", "要核对的照片不在这个产品的照片里，请刷新后重试。",

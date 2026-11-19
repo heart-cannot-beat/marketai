@@ -230,7 +230,9 @@ def ideas_dict(session, ctx, row) -> dict:
             "pending": pending_ads(session, ctx, row), "first_batch": summaries(session, ctx, [row.id]).get(row.id),
             "image_edits": edit_summaries(session, ctx, row),
             # The photos the product's reading found and whether the user checked each (#199).
-            "photos": photos}
+            "photos": photos,
+            # The logos the user added to the product (#233).
+            "logos": ideas_export.logo_list(session, ctx, row)}
 
 
 def call_summary(call) -> dict:

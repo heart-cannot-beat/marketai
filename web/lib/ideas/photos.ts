@@ -18,6 +18,10 @@ export type IdeasPhoto = components['schemas']['IdeasPhoto'];
 export type PhotoStatus = IdeasPhoto['status'];
 /** What a photo shows: the whole product, another angle, or a close-up. */
 export type PhotoRole = IdeasPhoto['role'];
+/** A logo the user added to the product (#233): listed apart, never a photo of the product. */
+export type IdeasLogo = components['schemas']['IdeasLogo'];
+/** What an upload is added to the product as: a photo of it, or the brand's logo. */
+export type UploadRole = components['schemas']['AddIdeasPhoto']['role'];
 
 /** The ads of these ideas made with this photo, in the ideas' order. */
 export function adsWithPhoto(detail: IdeasDetail, photoId: string): IdeasAd[] {

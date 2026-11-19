@@ -254,7 +254,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       reference_object_id: { type: 'string', maxLength: 64, minLength: 1 },
       role: {
         type: 'string',
-        enum: ['main', 'angle', 'detail'],
+        enum: ['main', 'angle', 'detail', 'logo'],
         default: 'detail',
       },
     },
@@ -8001,6 +8001,23 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'A crop or rotation of one ad (#200): a local Worker job, free of charge. ``unchanged`` when the result\nwas the source itself; ``result_asset_version_id`` is then that existing version.',
   },
+  IdeasLogo: {
+    properties: {
+      photo_id: { type: 'string' },
+      status: {
+        type: 'string',
+        enum: ['unverified', 'verified', 'rejected', 'unavailable'],
+      },
+      width: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      height: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      reference_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['photo_id', 'status'],
+    description:
+      "A logo the user added to the product (``add_marketing_ideas_photo`` with ``role = \"logo\"``, #233).\n\nIt is never sent as a photo of the product's look. Checking it (``verify_marketing_ideas`` ``photo_ids``)\ndeclares that it is the brand's logo and the user may use it in ads; it then becomes part of the\nproduct's published version as a logo, which the product's brand baseline can choose. Rejecting it\ntakes it out again. Show it with ``create_marketing_ideas_photo_download_intent(photo_id)``.",
+  },
   IdeasPhoto: {
     properties: {
       photo_id: { type: 'string' },
@@ -8092,6 +8109,10 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       },
       photos: {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
         type: 'array',
       },
     },
@@ -14543,6 +14564,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -14565,7 +14590,7 @@ const SCHEMAS: Record<string, object> = {
       reference_object_id: { type: 'string', maxLength: 64, minLength: 1 },
       role: {
         type: 'string',
-        enum: ['main', 'angle', 'detail'],
+        enum: ['main', 'angle', 'detail', 'logo'],
         default: 'detail',
       },
     },
@@ -16562,6 +16587,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -16639,6 +16668,10 @@ const SCHEMAS: Record<string, object> = {
       },
       photos: {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
         type: 'array',
       },
     },
@@ -17715,6 +17748,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -17849,6 +17886,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -17931,6 +17972,10 @@ const SCHEMAS: Record<string, object> = {
       },
       photos: {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
         type: 'array',
       },
     },
@@ -19783,6 +19828,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -21277,6 +21326,10 @@ const SCHEMAS: Record<string, object> = {
       },
       photos: {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
         type: 'array',
       },
     },
@@ -23029,6 +23082,10 @@ const SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
         type: 'array',
       },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
+        type: 'array',
+      },
     },
     additionalProperties: false,
     type: 'object',
@@ -23359,6 +23416,10 @@ const SCHEMAS: Record<string, object> = {
       },
       photos: {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
         type: 'array',
       },
     },
@@ -23858,6 +23919,10 @@ const SCHEMAS: Record<string, object> = {
       },
       photos: {
         items: { $ref: '#/components/schemas/IdeasPhoto' },
+        type: 'array',
+      },
+      logos: {
+        items: { $ref: '#/components/schemas/IdeasLogo' },
         type: 'array',
       },
     },
