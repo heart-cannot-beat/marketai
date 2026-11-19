@@ -23,6 +23,29 @@ PhotoId = Annotated[str, Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]
 IdeasState = Literal["input", "understanding_draft", "ideas_ready"]
 
 
+class UnsupportedClaim(Document):
+    """Something the AI read about the product that no source quote supports (design doc §5.2, #224): a
+    certification, a measurement, a performance or price claim, a comparison. Listed so the user sees it,
+    never used: no claim, way of telling or ad copy may say it (``claims.unsourced_uses``)."""
+    id: Identifier
+    text: Text
+
+
+class IdeasUnderstanding(Understanding):
+    """The product understanding of ads-first ideas: the plan-first ``Understanding`` and the claims the AI
+    read without a source (#224). The plan-first document is unchanged; this list is optional, so an
+    understanding drafted before it reads as having none."""
+    unsupported_claims: list[UnsupportedClaim] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def unsupported_ids(self):
+        ids = [f.id for f in self.facts] + [i.id for i in self.inferences] + [u.id for u in self.unsupported_claims]
+        if len(ids) != len(set(ids)):
+            raise PydanticCustomError("marketing_fact_ids_duplicate", "事实、推测与没有出处的说法的标识不能重复")
+        return self
+
+
+
 class Ideas(Document):
     market: Text
     ad_language: AdLanguage
@@ -251,7 +274,11 @@ class IdeasProjectDetail(Document):
     product_id: str
     market: str
     ad_language: str
-    understanding: Understanding | None
+    understanding: IdeasUnderstanding | None
+    # The audience the understanding states now is the one the user confirmed (#224). A confirmed audience
+    # is what the product's published version names as its audience; changing its words undoes this. Always
+    # set in responses; optional in the schema so clients built before it read the detail unchanged.
+    audience_confirmed: bool | None = None
     ideas: Ideas | None
     latest_call: IdeasCallSummary | None
     ads: list[AdSummary]
@@ -553,9 +580,27 @@ class EditIdeasUnderstanding(Document):
 
     ``confirmation`` in the document is ignored: a fact is checked only by ``verify_marketing_ideas``. A
     fact that reads as before keeps its checking; a changed or new fact is unchecked. Leaving a fact out
-    removes it. ``source_addition`` adds material for a new quote to the product's source."""
-    understanding: Understanding
+    removes it. ``source_addition`` adds material for a new quote to the product's source.
+
+    ``unsupported_claims`` (#224) can only lose items: the server keeps each listed claim the document still
+    names by id, as the AI wrote it, and ignores any other. "Add a source" removes one and adds the fact it
+    becomes (unchecked); "don't need it" removes one."""
+    understanding: IdeasUnderstanding
     source_addition: str | None = Field(default=None, max_length=8000)
+
+
+class EditIdeasClaim(Document):
+    """Change one claim in the user's own words (#224, design doc §5.7): what it says, why it is worth
+    trying and the facts it stands on, as a whole. Free of charge; nothing is drafted by AI.
+
+    Every fact named must be a fact of the understanding now: each has a source, and neither a removed fact
+    nor an unsourced claim can be named. The words may state no number, price or certification the named
+    facts do not, and no listed unsourced claim. Each way of telling the claim keeps only the facts the claim
+    still names. The claim's ads, their copy and their image instructions stay as they are; the images made
+    before need making again (``ideas_changed``), and a new image is made on the claim as it is now."""
+    proposition: Text
+    rationale: Text
+    fact_ids: list[Identifier] = Field(default_factory=list, max_length=30)
 
 
 class AcceptedFindings(Document):
@@ -579,6 +624,10 @@ class VerifyIdeas(Document):
     photo_ids: list[PhotoId] = Field(default_factory=list, max_length=20)
     # Photos the user says are not this product, or may not be used: ads made with one need making again.
     rejected_photo_ids: list[PhotoId] = Field(default_factory=list, max_length=20)
+    # The user read the audience the understanding states now and says it is right (#224). Its words are
+    # recorded; the product's published version names it as the audience until those words change. Absent
+    # or false: the audience is not part of this verification.
+    audience_confirmed: bool | None = None
 
     @model_validator(mode="after")
     def _one_decision_per_photo(self):

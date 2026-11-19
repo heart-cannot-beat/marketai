@@ -110,8 +110,10 @@ describe('DomainGateway operation coverage', () => {
     // 257 -> 260: changing and adding ads-first drafts
     // `prepare_marketing_ideas_feedback`, `create_marketing_ideas_image_edit`
     // and `place_marketing_ideas_upload` (#200).
-    // 260 -> 262: the user's own product photos `add_marketing_ideas_photo`
+    // 260 -> 262: changing and deleting a claim of ads-first ideas
+    // `edit_marketing_ideas_claim` and `delete_marketing_ideas_claim` (#224).
+    // 262 -> 264: the user's own product photos `add_marketing_ideas_photo`
     // and `create_marketing_ideas_photo_download_intent` (#233).
-    expect(DOMAIN_ALLOWLIST.length).toBe(262);
+    expect(DOMAIN_ALLOWLIST.length).toBe(264);
   });
 });

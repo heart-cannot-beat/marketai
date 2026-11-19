@@ -357,9 +357,10 @@ class FactChangeTests(IdeasExportFixtures):
             understanding["inferences"][0]["fact_ids"] = ["f4"]
         self.edit_facts(project, onto_f4)
         ads = self.ads(project)
-        # The third claim now rests on f4, which its images were not made on and nobody checked.
+        # The third claim now rests on f4, which its images were not made on and nobody checked, and no longer
+        # on f3, which they were made on (#224: an image stands on the facts its claim names now, no fewer).
         self.assertEqual((ads["c3_1"]["status"], [(r["code"], r["fact_ids"]) for r in ads["c3_1"]["reasons"]]),
-                         ("needs_redo", [("facts_changed", ["f4"])]))
+                         ("needs_redo", [("ideas_changed", []), ("facts_changed", ["f4"])]))
         self.assertEqual((ads["c1_1"]["status"], ads["c2_1"]["status"]), ("exportable", "exportable"))
 
     def test_a_claim_moved_onto_other_facts_in_the_same_words_makes_its_ads_need_redoing(self):

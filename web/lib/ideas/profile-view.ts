@@ -11,8 +11,10 @@ import type { IdeasDetail } from '@/lib/ideas/ideas-view';
  * removed. These helpers only build the document the user asked for.
  */
 
-export type Understanding = components['schemas']['Understanding'];
+export type Understanding = components['schemas']['IdeasUnderstanding'];
 export type Fact = components['schemas']['Fact'];
+/** Something the AI read without a source (#224): listed, never used. */
+export type UnsupportedClaim = components['schemas']['UnsupportedClaim'];
 
 /** What the user types for a fact: the claim, and the words it was read from. */
 export interface FactText {
@@ -59,6 +61,7 @@ export function newFactId(
   const taken = new Set([
     ...(understanding.facts ?? []).map((fact) => fact.id),
     ...understanding.inferences.map((inference) => inference.id),
+    ...(understanding.unsupported_claims ?? []).map((claim) => claim.id),
   ]);
   let id = '';
   do {
@@ -132,6 +135,41 @@ export function withUnknownAnswered(
   const index = unknowns.indexOf(unknown);
   if (index >= 0) unknowns.splice(index, 1);
   return { ...added, unknowns };
+}
+
+/**
+ * A claim the AI read without a source, given one (#224): it becomes an
+ * unchecked fact and leaves the list. The server keeps the list as the AI
+ * wrote it and only takes off what the document no longer names.
+ */
+export function withUnsourcedAnswered(
+  understanding: Understanding,
+  claimId: string,
+  text: FactText,
+  id: string = newFactId(understanding)
+): Understanding {
+  return withUnsourcedDropped(withFactAdded(understanding, text, id), claimId);
+}
+
+/** A claim the AI read without a source, taken off the list ("don't need it"). */
+export function withUnsourcedDropped(
+  understanding: Understanding,
+  claimId: string
+): Understanding {
+  return {
+    ...understanding,
+    unsupported_claims: (understanding.unsupported_claims ?? []).filter(
+      (claim) => claim.id !== claimId
+    ),
+  };
+}
+
+/** The understanding with the audience in the user's words; it is no longer checked. */
+export function withAudience(
+  understanding: Understanding,
+  audience: string
+): Understanding {
+  return { ...understanding, audience: audience.trim() };
 }
 
 /** The most facts one understanding may hold (`Understanding.facts`). */
