@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { useTranslation } from 'next-i18next';
 import classNames from 'classnames';
 import { useDomainQuery } from '@/hooks/domain/useDomainQuery';
+import { useArrivalScroll } from '@/hooks/ideas/useArrivalScroll';
 import { useIdeasCommands } from '@/hooks/ideas/useIdeasCommands';
 import {
   useIdeasPhotoUpload,
@@ -26,6 +27,9 @@ import {
   PhotoStatusBadge,
   PhotoThumbnail,
   RejectPhotoQuestion,
+  PRODUCT_PHOTOS_ANCHOR,
+  renewable,
+  useCheckDay,
   useCheckDeclaration,
   usePhotoFailure,
   usePhotoLabel,
@@ -59,15 +63,21 @@ function Section({
   intro,
   children,
   testId,
+  anchor,
 }: {
   title: string;
   intro: string;
   children: ReactNode;
   testId: string;
+  /** Links may open the page here (#233). */
+  anchor?: string;
 }) {
   const heading = useId();
+  const ref = useArrivalScroll<HTMLElement>(anchor ?? '', Boolean(anchor));
   return (
     <section
+      ref={ref}
+      id={anchor}
       aria-labelledby={heading}
       className="space-y-3"
       data-testid={testId}
@@ -133,6 +143,13 @@ function CandidatePhotos({
   const failureOf = usePhotoFailure();
   const declaration = useCheckDeclaration()(detail.understanding?.product_name);
   const labelOf = usePhotoLabel();
+  const day = useCheckDay();
+  const photoMeaning = (photo: IdeasPhoto) =>
+    photo.status === 'unavailable' && photo.unavailable_reason
+      ? t(`profile-photo-means-unavailable-${photo.unavailable_reason}`, {
+          date: photo.valid_to ? day(photo.valid_to) : '',
+        })
+      : t(`profile-photo-means-${photo.status}`);
   const ids = useId();
   const [asking, setAsking] = useState<Asking>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -169,6 +186,7 @@ function CandidatePhotos({
       title={t('profile-photos-title')}
       intro={t('profile-photos-intro')}
       testId="profile-photos"
+      anchor={PRODUCT_PHOTOS_ANCHOR}
     >
       <p className="text-sm text-gray-600 dark:text-gray-400">
         {t('profile-photos-expiry')}
@@ -211,15 +229,21 @@ function CandidatePhotos({
                     ? t('profile-photo-used', { count: used })
                     : t('profile-photo-unused')}
                 </p>
-                <p className="text-sm">
-                  {t(`profile-photo-means-${photo.status}`)}
-                </p>
+                <p className="text-sm">{photoMeaning(photo)}</p>
+                {photo.valid_to && photo.status === 'verified' && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {t('profile-photo-valid-to', {
+                      date: day(photo.valid_to),
+                    })}
+                  </p>
+                )}
               </div>
               {open === 'check' && (
                 <CheckPhotoQuestion
                   declaration={declaration}
                   used={used}
                   status={photo.status}
+                  expiredOn={renewable(photo) ? day(photo.valid_to!) : null}
                   busy={working}
                   failure={failureAt(photo.photo_id)}
                   onRefresh={() => void refresh()}
@@ -242,6 +266,22 @@ function CandidatePhotos({
                     setAsking(null);
                   }}
                 />
+              )}
+              {open === null && renewable(photo) && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm min-h-11"
+                    disabled={busy !== null}
+                    aria-describedby={nameId}
+                    onClick={() => {
+                      setFailure(null);
+                      setAsking({ kind: 'check', photoId: photo.photo_id });
+                    }}
+                  >
+                    {t('profile-photo-renew')}
+                  </button>
+                </div>
               )}
               {open === null && photo.status !== 'unavailable' && (
                 <div className="flex flex-wrap gap-2">
@@ -309,6 +349,7 @@ function CheckPhotoQuestion({
   declaration,
   used,
   status,
+  expiredOn = null,
   busy,
   failure,
   onRefresh,
@@ -318,6 +359,8 @@ function CheckPhotoQuestion({
   declaration: string;
   used: number;
   status: IdeasPhoto['status'];
+  /** Renewing (#233): the day the last check ran out. */
+  expiredOn?: string | null;
   busy: boolean;
   failure: PhotoFailure | null;
   onRefresh: () => void;
@@ -333,14 +376,19 @@ function CheckPhotoQuestion({
       className="space-y-3 rounded-lg border border-gray-300 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-950"
     >
       <p id={title} className="font-semibold">
-        {t('profile-photo-check-title')}
+        {expiredOn ? t('profile-photo-renew') : t('profile-photo-check-title')}
       </p>
+      {expiredOn && (
+        <p>{t('profile-photo-renew-intro', { date: expiredOn })}</p>
+      )}
       <p>{declaration}</p>
       {used > 0 && (
         <p>
-          {status === 'rejected'
-            ? t('profile-photo-check-ads-rejected', { count: used })
-            : t('profile-photo-check-ads', { count: used })}
+          {expiredOn
+            ? t('profile-photo-renew-ads', { count: used })
+            : status === 'rejected'
+              ? t('profile-photo-check-ads-rejected', { count: used })
+              : t('profile-photo-check-ads', { count: used })}
         </p>
       )}
       <PhotoFailureNote failure={failure} onRefresh={onRefresh} />
@@ -351,7 +399,11 @@ function CheckPhotoQuestion({
           disabled={busy}
           onClick={onCheck}
         >
-          {busy ? t('photo-saving') : t('profile-photo-check-confirm')}
+          {busy
+            ? t('photo-saving')
+            : expiredOn
+              ? t('profile-photo-renew-confirm')
+              : t('profile-photo-check-confirm')}
         </button>
         <button
           type="button"

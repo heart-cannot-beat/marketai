@@ -51,6 +51,29 @@ export function photoGone(ad: { reasons?: IdeasAd['reasons'] }): boolean {
   );
 }
 
+/**
+ * Whether renewing is all this ad needs from its photos (#233): it needs
+ * redoing for a product photo, and every photo it used that can no longer be
+ * used only had its check run out. Renewing such a photo brings the ad back
+ * as it was; a photo rejected, withdrawn or gone still means making it again.
+ */
+export function renewRestores(detail: IdeasDetail, ad: IdeasAd): boolean {
+  if (!photoGone(ad)) return false;
+  const used = new Set(ad.photo_ids ?? []);
+  const gone = (detail.photos ?? []).filter(
+    (photo) =>
+      used.has(photo.photo_id) &&
+      (photo.status === 'rejected' || photo.status === 'unavailable')
+  );
+  return (
+    gone.length > 0 &&
+    gone.every(
+      (photo) =>
+        photo.status === 'unavailable' && photo.unavailable_reason === 'expired'
+    )
+  );
+}
+
 /** The verify body that checks or rejects photos and records nothing else. */
 export function photoDecision(
   checked: string[],

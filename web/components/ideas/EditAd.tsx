@@ -10,6 +10,8 @@ import {
 import { ideasProblem } from '@/lib/ideas/ideas-problems';
 import { mainReasons } from '@/lib/ideas/check-sheet';
 import { removedFactsOf } from '@/lib/ideas/claim-edit';
+import { renewRestores } from '@/lib/ideas/photos';
+import { GuardedLink } from '@/components/workspace/GuardedLink';
 import {
   checkView,
   fromUpload,
@@ -49,6 +51,8 @@ const QUICK_NOTES = [
 ] as const;
 
 export interface EditAdProps {
+  /** Where a product photo whose check ran out is renewed (#233). */
+  renewHref?: string;
   projectId: string;
   detail: IdeasDetail;
   assetVersionId: string;
@@ -82,6 +86,7 @@ export function EditAd({
   onToggleKept,
   onAnotherTelling,
   onEditClaim,
+  renewHref,
 }: EditAdProps) {
   const { t } = useTranslation('ideas');
   const ad = detail.ads.find(
@@ -270,6 +275,9 @@ export function EditAd({
             }
             ideasChanged={reasons.has('ideas_changed')}
             photoGone={reasons.has('photo_unavailable')}
+            renewHref={
+              renewHref && renewRestores(detail, ad) ? renewHref : undefined
+            }
             hasFindings={findings.length > 0}
           />
 
@@ -349,6 +357,7 @@ function Redo({
   onEditClaim,
   ideasChanged,
   photoGone,
+  renewHref,
   hasFindings,
 }: {
   ad: IdeasAd;
@@ -361,6 +370,8 @@ function Redo({
   ideasChanged: boolean;
   /** A product photo it used was rejected or may no longer be used (#229). */
   photoGone: boolean;
+  /** Where to renew it, when its check only ran out (#233). */
+  renewHref?: string;
   hasFindings: boolean;
 }) {
   const { t } = useTranslation('ideas');
@@ -398,7 +409,18 @@ function Redo({
           {t('edit-ideas-changed')}
         </p>
       )}
-      {photoGone && !uploaded && !removedFact && (
+      {photoGone && !uploaded && !removedFact && renewHref && (
+        <div className="space-y-1 text-sm" role="note">
+          <p>{t('edit-photo-expired')}</p>
+          <GuardedLink
+            href={renewHref}
+            className="link font-medium underline-offset-2"
+          >
+            {t('ideas-photo-renew-link')}
+          </GuardedLink>
+        </div>
+      )}
+      {photoGone && !uploaded && !removedFact && !renewHref && (
         <p className="text-sm" role="note">
           {t('edit-photo-gone')}
         </p>

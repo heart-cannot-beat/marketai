@@ -10,6 +10,8 @@ import { AddPhoto } from './AddPhoto';
 import {
   PhotoFailureNote,
   PhotoStatusBadge,
+  renewable,
+  useCheckDay,
   usePhotoFailure,
   type PhotoFailure,
 } from './PhotoParts';
@@ -41,6 +43,7 @@ export function ProfileLogos({
   const { verify, refresh } = useIdeasCommands(projectId, detail);
   const directory = useProductDirectory();
   const failureOf = usePhotoFailure();
+  const day = useCheckDay();
   const ids = useId();
   const [asking, setAsking] = useState<Asking>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -100,19 +103,40 @@ export function ProfileLogos({
                     <PhotoStatusBadge status={logo.status} />
                   </div>
                   <p className="text-sm">
-                    {t(`profile-logo-means-${logo.status}`)}
+                    {logo.status === 'unavailable' && logo.unavailable_reason
+                      ? t(
+                          `profile-logo-means-unavailable-${logo.unavailable_reason}`,
+                          { date: logo.valid_to ? day(logo.valid_to) : '' }
+                        )
+                      : t(`profile-logo-means-${logo.status}`)}
                   </p>
+                  {logo.valid_to && logo.status === 'verified' && (
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      {t('profile-photo-valid-to', {
+                        date: day(logo.valid_to),
+                      })}
+                    </p>
+                  )}
                 </div>
                 {open && (
                   <div
                     role="group"
                     aria-label={
                       open === 'check'
-                        ? t('profile-logo-check')
+                        ? renewable(logo)
+                          ? t('profile-logo-renew')
+                          : t('profile-logo-check')
                         : t('profile-logo-reject')
                     }
                     className="space-y-3 rounded-lg border border-gray-300 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-950"
                   >
+                    {open === 'check' && renewable(logo) && (
+                      <p>
+                        {t('profile-photo-renew-intro', {
+                          date: day(logo.valid_to!),
+                        })}
+                      </p>
+                    )}
                     <p>
                       {open === 'check'
                         ? t('profile-logo-declaration')
@@ -132,7 +156,9 @@ export function ProfileLogos({
                         {working
                           ? t('photo-saving')
                           : open === 'check'
-                            ? t('profile-logo-check-confirm')
+                            ? renewable(logo)
+                              ? t('profile-photo-renew-confirm')
+                              : t('profile-logo-check-confirm')
                             : t('profile-logo-reject-confirm')}
                       </button>
                       <button
@@ -147,6 +173,22 @@ export function ProfileLogos({
                         {t('photo-cancel')}
                       </button>
                     </div>
+                  </div>
+                )}
+                {!open && renewable(logo) && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm min-h-11"
+                      disabled={busy !== null}
+                      aria-describedby={nameId}
+                      onClick={() => {
+                        setFailure(null);
+                        setAsking({ kind: 'check', photoId: logo.photo_id });
+                      }}
+                    >
+                      {t('profile-logo-renew')}
+                    </button>
                   </div>
                 )}
                 {!open && logo.status !== 'unavailable' && (

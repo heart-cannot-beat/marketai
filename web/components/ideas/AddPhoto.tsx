@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'next-i18next';
-import { useRouter } from 'next/router';
+import { useArrivalScroll } from '@/hooks/ideas/useArrivalScroll';
 import type { UseIdeasPhotoUploadResult } from '@/hooks/ideas/useIdeasPhotoUpload';
 import { errorMessage } from '@/lib/i18n/domain-errors';
 import type { PhotoRole, UploadRole } from '@/lib/ideas/photos';
@@ -41,32 +41,16 @@ export function AddPhoto({
 }) {
   const { t } = useTranslation('ideas');
   const { state, upload, reset } = uploader;
-  const [role, setRole] = useState<PhotoRole>(hasMain ? 'detail' : 'main');
   const logo = kind === 'logo';
+  const [role, setRole] = useState<PhotoRole>(hasMain ? 'detail' : 'main');
+
   const copy = logo ? 'profile-logo-add' : 'profile-photo-add';
   const title = useId();
   const roleName = useId();
   const input = useRef<HTMLInputElement>(null);
-  const area = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  // Arriving from the ideas page's link brings this part into view.
+  const area = useArrivalScroll<HTMLDivElement>(ADD_PHOTO_ANCHOR, !logo);
   const working = ['uploading', 'checking', 'adding'].includes(state.phase);
-
-  // Arriving from the ideas page's link brings this part into view. A link
-  // inside the app lands before the route change has finished settling the
-  // page, so it is tried once that has finished too.
-  useEffect(() => {
-    if (typeof window === 'undefined' || logo) return;
-    const bring = () => {
-      if (window.location.hash === `#${ADD_PHOTO_ANCHOR}`)
-        area.current?.scrollIntoView?.({ block: 'center' });
-    };
-    const timer = window.setTimeout(bring, 0);
-    router.events?.on('routeChangeComplete', bring);
-    return () => {
-      window.clearTimeout(timer);
-      router.events?.off('routeChangeComplete', bring);
-    };
-  }, [router.events, logo]);
 
   function chosen(files: FileList | null) {
     const file = files?.[0];

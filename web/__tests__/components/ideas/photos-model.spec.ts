@@ -9,6 +9,7 @@ import {
   adsWithPhoto,
   photoDecision,
   photoGone,
+  renewRestores,
   uncheckedPhotosOf,
 } from '@/lib/ideas/photos';
 import { ad, check, ideasDetail, photo } from './fixtures';
@@ -207,5 +208,57 @@ describe('photo helpers (#229)', () => {
       rejected_photo_ids: [],
     });
     expect(photoDecision([], ['p2']).rejected_photo_ids).toEqual(['p2']);
+  });
+});
+
+describe('an ad a renewal brings back (#233)', () => {
+  const gone = [reason('photo_unavailable')];
+  const ran = (extra = {}) =>
+    photo('p1', {
+      status: 'unavailable',
+      unavailable_reason: 'expired',
+      valid_to: '2026-11-17',
+      ...extra,
+    });
+
+  it('when every photo it can no longer use only ran out', () => {
+    const made = ad('av_1', 'c1', { photo_ids: ['p1', 'p2'], reasons: gone });
+    const detail = ideasDetail({
+      photos: [ran(), photo('p2', { status: 'verified' })],
+      ads: [made],
+    });
+    expect(renewRestores(detail, made)).toBe(true);
+  });
+
+  it('not when one of them was rejected or withdrawn, or nothing ran out', () => {
+    const made = ad('av_1', 'c1', { photo_ids: ['p1', 'p2'], reasons: gone });
+    for (const other of [
+      photo('p2', { status: 'rejected' }),
+      photo('p2', { status: 'unavailable', unavailable_reason: 'withdrawn' }),
+    ]) {
+      expect(
+        renewRestores(
+          ideasDetail({ photos: [ran(), other], ads: [made] }),
+          made
+        )
+      ).toBe(false);
+    }
+    expect(
+      renewRestores(
+        ideasDetail({
+          photos: [ran({ unavailable_reason: 'file_gone' })],
+          ads: [made],
+        }),
+        made
+      )
+    ).toBe(false);
+    // An ad no photo of these ideas explains, or one that does not need redoing for a photo.
+    expect(renewRestores(ideasDetail({ photos: [], ads: [made] }), made)).toBe(
+      false
+    );
+    const fine = ad('av_2', 'c2', { photo_ids: ['p1'], reasons: [] });
+    expect(
+      renewRestores(ideasDetail({ photos: [ran()], ads: [fine] }), fine)
+    ).toBe(false);
   });
 });

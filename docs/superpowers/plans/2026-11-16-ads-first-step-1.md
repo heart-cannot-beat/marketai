@@ -602,6 +602,10 @@ class IdeasApiTests(MarketingIdeasFixtures):
 
 - **做成的样子：** 产品资料的品牌部分可以上传品牌的 Logo，走同一个上传门禁和 `add_marketing_ideas_photo`（`role = "logo"`，新表在第一个 PR 已允许，不再迁移）。Logo 列在 `IdeasProjectDetail.logos`，不在照片里，出图从不把它当作产品外观。核对（`verify_marketing_ideas` 的 `photo_ids`）声明这是这个品牌的 Logo、有权用在广告里（`owned_brand_asset`），之后它作为用途 `logo` 的参考绑定写进核对发布的产品版本，品牌底线的 Logo 下拉就能选它；否定后它离开版本，品牌底线里选不到它（已保存的品牌底线版本照旧，要 Owner 改掉）。不加接口（仍是 262）。
 
+### S22 照片核对的续期（#233，第三个 PR）
+
+- **做成的样子：** `IdeasPhoto` / `IdeasLogo` 加 `valid_to` 和 `unavailable_reason`（`expired` / `withdrawn` / `file_gone`）。核对一张权利已过期的照片或 Logo 就是续期：创意库新加 `renew_reference_in_transaction`，把同一个参考图带用户的新声明再发布一次；被撤回、归档的不能续期（409 `photo_withdrawn`）。续期后，用这份字节出过的广告直接恢复，不用重出（`ideas_export._renewed`）。产品资料上每张核对过的照片写“核对有效到某天”，过期的写哪天过期并给“续期这张照片”，被撤回的只说明原因。广告想法页和修改页对只因为照片核对过期而需要重出的广告，说明去产品资料续期、续期后直接恢复，并给入口（维护者 2026-11-19 的决定）。不加接口，没有迁移。
+
 ### S15 前端：竞品独立页面，素材库和设置接入
 
 - **目的：** 竞品从营销测试页里拆出来；素材库和设置从新左边栏进入。

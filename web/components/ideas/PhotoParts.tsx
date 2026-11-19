@@ -5,6 +5,7 @@ import type { CommandOutcome } from '@/hooks/ideas/useIdeasCommands';
 import { useIdeasPhotoUrl } from '@/hooks/ideas/useIdeasPhotoUrl';
 import { useIntakeImageUrl } from '@/hooks/products/useIntakeImageUrl';
 import { errorMessage } from '@/lib/i18n/domain-errors';
+import { formatDate } from '@/lib/i18n/format';
 import type { IdeasPhoto, PhotoStatus } from '@/lib/ideas/photos';
 
 /**
@@ -272,3 +273,26 @@ export function RejectPhotoQuestion({
     </div>
   );
 }
+
+/** A checked photo whose rights ran out, which checking again renews (#233). */
+export function renewable(photo: {
+  status: IdeasPhoto['status'];
+  unavailable_reason?: string | null;
+  valid_to?: string | null;
+}): boolean {
+  return (
+    photo.status === 'unavailable' &&
+    photo.unavailable_reason === 'expired' &&
+    Boolean(photo.valid_to)
+  );
+}
+
+/** A check's last day (an ISO date) in the interface language. */
+export function useCheckDay() {
+  const { i18n } = useTranslation('ideas');
+  return (value: string) =>
+    formatDate(i18n.language, `${value}T00:00:00Z`, { timeZone: 'UTC' });
+}
+
+/** The product photos on the product profile, which links point to (#233). */
+export const PRODUCT_PHOTOS_ANCHOR = 'product-photos';

@@ -153,6 +153,39 @@ def _reference_usable(session, ctx, line) -> bool:
     return True
 
 
+def reference_condition(session, ctx, version_id) -> tuple[str | None, str | None]:
+    """Why a checked photo's creative-library reference can no longer be used, and until when its rights run.
+
+    ``(None, valid_to)`` while it can be used. Otherwise the reason: ``withdrawn`` -- a person withdrew,
+    archived or blocked it in the library, or it is no longer the reference's effective version; ``expired``
+    -- the rights the user declared ran out, and declaring them again renews it (#233); ``file_gone`` -- its
+    file is no longer released. ``valid_to`` is the rights' last day as declared (ISO date), when known."""
+    from app.library.contracts import check_rights_eligible
+    from .product_references import _usable
+    from app.adapters.persistence.models import LibraryVersionRecord, ReferenceObjectRecord
+    version = session.scalar(select(LibraryVersionRecord).where(LibraryVersionRecord.workspace_id == ctx.workspace_id,
+                                                                LibraryVersionRecord.id == version_id)) if version_id else None
+    if version is None:
+        return "withdrawn", None
+    entry = session.scalar(select(LibraryEntryRecord).where(LibraryEntryRecord.workspace_id == ctx.workspace_id,
+                                                            LibraryEntryRecord.id == version.entry_id))
+    rights = (version.content_json or {}).get("rights") or {}
+    valid_to = rights.get("valid_to") if isinstance(rights.get("valid_to"), str) else None
+    if version.eligibility == "blocked" or entry is None or entry.lifecycle != "active" or version.state == "withdrawn":
+        return "withdrawn", valid_to
+    if check_rights_eligible(rights):
+        # Also a version a renewal of the same reference superseded (the same bytes checked for another
+        # product): checking it again here takes the renewed version.
+        return "expired", valid_to
+    if version.state != "effective":
+        return "withdrawn", valid_to
+    obj = session.scalar(select(ReferenceObjectRecord).where(ReferenceObjectRecord.workspace_id == ctx.workspace_id,
+        ReferenceObjectRecord.id == (version.content_json or {}).get("object_id")))
+    if not _usable(obj, ctx):
+        return "file_gone", valid_to
+    return None, valid_to
+
+
 def photo_states(session, ctx, row, found=None, verified=None, decisions=None) -> dict:
     """Each photo's state for these ideas, by photo id: ``verified``, ``rejected``, ``unavailable`` or ``unverified``.
 
@@ -213,8 +246,17 @@ def photo_list(session, ctx, row, ads) -> list[dict]:
                        "width": photo["width"], "height": photo["height"],
                        "reference_version_id": (library.get(pid) or decisions.get(pid, {}).get("reference_version_id"))
                        if state == "verified" else None,
-                       "asset_version_ids": used.get(pid, [])})
+                       "asset_version_ids": used.get(pid, []),
+                       **_checking(session, ctx, state, decisions.get(pid, {}).get("reference_version_id") or library.get(pid))})
     return result
+
+
+def _checking(session, ctx, state, version_id) -> dict:
+    """``valid_to`` of a checked photo's rights, and for one that can no longer be used, why (#233)."""
+    if state not in ("verified", "unavailable") or not version_id:
+        return {"unavailable_reason": None, "valid_to": None}
+    reason, valid_to = reference_condition(session, ctx, version_id)
+    return {"unavailable_reason": reason if state == "unavailable" else None, "valid_to": valid_to}
 
 
 def logo_list(session, ctx, row, decisions=None) -> list[dict]:
@@ -227,7 +269,9 @@ def logo_list(session, ctx, row, decisions=None) -> list[dict]:
     states = photo_states(session, ctx, row, found=logos, verified=[], decisions=decisions)
     return [{"photo_id": logo["photo_id"], "status": states[logo["photo_id"]], "width": logo["width"], "height": logo["height"],
              "reference_version_id": decisions.get(logo["photo_id"], {}).get("reference_version_id")
-             if states[logo["photo_id"]] == "verified" else None} for logo in logos]
+             if states[logo["photo_id"]] == "verified" else None,
+             **_checking(session, ctx, states[logo["photo_id"]], decisions.get(logo["photo_id"], {}).get("reference_version_id"))}
+            for logo in logos]
 
 
 def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
@@ -235,6 +279,7 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
     ads = ideas.project_ads(session, ctx, row) if ads is None else ads
     calls = ideas_checks.latest_by_asset(session, ctx, row.id) if calls is None else calls
     states = photo_states(session, ctx, row) if states is None else states
+    decisions = photo_decisions(session, ctx, row)
     appearance, accepted = confirmations(session, ctx, row)
     item_ids = [version.producing_run_item_id for version, _ in ads if version.producing_run_item_id]
     items = dict(session.execute(select(RunItemRecord.id, RunItemRecord.state).where(
@@ -281,8 +326,10 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
         references = _references(recipe)
         if references:
             # A photo the user rejected, or one no longer usable as it was sent or as it was checked, cannot be
-            # rescued (#199).
-            if (not references_current(session, ctx, references) or _photo_rejected(session, ctx, references, photo_sets)
+            # rescued (#199). A photo frozen as a creative-library reference the user has since renewed (#233)
+            # counts by the renewal: the same bytes, now checked again.
+            live = [reference for reference in references if not _renewed(session, ctx, reference, decisions, states)]
+            if (not references_current(session, ctx, live) or _photo_rejected(session, ctx, live, photo_sets)
                     or any(states.get(reference.get("content_sha256")) in PHOTO_GONE for reference in references)):
                 reasons.append(_reason("photo_unavailable"))
             elif any(reference.get("attestation") not in VERIFIED_PHOTOS
@@ -316,6 +363,27 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
         result[version.id] = {"status": status, "cited_fact_ids": cited, "appearance_confirmed": version.id in appearance,
                               "reasons": reasons}
     return result
+
+
+def _renewed(session, ctx, reference, decisions, states) -> bool:
+    """Whether this frozen photo is a creative-library reference the user has since checked again (#233).
+
+    Its frozen version can no longer be used (its rights ran out and the renewal superseded it), but the
+    newest decision on the same bytes is a check whose reference -- another version of the same entry, of the
+    same object -- can be: the image was made with exactly the bytes the user has now declared again. Only
+    then; any other change to the frozen reference still makes the ad need redoing."""
+    from app.adapters.persistence.models import LibraryVersionRecord
+    frozen_id, pid = reference.get("reference_version_id"), reference.get("content_sha256")
+    line = decisions.get(pid)
+    if (not frozen_id or line is None or line["decision"] != "verified" or states.get(pid) != "verified"
+            or not line.get("reference_version_id") or line["reference_version_id"] == frozen_id):
+        return False
+    versions = {version.id: version for version in session.scalars(select(LibraryVersionRecord).where(
+        LibraryVersionRecord.workspace_id == ctx.workspace_id,
+        LibraryVersionRecord.id.in_([frozen_id, line["reference_version_id"]]))).all()}
+    old, new = versions.get(frozen_id), versions.get(line["reference_version_id"])
+    return bool(old and new and old.entry_id == new.entry_id
+                and (old.content_json or {}).get("object_id") == (new.content_json or {}).get("object_id"))
 
 
 def ad_status(session, ctx, row, asset_version_id: str) -> dict:
@@ -731,11 +799,25 @@ def _photo_decisions_to_record(session, ctx, row, photo_ids, rejected_photo_ids)
                     "rank": photo["rank"], **({"added_id": photo["added_id"]} if photo["added_id"] else {})}
             if decision == "verified":
                 try:
-                    line["reference_version_id"] = library.promote_reference_in_transaction(
+                    version_id = library.promote_reference_in_transaction(
                         session, ctx, photo["reference_object_id"],
                         display_name=f"{((product.name if product else '') or 'Product')[:80]} · "
                                      f"{photo['image_id'] or photo['added_id']}",
                         rights=_photo_rights(photo, today), today=today)
+                    # Checked before and its rights ran out (#233): this check is the user's new declaration,
+                    # so the same reference is published again with it. Nothing renews on its own.
+                    if reference_condition(session, ctx, version_id)[0] == "expired":
+                        line["renewed_from"] = version_id
+                        version_id = library.renew_reference_in_transaction(
+                            session, ctx, version_id, rights=_photo_rights(photo, today), today=today)
+                    line["reference_version_id"] = version_id
+                except library.LibraryConflict as exc:
+                    if getattr(exc, "code", None) in ("entry_archived", "reference_version_unavailable"):
+                        # Withdrawn or archived in the library: a person's decision a check never undoes.
+                        raise MarketingError("photo_withdrawn", "这张照片在素材库里被撤回或归档了，不能再核对，用到它的广告需要重出。",
+                                             409, params={"photo_ids": [pid]}) from exc
+                    raise MarketingError("verified_product_unpublishable", "核对过的照片不能存进创意库，请刷新后重试。", 409,
+                                         params={"reason": getattr(exc, "code", None) or "library_validation_failed"}) from exc
                 except library.LibraryError as exc:
                     raise MarketingError("verified_product_unpublishable", "核对过的照片不能存进创意库，请刷新后重试。", 409,
                                          params={"reason": getattr(exc, "code", None) or "library_validation_failed"}) from exc

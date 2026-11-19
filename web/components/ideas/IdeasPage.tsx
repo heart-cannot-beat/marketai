@@ -26,12 +26,14 @@ import {
   type IdeaSlot,
   type IdeasAd,
 } from '@/lib/ideas/ideas-view';
+import { renewRestores } from '@/lib/ideas/photos';
 import {
   productViewHref,
   type WorkspaceProduct,
 } from '@/lib/products/workspace-products';
 import { AdCard } from './AdCard';
 import { ADD_PHOTO_ANCHOR } from './AddPhoto';
+import { PRODUCT_PHOTOS_ANCHOR } from './PhotoParts';
 import { ChecksButton } from './ChecksButton';
 import { CheckSheet } from './CheckSheet';
 import { ClaimMenu, type ClaimPanel } from './ClaimMenu';
@@ -115,6 +117,8 @@ function IdeasProject({
     product.productId,
     'profile'
   );
+  // Where a product photo whose check ran out is renewed (#233).
+  const renewHref = `${profileHref}#${PRODUCT_PHOTOS_ANCHOR}`;
 
   // A new screen starts at its top, as a new page would.
   useEffect(() => {
@@ -272,6 +276,7 @@ function IdeasProject({
           assetVersionId={screen.assetVersionId}
           commands={commands}
           image={image}
+          renewHref={renewHref}
           onClose={() => setScreen({ kind: 'ideas' })}
           onSwitch={(id) => setScreen({ kind: 'edit', assetVersionId: id })}
           onToggleKept={(item) => void toggleKept(item)}
@@ -314,6 +319,11 @@ function IdeasProject({
         setScreen({ kind: 'edit', assetVersionId: item.asset_version_id })
       }
       check={slot.kind === 'ad' ? checkView(slot.ad, detail) : undefined}
+      renewHref={
+        slot.kind === 'ad' && renewRestores(detail, slot.ad)
+          ? renewHref
+          : undefined
+      }
       findings={slot.kind === 'ad' ? openFindings(slot.ad) : undefined}
       onRetry={retryOffer ? () => void retryImages() : undefined}
       retryLabel={

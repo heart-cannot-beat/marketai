@@ -34207,6 +34207,31 @@
                 "type": "null"
               }
             ]
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "expired",
+                  "withdrawn",
+                  "file_gone"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -34312,6 +34337,31 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "expired",
+                  "withdrawn",
+                  "file_gone"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

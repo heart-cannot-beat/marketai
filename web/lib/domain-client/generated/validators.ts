@@ -8011,6 +8011,13 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       width: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
       height: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
       reference_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      unavailable_reason: {
+        anyOf: [
+          { type: 'string', enum: ['expired', 'withdrawn', 'file_gone'] },
+          { type: 'null' },
+        ],
+      },
+      valid_to: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     },
     additionalProperties: false,
     type: 'object',
@@ -8034,6 +8041,13 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       height: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
       reference_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       asset_version_ids: { items: { type: 'string' }, type: 'array' },
+      unavailable_reason: {
+        anyOf: [
+          { type: 'string', enum: ['expired', 'withdrawn', 'file_gone'] },
+          { type: 'null' },
+        ],
+      },
+      valid_to: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     },
     additionalProperties: false,
     type: 'object',

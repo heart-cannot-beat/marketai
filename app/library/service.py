@@ -2607,6 +2607,65 @@ def promote_reference_in_transaction(
     return version_dict["id"]
 
 
+#: ``origin_command`` of a reference version an ads-first check published again with a new rights declaration (#233).
+COMMAND_IDEAS_PHOTO_RENEWAL = "ideas_photo_renewal"
+
+
+def renew_reference_in_transaction(
+    session, context: TenantContext, version_id: str, *, rights: dict, today: date | None = None,
+) -> str:
+    """Publish a reference whose rights ran out again with the user's new rights declaration; the new version id.
+
+    For an ads-first check (#233): the user declares again that a photo they checked before shows this product
+    and may be used in ads. Nothing is extended on its own -- only this declaration, made by the checking user
+    (``declared_by`` is set here), starts a new period. The new version is the same reference (same entry,
+    same object, same gate evidence) with the new ``rights``, through the same validation as any publish, and
+    it supersedes the expired one. Refused when the reference is no longer the entry's effective version (it
+    was withdrawn, or published again since: ``reference_version_unavailable``) or the entry is archived
+    (``entry_archived``): those are people's decisions this never undoes. The entry's Draft follows the new
+    version when it held exactly the expired one, and is left alone when the user has changed it since."""
+    _require_workspace(session, context.workspace_id)
+    version = session.scalar(select(LibraryVersionRecord).where(
+        LibraryVersionRecord.workspace_id == context.workspace_id, LibraryVersionRecord.id == version_id))
+    if version is None or version.entry_type != ENTRY_REFERENCE_ASSET:
+        raise LibraryNotFound("参考版本不存在")
+    entry = _entry(session, context, version.entry_id)
+    if entry.lifecycle == LIFECYCLE_ARCHIVED:
+        raise LibraryConflict("该参考素材条目已归档，不能续期", {"code": "entry_archived", "entry_id": entry.id})
+    current = _effective_version(session, entry)
+    if current is None or current.id != version.id or current.eligibility == "blocked":
+        raise LibraryConflict("该参考版本已不是生效版本，不能续期",
+                              {"code": "reference_version_unavailable", "entry_id": entry.id})
+    declaration = normalize_rights_declaration(rights, declared_by=context.initiator_id or "", today=today)
+    content = {**(current.content_json or {}), "rights": dict(declaration)}
+    report, resolved = _build_report(session, context, entry, content, today=today)
+    if not report.ok:
+        raise LibraryValidationError("续期被阻断项拒绝", report.as_dict())
+    if report.warnings:
+        raise LibraryValidationError("存在未确认的非阻断警告，必须显式确认后再发布", report.as_dict(),
+                                     code="library_warnings_unacknowledged")
+    draft = _draft(session, context, entry.id, for_update=True)
+    follows = draft.content_json == current.content_json
+    renewed, version_no, now = _create_effective_version(
+        session, context, entry, content, report, resolved, current,
+        base_version_id=current.id, source_version_id=None, origin_command=COMMAND_IDEAS_PHOTO_RENEWAL,
+    )
+    if follows:
+        _claim_draft_revision(session, context, draft, draft.revision, attempted_content=content)
+        draft.content_json = content
+        draft.base_version_id = renewed.id
+        draft.validation_json = report.as_dict()
+        draft.updated_at = now
+    _emit(session, context, entry.id, "published", version_id=renewed.id, to_state=VERSION_EFFECTIVE,
+          payload={"version_no": version_no, "content_hash": report.content_hash})
+    _audit(session, context, "publish", entry_id=entry.id, version_id=renewed.id,
+           detail={"version_no": version_no, "content_hash": report.content_hash,
+                   "origin_command": COMMAND_IDEAS_PHOTO_RENEWAL, "renewed_from": current.id,
+                   "rights_scope": declaration.get("scope"), "rights_valid_to": declaration.get("valid_to")})
+    session.flush()
+    return renewed.id
+
+
 def promote_reference_object(
     context: TenantContext,
     object_id: str,
