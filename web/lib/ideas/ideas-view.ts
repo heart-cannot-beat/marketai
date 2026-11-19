@@ -67,6 +67,10 @@ const telling = (expression: Expression | undefined): Telling | null =>
     ? { name: expression.name, description: expression.description }
     : null;
 
+/** An image of content its place no longer holds (#198): it needs making again. */
+const changed = (item: IdeasAd): boolean =>
+  (item.reasons ?? []).some((reason) => reason.code === 'ideas_changed');
+
 /**
  * A claim's competitor line (design §5.3): only when the ideas cite a
  * competitor scan. The planner leaves `competitor_overlap` empty today (#190),
@@ -110,6 +114,9 @@ export function ideasView(detail: IdeasDetail): IdeasView {
         placed.add(item.asset_version_id);
         slots.push({
           ...base,
+          // An image of earlier content (another claim or other copy here,
+          // #224, #228) does not carry the words the ideas hold now.
+          headline: changed(item) ? null : base.headline,
           kind: 'ad',
           key: item.asset_version_id,
           ad: item,
@@ -128,7 +135,8 @@ export function ideasView(detail: IdeasDetail): IdeasView {
           kind: 'making',
           key: `${combination.id}:making`,
         });
-      else if (made.length === 0)
+      // No image says what the ideas hold here now: the place waits for one.
+      else if (made.every(changed))
         slots.push({
           ...base,
           kind: 'not_made',

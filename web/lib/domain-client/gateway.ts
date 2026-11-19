@@ -1124,6 +1124,17 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'edit_marketing_ideas_claim'> | ReconciliationRequired
   >;
+  /** Change one ad's headline and body copy in the user's own words; free (#228). */
+  editMarketingIdeasCopy(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    combinationId: string;
+    body: DomainOperationMap['edit_marketing_ideas_copy']['requestBody'];
+  }): Promise<
+    DomainResultFor<'edit_marketing_ideas_copy'> | ReconciliationRequired
+  >;
   /** Take one claim and its ads out of the ideas; its images stay, needing redoing (#224). */
   deleteMarketingIdeasClaim(params: {
     workspaceSlug: string;
@@ -5174,6 +5185,32 @@ export class DefaultDomainGateway implements DomainGateway {
         slug: params.workspaceSlug,
         project_id: params.projectId,
         angle_id: params.angleId,
+      }),
+      'PATCH',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async editMarketingIdeasCopy(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    expectedRevision?: number;
+    projectId: string;
+    combinationId: string;
+    body: DomainOperationMap['edit_marketing_ideas_copy']['requestBody'];
+  }): Promise<
+    DomainResultFor<'edit_marketing_ideas_copy'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'edit_marketing_ideas_copy',
+      params.actionInstanceId,
+      buildBffPath('edit_marketing_ideas_copy', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+        combination_id: params.combinationId,
       }),
       'PATCH',
       params.body,

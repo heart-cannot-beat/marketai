@@ -69,7 +69,6 @@ jest.mock('@/components/workspace/ImageSelectionCanvas', () => ({
   }: {
     onLoad?: (size: { width: number; height: number }) => void;
   }) => {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => onLoad?.({ width: 1024, height: 1280 }), [onLoad]);
     return <div data-testid="canvas" />;
   },
@@ -208,13 +207,15 @@ describe('EditAd (#201)', () => {
         'Claim 1 “Plug in at night and forget about it” · Way of telling: Bedtime story · Facts it uses: Schedule charging in the Acme Charge app'
       )
     ).toBeInTheDocument();
+    // The copy can be changed here (#228); the old "not yet" note is gone.
     const copy = screen.getByRole('region', { name: 'Copy' });
-    expect(within(copy).getByText('Plug in. Go to bed.')).toBeInTheDocument();
-    expect(
-      within(copy).getByText('Plug in. Go to bed. Acme Charge Home.')
-    ).toBeInTheDocument();
-    // No fake copy editor: the server cannot change an ad's copy yet.
-    expect(within(copy).queryByRole('textbox')).toBeNull();
+    expect(within(copy).getByLabelText('Headline')).toHaveValue(
+      'Plug in. Go to bed.'
+    );
+    expect(within(copy).getByLabelText('Body text')).toHaveValue(
+      'Plug in. Go to bed. Acme Charge Home.'
+    );
+    expect(copy).not.toHaveTextContent(/isn't available yet/);
     const findings = within(
       screen.getByRole('region', { name: 'Check' })
     ).getAllByTestId('finding');

@@ -1223,6 +1223,8 @@
   "error-claim_cites_removed_fact": "这个主张用到的事实已被删掉，先改主张，再重出这张广告。",
   "error-claim_fact_not_found": "主张只能靠产品资料里现有的事实。刷新后再选。",
   "error-claim_unsupported": "主张里有引用的事实找不到出处的内容。改掉它，或先到产品资料里补上出处。",
+  "error-copy_unsupported": "文案里有这条广告用到的事实找不到出处的说法。改掉它们，或先到产品资料里补上出处。",
+  "error-ad_copy_too_long": "标题和正文太长，出图时放不下。请缩短一些。",
   "error-claims_too_few": "至少要留两个主张。可以改这个主张，或先再加一个主张。",
   "error-unsourced_claim_used": "主张、讲法或广告用了资料里找不到出处的说法。",
   "error-feedback_not_found": "找不到这次修改，请刷新后重试。",

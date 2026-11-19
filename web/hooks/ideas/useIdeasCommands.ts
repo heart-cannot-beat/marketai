@@ -25,6 +25,7 @@ export type ImageEditBody = components['schemas']['CreateIdeasImageEdit'];
 export type ChecksQuote = components['schemas']['IdeasChecksQuote'];
 type VerifyBody = components['schemas']['VerifyIdeas'];
 type EditClaimBody = components['schemas']['EditIdeasClaim'];
+type EditCopyBody = components['schemas']['EditIdeasCopy'];
 type CallSummary = components['schemas']['IdeasCallSummary'];
 type Drafts = components['schemas']['IdeasGenerationDrafts'];
 type OperationRef = components['schemas']['OperationRef'];
@@ -112,6 +113,11 @@ export interface IdeasCommands {
   ) => Promise<CommandOutcome<IdeasDetail>>;
   /** Deletes one claim; its images stay, needing redoing (#224). */
   deleteClaim: (angleId: string) => Promise<CommandOutcome<IdeasDetail>>;
+  /** Changes one ad's headline and body copy in the user's own words; free (#228). */
+  editCopy: (
+    combinationId: string,
+    body: EditCopyBody
+  ) => Promise<CommandOutcome<IdeasDetail>>;
   /** Asks the server for the ideas again. */
   refresh: () => Promise<void>;
 }
@@ -443,6 +449,25 @@ export function useIdeasCommands(
     [gateway, projectId, revision, run, slug, store]
   );
 
+  const editCopy = useCallback(
+    async (combinationId: string, body: EditCopyBody) =>
+      store(
+        await run<IdeasDetail>(
+          `copy:${revision}:${combinationId}:${JSON.stringify(body)}`,
+          (action) =>
+            gateway.editMarketingIdeasCopy({
+              workspaceSlug: slug,
+              actionInstanceId: action,
+              expectedRevision: revision,
+              projectId,
+              combinationId,
+              body,
+            })
+        )
+      ),
+    [gateway, projectId, revision, run, slug, store]
+  );
+
   return {
     verify,
     download,
@@ -456,6 +481,7 @@ export function useIdeasCommands(
     placeUpload,
     editClaim,
     deleteClaim,
+    editCopy,
     refresh,
   };
 }

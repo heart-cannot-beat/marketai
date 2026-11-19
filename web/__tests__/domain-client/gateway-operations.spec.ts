@@ -114,6 +114,8 @@ describe('DomainGateway operation coverage', () => {
     // `edit_marketing_ideas_claim` and `delete_marketing_ideas_claim` (#224).
     // 262 -> 264: the user's own product photos `add_marketing_ideas_photo`
     // and `create_marketing_ideas_photo_download_intent` (#233).
-    expect(DOMAIN_ALLOWLIST.length).toBe(264);
+    // 264 -> 265: changing an ad's headline and body copy
+    // `edit_marketing_ideas_copy` (#228).
+    expect(DOMAIN_ALLOWLIST.length).toBe(265);
   });
 });

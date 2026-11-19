@@ -587,6 +587,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['EditIdeasClaim'];
     successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
   };
+  edit_marketing_ideas_copy: {
+    pathParams: { project_id: string; combination_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['EditIdeasCopy'];
+    successResponses: { 200: components['schemas']['IdeasProjectDetail'] };
+  };
   edit_marketing_ideas_understanding: {
     pathParams: { project_id: string };
     queryParams: Record<string, never>;

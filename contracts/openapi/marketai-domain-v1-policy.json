@@ -1150,6 +1150,12 @@
     "maxResponseBytes": 524288,
     "forwardConditionalHeaders": true
   },
+  "edit_marketing_ideas_copy": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/combinations/:combination_id",
+    "maxRequestBytes": 16384,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": true
+  },
   "verify_marketing_ideas": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/verification",
     "maxRequestBytes": 32768,

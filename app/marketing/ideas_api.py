@@ -17,7 +17,7 @@ from app.platform.pagination import InvalidCursorError, decode_cursor, encode_cu
 from app.platform.tenancy import TenantContext
 from . import ideas, service
 from .ideas_contracts import (AddIdeasPhoto, CreateIdeas, CreateIdeasImageEdit, DownloadIdeas, EditIdeasClaim,
-                              EditIdeasUnderstanding, IdeasCallSummary, IdeasChecksQuote, IdeasDownload, IdeasFeedbackDraft,
+                              EditIdeasCopy, EditIdeasUnderstanding, IdeasCallSummary, IdeasChecksQuote, IdeasDownload, IdeasFeedbackDraft,
                               IdeasGenerationDrafts, IdeasPhotoDownloadGrant, IdeasProjectDetail, IdeasProjectPage,
                               PlaceIdeasUpload, PrepareIdeasFeedback, PrepareIdeasGeneration, SetKept, StartIdeasChecks,
                               StartIdeasPlanning, VerifyIdeas)
@@ -250,6 +250,33 @@ def delete_ideas_claim(project_id: str, angle_id: str, request: Request, respons
         row = _resource_command(session, ctx, request, key, "marketing.ideas.delete_claim", {"angle_id": angle_id},
             lambda s: ideas_claims.delete_claim(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, angle_id),
             lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ideas.ideas_dict(session, ctx, row)
+
+
+@router.patch("/{project_id}/combinations/{combination_id}", operation_id="edit_marketing_ideas_copy",
+              response_model=IdeasProjectDetail, openapi_extra={"x-marketai-idempotent": True})
+def edit_ideas_copy(project_id: str, combination_id: str, body: EditIdeasCopy, request: Request, response: Response,
+                    ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                    if_match: str | None = Header(default=None, alias="If-Match")):
+    """Change one ad's headline and body copy in the user's own words (#228). Free of charge.
+
+    The words must use the ads' language (``copy_language_mismatch``) and state nothing the facts this ad
+    cites do not -- no number, price or certification they lack, no listed unsourced claim
+    (``copy_unsupported``) -- and fit the image prompt (``ad_copy_too_long``). The images made for this ad
+    before need making again (``ideas_changed``); an uploaded image keeps its own words and stays as it is.
+    The claim, the way of telling and their facts do not change. Refused while the first batch is still
+    making ads."""
+    from . import ideas_copy
+
+    def edit(s):
+        return ideas_copy.edit_copy(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, combination_id,
+                                    headline=body.headline, body_copy=body.body_copy)
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.ideas.edit_copy",
+                                {"combination_id": combination_id, **body.model_dump(mode="json")}, edit,
+                                lambda s, resource: ideas.get_ideas_project(s, ctx, resource))
         set_etag(response, row.revision)
         return ideas.ideas_dict(session, ctx, row)
 

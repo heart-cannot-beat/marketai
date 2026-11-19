@@ -1223,6 +1223,8 @@
   "error-claim_cites_removed_fact": "This claim relies on a fact that was deleted. Change the claim before remaking this ad.",
   "error-claim_fact_not_found": "A claim can only rest on facts in the product profile. Refresh and pick again.",
   "error-claim_unsupported": "Something in this claim isn't in the facts it names. Change the words, or add a source in the product profile first.",
+  "error-copy_unsupported": "The copy says something the facts this ad uses don't. Change it, or add a source in the product profile first.",
+  "error-ad_copy_too_long": "The headline and body text are too long to fit when the image is made. Shorten them.",
   "error-claims_too_few": "Keep at least two claims. Change this one instead, or add another claim first.",
   "error-unsourced_claim_used": "A claim, way of telling or ad used something the product material has no source for.",
   "error-feedback_not_found": "We can't find that change. Refresh and try again.",

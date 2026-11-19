@@ -672,6 +672,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'edit_marketing_ideas_copy',
+    method: 'PATCH',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/ideas/:project_id/combinations/:combination_id',
+    pathParams: ['project_id', 'combination_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'edit_marketing_ideas_understanding',
     method: 'PATCH',
     bffPattern:

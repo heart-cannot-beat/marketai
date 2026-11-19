@@ -277,6 +277,7 @@ function IdeasProject({
           commands={commands}
           image={image}
           renewHref={renewHref}
+          profileHref={profileHref}
           onClose={() => setScreen({ kind: 'ideas' })}
           onSwitch={(id) => setScreen({ kind: 'edit', assetVersionId: id })}
           onToggleKept={(item) => void toggleKept(item)}
@@ -319,6 +320,7 @@ function IdeasProject({
         setScreen({ kind: 'edit', assetVersionId: item.asset_version_id })
       }
       check={slot.kind === 'ad' ? checkView(slot.ad, detail) : undefined}
+      language={detail.ad_language}
       renewHref={
         slot.kind === 'ad' && renewRestores(detail, slot.ad)
           ? renewHref
