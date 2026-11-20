@@ -4,6 +4,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ProductHome } from '@/components/products/ProductHome';
 import { RunList } from '@/components/generation/list/RunList';
+import env from '@/lib/env';
 
 let mockDirectory: any;
 const mockRefresh = jest.fn();
@@ -166,6 +167,20 @@ describe('ProductHome', () => {
       'href',
       '/w/acme/products/new'
     );
+  });
+
+  it('with the ads-first switch on, adding a product goes to the start page (#204)', () => {
+    env.adsFirstEnabled = true;
+    try {
+      mockDirectory = directory({ products: [] });
+      render(<ProductHome />);
+      expect(screen.getByRole('link', { name: 'Add product' })).toHaveAttribute(
+        'href',
+        '/w/acme/start'
+      );
+    } finally {
+      env.adsFirstEnabled = false;
+    }
   });
 
   it('highlights the product just added, once', () => {

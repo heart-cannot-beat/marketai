@@ -8373,6 +8373,23 @@
             }
           }
         }
+      },
+      "get": {
+        "operationId": "list_marketing_first_batches",
+        "summary": "List Batches",
+        "description": "The first batches that have not made a product yet and have not ended, newest first (at most 20).",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstBatchPage"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/marketing/first-batch-quote": {
@@ -31564,6 +31581,19 @@
               }
             ]
           },
+          "run_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "resumable": {
             "type": "boolean"
           }
@@ -31731,6 +31761,90 @@
           "ads_planned",
           "created_at",
           "updated_at"
+        ]
+      },
+      "FirstBatchListItem": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "understanding",
+              "ideas",
+              "generating",
+              "checking",
+              "done",
+              "needs_attention",
+              "failed"
+            ]
+          },
+          "needs_attention": {
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "several_models",
+                  "page_unreadable",
+                  "reading_failed",
+                  "too_few_claims",
+                  "over_budget",
+                  "ideas_refused",
+                  "step_failed",
+                  "uncertain"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "needs_attention",
+          "created_at",
+          "updated_at"
+        ],
+        "description": "A first batch that has no product yet and has not ended (#204): still reading, or stopped before the\nproduct could be made (several models on the page). The overview and the start page list them, so a\nuser who left the reading page finds the way back."
+      },
+      "FirstBatchPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FirstBatchListItem"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
         ]
       },
       "FirstBatchQuote": {

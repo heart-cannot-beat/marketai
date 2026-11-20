@@ -383,8 +383,13 @@ async def execute_run_item(ctx, job_id, item_id, blob_store, *, adapter=None):
                          provider_call_attempt_id=prepared["attempt_id"], event_type="failure_classified",
                          payload={"classification": "uncertain" if uncertain else "terminal",
                                   "code": failure_code}, executor="worker")
+            # The summary leads with the code the interface renders; a refusal the provider classified
+            # (``credential_rejected`` for a key refused for images, ...) follows it as the diagnostic, so
+            # the ads-first first batch can say why its images failed (#204) while every page that renders
+            # the leading code reads exactly as before.
+            provider_code = exc.error_code if certain_no_call and getattr(exc, "error_code", None) else None
             _transition_item(session, ctx, item, state="uncertain" if uncertain else "failed",
-                             error_summary=failure_code)
+                             error_summary=f"{failure_code}: {provider_code}" if provider_code else failure_code)
             if recipe["execution_mode"] == "byok":
                 if result is not None:
                     _settle(session, reservation, prepared["attempt_id"], called=True)

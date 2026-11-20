@@ -229,6 +229,30 @@ def summaries(session, ctx, project_ids) -> dict:
                              "reason": (row.attention_json or {}).get("reason")} for row in rows}
 
 
+#: How many unfinished batches without a product ``without_product`` lists.
+WITHOUT_PRODUCT_LIMIT = 20
+
+
+def without_product(session, ctx) -> list[dict]:
+    """The Workspace's first batches that have not made a product yet and have not ended, newest first (#204).
+
+    Until the reading has made the product, nothing else lists the batch: a user who left the reading page
+    (or stopped at "several models", which comes before the product) finds it again here."""
+    rows = session.scalars(select(MarketingFirstBatchRecord).where(
+        MarketingFirstBatchRecord.workspace_id == ctx.workspace_id,
+        MarketingFirstBatchRecord.product_id.is_(None),
+        MarketingFirstBatchRecord.state.not_in(ENDED),
+    ).order_by(MarketingFirstBatchRecord.created_at.desc(), MarketingFirstBatchRecord.id.desc())
+     .limit(WITHOUT_PRODUCT_LIMIT)).all()
+    intakes = {row.id: row for row in session.scalars(select(ProductIntakeRecord).where(
+        ProductIntakeRecord.workspace_id == ctx.workspace_id,
+        ProductIntakeRecord.id.in_([row.intake_id for row in rows])))} if rows else {}
+    return [{"id": row.id, "state": row.state, "needs_attention": row.state == "needs_attention",
+             "reason": (row.attention_json or {}).get("reason"),
+             "source_url": getattr(intakes.get(row.intake_id), "source_url", None),
+             "created_at": _iso(row.created_at), "updated_at": _iso(row.updated_at)} for row in rows]
+
+
 def detail(session, ctx, batch) -> dict:
     """The ``FirstBatchDetail`` of a batch, with what continuing would cost when it waits for the user."""
     progress = batch.progress_json or {}
@@ -242,6 +266,10 @@ def detail(session, ctx, batch) -> dict:
         # Whether this kind of stop is continued on this batch; ``resume`` is what continuing costs right now.
         attention["resumable"] = batch.state == "needs_attention" and (
             attention["reason"] in RESUMABLE or offer is not None)
+        if attention["reason"] == "uncertain" and attention.get("step") == "images":
+            # The generation runs to reconcile (#204): the existing reconciliation of a run settles them.
+            runs = _image_runs(batch)
+            attention["run_ids"] = sorted({runs[c] for c in attention.get("combination_ids", []) if c in runs})
     return {"id": batch.id, "operation_id": batch.operation_id, "state": batch.state,
             "needs_attention": batch.state == "needs_attention", "attention": attention,
             "resume": offer, "intake_id": batch.intake_id, "product_id": batch.product_id,
@@ -539,6 +567,30 @@ def image_states(session, ctx, batch) -> dict:
     return states
 
 
+def _image_failure(session, ctx, batch, combination_ids) -> str | None:
+    """The failure code the failed images share, when they share one (#204): ``credential_rejected`` for a key
+    the provider refused for images (for OpenAI, often an organisation not verified for its image models)."""
+    runs = _image_runs(batch)
+    run_ids = [runs[c] for c in combination_ids if c in runs]
+    if not run_ids:
+        return None
+    codes = {_provider_code(item.error_summary) for item in session.scalars(select(RunItemRecord).where(
+        RunItemRecord.workspace_id == ctx.workspace_id, RunItemRecord.generation_run_id.in_(run_ids),
+        RunItemRecord.state == "failed")).all()}
+    codes.discard(None)
+    return codes.pop() if len(codes) == 1 else None
+
+
+def _provider_code(summary: str | None) -> str | None:
+    """A failed image's code: the provider's own classification when the run item recorded one after
+    ``provider_rejected`` (``paid_execution``), otherwise the summary's leading code."""
+    from app.generation.run_queries import error_code_of
+    code = error_code_of(summary)
+    if code == "provider_rejected" and summary and ": " in summary:
+        return error_code_of(summary.split(": ", 1)[1]) or code
+    return code
+
+
 def _generate(session, ctx, batch, row, resumed: bool) -> None:
     combinations = [c["id"] for c in (row.ideas_json or {}).get("combinations", [])]
     states = image_states(session, ctx, batch)
@@ -551,7 +603,8 @@ def _generate(session, ctx, batch, row, resumed: bool) -> None:
         return
     failed = [c for c in combinations if states.get(c) == "failed"]
     if failed and not resumed:
-        _stop(session, ctx, batch, "step_failed", "images", combination_ids=failed)
+        _stop(session, ctx, batch, "step_failed", "images", code=_image_failure(session, ctx, batch, failed),
+              combination_ids=failed)
         return
     todo = [c for c in combinations if c not in states or c in failed]
     if not todo:

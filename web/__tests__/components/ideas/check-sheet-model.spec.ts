@@ -222,7 +222,7 @@ describe('ideas view for S13 (#201)', () => {
     const checking = ideasDetail({
       first_batch: {
         id: 'mfb_1',
-        state: 'checking' as unknown as 'done',
+        state: 'checking',
         needs_attention: false,
         reason: null,
       },

@@ -339,7 +339,11 @@ export function CheckSheet({
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {model.facts.length > 0
               ? t('check-facts-intro')
-              : t('check-facts-none')}
+              : model.ready.length === 0
+                ? // Nothing can be downloaded this time: no fact was looked at,
+                  // so none is said to be checked already (#204).
+                  t('check-facts-none-nothing-ready')
+                : t('check-facts-none')}
             {model.checkedFacts > 0 &&
               ' ' + t('check-facts-checked', { count: model.checkedFacts })}
           </p>

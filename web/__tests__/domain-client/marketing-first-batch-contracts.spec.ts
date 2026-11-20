@@ -174,9 +174,17 @@ test('the quote is not read as a batch whose id is "quote"', () => {
   ).toEqual([
     'get_marketing_first_batch',
     'get_marketing_first_batch_quote',
+    'list_marketing_first_batches',
     'resume_marketing_first_batch',
     'start_marketing_first_batch',
   ]);
+  // The list (#204) and the start share a path; the method tells them apart.
+  expect(
+    matchAllowlistEntry('GET', ['marketing', 'first-batch'])?.entry.operationId
+  ).toBe('list_marketing_first_batches');
+  expect(
+    matchAllowlistEntry('POST', ['marketing', 'first-batch'])?.entry.operationId
+  ).toBe('start_marketing_first_batch');
 });
 
 describe('first batch gateway', () => {

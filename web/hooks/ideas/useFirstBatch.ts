@@ -209,7 +209,9 @@ export function useStartFirstBatch() {
         .catch(() => null);
       if (result?.kind === 'created') {
         pending.current.delete(identity);
-        setPhase('idle');
+        // Still "starting" until the page has moved to the reading page: the
+        // button stays busy rather than clickable for that moment (#204).
+        // The caller calls `settle()` if the page stays.
         setUploadProgress(null);
         return { kind: 'started', batch: result.data as FirstBatch };
       }
@@ -224,7 +226,10 @@ export function useStartFirstBatch() {
     [current.slug, gateway, upload]
   );
 
-  return { start, phase, uploadProgress };
+  /** Back to idle: a started batch whose reading page did not open. */
+  const settle = useCallback(() => setPhase('idle'), []);
+
+  return { start, phase, uploadProgress, settle };
 }
 
 export interface ResumeInput {
@@ -407,6 +412,14 @@ export function useSaveOpenAIKey() {
         })
         .catch(() => null);
       if (created === null || created.kind === 'reconciliation_required')
+        return { kind: 'unresolved' };
+      // A server error other than "could not ask OpenAI" (which saved
+      // nothing) leaves it unknown whether the key was stored (#204).
+      if (
+        created.kind === 'problem' &&
+        created.status >= 500 &&
+        created.problem.code !== 'provider_key_check_unavailable'
+      )
         return { kind: 'unresolved' };
       if (created.kind === 'problem')
         return { kind: 'refused', problem: created.problem };

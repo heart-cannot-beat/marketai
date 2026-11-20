@@ -1,8 +1,9 @@
 """Authenticated v1 endpoints of the ads-first first batch (#193, ADR 0018; design doc §5.1, §5.2, §8).
 
 The quote is the start button's maximum; starting is the one confirmation of it. Reading the batch
-shows its step, why it stopped and what continuing would cost; continuing confirms that cost. Owner and
-Member may do all four, as for the product intake they build on.
+shows its step, why it stopped and what continuing would cost; continuing confirms that cost. Listing the
+batches that have no product yet finds a reading the user left (#204). Owner and Member may do all five, as
+for the product intake they build on.
 """
 from typing import Literal
 
@@ -13,7 +14,7 @@ from app.generation.v1_router import _idempotency_key, _resource_command
 from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
 from . import first_batch, service
-from .ideas_contracts import FirstBatchDetail, FirstBatchQuote, ResumeFirstBatch, StartFirstBatch
+from .ideas_contracts import FirstBatchDetail, FirstBatchPage, FirstBatchQuote, ResumeFirstBatch, StartFirstBatch
 
 router = APIRouter(prefix="/marketing/first-batch", tags=["marketing"])
 #: The quote sits beside the batches, not under them: the BFF allowlist matches routes in operation-id
@@ -51,6 +52,14 @@ def start(body: StartFirstBatch, request: Request,
         # No Location header: the web proxy answers 502 to one its contract policy does not declare, and
         # the body already carries the batch id (#216).
         return first_batch.detail(session, ctx, batch)
+
+
+@router.get("", operation_id="list_marketing_first_batches", response_model=FirstBatchPage)
+def list_batches(ctx: TenantContext = Depends(request_tenant_context)):
+    """The first batches that have not made a product yet and have not ended, newest first (at most 20)."""
+    _member(ctx)
+    with tenant_session(ctx) as session:
+        return {"items": first_batch.without_product(session, ctx)}
 
 
 @router.get("/{first_batch_id}", operation_id="get_marketing_first_batch", response_model=FirstBatchDetail)

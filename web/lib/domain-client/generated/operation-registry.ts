@@ -5191,6 +5191,28 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'list_marketing_first_batches',
+    {
+      operationId: 'list_marketing_first_batches',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/first-batch',
+      pathParams: [],
+      queryParams: [],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 32768,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'list_marketing_first_batches_200' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'list_marketing_ideas',
     {
       operationId: 'list_marketing_ideas',

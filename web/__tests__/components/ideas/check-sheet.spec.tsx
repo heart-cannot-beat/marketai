@@ -466,6 +466,25 @@ describe('CheckSheet (#201)', () => {
       expect(text).not.toContain(id);
   });
 
+  it('when no kept ad can be downloaded, never says the facts are checked already (#204)', async () => {
+    const detail = sheetDetail();
+    detail.ads = detail.ads.map((item) =>
+      item.kept
+        ? {
+            ...item,
+            status: 'needs_redo' as const,
+            reasons: [reason('facts_changed', ['f1'])],
+          }
+        : item
+    );
+    await openSheet(detail);
+    const facts = screen.getByRole('region', { name: 'Facts' });
+    expect(facts).toHaveTextContent(
+      'No kept ad can be downloaded this time, so there are no facts to check.'
+    );
+    expect(facts).not.toHaveTextContent('checked already');
+  });
+
   it('says only why an ad needs redoing, and says so when leaving one out is refused', async () => {
     const detail = sheetDetail();
     detail.ads.push(

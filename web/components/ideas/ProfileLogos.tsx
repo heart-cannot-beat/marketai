@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'next-i18next';
+import { useDomainQuery } from '@/hooks/domain/useDomainQuery';
 import { useIdeasCommands } from '@/hooks/ideas/useIdeasCommands';
 import { useIdeasPhotoUpload } from '@/hooks/ideas/useIdeasPhotoUpload';
 import { useIdeasPhotoUrl } from '@/hooks/ideas/useIdeasPhotoUrl';
@@ -39,6 +40,27 @@ export function ProfileLogos({
 }) {
   const { t } = useTranslation('ideas');
   const logos = detail.logos ?? [];
+  // A logo the user rejected (or that can no longer be used) stays in a brand
+  // baseline already saved with it, and goes on new images until the Owner
+  // changes the baseline (#233, #204). A rejected logo no longer names its
+  // library version, so the saved baseline is compared with the checked ones.
+  const gone = logos.some(
+    (logo) => logo.status === 'rejected' || logo.status === 'unavailable'
+  );
+  const brandKit = useDomainQuery(
+    'get_product_brand_kit',
+    { product_id: detail.product_id },
+    { enabled: gone }
+  );
+  const savedLogo =
+    brandKit.data?.current?.content.logo?.reference_version_id ?? null;
+  const kitUsesGoneLogo =
+    gone &&
+    savedLogo !== null &&
+    !logos.some(
+      (logo) =>
+        logo.status === 'verified' && logo.reference_version_id === savedLogo
+    );
   const uploader = useIdeasPhotoUpload(projectId);
   const { verify, refresh } = useIdeasCommands(projectId, detail);
   const directory = useProductDirectory();
@@ -233,6 +255,15 @@ export function ProfileLogos({
             );
           })}
         </ul>
+      )}
+      {kitUsesGoneLogo && (
+        <p
+          className="text-sm text-amber-800 dark:text-amber-300"
+          role="note"
+          data-testid="profile-logo-still-in-kit"
+        >
+          {t('profile-logo-still-in-kit')}
+        </p>
       )}
       <AddPhoto uploader={uploader} kind="logo" />
     </div>

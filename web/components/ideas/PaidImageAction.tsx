@@ -2,9 +2,9 @@ import { useId } from 'react';
 import { useTranslation } from 'next-i18next';
 import classNames from 'classnames';
 import { costLabel } from '@/lib/ideas/first-batch-view';
-import { ideasProblem } from '@/lib/ideas/ideas-problems';
 import { previewCost } from '@/hooks/ideas/useIdeasCommands';
 import type { PaidImage } from '@/hooks/ideas/usePaidImage';
+import { ProblemNote } from './ProblemNote';
 
 export const BUTTON =
   'inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-900 hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100';
@@ -99,11 +99,7 @@ export function PaidImageAction({
           </p>
         )
       )}
-      {phase.kind === 'problem' && (
-        <p className="text-sm text-red-700 dark:text-red-300" role="alert">
-          {ideasProblem(t, phase.problem)}
-        </p>
-      )}
+      {phase.kind === 'problem' && <ProblemNote problem={phase.problem} />}
     </div>
   );
 }

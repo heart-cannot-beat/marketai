@@ -167,6 +167,17 @@ function IdeasProject({
   }
   const batchStopped =
     firstBatch?.state === 'needs_attention' || firstBatch?.state === 'failed';
+  // Why a failed image of the first batch cannot be tried again yet (#204):
+  // the batch is still making or checking its other images, or it stopped
+  // for another reason that is sorted out on its reading page first.
+  const retryHint =
+    firstBatch?.state === 'needs_attention'
+      ? t('ideas-ad-retry-after-stop')
+      : firstBatch &&
+          firstBatch.state !== 'done' &&
+          firstBatch.state !== 'failed'
+        ? t('ideas-ad-retry-after-batch')
+        : undefined;
   // Images outside the first batch are made here; while the batch is still
   // on its way (or stopped), its own steps make them.
   const batchEnded =
@@ -328,6 +339,8 @@ function IdeasProject({
       }
       findings={slot.kind === 'ad' ? openFindings(slot.ad) : undefined}
       onRetry={retryOffer ? () => void retryImages() : undefined}
+      retrying={retrying}
+      retryHint={retryHint}
       retryLabel={
         retryOffer && costsMore(retryOffer.additional_cost)
           ? t('ideas-ad-retry-cost', {

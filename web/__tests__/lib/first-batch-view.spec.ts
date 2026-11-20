@@ -128,12 +128,9 @@ describe('progressSteps', () => {
   });
 });
 
-/** S9 (#197) adds a checking state and a checks step; today's generated
- * contract does not list them yet. */
-const CHECKING = 'checking' as unknown as FirstBatch['state'];
-const CHECKS = 'checks' as unknown as NonNullable<
-  FirstBatch['attention']
->['step'];
+/** The checking state and the checks step (S9, #197). */
+const CHECKING: FirstBatch['state'] = 'checking';
+const CHECKS: NonNullable<FirstBatch['attention']>['step'] = 'checks';
 
 describe('progressSteps once the ads are checked (S9, #197)', () => {
   const states = (b: FirstBatch) => progressSteps(b).map((s) => s.state);
@@ -213,6 +210,7 @@ describe('stopView', () => {
       kind: 'choose_model',
       reason: 'several_models',
       step: 'reading',
+      runIds: [],
       variants: ['7 kW', '11 kW'],
       failedAds: 0,
       resume: { ...resume, requires: ['selected_variant'] },

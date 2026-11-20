@@ -1,5 +1,7 @@
 import { useTranslation } from 'next-i18next';
+import { useUnfinishedFirstBatches } from '@/hooks/ideas/useUnfinishedFirstBatches';
 import { StartForm } from './StartForm';
+import { UnfinishedReadings } from './UnfinishedReadings';
 
 /**
  * The examples under the start form (design §5.1): a made-up Acme Charge
@@ -29,8 +31,11 @@ export const EXAMPLES = [
  */
 export function StartPage() {
   const { t } = useTranslation('ideas');
+  // A reading the user left before its product existed (#204).
+  const { batches } = useUnfinishedFirstBatches();
   return (
     <div className="mx-auto max-w-3xl space-y-10">
+      <UnfinishedReadings batches={batches} />
       <div className="space-y-6">
         <div className="space-y-2">
           <h1 className="text-2xl font-bold sm:text-3xl">{t('start-title')}</h1>

@@ -1210,6 +1210,12 @@
     "maxResponseBytes": 16384,
     "forwardConditionalHeaders": false
   },
+  "list_marketing_first_batches": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/first-batch",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 32768,
+    "forwardConditionalHeaders": false
+  },
   "get_marketing_first_batch": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/first-batch/:first_batch_id",
     "maxRequestBytes": 0,

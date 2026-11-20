@@ -28,11 +28,16 @@ import {
 } from '@/lib/ideas/first-batch-view';
 import { productViewHref } from '@/lib/products/workspace-products';
 import { newProductHref } from '@/lib/workspace-navigator';
+import { PhotoStatusBadge, PhotoThumbnail, usePhotoLabel } from './PhotoParts';
+import { SpendLimitLink } from './SpendLimitLink';
 import { StartForm } from './StartForm';
 
 /** Why a step failed, said plainly, for the codes that have a plain reason. */
-const STEP_FAILED_WHY: Record<string, string> = {
+export const STEP_FAILED_WHY: Record<string, string> = {
   budget_exceeded: 'stop-why-budget',
+  // OpenAI refused the key for images: often an organisation not verified
+  // for its image models, which saving the key cannot tell (#192, #204).
+  credential_rejected: 'stop-why-image-key',
   credential_required: 'stop-why-key',
   openai_key_required: 'stop-why-key',
   planner_not_configured: 'stop-why-not-set-up',
@@ -121,6 +126,22 @@ function ProjectReading({
   return <Reading batch={batch} detail={detail} resume={resume} />;
 }
 
+/** Reading usually takes well under this; past it the page says it is still going (#204). */
+export const SLOW_READING_MS = 2 * 60_000;
+
+/** True once the batch has been reading for longer than usual. */
+function useSlowReading(batch: FirstBatch): boolean {
+  const reading = batch.state === 'reading';
+  const since = Date.parse(batch.created_at);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!reading) return;
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
+  }, [reading]);
+  return reading && Number.isFinite(since) && now - since > SLOW_READING_MS;
+}
+
 function Reading({
   batch,
   detail,
@@ -143,6 +164,7 @@ function Reading({
     detail?.understanding?.product_name || intake?.card?.name || null;
   const view = stopView(batch);
   const running = isRunning(batch);
+  const slow = useSlowReading(batch);
 
   // The new product belongs in the sidebar as soon as it exists.
   const listedProduct = useRef<string | null>(null);
@@ -182,6 +204,15 @@ function Reading({
             {t('reading-intro')}
           </p>
         )}
+        {slow && (
+          <p
+            className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-900"
+            role="status"
+            data-testid="reading-slow"
+          >
+            {t('reading-slow')}
+          </p>
+        )}
         {adsMade(batch) && (
           <p className="text-sm" role="status">
             {t('reading-done')}
@@ -189,7 +220,15 @@ function Reading({
         )}
       </div>
 
-      {view && <StopPanel batch={batch} view={view} resume={resume} />}
+      {view && (
+        // A new stop starts with an empty panel; the same stop keeps what was typed.
+        <StopPanel
+          key={`${view.reason}:${view.step}:${batch.updated_at}`}
+          batch={batch}
+          view={view}
+          resume={resume}
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <section aria-labelledby="reading-found" className={CARD}>
@@ -197,6 +236,7 @@ function Reading({
             {t('reading-found')}
           </h2>
           <ReadFacts detail={detail} imagesOnly={imagesOnly} />
+          <ReadGuessesAndPhotos detail={detail} />
         </section>
         <div className="order-first space-y-3 lg:order-none">
           <Progress batch={batch} made={detail?.ads.length ?? 0} />
@@ -344,6 +384,68 @@ function ReadFacts({
 }
 
 /**
+ * What else the reading found (design §5.2, #204): the AI's guesses -- never
+ * facts, never checked -- and the photos that may show the product, which
+ * ads may use before anyone checks them.
+ */
+function ReadGuessesAndPhotos({ detail }: { detail: IdeasDetail | undefined }) {
+  const { t } = useTranslation('ideas');
+  const label = usePhotoLabel();
+  const understanding = detail?.understanding;
+  if (!detail || !understanding || (understanding.facts ?? []).length === 0)
+    return null;
+  const guesses = [
+    understanding.audience,
+    ...understanding.inferences.map((inference) => inference.statement),
+  ].filter((guess) => guess?.trim());
+  const photos = (detail.photos ?? []).filter(
+    (photo) => photo.status !== 'rejected'
+  );
+  return (
+    <div className="mt-5 space-y-5">
+      {guesses.length > 0 && (
+        <section className="space-y-2" data-testid="reading-guesses">
+          <h3 className="text-sm font-semibold">{t('reading-guesses')}</h3>
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            {t('reading-guesses-note')}
+          </p>
+          <ul role="list" className="space-y-1">
+            {guesses.map((guess, index) => (
+              <li key={index} className="text-sm italic">
+                {guess}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {photos.length > 0 && (
+        <section className="space-y-2" data-testid="reading-photos">
+          <h3 className="text-sm font-semibold">{t('reading-photos')}</h3>
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            {t('reading-photos-note')}
+          </p>
+          <ul role="list" className="flex flex-wrap gap-3">
+            {photos.map((photo) => {
+              const { role } = label(photo);
+              return (
+                <li key={photo.photo_id} className="space-y-1">
+                  <PhotoThumbnail
+                    photo={photo}
+                    projectId={detail.id}
+                    alt={role}
+                  />
+                  <PhotoStatusBadge status={photo.status} />
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
+/**
  * What to do about a stop (design §5.2): choose a model, paste something else
  * and start again, add material, or continue. Continuing that costs more says
  * how much more on its button; clicking it confirms the new maximum.
@@ -358,6 +460,7 @@ function StopPanel({
   resume: Resume;
 }) {
   const { t, i18n } = useTranslation('ideas');
+  const { current } = useWorkspace();
   const ids = useId();
   const [variant, setVariant] = useState<string | null>(null);
   const [material, setMaterial] = useState('');
@@ -415,7 +518,9 @@ function StopPanel({
           ? t('stop-over_budget-body', {
               cost: costLabel(i18n.language, batch.confirmed_max_cost),
             })
-          : t(`stop-${view.reason}-body`);
+          : view.reason === 'uncertain' && view.runIds.length > 0
+            ? t('stop-uncertain-images-body')
+            : t(`stop-${view.reason}-body`);
   const why =
     view.reason === 'step_failed' && batch.attention?.code
       ? STEP_FAILED_WHY[batch.attention.code]
@@ -451,6 +556,7 @@ function StopPanel({
         </h2>
         <p className="text-sm">{body}</p>
         {why && <p className="text-sm">{t(why)}</p>}
+        {why === STEP_FAILED_WHY.budget_exceeded && <SpendLimitLink />}
         {view.kind !== 'start_again' && (
           <p className="text-sm text-gray-700 dark:text-gray-300">
             {t('stop-kept')}
@@ -524,6 +630,28 @@ function StopPanel({
           view.reason === 'step_failed' ? t('stop-retry') : t('stop-continue'),
           () => void go({})
         )}
+
+      {view.kind === 'uncertain' && !offer && view.runIds.length > 0 && (
+        // The existing reconciliation of a generation run (#204): say there
+        // whether the image was made; continuing then becomes possible here.
+        <ul role="list" className="flex flex-wrap gap-2">
+          {view.runIds.map((runId, index) => (
+            <li key={runId}>
+              <GuardedLink
+                href={`/w/${current.slug}/generate/runs/${encodeURIComponent(runId)}`}
+                className="btn btn-primary min-h-12 w-full sm:w-auto"
+                data-testid="reading-stop-reconcile"
+              >
+                {view.runIds.length === 1
+                  ? t('stop-uncertain-reconcile')
+                  : t('stop-uncertain-reconcile-numbered', {
+                      number: index + 1,
+                    })}
+              </GuardedLink>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {view.kind !== 'start_again' && !offer && (
         <p className="text-sm font-semibold" data-testid="reading-stop-waiting">

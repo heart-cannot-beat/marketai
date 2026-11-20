@@ -183,3 +183,33 @@ it('warns when the saved logo lost its gates', () => {
     )
   ).toBeInTheDocument();
 });
+
+it('says where a logo comes from in the words the page gives, else the product card’s (#204)', () => {
+  const items = mockReferences.items;
+  mockReferences.items = items.filter((item) => item.role !== 'logo');
+  try {
+    const view = render(
+      <ProductBrandKitSettings
+        product={product}
+        logoHint="Upload a logo above and check it first."
+      />
+    );
+    const details = view.container.querySelector('details')!;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(
+      screen.getByText('Upload a logo above and check it first.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/under Reference images/)).toBeNull();
+    view.unmount();
+
+    open();
+    expect(
+      screen.getByText(
+        'To use a logo, add an image with the Logo role under Reference images.'
+      )
+    ).toBeInTheDocument();
+  } finally {
+    mockReferences.items = items;
+  }
+});

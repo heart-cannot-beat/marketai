@@ -12,7 +12,11 @@ import type {
   WorkspaceProduct,
 } from '@/lib/products/workspace-products';
 
-const mockRouter = { asPath: '/w/acme/overview', query: { slug: 'acme' } };
+const mockRouter = {
+  asPath: '/w/acme/overview',
+  query: { slug: 'acme' },
+  replace: jest.fn().mockResolvedValue(true),
+};
 jest.mock('next/router', () => ({ useRouter: () => mockRouter }));
 jest.mock('@/components/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({ current: { slug: 'acme' } }),
@@ -80,6 +84,23 @@ function productsResult(
 let mockProducts = productsResult([]);
 jest.mock('@/hooks/products/useWorkspaceProducts', () => ({
   useWorkspaceProducts: () => mockProducts,
+}));
+type Unfinished = {
+  batches: {
+    id: string;
+    state: 'reading' | 'needs_attention';
+    needs_attention: boolean;
+    reason: 'several_models' | null;
+    source_url: string | null;
+    created_at: string;
+    updated_at: string;
+  }[];
+  loaded: boolean;
+  failed: boolean;
+};
+let mockUnfinished: Unfinished = { batches: [], loaded: true, failed: false };
+jest.mock('@/hooks/ideas/useUnfinishedFirstBatches', () => ({
+  useUnfinishedFirstBatches: () => mockUnfinished,
 }));
 
 const ALL_STEPS: [NextStepKind, string, string, string][] = [
@@ -218,6 +239,76 @@ describe('WorkspaceOverview (#194)', () => {
     expect(screen.queryAllByTestId('overview-product')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(refresh).toHaveBeenCalled();
+  });
+});
+
+describe('WorkspaceOverview: nothing yet, or a reading left behind (#204)', () => {
+  beforeEach(() => {
+    env.adsFirstEnabled = true;
+    mockRouter.replace.mockClear();
+    mockProducts = productsResult([]);
+    mockUnfinished = { batches: [], loaded: true, failed: false };
+  });
+  afterEach(() => {
+    env.adsFirstEnabled = false;
+    mockUnfinished = { batches: [], loaded: true, failed: false };
+  });
+
+  it('an empty Workspace opens the start page (design §5.1)', () => {
+    render(<WorkspaceOverview />);
+    expect(mockRouter.replace).toHaveBeenCalledWith('/w/acme/start');
+  });
+
+  it('waits for both lists before deciding the Workspace is empty', () => {
+    mockUnfinished = { batches: [], loaded: false, failed: false };
+    const { rerender } = render(<WorkspaceOverview />);
+    mockProducts = productsResult([], { isLoading: true });
+    mockUnfinished = { batches: [], loaded: true, failed: false };
+    rerender(<WorkspaceOverview />);
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it('a reading left before its product existed is listed instead, with the way back', () => {
+    mockUnfinished = {
+      loaded: true,
+      failed: false,
+      batches: [
+        {
+          id: 'mfb_9',
+          state: 'reading',
+          needs_attention: false,
+          reason: null,
+          source_url: 'https://acmecharge.example/products/home',
+          created_at: '2026-11-17T08:00:00+00:00',
+          updated_at: '2026-11-17T08:00:00+00:00',
+        },
+      ],
+    };
+    render(<WorkspaceOverview />);
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    const left = screen.getByTestId('unfinished-readings');
+    expect(left).toHaveTextContent('acmecharge.example/products/home');
+    expect(
+      within(left).getByRole('link', { name: 'See progress' })
+    ).toHaveAttribute('href', '/w/acme/start/mfb_9');
+    expect(screen.getByTestId('overview-new-product')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/mfb_/);
+  });
+
+  it('a Workspace with products stays on the overview', () => {
+    mockProducts = productsResult([
+      workspaceProduct('prod_1', 'Acme Charge Home', 'drafts_unhandled', 6),
+    ]);
+    render(<WorkspaceOverview />);
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(screen.getAllByTestId('overview-product')).toHaveLength(1);
+  });
+
+  it('with the switch off nothing changes', () => {
+    env.adsFirstEnabled = false;
+    render(<WorkspaceOverview />);
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(screen.getByTestId('overview-empty')).toBeInTheDocument();
   });
 });
 

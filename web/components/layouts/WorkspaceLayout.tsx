@@ -25,6 +25,26 @@ import Brand from '@/components/shared/shell/Brand';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import type { WorkspaceBootstrap } from '@/lib/workspace-bootstrap';
 
+/**
+ * In dark mode the navigation's text turns light, so its panel has to turn
+ * dark too (#204: on a white panel the new navigation was barely readable).
+ * Only with the ads-first switch on: with it off, the existing screens stay
+ * exactly as they are.
+ */
+const DARK_PANEL = 'dark:border-gray-800 dark:bg-black';
+
+export function sidebarPanelClass(adsFirst: boolean = env.adsFirstEnabled) {
+  const base =
+    'flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white px-4 pb-4';
+  return adsFirst ? `${base} ${DARK_PANEL}` : base;
+}
+
+export function phoneBarClass(adsFirst: boolean = env.adsFirstEnabled) {
+  const base =
+    'sticky top-0 z-40 flex items-center justify-between gap-x-4 border-b border-gray-200 bg-white px-4 py-2 lg:hidden';
+  return adsFirst ? `${base} ${DARK_PANEL}` : base;
+}
+
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
   bootstrap: WorkspaceBootstrap | null;
@@ -90,7 +110,7 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white px-4 pb-4">
+        <div className={sidebarPanelClass()}>
           <Brand />
           <WorkspaceSelector />
           <nav className="flex flex-1 flex-col">
@@ -109,7 +129,7 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
             out) reachable from a slim bar instead. With the ads-first switch
             on, the bar opens the sidebar's content as a menu (design §5.8),
             and the language choice moves into it as on the sidebar. */}
-        <div className="sticky top-0 z-40 flex items-center justify-between gap-x-4 border-b border-gray-200 bg-white px-4 py-2 lg:hidden">
+        <div className={phoneBarClass()}>
           <div className="flex items-center gap-x-2 [&>div]:pt-0">
             {env.adsFirstEnabled && <WorkspaceMenu slug={slug} />}
             <Brand />

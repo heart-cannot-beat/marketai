@@ -29,8 +29,11 @@ import {
 jest.mock('next/router', () => ({
   useRouter: () => ({ asPath: '/w/acme/p/prod_home/ideas', query: {} }),
 }));
+let mockRole: string | undefined;
 jest.mock('@/components/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ current: { slug: 'acme', workspaceId: 'ws_1' } }),
+  useWorkspace: () => ({
+    current: { slug: 'acme', workspaceId: 'ws_1', role: mockRole },
+  }),
 }));
 const mockGateway = {
   getMarketingIdeas: jest.fn(),
@@ -119,6 +122,7 @@ const call = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockRole = undefined;
   mockUpload.phase = 'idle';
   mockUpload.creatives = [];
   mockGateway.getMarketingCapabilities.mockResolvedValue(
@@ -363,6 +367,57 @@ describe('ideas page actions (#201)', () => {
     );
   });
 
+  it('a paid image refused by the spending limit gives the Owner the way to the limits (#204)', async () => {
+    mockRole = 'OWNER';
+    mockGateway.prepareMarketingIdeasGeneration.mockResolvedValue(
+      ok(
+        {
+          project_id: 'mp_secret',
+          revision: 3,
+          drafts: [{ combination_id: 'c6', draft_id: 'gd_c6' }],
+        },
+        201
+      )
+    );
+    mockGateway.createGenerationPreview.mockResolvedValue({
+      kind: 'problem',
+      status: 422,
+      problem: { code: 'budget_exceeded', field_errors: [] },
+      meta: {},
+    });
+    await renderPage();
+    const [, failed] = within(claim(3)).getAllByTestId('ad-card');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Try again' }));
+    expect(await within(failed).findByRole('alert')).toHaveTextContent(
+      "This generation would exceed the Workspace's spending limit or the platform's per-request cost limit."
+    );
+    expect(
+      within(failed).getByRole('link', { name: 'Change the limits' })
+    ).toHaveAttribute('href', '/w/acme/settings#spend-guardrail');
+  });
+
+  it('says plainly when drafting is not set up on this site, never its code (#204)', async () => {
+    mockGateway.getMarketingCapabilities.mockResolvedValue(
+      ok({
+        ...plannerCapabilities('0.08'),
+        paid: {
+          ...plannerCapabilities('0.08').paid,
+          available: false,
+          unavailable_reason: 'planner_not_configured',
+          maximum_cost: '0',
+        },
+      })
+    );
+    await renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /another claim/i }));
+    expect(
+      await screen.findByText(
+        /This site has not set up the AI model for drafting yet/
+      )
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/planner_not_configured/);
+  });
+
   it("makes a new way of telling's image with the image settings the user chose", async () => {
     const detail = ideasDetail({
       ads: [ad('av_1', 'c1')],
@@ -545,7 +600,7 @@ describe('ideas page actions (#201)', () => {
       ideasDetail({
         first_batch: {
           id: 'mfb_1',
-          state: 'checking' as unknown as 'done',
+          state: 'checking',
           needs_attention: false,
           reason: null,
         },

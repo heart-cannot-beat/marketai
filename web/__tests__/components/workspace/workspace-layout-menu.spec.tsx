@@ -1,7 +1,10 @@
 /** @jest-environment jsdom */
 import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
-import WorkspaceLayout from '@/components/layouts/WorkspaceLayout';
+import WorkspaceLayout, {
+  phoneBarClass,
+  sidebarPanelClass,
+} from '@/components/layouts/WorkspaceLayout';
 import env from '@/lib/env';
 import type { WorkspaceBootstrap } from '@/lib/workspace-bootstrap';
 
@@ -72,5 +75,21 @@ describe('WorkspaceLayout phone menu (#194)', () => {
     renderLayout();
     expect(screen.queryByTestId('workspace-menu-mock')).toBeNull();
     expect(screen.getAllByTestId('language-switcher')).toHaveLength(2);
+  });
+});
+
+describe('WorkspaceLayout in dark mode (#204)', () => {
+  it('with the switch on, the sidebar and the phone bar turn dark with the text', () => {
+    expect(sidebarPanelClass(true)).toContain('dark:bg-black');
+    expect(phoneBarClass(true)).toContain('dark:bg-black');
+  });
+
+  it('with the switch off, the existing panels stay exactly as they were', () => {
+    expect(sidebarPanelClass(false)).toBe(
+      'flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white px-4 pb-4'
+    );
+    expect(phoneBarClass(false)).toBe(
+      'sticky top-0 z-40 flex items-center justify-between gap-x-4 border-b border-gray-200 bg-white px-4 py-2 lg:hidden'
+    );
   });
 });
