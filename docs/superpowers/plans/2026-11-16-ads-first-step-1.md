@@ -625,6 +625,8 @@ class IdeasApiTests(MarketingIdeasFixtures):
 - **内容：** “出错和待处理”里属于第 1 步的情况逐个补齐并各有一条测试；新流程的 Playwright 端到端（空工作区到下载图片）；确认旧的黄金路径 e2e 仍通过；更新 `docs/user-guide.md`、`docs/tutorials/`、`docs/product/provider-credentials-self-service-acceptance.md`；按设计文档 §10 第 1 步的 13 条逐条验收并记录；在生产环境打开 `NEXT_PUBLIC_MARKETAI_ADS_FIRST`。
 - **拆成三个 PR（#204 上的归类表，维护者 2026-11-20 确认）：** 出错和待处理；新流程的端到端；文档、13 条验收记录和打开开关前的清单。打开开关本身只由维护者做。
 - **做成的样子（第一个 PR，出错和待处理）：** 新接口 `list_marketing_first_batches` 列出还没建出产品、没结束的首批，总览和开始页显示“正在读的产品”；工作区没有产品、也没有这样的首批时，`/w/{slug}` 落到总览后直接换成开始页。首批出图停下时带上失败的图共同的原因（例如 `credential_rejected`，读产品页说明去 OpenAI 后台处理组织验证或出图权限）；结果不确定的图带上出图任务编号，读产品页给“去核对”到现有的出图任务核对；策划和检查的不确定如实说要管理员核对。读产品超过两分钟说明“还在读，没有失败”；读产品页加上 AI 的猜测和候选照片。开始按钮在跳到读产品页之前一直是“正在开始”；保存 Key 遇到服务端错误（除了“连不上 OpenAI”）时清空输入框；停下面板换一次停下就清空。广告想法页：重试时卡片上写“正在重试”；首批还在出图或停在别的原因时，失败的图说明什么时候能重试；报价不可用时不再露出 `planner_not_configured`。花费上限挡住时，Owner 看到“去调上限”。产品资料加上“来源”，否定的 Logo 如果品牌底线还在用会写明。开关打开时旧产品页的“新产品”去开始页。没有迁移，没有新的数据库权限，接口总数 265 → 266。
+- **做成的样子（第二个 PR，端到端）：** `web/e2e/ads-first/empty-to-download.spec.ts`，Playwright 项目 `ads-first`，`docker-compose.ads-first.yml`（网页带开关构建），`make ads-first-e2e`，手动工作流 `ads-first-e2e-manual.yml`。测试在浏览器里把报价和开始请求的执行方式改成 Controlled Mock，从空工作区的开始页点到下载两张；旧黄金路径照常在开关关着的构建上跑。
+- **做成的样子（第三个 PR，文档和验收）：** 用户指南“新开头”一节；单文件 HTML 教程 `docs/tutorials/ads-first-tutorial.html`（截图由端到端拍下，`validation.json` 有记录）；13 条验收记录 `docs/product/ads-first-step-1-acceptance.md`；设计文档 §5.3、§5.6、§5.7 写明第 1 步不含的部分；打开开关前维护者的清单在 PR 说明和 #204。
 
 ---
 
