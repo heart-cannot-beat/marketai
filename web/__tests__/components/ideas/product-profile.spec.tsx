@@ -45,6 +45,8 @@ const mockGateway = {
   getMarketingIdeas: jest.fn(),
   editMarketingIdeasUnderstanding: jest.fn(),
   verifyMarketingIdeas: jest.fn(),
+  getMarketingFirstBatch: jest.fn(),
+  getProductIntake: jest.fn(),
 };
 jest.mock('@/lib/domain-client/gateway-provider', () => ({
   useDomainGateway: () => mockGateway,
@@ -173,6 +175,58 @@ beforeEach(() => {
   mockReads.list_products = {
     items: [{ product_id: 'prod_home', entry_id: 'le_1', ready: false }],
   };
+});
+
+describe('ProductProfile: where it came from (#204)', () => {
+  it('names the product, the page it was read from, when, and where its ads go', async () => {
+    mockGateway.getMarketingFirstBatch.mockResolvedValue(
+      ok({
+        id: 'mfb_1',
+        state: 'done',
+        intake_id: 'pi_secret',
+        created_at: '2026-11-16T08:00:00+00:00',
+        attention: null,
+        resume: null,
+      })
+    );
+    mockGateway.getProductIntake.mockResolvedValue(
+      ok({
+        intake_id: 'pi_secret',
+        status: 'ready',
+        input: {
+          url: 'https://acmecharge.example/products/home',
+          text_chars: 0,
+          upload_count: 0,
+        },
+      })
+    );
+    await renderProfile(
+      detailWithUses({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'done',
+          needs_attention: false,
+          reason: null,
+        },
+      })
+    );
+    const source = await screen.findByTestId('profile-source');
+    await waitFor(() =>
+      expect(source).toHaveTextContent('acmecharge.example/products/home')
+    );
+    expect(source).toHaveTextContent('Acme Charge Home');
+    expect(source).toHaveTextContent('United States · ads in English');
+    expect(source).toHaveTextContent('Read on');
+    expect(document.body.textContent).not.toMatch(/mfb_|pi_/);
+  });
+
+  it('without a first batch, names the product and where its ads go', async () => {
+    await renderProfile(detailWithUses({ first_batch: null }));
+    const source = screen.getByTestId('profile-source');
+    expect(source).toHaveTextContent('United States · ads in English');
+    expect(source).not.toHaveTextContent('Product page');
+    expect(mockGateway.getMarketingFirstBatch).not.toHaveBeenCalled();
+  });
 });
 
 describe('ProductProfile (#202)', () => {
@@ -641,7 +695,7 @@ describe('ProductProfile: audience and claims without a source (#224)', () => {
     ).toBeNull();
     expect(
       within(audienceBlock()).getByText(
-        "A checked audience goes into the product's published details. Change the words and it needs checking again."
+        "A checked audience goes into the product's published details; those are published once you have checked at least one fact or photo. Change the words and it needs checking again."
       )
     ).toBeInTheDocument();
   });

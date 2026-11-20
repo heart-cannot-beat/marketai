@@ -42,6 +42,10 @@ interface AdCardProps {
   onRetry?: () => void;
   /** The retry button's text when it says what trying again costs. */
   retryLabel?: string;
+  /** The first batch's failed images are being tried again (#204). */
+  retrying?: boolean;
+  /** Why retrying is not possible here yet, when the page knows (#204). */
+  retryHint?: string;
   /**
    * The paid "make this ad" control of an ad with no image: one never made,
    * or one that failed outside the first batch (#200, #201).
@@ -69,6 +73,8 @@ export function AdCard({
   findings = [],
   onRetry,
   retryLabel,
+  retrying,
+  retryHint,
   makeAction,
   renewHref,
   language,
@@ -87,6 +93,8 @@ export function AdCard({
           slot={slot}
           onRetry={onRetry}
           retryLabel={retryLabel}
+          retrying={retrying}
+          retryHint={retryHint}
           makeAction={makeAction}
         />
       )}
@@ -289,11 +297,15 @@ function EmptyFrame({
   slot,
   onRetry,
   retryLabel,
+  retrying,
+  retryHint,
   makeAction,
 }: {
   slot: Exclude<IdeaSlot, { kind: 'ad' }>;
   onRetry?: () => void;
   retryLabel?: string;
+  retrying?: boolean;
+  retryHint?: string;
   makeAction?: ReactNode;
 }) {
   const { t } = useTranslation('ideas');
@@ -323,18 +335,26 @@ function EmptyFrame({
             <button
               type="button"
               className="btn btn-sm min-h-11"
-              disabled={!onRetry}
+              disabled={!onRetry || retrying}
               aria-describedby={onRetry ? undefined : hint}
               onClick={onRetry}
             >
-              {retryLabel ?? t('ideas-ad-retry')}
+              {retrying && (
+                <span
+                  className="loading loading-spinner loading-xs"
+                  aria-hidden="true"
+                />
+              )}
+              {retrying
+                ? t('ideas-ad-retrying')
+                : (retryLabel ?? t('ideas-ad-retry'))}
             </button>
             {!onRetry && (
               <span
                 id={hint}
                 className="text-center text-xs text-gray-600 dark:text-gray-400"
               >
-                {t('ideas-ad-retry-unavailable')}
+                {retryHint ?? t('ideas-ad-retry-unavailable')}
               </span>
             )}
           </>

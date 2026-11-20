@@ -6639,6 +6639,9 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       combination_ids: { items: { type: 'string' }, type: 'array' },
       needed: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       call_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      run_ids: {
+        anyOf: [{ items: { type: 'string' }, type: 'array' }, { type: 'null' }],
+      },
       resumable: { type: 'boolean' },
     },
     additionalProperties: false,
@@ -6718,6 +6721,62 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'created_at',
       'updated_at',
     ],
+  },
+  FirstBatchListItem: {
+    properties: {
+      id: { type: 'string' },
+      state: {
+        type: 'string',
+        enum: [
+          'reading',
+          'understanding',
+          'ideas',
+          'generating',
+          'checking',
+          'done',
+          'needs_attention',
+          'failed',
+        ],
+      },
+      needs_attention: { type: 'boolean' },
+      reason: {
+        anyOf: [
+          {
+            type: 'string',
+            enum: [
+              'several_models',
+              'page_unreadable',
+              'reading_failed',
+              'too_few_claims',
+              'over_budget',
+              'ideas_refused',
+              'step_failed',
+              'uncertain',
+            ],
+          },
+          { type: 'null' },
+        ],
+      },
+      source_url: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+      updated_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'state', 'needs_attention', 'created_at', 'updated_at'],
+    description:
+      'A first batch that has no product yet and has not ended (#204): still reading, or stopped before the\nproduct could be made (several models on the page). The overview and the start page list them, so a\nuser who left the reading page finds the way back.',
+  },
+  FirstBatchPage: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/FirstBatchListItem' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items'],
   },
   FirstBatchQuote: {
     properties: {
@@ -21186,6 +21245,17 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['items'],
   },
+  list_marketing_first_batches_200: {
+    properties: {
+      items: {
+        items: { $ref: '#/components/schemas/FirstBatchListItem' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['items'],
+  },
   list_marketing_ideas_200: {
     properties: {
       items: {
@@ -25149,6 +25219,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'list_marketing_brand_kits_200',
       VALIDATOR_FUNCTIONS['list_marketing_brand_kits_200'],
+    ],
+    [
+      'list_marketing_first_batches_200',
+      VALIDATOR_FUNCTIONS['list_marketing_first_batches_200'],
     ],
     [
       'list_marketing_ideas_200',

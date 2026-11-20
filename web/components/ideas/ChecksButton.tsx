@@ -9,6 +9,8 @@ import {
   type IdeasCommands,
 } from '@/hooks/ideas/useIdeasCommands';
 import { BUTTON, PRIMARY } from './PaidImageAction';
+import { ProblemNote } from './ProblemNote';
+import { SpendLimitLink, isSpendLimit } from './SpendLimitLink';
 
 const KNOWN_UNAVAILABLE = new Set([
   'credential_required',
@@ -52,16 +54,19 @@ export function ChecksButton({
     const reason = data.unavailable_reason ?? '';
     if (reason === 'nothing_to_check') return null;
     return (
-      <p className="text-sm text-gray-700 dark:text-gray-300" role="note">
-        {KNOWN_UNAVAILABLE.has(reason)
-          ? t(`checks-unavailable-${reason}`)
-          : t('checks-unavailable-reason', {
-              reason: t(`error-${reason}`, {
-                ns: 'common',
-                defaultValue: t('checks-unavailable'),
-              }),
-            })}
-      </p>
+      <>
+        <p className="text-sm text-gray-700 dark:text-gray-300" role="note">
+          {KNOWN_UNAVAILABLE.has(reason)
+            ? t(`checks-unavailable-${reason}`)
+            : t('checks-unavailable-reason', {
+                reason: t(`error-${reason}`, {
+                  ns: 'common',
+                  defaultValue: t('checks-unavailable'),
+                }),
+              })}
+        </p>
+        {isSpendLimit(reason) && <SpendLimitLink />}
+      </>
     );
   }
   async function start() {
@@ -91,11 +96,7 @@ export function ChecksButton({
           cost: costLabel(i18n.language, data.maximum_cost),
         })}
       </button>
-      {problem !== undefined && (
-        <p className="text-sm text-red-700 dark:text-red-300" role="alert">
-          {ideasProblem(t, problem)}
-        </p>
-      )}
+      {problem !== undefined && <ProblemNote problem={problem} />}
     </div>
   );
 }

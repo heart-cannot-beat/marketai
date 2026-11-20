@@ -28,13 +28,13 @@ from app.entitlements.credential_protector import CredentialProtector
 from app.generation.models import RunItemRecord
 from app.marketing import first_batch, ideas
 from app.marketing.ai_qc_worker import execute_ai_qc
-from app.marketing.ideas_contracts import FirstBatchDetail, FirstBatchQuote, IdeasProjectDetail
+from app.marketing.ideas_contracts import FirstBatchDetail, FirstBatchPage, FirstBatchQuote, IdeasProjectDetail
 from app.marketing.models import MarketingFirstBatchRecord, MarketingGenerationLinkRecord, MarketingProjectRecord, PlanningCallRecord
 from app.marketing.planner import example_result, execute_planning
 from app.platform import jobs
 from app.products import intake_extraction as extraction
 from app.products.intake_fetch import SafeFetcher
-from app.providers.adapter import ProviderCallResult
+from app.providers.adapter import ProviderCallResult, ProviderDispatchError
 from app.providers.llm_mock import register_llm_mock_fixture
 from app.worker_runtime import WorkerRuntime
 from tests.support.library_fixtures import png_bytes
@@ -152,6 +152,16 @@ class FakeImages:
         return ProviderCallResult(png_bytes(colour=(12, 34, 56 + self.calls % 100)), f"req-{self.calls}", False)
 
 
+class RefusedImages(FakeImages):
+    """An image provider that refuses the key for images, as OpenAI does for an organisation not verified for
+    its image models: a 403 before anything is made (``credential_rejected``)."""
+
+    async def execute(self, request):
+        self.calls += 1
+        raise ProviderDispatchError("not_dispatched", "OpenAI 403: organization must be verified",
+                                    error_code="credential_rejected")
+
+
 class FirstBatchFixtures(IdeasPlanningFixtures):
     def setUp(self):
         super().setUp()
@@ -188,6 +198,13 @@ class FirstBatchFixtures(IdeasPlanningFixtures):
         self.assertEqual(response.status_code, expect, response.text)
         if expect == 200:
             FirstBatchDetail.model_validate(response.json())
+        return response.json()
+
+    def without_product(self, expect=200):
+        response = self.client.get("/api/v1/marketing/first-batch")
+        self.assertEqual(response.status_code, expect, response.text)
+        if expect == 200:
+            FirstBatchPage.model_validate(response.json())
         return response.json()
 
     def resume(self, batch, expect=200, key=None, **body):
@@ -450,7 +467,10 @@ class FirstBatchFlowTests(FirstBatchFixtures):
         self.assertIsNone(stopped["resume"], "an uncertain image waits for reconciliation")
         self.assertEqual((self.runs(), self.images.calls), (6, 5), "the lost image is not sent again")
         with tenant_session(self.context) as session:
-            self.assertEqual(session.get(RunItemRecord, lost).state, "uncertain")
+            lost_item = session.get(RunItemRecord, lost)
+            self.assertEqual(lost_item.state, "uncertain")
+            # The run to reconcile is named, so the reading page can point at its reconciliation (#204).
+            self.assertEqual(stopped["attention"]["run_ids"], [lost_item.generation_run_id])
 
 
 class FirstBatchStopTests(FirstBatchFixtures):
@@ -547,6 +567,53 @@ class FirstBatchStopTests(FirstBatchFixtures):
         self.drain()
         self.assertEqual(self.batch(stopped["id"])["state"], "done")
         self.assertEqual(len(self.calls(stopped["project_id"])), 4)
+
+
+class FirstBatchWayBackTests(FirstBatchFixtures):
+    """A user who left the reading page before the product existed finds the batch again (#204)."""
+
+    def test_a_batch_is_listed_until_it_has_a_product(self):
+        self.reading(card(("7 kW", "11 kW")))
+        batch = self.start()
+        listed = self.without_product()["items"]
+        self.assertEqual([(i["id"], i["state"], i["needs_attention"], i["source_url"]) for i in listed],
+                         [(batch["id"], "reading", False, LINK)])
+        self.drain()
+        stopped = self.without_product()["items"]
+        self.assertEqual([(i["id"], i["state"], i["reason"]) for i in stopped],
+                         [(batch["id"], "needs_attention", "several_models")])
+        self.resume(self.batch(batch["id"]), selected_variant="7 kW")
+        self.drain()
+        self.assertEqual(self.batch(batch["id"])["state"], "done")
+        self.assertEqual(self.without_product()["items"], [], "the product lists it from now on")
+
+    def test_an_ended_batch_is_not_listed(self):
+        self.web.routes[("acmecharge.example", "/products/home")] = httpx.Response(403)
+        self.assertEqual(self.started_and_drained()["state"], "failed")
+        self.assertEqual(self.without_product()["items"], [])
+
+    def test_pasted_text_has_no_link(self):
+        batch = self.start(url=None, text="Acme Charge Home: a 7 kW home charger with an app.")
+        self.assertEqual([(i["id"], i["source_url"]) for i in self.without_product()["items"]], [(batch["id"], None)])
+
+
+class FirstBatchImageFailureTests(FirstBatchFixtures):
+    def test_images_refused_for_the_key_say_why(self):
+        self.images = RefusedImages()
+        stopped = self.started_and_drained()
+        self.assertEqual((stopped["state"], stopped["attention"]["reason"], stopped["attention"]["step"]),
+                         ("needs_attention", "step_failed", "images"))
+        # Every image failed the same way: the stop names it, so the page can say what to do (#204).
+        self.assertEqual(stopped["attention"]["code"], "credential_rejected")
+        self.assertEqual(len(stopped["attention"]["combination_ids"]), 6)
+        self.assertIsNone(stopped["attention"].get("run_ids"))
+        # Pages that render a run item's leading code read it exactly as before.
+        from app.generation.run_queries import error_code_of
+        with tenant_session(self.context) as session:
+            summaries = {item.error_summary for item in session.scalars(select(RunItemRecord).where(
+                RunItemRecord.workspace_id == self.context.workspace_id)).all()}
+        self.assertEqual(summaries, {"provider_rejected: credential_rejected"})
+        self.assertEqual({error_code_of(summary) for summary in summaries}, {"provider_rejected"})
 
 
 class FirstBatchPaidTests(FirstBatchFixtures):
@@ -724,6 +791,14 @@ class FirstBatchTenantTests(FirstBatchFixtures):
         self.context = mine
         self.assertEqual(self.batch(stopped["id"])["state"], "needs_attention")
         self.assertEqual(self.record(stopped["id"]).selected_variant, None)
+
+    def test_another_workspace_does_not_list_it(self):
+        self.reading(card(("7 kW", "11 kW")))
+        stopped = self.started_and_drained()
+        self.assertEqual([i["id"] for i in self.without_product()["items"]], [stopped["id"]])
+        self.context = self._make_context()
+        self.addCleanup(cancel_workspace_jobs, self.context.workspace_id)
+        self.assertEqual(self.without_product()["items"], [])
 
     def test_another_workspace_sees_no_first_batch_on_its_ideas(self):
         done = self.started_and_drained()

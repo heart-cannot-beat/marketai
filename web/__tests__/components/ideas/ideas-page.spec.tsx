@@ -314,10 +314,10 @@ describe('IdeasPage (#196)', () => {
     ).toBeInTheDocument();
     const retry = within(failed).getByRole('button', { name: 'Try again' });
     // Only a first batch's images are tried again from here (#193, #195);
-    // without one the entry is there but says it is not available.
+    // while it still makes its others, the entry says when it can (#204).
     expect(retry).toBeDisabled();
     expect(retry).toHaveAccessibleDescription(
-      "Trying again from here isn't available yet."
+      'The first batch is still making or checking its other images; you can retry here once it is done.'
     );
     expect(
       screen.getByText(
@@ -389,7 +389,7 @@ describe('IdeasPage (#196)', () => {
       ideasDetail({
         first_batch: {
           id: 'mfb_1',
-          state: 'checking' as unknown as 'done',
+          state: 'checking',
           needs_attention: false,
           reason: null,
         },
@@ -663,6 +663,80 @@ describe('IdeasPage (#196)', () => {
     expect(
       await screen.findByRole('heading', { level: 2, name: '3 claims, 4 ads' })
     ).toBeInTheDocument();
+  });
+});
+
+describe('IdeasPage: trying a failed image again (#204)', () => {
+  it('says the retry is running on the card, and the button cannot be pressed again', async () => {
+    mockGateway.getMarketingFirstBatch.mockResolvedValue(
+      ok({
+        id: 'mfb_1',
+        state: 'needs_attention',
+        attention: {
+          reason: 'step_failed',
+          step: 'images',
+          combination_ids: ['c6'],
+          resumable: true,
+        },
+        resume: {
+          maximum_cost: '0.95',
+          additional_cost: '0.04',
+          currency: 'USD',
+          quote_hash: 'rq_1',
+          requires: [],
+        },
+        confirmed_max_cost: '0.91',
+      })
+    );
+    let answered: (value: unknown) => void = () => undefined;
+    mockGateway.resumeMarketingFirstBatch.mockReturnValue(
+      new Promise((done) => (answered = done))
+    );
+    await renderPage(
+      ideasDetail({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'needs_attention',
+          needs_attention: true,
+          reason: 'step_failed',
+        },
+      })
+    );
+    const [, failed] = within(claim(3)).getAllByTestId('ad-card');
+    fireEvent.click(
+      await within(failed).findByRole('button', {
+        name: 'Try again · up to $0.04 more',
+      })
+    );
+    const busy = await within(failed).findByRole('button', {
+      name: 'Retrying…',
+    });
+    expect(busy).toBeDisabled();
+    answered(
+      ok({ id: 'mfb_1', state: 'generating', attention: null, resume: null })
+    );
+    await waitFor(() =>
+      expect(mockGateway.resumeMarketingFirstBatch).toHaveBeenCalledTimes(1)
+    );
+  });
+
+  it('a batch stopped for another reason says to sort that out first', async () => {
+    await renderPage(
+      ideasDetail({
+        first_batch: {
+          id: 'mfb_1',
+          state: 'needs_attention',
+          needs_attention: true,
+          reason: 'uncertain',
+        },
+      })
+    );
+    const [, failed] = within(claim(3)).getAllByTestId('ad-card');
+    expect(
+      within(failed).getByRole('button', { name: 'Try again' })
+    ).toHaveAccessibleDescription(
+      'The first batch stopped. Sort out why on its progress page first; then you can retry here.'
+    );
   });
 });
 

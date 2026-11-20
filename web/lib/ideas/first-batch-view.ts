@@ -16,13 +16,10 @@ type Attention = components['schemas']['FirstBatchAttention'];
 type IntakeInput = components['schemas']['IntakeInputSummary'];
 
 export type StopReason = Attention['reason'];
-/**
- * A batch's state and the step it stopped at. S9 (#197) adds `checking`
- * (every image made, the checks running) and the `checks` step; they are
- * listed here so the pages handle them before the generated contract does.
- */
-export type FirstBatchState = FirstBatch['state'] | 'checking';
-export type ProgressStepKey = Attention['step'] | 'checks';
+/** A batch's state (`checking`: every image made, the checks running, #197). */
+export type FirstBatchState = FirstBatch['state'];
+/** The step a batch is at or stopped at (`checks` since #197). */
+export type ProgressStepKey = Attention['step'];
 export type ProgressStepState = 'done' | 'active' | 'pending' | 'stopped';
 
 /** The progress list; the check shows only when the batch stopped there. */
@@ -51,8 +48,7 @@ const RUNNING: ReadonlyArray<FirstBatchState> = [
 export const stateOf = (batch: { state: string }) =>
   batch.state as FirstBatchState;
 
-const stepOf = (attention: Attention | null | undefined) =>
-  attention?.step as ProgressStepKey | undefined;
+const stepOf = (attention: Attention | null | undefined) => attention?.step;
 
 /** True while the batch still has a step on its way (nothing to do but wait). */
 export function isRunning(batch: FirstBatch | undefined): boolean {
@@ -124,6 +120,11 @@ export interface StopView {
   failedAds: number;
   /** What continuing needs and costs; `null` when it cannot continue now. */
   resume: FirstBatchResume | null;
+  /**
+   * `uncertain` while making images: the generation runs whose existing
+   * reconciliation settles them (#204). Planning and check calls have none.
+   */
+  runIds: string[];
 }
 
 const KIND_OF_REASON: Record<StopReason, StopKind> = {
@@ -154,6 +155,10 @@ export function stopView(batch: FirstBatch): StopView | null {
         ? (attention.combination_ids ?? []).length
         : 0,
     resume: ended ? null : batch.resume,
+    runIds:
+      reason === 'uncertain' && attention?.step === 'images'
+        ? (attention.run_ids ?? [])
+        : [],
   };
 }
 

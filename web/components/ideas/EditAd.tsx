@@ -7,7 +7,6 @@ import {
   MarketingVersionHistory,
   type HistoryAsset,
 } from '@/components/workspace/MarketingVersionHistory';
-import { ideasProblem } from '@/lib/ideas/ideas-problems';
 import { mainReasons } from '@/lib/ideas/check-sheet';
 import { removedFactsOf } from '@/lib/ideas/claim-edit';
 import { renewRestores } from '@/lib/ideas/photos';
@@ -30,6 +29,7 @@ import { ChecksButton } from './ChecksButton';
 import { FindingList } from './FindingList';
 import { EditCopy } from './EditCopy';
 import { BUTTON, PaidImageAction, PRESSED } from './PaidImageAction';
+import { ProblemNote } from './ProblemNote';
 
 const SECTION =
   'space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900 sm:p-5';
@@ -591,11 +591,7 @@ function ImageWork({
                 .finally(() => setBusy(false));
             }}
           />
-          {problem !== undefined && (
-            <p className="text-sm text-red-700 dark:text-red-300" role="alert">
-              {ideasProblem(t, problem)}
-            </p>
-          )}
+          {problem !== undefined && <ProblemNote problem={problem} />}
           {!uploaded && (
             <>
               <MarketingImageTools

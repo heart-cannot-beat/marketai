@@ -15,6 +15,7 @@ import {
 import { errorMessage, type DomainProblem } from '@/lib/i18n/domain-errors';
 import { costLabel, costsMore, quoteState } from '@/lib/ideas/first-batch-view';
 import { firstBatchHref } from '@/lib/workspace-navigator';
+import { SpendLimitLink, isSpendLimit } from './SpendLimitLink';
 
 /** Where OpenAI lists a user's API keys ("How do I get one?"). */
 export const OPENAI_KEYS_URL = 'https://platform.openai.com/api-keys';
@@ -83,7 +84,7 @@ export function StartForm({
     failed: quoteFailed,
     refresh: refreshQuote,
   } = useFirstBatchQuote();
-  const { start, phase, uploadProgress } = useStartFirstBatch();
+  const { start, phase, uploadProgress, settle } = useStartFirstBatch();
   const saveKey = useSaveOpenAIKey();
 
   const [raw, setRaw] = useState('');
@@ -139,7 +140,11 @@ export function StartForm({
       quoteHash,
     });
     if (outcome.kind === 'started') {
-      await router.push(firstBatchHref(current.slug, outcome.batch.id));
+      // The button stays busy until the reading page is open (#204).
+      const moved = await router
+        .push(firstBatchHref(current.slug, outcome.batch.id))
+        .catch(() => false);
+      if (moved === false) settle();
       return;
     }
     const code = outcome.problem.code;
@@ -349,6 +354,9 @@ export function StartForm({
           data-testid="start-blocked"
         >
           <p>{reason}</p>
+          {state.kind === 'unavailable' && isSpendLimit(state.reason) && (
+            <SpendLimitLink />
+          )}
           {state.kind === 'failed' && (
             <button
               type="button"

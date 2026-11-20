@@ -1316,6 +1316,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['BrandKitList'] };
   };
+  list_marketing_first_batches: {
+    pathParams: Record<string, never>;
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: { 200: components['schemas']['FirstBatchPage'] };
+  };
   list_marketing_ideas: {
     pathParams: Record<string, never>;
     queryParams: { limit?: string; cursor?: string };

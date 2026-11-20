@@ -28,6 +28,7 @@ import {
   type Understanding,
 } from '@/lib/ideas/profile-view';
 import { ProfileBrand, ProfilePhotos } from './ProfileAssets';
+import { ProfileSource } from './ProfileSource';
 
 /**
  * A product's profile (ADR 0018, design §5.6, #202): what the AI read about
@@ -145,6 +146,7 @@ function Profile({
         projectId={projectId}
         detail={detail}
       />
+      <ProfileSource detail={detail} />
     </div>
   );
 }

@@ -3,8 +3,7 @@ import { useTranslation } from 'next-i18next';
 import type { components } from '@/lib/domain-client/generated/domain-v1';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
 import { costLabel } from '@/lib/ideas/first-batch-view';
-import { ideasProblem } from '@/lib/ideas/ideas-problems';
-import { errorCodeMessage } from '@/lib/i18n/domain-errors';
+import { ideasProblem, quoteReason } from '@/lib/ideas/ideas-problems';
 import { TELLING_TYPES } from '@/lib/ideas/mechanisms';
 import type { IdeasDetail } from '@/lib/ideas/ideas-view';
 import {
@@ -13,6 +12,8 @@ import {
   type IdeasCommands,
 } from '@/hooks/ideas/useIdeasCommands';
 import { BUTTON, PRIMARY } from './PaidImageAction';
+import { ProblemNote } from './ProblemNote';
+import { SpendLimitLink, isSpendLimit } from './SpendLimitLink';
 
 type Angle = components['schemas']['Angle'];
 type GuidingAnswer = components['schemas']['IdeasGuidingAnswer'];
@@ -118,11 +119,14 @@ function QuoteState({
     );
   if (quote.kind === 'ok' && !quote.data.available)
     return (
-      <p className="text-sm text-gray-600 dark:text-gray-400" role="note">
-        {t('add-unavailable', {
-          reason: errorCodeMessage(t, quote.data.unavailable_reason),
-        })}
-      </p>
+      <>
+        <p className="text-sm text-gray-600 dark:text-gray-400" role="note">
+          {t('add-unavailable', {
+            reason: quoteReason(t, quote.data.unavailable_reason),
+          })}
+        </p>
+        {isSpendLimit(quote.data.unavailable_reason) && <SpendLimitLink />}
+      </>
     );
   return null;
 }
@@ -199,11 +203,7 @@ export function AddClaim(props: AdditionProps) {
         </div>
       )}
       <QuoteState quote={quote} blocked={blocked} />
-      {problem !== undefined && (
-        <p className="text-sm text-red-700 dark:text-red-300" role="alert">
-          {ideasProblem(t, problem)}
-        </p>
-      )}
+      {problem !== undefined && <ProblemNote problem={problem} />}
       {added && (
         <p className="text-sm" role="status">
           {t('add-started')}
@@ -325,11 +325,7 @@ export function AddTelling({
         </div>
       )}
       {explain && <QuoteState quote={quote} blocked={blocked} />}
-      {problem !== undefined && (
-        <p className="text-sm text-red-700 dark:text-red-300" role="alert">
-          {ideasProblem(t, problem)}
-        </p>
-      )}
+      {problem !== undefined && <ProblemNote problem={problem} />}
       {added && (
         <p className="text-sm" role="status">
           {t('add-started')}

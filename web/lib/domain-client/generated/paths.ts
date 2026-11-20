@@ -1385,6 +1385,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'list_marketing_first_batches',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/first-batch',
+    pathParams: [],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'list_marketing_ideas',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/ideas',

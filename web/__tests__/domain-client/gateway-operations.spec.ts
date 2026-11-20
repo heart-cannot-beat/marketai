@@ -116,6 +116,8 @@ describe('DomainGateway operation coverage', () => {
     // and `create_marketing_ideas_photo_download_intent` (#233).
     // 264 -> 265: changing an ad's headline and body copy
     // `edit_marketing_ideas_copy` (#228).
-    expect(DOMAIN_ALLOWLIST.length).toBe(265);
+    // 265 -> 266: the first batches with no product yet
+    // `list_marketing_first_batches` (#204).
+    expect(DOMAIN_ALLOWLIST.length).toBe(266);
   });
 });

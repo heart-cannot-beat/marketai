@@ -1,9 +1,14 @@
+import { useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import classNames from 'classnames';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { GuardedLink } from '@/components/workspace/GuardedLink';
+import { UnfinishedReadings } from '@/components/ideas/UnfinishedReadings';
 import { useWorkspaceProducts } from '@/hooks/products/useWorkspaceProducts';
+import { useUnfinishedFirstBatches } from '@/hooks/ideas/useUnfinishedFirstBatches';
+import env from '@/lib/env';
 import { newProductHref } from '@/lib/workspace-navigator';
 import {
   STEP_COPY,
@@ -67,13 +72,28 @@ function ProductCard({
 /**
  * The overview (ADR 0018, design §5.6): the landing page of a Workspace that
  * has products. Each product lists the one thing to do now, with exactly one
- * main button.
+ * main button. Products still being read come first (#204). A Workspace with
+ * neither opens the start page instead (design §5.1).
  */
 export function WorkspaceOverview() {
   const { t } = useTranslation('common');
+  const router = useRouter();
   const { current } = useWorkspace();
   const { products, isLoading, problem, refresh } = useWorkspaceProducts();
+  const unfinished = useUnfinishedFirstBatches();
   const slug = current.slug;
+  const empty =
+    env.adsFirstEnabled &&
+    !isLoading &&
+    !problem &&
+    products.length === 0 &&
+    unfinished.loaded &&
+    unfinished.batches.length === 0;
+
+  // Nothing here yet: the Workspace's page is the start page (design §5.1).
+  useEffect(() => {
+    if (empty) void router.replace(newProductHref(slug));
+  }, [empty, router, slug]);
 
   const newProduct = (
     <GuardedLink
@@ -116,6 +136,11 @@ export function WorkspaceOverview() {
           <span className="loading loading-spinner" aria-hidden="true" />
           <span className="sr-only">{t('overview-loading')}</span>
         </div>
+      ) : products.length === 0 && unfinished.batches.length > 0 ? (
+        <div className="space-y-3">
+          <UnfinishedReadings batches={unfinished.batches} />
+          {newProduct}
+        </div>
       ) : products.length === 0 ? (
         <div
           className="space-y-4 rounded-xl border border-base-300 bg-base-100 p-6"
@@ -138,6 +163,7 @@ export function WorkspaceOverview() {
         </div>
       ) : (
         <div className="space-y-3">
+          <UnfinishedReadings batches={unfinished.batches} />
           {products.map((product) => (
             <ProductCard
               key={product.productId}

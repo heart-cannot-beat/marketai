@@ -559,6 +559,9 @@ class FirstBatchAttention(Document):
     # ``over_budget``: what the reserved total would have become.
     needed: str | None = None
     call_id: str | None = None
+    # ``uncertain`` while making images: the generation runs to reconcile, one per ad concerned (#204). The
+    # existing reconciliation of a generation run settles them; planning and check calls have none.
+    run_ids: list[str] | None = None
     # Whether this stop is continued on this batch (``resume``); otherwise start again.
     resumable: bool
 
@@ -596,6 +599,24 @@ class FirstBatchDetail(Document):
     ads_planned: int | None
     created_at: str
     updated_at: str
+
+
+class FirstBatchListItem(Document):
+    """A first batch that has no product yet and has not ended (#204): still reading, or stopped before the
+    product could be made (several models on the page). The overview and the start page list them, so a
+    user who left the reading page finds the way back."""
+    id: str
+    state: FirstBatchState
+    needs_attention: bool
+    reason: FirstBatchStopReason | None = None
+    # The link the user pasted; none when they pasted text or images.
+    source_url: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class FirstBatchPage(Document):
+    items: list[FirstBatchListItem]
 
 
 class ResumeFirstBatch(Document):

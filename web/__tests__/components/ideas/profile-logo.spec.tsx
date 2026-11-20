@@ -306,6 +306,54 @@ describe('the brand’s logo (#233)', () => {
     ).toBeInTheDocument();
   });
 
+  it('a rejected logo the saved brand baseline still uses says new images keep it (#204)', async () => {
+    mockReads.get_product_brand_kit = {
+      product_id: 'prod_home',
+      revision: 2,
+      current: {
+        id: 'bk_1',
+        product_id: 'prod_home',
+        version: 2,
+        content_hash: 'h',
+        content: {
+          logo: {
+            item_id: 'pritem_lg',
+            placement: 'top_left',
+            reference_version_id: 'rv_lg',
+            reference_object_id: 'refobj_lg',
+            content_sha256: 'a'.repeat(64),
+          },
+        },
+        created_at: '2026-11-18T08:00:00+00:00',
+        logo_available: true,
+      },
+    };
+    await renderProfile({
+      ...noPhotos(),
+      logos: [logo({ status: 'rejected', reference_version_id: 'rv_lg' })],
+    });
+    expect(
+      within(brand()).getByTestId('profile-logo-still-in-kit')
+    ).toHaveTextContent(
+      'But the saved brand baseline still uses it: new images keep carrying this logo until the Owner changes the brand baseline below and saves it.'
+    );
+  });
+
+  it('says nothing more of a rejected logo the brand baseline does not use (#204)', async () => {
+    mockReads.get_product_brand_kit = {
+      product_id: 'prod_home',
+      revision: 1,
+      current: null,
+    };
+    await renderProfile({
+      ...noPhotos(),
+      logos: [logo({ status: 'rejected', reference_version_id: 'rv_lg' })],
+    });
+    expect(
+      within(brand()).queryByTestId('profile-logo-still-in-kit')
+    ).toBeNull();
+  });
+
   it('rejecting a logo asks first, saying a saved baseline keeps it until changed', async () => {
     await renderProfile({
       ...noPhotos(),

@@ -5,6 +5,7 @@ import classNames from 'classnames';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { useWorkspace } from '@/components/workspace/WorkspaceProvider';
 import { FeatureEmptyState } from '@/components/workspace/FeatureEmptyState';
+import { newProductHref } from '@/lib/workspace-navigator';
 import {
   useProductDirectory,
   type ProductSummary,
@@ -150,7 +151,9 @@ export function ProductHome() {
   const highlighted = highlightId
     ? products.find((product) => product.product_id === highlightId)
     : undefined;
-  const newProductHref = `/w/${slug}/products/new`;
+  // With the ads-first switch on, a new product starts on the start page
+  // (design §10: the old "new" entries lead there, #204); off, unchanged.
+  const newProduct = newProductHref(slug);
 
   return (
     <div className="space-y-6">
@@ -160,7 +163,7 @@ export function ProductHome() {
           <p className="mt-1 text-sm text-base-content/70">{t('page-intro')}</p>
         </div>
         {products.length > 0 && (
-          <Link href={newProductHref} className="btn btn-primary btn-sm">
+          <Link href={newProduct} className="btn btn-primary btn-sm">
             <PlusIcon className="h-4 w-4" aria-hidden="true" />
             {t('add-product')}
           </Link>
@@ -198,7 +201,7 @@ export function ProductHome() {
           title={t('empty-title')}
           description={t('empty-description')}
           action={
-            <Link href={newProductHref} className="btn btn-primary btn-sm mt-2">
+            <Link href={newProduct} className="btn btn-primary btn-sm mt-2">
               {t('add-product')}
             </Link>
           }

@@ -88,7 +88,7 @@
 - **D6 广告清单。** 一个项目的广告通过出图配方里的 `marketing_intent.project_id` 找，不依赖小轮。查询写在 `app/marketing/ideas.py::project_ads`，S1 提供，后面各块共用。
 - **D7 费用。** 首批总价是各步最高费用之和，再加一次策划调用的最高费用，确认一次。多出的一次只用于应用拒收主张草稿时重新起草一次（#193 维护者决定）。每一步仍然单独预留、单独结算，没用上的不收费。预留总额不超过确认的数字，超过就停下来。
 - **D8 供应商。** 第 1 步保证只有 OpenAI Key 时全程能跑。只有 Gemini Key 时，在开始之前提示“目前需要 OpenAI 的 Key”。
-- **D9 新接口一览。** 全部做完后接口数从 242 变成 265（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200；S18 多两个改主张、删主张的接口，#224；S22 多两个产品照片的接口，#233；S20 多一个改文案的接口，#228）。
+- **D9 新接口一览。** 全部做完后接口数从 242 变成 266（S9 多一个检查报价接口，#197；S12 多一个放上传图的接口，#200；S18 多两个改主张、删主张的接口，#224；S22 多两个产品照片的接口，#233；S20 多一个改文案的接口，#228；S16 多一个列出还没建出产品的首批的接口，#204）。
 
 | 块 | operation_id | 路径 |
 | --- | --- | --- |
@@ -101,6 +101,7 @@
 | S4 | `get_marketing_first_batch_quote` | `GET /marketing/first-batch-quote`（不放在 `/first-batch/` 下：BFF 按 operation_id 顺序匹配，`/first-batch/quote` 会被当成编号为 quote 的首批） |
 | S4 | `start_marketing_first_batch` | `POST /marketing/first-batch` |
 | S4 | `get_marketing_first_batch` | `GET /marketing/first-batch/{first_batch_id}` |
+| S16 | `list_marketing_first_batches` | `GET /marketing/first-batch`（还没建出产品、没结束的首批，最多 20 个，最新的在前；离开读产品页后从总览和开始页找回，#204） |
 | S4 | `resume_marketing_first_batch` | `POST /marketing/first-batch/{first_batch_id}/resume` |
 | S9 | `get_marketing_ideas_checks_quote` | `GET /marketing/ideas/{project_id}/checks/quote`（按钮上写的最高费用从这里来，和小轮检查、首批一样先报价再确认） |
 | S9 | `start_marketing_ideas_checks` | `POST /marketing/ideas/{project_id}/checks` |
@@ -622,6 +623,8 @@ class IdeasApiTests(MarketingIdeasFixtures):
 
 - **目的：** 第 1 步的验收和上线。
 - **内容：** “出错和待处理”里属于第 1 步的情况逐个补齐并各有一条测试；新流程的 Playwright 端到端（空工作区到下载图片）；确认旧的黄金路径 e2e 仍通过；更新 `docs/user-guide.md`、`docs/tutorials/`、`docs/product/provider-credentials-self-service-acceptance.md`；按设计文档 §10 第 1 步的 13 条逐条验收并记录；在生产环境打开 `NEXT_PUBLIC_MARKETAI_ADS_FIRST`。
+- **拆成三个 PR（#204 上的归类表，维护者 2026-11-20 确认）：** 出错和待处理；新流程的端到端；文档、13 条验收记录和打开开关前的清单。打开开关本身只由维护者做。
+- **做成的样子（第一个 PR，出错和待处理）：** 新接口 `list_marketing_first_batches` 列出还没建出产品、没结束的首批，总览和开始页显示“正在读的产品”；工作区没有产品、也没有这样的首批时，`/w/{slug}` 落到总览后直接换成开始页。首批出图停下时带上失败的图共同的原因（例如 `credential_rejected`，读产品页说明去 OpenAI 后台处理组织验证或出图权限）；结果不确定的图带上出图任务编号，读产品页给“去核对”到现有的出图任务核对；策划和检查的不确定如实说要管理员核对。读产品超过两分钟说明“还在读，没有失败”；读产品页加上 AI 的猜测和候选照片。开始按钮在跳到读产品页之前一直是“正在开始”；保存 Key 遇到服务端错误（除了“连不上 OpenAI”）时清空输入框；停下面板换一次停下就清空。广告想法页：重试时卡片上写“正在重试”；首批还在出图或停在别的原因时，失败的图说明什么时候能重试；报价不可用时不再露出 `planner_not_configured`。花费上限挡住时，Owner 看到“去调上限”。产品资料加上“来源”，否定的 Logo 如果品牌底线还在用会写明。开关打开时旧产品页的“新产品”去开始页。没有迁移，没有新的数据库权限，接口总数 265 → 266。
 
 ---
 

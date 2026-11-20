@@ -2475,7 +2475,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    get?: never;
+    /**
+     * List Batches
+     * @description The first batches that have not made a product yet and have not ended, newest first (at most 20).
+     */
+    get: operations['list_marketing_first_batches'];
     put?: never;
     /**
      * Start
@@ -8434,6 +8438,7 @@ export interface components {
       combination_ids?: string[];
       needed?: string | null;
       call_id?: string | null;
+      run_ids?: string[] | null;
       resumable: boolean;
     };
     FirstBatchDetail: {
@@ -8471,6 +8476,43 @@ export interface components {
       ads_planned: number | null;
       created_at: string;
       updated_at: string;
+    };
+    /**
+     * @description A first batch that has no product yet and has not ended (#204): still reading, or stopped before the
+     *     product could be made (several models on the page). The overview and the start page list them, so a
+     *     user who left the reading page finds the way back.
+     */
+    FirstBatchListItem: {
+      id: string;
+      /** @enum {string} */
+      state:
+        | 'reading'
+        | 'understanding'
+        | 'ideas'
+        | 'generating'
+        | 'checking'
+        | 'done'
+        | 'needs_attention'
+        | 'failed';
+      needs_attention: boolean;
+      reason?:
+        | (
+            | 'several_models'
+            | 'page_unreadable'
+            | 'reading_failed'
+            | 'too_few_claims'
+            | 'over_budget'
+            | 'ideas_refused'
+            | 'step_failed'
+            | 'uncertain'
+          )
+        | null;
+      source_url?: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    FirstBatchPage: {
+      items: components['schemas']['FirstBatchListItem'][];
     };
     /**
      * @description The start button's maximum (#193): every step's maximum, the images' checks (#197) included, plus one
@@ -17636,6 +17678,26 @@ export interface operations {
         };
         content: {
           'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  list_marketing_first_batches: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['FirstBatchPage'];
         };
       };
     };

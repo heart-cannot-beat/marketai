@@ -40,6 +40,7 @@ const mockGateway = {
   createCredential: jest.fn(),
   bindCredential: jest.fn(),
   pollOperation: jest.fn(),
+  listMarketingFirstBatches: jest.fn(),
 };
 jest.mock('@/lib/domain-client/gateway-provider', () => ({
   useDomainGateway: () => mockGateway,
@@ -122,6 +123,8 @@ beforeEach(() => {
   mockGateway.startMarketingFirstBatch.mockResolvedValue(
     ok({ id: 'mfb_1', state: 'reading' }, 201, 'created')
   );
+  mockGateway.listMarketingFirstBatches.mockResolvedValue(ok({ items: [] }));
+  mockPush.mockResolvedValue(true);
 });
 
 describe('StartPage (#195)', () => {
@@ -309,6 +312,127 @@ describe('StartPage (#195)', () => {
       expect(screen.getByRole('button', { name: 'Save key' })).toBeEnabled();
     }
   );
+
+  it('keeps the button busy until the reading page has opened (#204)', async () => {
+    mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(ok(quote()));
+    // The page change takes a moment; the button must not come back meanwhile.
+    let opened: (value: boolean) => void = () => undefined;
+    mockPush.mockReturnValue(new Promise<boolean>((done) => (opened = done)));
+    renderPage();
+    const start = await screen.findByRole('button', {
+      name: 'Start · up to $0.87',
+    });
+    fireEvent.change(paste(), { target: { value: LINK } });
+    fireEvent.click(start);
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith('/w/acme/start/mfb_1')
+    );
+    expect(screen.getByRole('button', { name: /Starting…/ })).toBeDisabled();
+    opened(true);
+  });
+
+  it('comes back when the reading page did not open (#204)', async () => {
+    mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(ok(quote()));
+    mockPush.mockResolvedValue(false);
+    renderPage();
+    const start = await screen.findByRole('button', {
+      name: 'Start · up to $0.87',
+    });
+    fireEvent.change(paste(), { target: { value: LINK } });
+    fireEvent.click(start);
+    expect(
+      await screen.findByRole('button', { name: 'Start · up to $0.87' })
+    ).toBeEnabled();
+  });
+
+  it('a server error while saving the key clears it, since it may have been stored (#204)', async () => {
+    mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(ok(NO_KEY));
+    mockGateway.createCredential.mockResolvedValue(
+      problem(500, 'internal_error')
+    );
+    renderPage();
+    const save = await screen.findByRole('button', { name: 'Save key' });
+    fireEvent.change(paste(), { target: { value: LINK } });
+    fireEvent.change(screen.getByLabelText('Your OpenAI API key'), {
+      target: { value: 'sk-test-fixture' },
+    });
+    fireEvent.click(save);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "We couldn't confirm whether the key was saved. Refresh the page to check."
+    );
+    expect(screen.getByLabelText('Your OpenAI API key')).toHaveValue('');
+    expect(mockGateway.bindCredential).not.toHaveBeenCalled();
+  });
+
+  it('over the spending limit: the Owner gets the way to the limits (#204)', async () => {
+    mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(
+      ok(
+        quote({
+          available: false,
+          unavailable_reason: 'budget_exceeded',
+          maximum_cost: '0',
+        })
+      )
+    );
+    renderPage();
+    expect(
+      await screen.findByText(
+        "This would go over the workspace's spending limit. The Owner can raise it in Settings."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Change the limits' })
+    ).toHaveAttribute('href', '/w/acme/settings#spend-guardrail');
+  });
+
+  it('a Member is told about the spending limit but gets no link to change it (#204)', async () => {
+    mockRole = 'MEMBER';
+    mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(
+      ok(
+        quote({
+          available: false,
+          unavailable_reason: 'budget_exceeded',
+          maximum_cost: '0',
+        })
+      )
+    );
+    renderPage();
+    await screen.findByText(
+      "This would go over the workspace's spending limit. The Owner can raise it in Settings."
+    );
+    expect(
+      screen.queryByRole('link', { name: 'Change the limits' })
+    ).toBeNull();
+  });
+
+  it('lists a reading that was left before its product existed, with the way back (#204)', async () => {
+    mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(ok(quote()));
+    mockGateway.listMarketingFirstBatches.mockResolvedValue(
+      ok({
+        items: [
+          {
+            id: 'mfb_9',
+            state: 'needs_attention',
+            needs_attention: true,
+            reason: 'several_models',
+            source_url: LINK,
+            created_at: '2026-11-17T08:00:00+00:00',
+            updated_at: '2026-11-17T08:01:00+00:00',
+          },
+        ],
+      })
+    );
+    renderPage();
+    const left = await screen.findByTestId('unfinished-readings');
+    expect(left).toHaveTextContent('acmecharge.example/products/home');
+    expect(left).toHaveTextContent(
+      'Stopped and waiting for you before the product could be made.'
+    );
+    expect(
+      within(left).getByRole('link', { name: 'Sort it out' })
+    ).toHaveAttribute('href', '/w/acme/start/mfb_9');
+    expect(document.body.textContent).not.toMatch(/mfb_/);
+  });
 
   it('says the site is not set up when checking the ads is not configured (S9, #197)', async () => {
     mockGateway.getMarketingFirstBatchQuote.mockResolvedValue(

@@ -12,7 +12,7 @@ import {
 import { SWRConfig } from 'swr';
 import { ReadingPage } from '@/components/ideas/ReadingPage';
 import type { FirstBatch } from '@/lib/ideas/first-batch-view';
-import { ideasDetail } from './fixtures';
+import { ideasDetail, photo } from './fixtures';
 
 /**
  * The reading page (ADR 0018, design §5.2, #195): the first batch's progress,
@@ -41,12 +41,24 @@ const mockGateway = {
   getProductIntake: jest.fn(),
   getMarketingFirstBatchQuote: jest.fn(),
   startMarketingFirstBatch: jest.fn(),
+  // A read photo's picture (#204): no link comes back here, so none is shown.
+  createProductIntakeImageDownloadIntent: jest.fn().mockResolvedValue({
+    kind: 'problem',
+    status: 404,
+    problem: { code: 'intake_image_not_found', field_errors: [] },
+    meta: {},
+  }),
 };
 jest.mock('@/lib/domain-client/gateway-provider', () => ({
   useDomainGateway: () => mockGateway,
 }));
 jest.mock('@/hooks/domain/useUpload', () => ({
   useUpload: () => ({ startUpload: jest.fn() }),
+}));
+// Showing a read photo needs the browser's storage client (#204); nothing here loads one.
+jest.mock('@/lib/domain-client/upload-deps', () => ({
+  useBlobTransferClient: () => ({ downloadBlob: jest.fn() }),
+  useFileDigest: () => jest.fn(),
 }));
 const mockRefreshProducts = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/hooks/products/useWorkspaceProducts', () => ({
@@ -278,7 +290,7 @@ describe('ReadingPage (#195)', () => {
     await renderPage(
       batch({
         ...READ,
-        state: 'checking' as unknown as FirstBatch['state'],
+        state: 'checking',
         ads_planned: 6,
       })
     );
@@ -300,7 +312,7 @@ describe('ReadingPage (#195)', () => {
         ads_planned: 6,
         attention: {
           reason: 'step_failed',
-          step: 'checks' as unknown as 'images',
+          step: 'checks',
           combination_ids: ['c1', 'c2'],
           resumable: true,
         },
@@ -593,17 +605,191 @@ describe('ReadingPage (#195)', () => {
       })
     ).toBeInTheDocument();
     expect(within(stop).queryByRole('button')).toBeNull();
-    // Nothing clears this on its own: the Owner has to check the step.
+    // Nothing clears this on its own, and without a run to reconcile there is
+    // no place on the page to check it (#204).
     expect(
       within(stop).getByText(
-        'To avoid paying twice, it is never sent again on its own. Someone has to check whether it went through first: ask the workspace Owner. Once it has been checked, you can continue here.'
+        "To avoid paying twice, it is never sent again on its own. An administrator has to check against the AI provider's records whether it went through; there is no place on the page to check it yourself yet, so ask your administrator. Once it has been checked, you can continue here."
       )
     ).toBeInTheDocument();
+    expect(within(stop).queryByRole('link')).toBeNull();
     expect(
       within(stop).getByText(
         'Waiting for that check. This page looks again every few seconds.'
       )
     ).toBeInTheDocument();
+  });
+
+  it('an uncertain image points at the existing check of its image run (#204)', async () => {
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        attention: {
+          reason: 'uncertain',
+          step: 'images',
+          combination_ids: ['c1'],
+          run_ids: ['run_7'],
+          resumable: false,
+        },
+        resume: null,
+      })
+    );
+    const stop = screen.getByTestId('reading-stop');
+    expect(
+      within(stop).getByText(
+        'To avoid paying twice, the image is never asked for again on its own. Choose Check it and say in the image record whether it was made (your OpenAI usage records can tell); then come back here to continue.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(stop).getByRole('link', { name: 'Check it' })
+    ).toHaveAttribute('href', '/w/acme/generate/runs/run_7');
+    expect(within(stop).queryByRole('button')).toBeNull();
+  });
+
+  it('several uncertain images each get their own check (#204)', async () => {
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        attention: {
+          reason: 'uncertain',
+          step: 'images',
+          combination_ids: ['c1', 'c2'],
+          run_ids: ['run_7', 'run_8'],
+          resumable: false,
+        },
+        resume: null,
+      })
+    );
+    const stop = screen.getByTestId('reading-stop');
+    expect(
+      within(stop)
+        .getAllByRole('link')
+        .map((link) => [link.textContent, link.getAttribute('href')])
+    ).toEqual([
+      ['Check image 1', '/w/acme/generate/runs/run_7'],
+      ['Check image 2', '/w/acme/generate/runs/run_8'],
+    ]);
+  });
+
+  it('images refused for the key say what to do in the OpenAI account (#204)', async () => {
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        attention: {
+          reason: 'step_failed',
+          step: 'images',
+          code: 'credential_rejected',
+          combination_ids: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'],
+          resumable: true,
+        },
+        resume: RESUME,
+      })
+    );
+    expect(
+      within(screen.getByTestId('reading-stop')).getByText(
+        "OpenAI refused to make images with this key. Usually the key's OpenAI organization hasn't been verified yet (its image models need verification), or the key has no image permission. Sort it out in your OpenAI account, then try again."
+      )
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/credential_rejected/);
+  });
+
+  it('a spending-limit stop gives the Owner the way to the limits (#204)', async () => {
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        attention: {
+          reason: 'step_failed',
+          step: 'checks',
+          code: 'budget_exceeded',
+          resumable: true,
+        },
+        resume: RESUME,
+      })
+    );
+    expect(
+      within(screen.getByTestId('reading-stop')).getByRole('link', {
+        name: 'Change the limits',
+      })
+    ).toHaveAttribute('href', '/w/acme/settings#spend-guardrail');
+  });
+
+  it('says a reading that takes longer than usual is still going (#204)', async () => {
+    const started = new Date(Date.now() - 3 * 60_000).toISOString();
+    await renderPage(batch({ created_at: started, updated_at: started }));
+    expect(screen.getByTestId('reading-slow')).toHaveTextContent(
+      'This is taking longer than usual. It is still reading and nothing failed: you can close this page and come back to see the progress.'
+    );
+  });
+
+  it('says nothing of that while a reading is still quick (#204)', async () => {
+    const started = new Date(Date.now() - 20_000).toISOString();
+    await renderPage(batch({ created_at: started, updated_at: started }));
+    expect(screen.queryByTestId('reading-slow')).toBeNull();
+  });
+
+  it('lists the AI guesses and the photos the ads may use, all unchecked (#204)', async () => {
+    mockGateway.getMarketingIdeas.mockResolvedValue(
+      ok(ideasDetail({ photos: [photo('ph_1')] }))
+    );
+    await renderPage(batch({ ...READ, state: 'ideas' }));
+    const guesses = await screen.findByTestId('reading-guesses');
+    expect(guesses).toHaveTextContent('Electric car owners with a driveway.');
+    expect(guesses).toHaveTextContent(
+      'Owners want charging to need no attention.'
+    );
+    expect(guesses).toHaveTextContent(
+      'Nobody has checked these; they are never written into ads as facts.'
+    );
+    const photos = screen.getByTestId('reading-photos');
+    expect(photos).toHaveTextContent('Not checked yet');
+    expect(document.body.textContent).not.toMatch(/ph_1|pin_|img_/);
+  });
+
+  it('a new stop starts with an empty panel (#204)', async () => {
+    const stopped = (at: string) =>
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        attention: { reason: 'too_few_claims', step: 'ideas', resumable: true },
+        resume: { ...RESUME, requires: ['additional_text'] },
+        updated_at: at,
+      });
+    mockGateway.resumeMarketingFirstBatch.mockResolvedValue({
+      kind: 'problem',
+      status: 409,
+      problem: { code: 'first_batch_quote_changed', field_errors: [] },
+      meta: {},
+    });
+    await renderPage(stopped('2026-11-17T08:00:00+00:00'));
+    const field = within(screen.getByTestId('reading-stop')).getByLabelText(
+      'More about the product'
+    );
+    fireEvent.change(field, { target: { value: 'Works with any car.' } });
+    // The next read is a later stop of the same kind.
+    mockGateway.getMarketingFirstBatch.mockResolvedValue(
+      ok(stopped('2026-11-17T09:00:00+00:00'))
+    );
+    fireEvent.click(
+      within(screen.getByTestId('reading-stop')).getByRole('button', {
+        name: /Add and continue/,
+      })
+    );
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('reading-stop')).getByLabelText(
+          'More about the product'
+        )
+      ).toHaveValue('')
+    );
   });
 
   it('says why a refused continue did not go through', async () => {

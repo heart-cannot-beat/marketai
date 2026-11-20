@@ -1,6 +1,6 @@
 import type { useTranslation } from 'next-i18next';
 import type { ProblemDetails } from '@/lib/domain-client/result-types';
-import { errorMessage } from '@/lib/i18n/domain-errors';
+import { errorCodeMessage, errorMessage } from '@/lib/i18n/domain-errors';
 
 type Translate = ReturnType<typeof useTranslation>['t'];
 
@@ -41,4 +41,20 @@ export function ideasProblem(
   if (OWN.has(problem.code))
     return t(`ideas-refusal-${problem.code}`, { ns: 'ideas' });
   return errorMessage(t, problem);
+}
+
+/**
+ * Reasons a paid quote gives for "not now" that no service raises as an
+ * error code (nothing has `error-<code>` copy for them), in these screens'
+ * own words (#204: the ideas page showed `planner_not_configured` itself).
+ */
+export const QUOTE_REASON_COPY: Readonly<Record<string, string>> = {
+  planner_not_configured: 'quote-unavailable-planner_not_configured',
+  qc_not_configured: 'quote-unavailable-qc_not_configured',
+};
+
+/** Why a quote is unavailable, as one sentence: never the code itself. */
+export function quoteReason(t: Translate, code: string | null | undefined) {
+  const own = code ? QUOTE_REASON_COPY[code] : undefined;
+  return own ? t(own, { ns: 'ideas' }) : errorCodeMessage(t, code);
 }

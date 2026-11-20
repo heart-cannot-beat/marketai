@@ -1228,6 +1228,10 @@ export interface DomainGateway {
     workspaceSlug: string;
     firstBatchId: string;
   }): Promise<DomainResultFor<'get_marketing_first_batch'>>;
+  /** First batches with no product yet that have not ended: the way back to a reading the user left (#204). */
+  listMarketingFirstBatches(params: {
+    workspaceSlug: string;
+  }): Promise<DomainResultFor<'list_marketing_first_batches'>>;
   /** Continue a stopped first batch, confirming the maximum its `resume` offers (#193). */
   resumeMarketingFirstBatch(params: {
     workspaceSlug: string;
@@ -5443,6 +5447,16 @@ export class DefaultDomainGateway implements DomainGateway {
       buildBffPath('get_marketing_first_batch', {
         slug: params.workspaceSlug,
         first_batch_id: params.firstBatchId,
+      })
+    );
+  }
+
+  async listMarketingFirstBatches(params: {
+    workspaceSlug: string;
+  }): Promise<DomainResultFor<'list_marketing_first_batches'>> {
+    return this.sendSafe<'list_marketing_first_batches'>(
+      buildBffPath('list_marketing_first_batches', {
+        slug: params.workspaceSlug,
       })
     );
   }
