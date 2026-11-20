@@ -566,7 +566,14 @@ function ImageWork({
           {t('edit-image-title')}
         </h2>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          {blocked ? t('ideas-refusal-ad_needs_redo') : t('edit-image-note')}
+          {blocked
+            ? // Your own image cannot be redone (#200): the way on is a new upload (#204).
+              t(
+                uploaded
+                  ? 'edit-image-upload-needs-redo'
+                  : 'ideas-refusal-ad_needs_redo'
+              )
+            : t('edit-image-note')}
         </p>
       </div>
       {!blocked && (

@@ -483,6 +483,32 @@ describe('EditAd (#201)', () => {
     ).toBeNull();
   });
 
+  it('says to upload again when your own image needs redoing, never to redo it (#204)', async () => {
+    const detail = ideasDetail({
+      ads: [
+        ad('av_3', 'c3', {
+          origin: 'uploaded',
+          used_product_photo: false,
+          status: 'needs_redo',
+          reasons: [reason('facts_changed', ['f1'])],
+        }),
+      ],
+      pending: [],
+    });
+    await openEdit(0, detail);
+    expect(
+      screen.getByText(
+        "This ad needs redoing, but your own image can't be redone or processed by AI: upload it again under the right way of telling."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "This ad needs redoing, so cropping or processing it won't make it downloadable. Redo it with a note instead."
+      )
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Redo this one' })).toBeNull();
+  });
+
   it("treats a crop of an uploaded image as the user's own image", async () => {
     const detail = ideasDetail({
       ads: [
