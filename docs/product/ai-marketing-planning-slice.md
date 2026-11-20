@@ -40,7 +40,7 @@ Workspace 需 active、有效生成权益、USD Spend Guardrail，以及所选�
 
 原子预留费用后，Worker 在短事务内检查资格、读取本 Workspace 凭据、记录调用边界；提交后才发出请求。成功返回按上限估算结算；JSON/证据校验失败保留失败状态并结算已知调用，不能冒充有效策略。超时或调用边界后中断保留 uncertain 和费用暴露，不盲目重发；当前不提供 uncertain 自助对账界面，需核对外部记录后处理。
 
-PostgreSQL 的 API 只读取 `workspace_provider_bindings` 中的非敏感就绪信息，不能为了判断可用性取得加密秘密；Worker 的凭据读取与解密仍在原有 KMS 边界。模型/Prompt 与事实引用进入持久化记录，凭据值不会进入计划或响应。
+PostgreSQL 的 API 只读取 `workspace_provider_bindings` 中的非敏感就绪信息，不能为了判断可用性取得加密秘密；Worker 推进首批时同样从这个视图判断有没有可用的绑定（#242）。Worker 的凭据读取与解密仍在原有 KMS 边界。模型/Prompt 与事实引用进入持久化记录，凭据值不会进入计划或响应。
 
 ## 首个切片的历史验证范围
 

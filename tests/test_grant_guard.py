@@ -61,6 +61,13 @@ class RoleFileEvaluationTests(unittest.TestCase):
             self.matrix.allows(API_ROLE, "scale_lineage_guards", "UPDATE", frozenset({"revision"}))
         )
 
+    def test_both_runtime_roles_read_the_provider_bindings_view(self):
+        # SQLite has no such view, so the guard never sees this read (#242):
+        # credential_binding(include_secret=False) reads it on PostgreSQL, from
+        # the API admitting a run and from the Worker advancing a first batch.
+        for role in (API_ROLE, WORKER_ROLE):
+            self.assertTrue(self.matrix.allows(role, "workspace_provider_bindings", "SELECT"), role)
+
     def test_the_owner_only_context_key_table_is_granted_to_nobody(self):
         for role in (API_ROLE, WORKER_ROLE):
             self.assertFalse(self.matrix.allows(role, "tenant_context_secrets", "SELECT"))

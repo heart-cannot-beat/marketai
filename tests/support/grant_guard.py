@@ -102,9 +102,11 @@ _PLATFORM_WORKSPACE = (
 )
 
 _BINDINGS_VIEW = (
-    "PostgreSQL answers the API from the workspace_provider_bindings view (binding id and "
-    "revision, no secret column); only SQLite, which has no such view, reads the binding "
-    "and credential records themselves. include_secret=True (Worker) reads them everywhere"
+    "PostgreSQL answers a lookup without the secret from the workspace_provider_bindings view "
+    "(binding id and revision, no secret column), which both runtime roles may read: the API "
+    "admitting a run, the Worker advancing a first batch (#242). Only SQLite, which has no such "
+    "view, reads the binding and credential records themselves. include_secret=True (Worker) "
+    "reads them everywhere. test_grant_guard checks both roles hold the view"
 )
 
 _SETTLED_TOTAL = (

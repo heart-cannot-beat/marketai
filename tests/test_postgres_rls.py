@@ -885,6 +885,28 @@ class RowLevelSecurityTests(unittest.TestCase):
         ).all()
         self.assertEqual([b.provider for b in bindings], ["meta"])
 
+    def test_both_runtime_roles_look_a_binding_up_without_its_secret(self):
+        """``credential_binding(include_secret=False)`` reads the
+        ``workspace_provider_bindings`` view on PostgreSQL: the API admitting a
+        run, the Worker advancing a first batch (#242). Each sees only the
+        scoped Workspace's binding, even when it asks for another's."""
+        from types import SimpleNamespace
+
+        from sqlalchemy.orm import Session
+
+        from app.generation.selection import credential_binding
+
+        for url in (API_URL, WORKER_URL):
+            with self.subTest(role=url.split("://", 1)[1].split(":", 1)[0]):
+                conn = self.scoped_connection(self.engine(url), self.alpha)
+                session = Session(bind=conn)
+                found = credential_binding(session, SimpleNamespace(workspace_id=self.alpha), "meta")
+                self.assertEqual(found[0].id, self.alpha_binding)
+                self.assertIsNone(
+                    credential_binding(session, SimpleNamespace(workspace_id=self.beta), "meta")
+                )
+                session.close()
+
     def test_generation_drafts_are_tenant_scoped_and_api_writable(self):
         conn = self.scoped_connection(self.engine(API_URL), self.alpha)
 
