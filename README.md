@@ -12,7 +12,7 @@ MarketAI 帮用户提出营销假设、组织测试、解释结果。用户提�
 
 之后在同一张营销测试页完成：**生成 → AI 质量检查（QC）→ 反馈修订 → 人工确认 → 导出 → 在 Meta 人工投放 → 回传每日 CSV → 看结论和下一步**。
 
-接受 Workspace 邀请、登录并完成 MFA 后进入 **Marketing Tests**（`/w/{slug}/experiments`）。逐步操作见[图文教程](docs/tutorials/marketai-tutorial.html)（GitHub 只显示 HTML 源码，下载后可离线打开，见[阅读说明](docs/tutorials/README.md)）或[文字速查](docs/user-guide.md)。
+接受 Workspace 邀请、登录并完成 MFA 后进入 **Marketing Tests**（`/w/{slug}/experiments`）。逐步操作见[图文教程](docs/tutorials/marketai-tutorial.html)（GitHub 只显示 HTML 源码，下载后可离线打开，见[阅读说明](docs/tutorials/README.md)）或[文字速查](docs/user-guide.md)。网站打开新开头（开关 `NEXT_PUBLIC_MARKETAI_ADS_FIRST`）以后，新产品从开始页贴链接起步，见[新开头教程](docs/tutorials/ads-first-tutorial.html)。
 
 几条边界：
 

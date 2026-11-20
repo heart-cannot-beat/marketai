@@ -48,6 +48,27 @@ Gemini/Seedream 的真实 Key、供应商鉴权、模型可用性、最大成本
 - 校验只能说明 Key 被接受。OpenAI 要求组织先完成验证才能用 GPT Image 出图，这一点只在收费的出图请求上检查，所以组织没验证的 Key 会被保存，第一次出图时才失败。
 - 非 Owner、另一个工作区的请求在发出任何外部请求之前就被拒（403 / 404）。测试见 `tests/test_provider_key_check.py`，全部用 `httpx.MockTransport`，没有真实 Key 或真实请求。
 
+## 新开头的开始页：第二个 Key 入口（[ADR 0018](../adr/0018-ads-before-test-setup.md)，#195、#204）
+
+开关 `NEXT_PUBLIC_MARKETAI_ADS_FIRST` 打开后，工作区还没有可用的 OpenAI Key 时，开始页多一个入口。设置页的入口保留，规则不变。
+
+- **工作区已有可用的 OpenAI Key**：开始页不出现 Key 这一行。
+- **没有 Key，当前用户是 Owner**：表单里多一行“你的 OpenAI API Key”和“怎么拿到？”链接。按钮写“保存 Key 并开始 · 最多 $X”，保存成功后直接开始，不用去设置页；只差 Key 时报价已经给出最高费用（#216）。
+  - 保存走 `create_credential`（`verify: true`）和 `bind_credential`，还是现有的凭据机制：加密、版本、审计都不变。
+  - 保存前先问 OpenAI（上一节）。被拒时分别说明：Key 无效；没有读取模型列表的权限（受限 Key 要有这个权限）；账户没有余额或到了花费上限；暂时连不上 OpenAI。都不保存、不开始，Key 留在输入框里可以改了再试。
+  - 遇到其他服务端错误时，不知道存没存，页面清空输入框、提示刷新看看（#204）。
+  - 已经存过一个 OpenAI Key、但没启用：提示到设置里启用或替换。
+- **没有 Key，当前用户不是 Owner**：不显示 Key 输入，提示“请工作区 Owner 先添加 OpenAI 的 API Key”，开始按钮不可用。只有 Owner 能添加 Key，这一点不变。
+- **只有 Gemini 的 Key**：第 1 步只支持 OpenAI，报价是 `openai_key_required`，开始页按上面“没有 Key”处理。
+
+**Key 不能用时，什么时候告诉用户。** 设计要求在出图开始之前讲清楚。能做到的是保存时校验；做不到的是 OpenAI 组织验证：这一点 OpenAI 只在收费的出图请求上检查。所以：
+
+- 开始页 Key 的说明里先写明：组织没通过 OpenAI 图片模型验证的 Key 能保存，出图时会被拒。
+- 首批出图时 OpenAI 拒绝了这个 Key（`credential_rejected`），首批停在“出图”这一步，读产品页说明常见原因（组织没验证、Key 没有出图权限），请用户去 OpenAI 后台处理后重试。重试按按钮上写的多出的最高费用确认（#204）。
+- 读产品和起草这两步不受影响：它们在出图之前，用的是同一个 Key 的对话接口。
+
+**验收。** 前端测试见 `web/__tests__/components/ideas/start-page.spec.tsx`（有 Key、Owner 没 Key、成员没 Key、每种被拒的原因、服务端错误清空 Key、花费上限）和 `reading-page.spec.tsx`（出图时 Key 被拒的说明）。全部用假的网关，没有真实 Key。用真实 Key 在生产上走一遍由维护者做，见 #204 的上线清单；生产证据不进这个仓库。
+
 ## 竞品扫描数据供应商（ScrapeCreators，2026-10-28，#267）
 
 范围是竞品扫描（Epic #265 的 C-11）所需的数据供应商密钥：`binding_scope=market_data`、provider `scrapecreators`，以及每次真实解析与扫描报价所用的价格表。没有真实 ScrapeCreators Key、没有真实供应商请求；真实调用留给 C-50 由用户确认费用后进行。

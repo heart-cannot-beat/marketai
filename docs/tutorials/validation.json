@@ -949,8 +949,8 @@
   "files": [
     {
       "name": "marketai-tutorial.html",
-      "bytes": 4845223,
-      "sha256": "ee1da153f05bd625c9e8b729ba39be13ce142d716086f3df255a5028a9b3e062",
+      "bytes": 4857679,
+      "sha256": "040c07071f80f668b3345fccdbecaf3bbfc19aadd90763eb2ae13d930bc98439",
       "images": 68,
       "new_images_2026_11_02": 0,
       "carried_over_images": 68,
@@ -967,8 +967,8 @@
     },
     {
       "name": "advanced-reference.html",
-      "bytes": 1677733,
-      "sha256": "d9215231cd573fb40258171b39f7f964ee2f49b766effea330c2046ef37992cc",
+      "bytes": 1681031,
+      "sha256": "7f82751c1aa41d99d4747ba9d8b01aae2a1d89014d14d56e572d45dbd29d3e0f",
       "images": 27,
       "new_images_2026_11_02": 0,
       "carried_over_images": 27,
@@ -980,6 +980,21 @@
       "all_images_decoded_static": true,
       "external_subresources": 0,
       "javascript_syntax_valid": true,
+      "visible_internal_ids": [],
+      "public_signed_urls_or_keys": false
+    },
+    {
+      "name": "ads-first-tutorial.html",
+      "bytes": 1223767,
+      "sha256": "19cefd78a0f51ede54416dc1aa795d4137d192c154c0e5f685220a6c3ba14a99",
+      "images": 9,
+      "numbered_steps": 9,
+      "toc_entries": 17,
+      "anchors_valid": true,
+      "duplicate_ids": false,
+      "all_images_embedded": true,
+      "all_images_decoded_static": true,
+      "external_subresources": 0,
       "visible_internal_ids": [],
       "public_signed_urls_or_keys": false
     }
@@ -1204,5 +1219,195 @@
       }
     ],
     "checked_at": "2026-11-05"
+  },
+  "ads_first_tutorial_2026_11_20": {
+    "issue": "#204",
+    "base_main_sha": "528434d26a0ed6114a6b189063609f81664a51ef",
+    "scope": "new file ads-first-tutorial.html (the new opening, step 1: start page to downloaded images, overview, product profile, competitors page); marketai-tutorial.html and advanced-reference.html only gained a one-sentence note at the top pointing to it, text and screenshots unchanged",
+    "screenshot_mode": "controlled Mock on a local Compose stack, web built with NEXT_PUBLIC_MARKETAI_ADS_FIRST=true; English interface; fictional tutorial product and Acme Charge text; no real provider, no real key, no Meta write",
+    "screenshot_source": "web/e2e/ads-first/empty-to-download.spec.ts with E2E_ADS_FIRST_SHOTS set; 1280x1100 view from the top of each page, JPEG 1000 px wide",
+    "screenshots": [
+      {
+        "name": "01-start-no-key.jpg",
+        "sha256": "4b8ca560d8d2dfcf9bb46feab26bae3d18149678078c049035fa5995b8daa81e",
+        "bytes": 124055,
+        "captured_at": "2026-11-20"
+      },
+      {
+        "name": "02-start.jpg",
+        "sha256": "16dc2a5bcf94e77cb3d61e7ae80a3bff6ba92e33df4d6a8ee4ffc627ee65032e",
+        "bytes": 115229,
+        "captured_at": "2026-11-20"
+      },
+      {
+        "name": "03-reading-choose-model.jpg",
+        "sha256": "033aec9b72a732a897ef3f1fd830a3d647aeab513f66de8a218ff8014aa8d927",
+        "bytes": 62386,
+        "captured_at": "2026-11-20"
+      },
+      {
+        "name": "04-ideas.jpg",
+        "sha256": "c8e3e7dbe3750b9558b8d840bc7ca8142ca0ed52883cb4507c2878abb3fec4b2",
+        "bytes": 137823,
+        "captured_at": "2026-11-20"
+      },
+      {
+        "name": "05-kept.jpg",
+        "sha256": "62f1f1f7b84dcf4ca73f1b41dedf202e3fc7180c44236ff9c65f773a69b2c67d",
+        "bytes": 138984,
+        "captured_at": "2026-11-20"
+      },
+      {
+        "name": "06-check.jpg",
+        "sha256": "7893f9beb638d4b447c1dba7cb60ad2576f6367360e507d3120befb62321e43d",
+        "bytes": 113380,
+        "captured_at": "2026-11-20"
+      },
+      {
+        "name": "07-overview.jpg",
+        "sha256": "c85a4d2691cbf75882b9b30102efd41f14b284c3ff8ce46842870207f3934f90",
+        "bytes": 50242,
+        "captured_at": "2026-11-20"
+      },
+      {
+        "name": "08-profile.jpg",
+        "sha256": "0f60df13be142b65ecda357fcb89c42de8d4991eea4a0eae0cfa22aae5cc6516",
+        "bytes": 112098,
+        "captured_at": "2026-11-20"
+      },
+      {
+        "name": "09-competitors.jpg",
+        "sha256": "190af26c567cfa50426b6c8270b90eb890ae38b1673194f00134bb448de21d29",
+        "bytes": 42324,
+        "captured_at": "2026-11-20"
+      }
+    ],
+    "paid_calls": 0,
+    "browser_validation": {
+      "status": "passed",
+      "surface": "Chromium (@playwright/test from web/node_modules) via file protocol with the browser context offline",
+      "desktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "mobile": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 2
+      },
+      "checks": [
+        {
+          "viewport": "desktop",
+          "file": "ads-first-tutorial.html",
+          "contentImages": 9,
+          "contentImagesDecoded": 9,
+          "anchors": {
+            "count": 17,
+            "missing": [],
+            "duplicateIds": []
+          },
+          "crossLinks": [
+            "marketai-tutorial.html",
+            "advanced-reference.html"
+          ],
+          "horizontalOverflowPx": 0,
+          "externalRequests": 0,
+          "viewerOpens": true,
+          "crossLinkFromOldTutorialNavigates": true
+        },
+        {
+          "viewport": "desktop",
+          "file": "marketai-tutorial.html",
+          "contentImages": 68,
+          "contentImagesDecoded": 68,
+          "anchors": {
+            "count": 69,
+            "missing": [],
+            "duplicateIds": []
+          },
+          "crossLinks": [
+            "ads-first-tutorial.html",
+            "advanced-reference.html"
+          ],
+          "horizontalOverflowPx": 0,
+          "externalRequests": 0,
+          "viewerOpens": true
+        },
+        {
+          "viewport": "desktop",
+          "file": "advanced-reference.html",
+          "contentImages": 27,
+          "contentImagesDecoded": 27,
+          "anchors": {
+            "count": 25,
+            "missing": [],
+            "duplicateIds": []
+          },
+          "crossLinks": [
+            "ads-first-tutorial.html",
+            "marketai-tutorial.html"
+          ],
+          "horizontalOverflowPx": 0,
+          "externalRequests": 0,
+          "viewerOpens": true
+        },
+        {
+          "viewport": "mobile",
+          "file": "ads-first-tutorial.html",
+          "contentImages": 9,
+          "contentImagesDecoded": 9,
+          "anchors": {
+            "count": 17,
+            "missing": [],
+            "duplicateIds": []
+          },
+          "crossLinks": [
+            "marketai-tutorial.html",
+            "advanced-reference.html"
+          ],
+          "horizontalOverflowPx": 0,
+          "externalRequests": 0,
+          "viewerOpens": true,
+          "crossLinkFromOldTutorialNavigates": true
+        },
+        {
+          "viewport": "mobile",
+          "file": "marketai-tutorial.html",
+          "contentImages": 68,
+          "contentImagesDecoded": 68,
+          "anchors": {
+            "count": 69,
+            "missing": [],
+            "duplicateIds": []
+          },
+          "crossLinks": [
+            "ads-first-tutorial.html",
+            "advanced-reference.html"
+          ],
+          "horizontalOverflowPx": 0,
+          "externalRequests": 0,
+          "viewerOpens": true
+        },
+        {
+          "viewport": "mobile",
+          "file": "advanced-reference.html",
+          "contentImages": 27,
+          "contentImagesDecoded": 27,
+          "anchors": {
+            "count": 25,
+            "missing": [],
+            "duplicateIds": []
+          },
+          "crossLinks": [
+            "ads-first-tutorial.html",
+            "marketai-tutorial.html"
+          ],
+          "horizontalOverflowPx": 0,
+          "externalRequests": 0,
+          "viewerOpens": true
+        }
+      ],
+      "checked_at": "2026-11-20"
+    }
   }
 }
