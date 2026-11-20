@@ -33,7 +33,7 @@ export default defineConfig({
     },
     {
       name: 'chromium',
-      testIgnore: /onboarding\//,
+      testIgnore: /onboarding\/|ads-first\//,
       use: {
         ...devices['Desktop Chrome'],
         storageState: 'e2e/.auth/owner.json',
@@ -42,7 +42,7 @@ export default defineConfig({
     },
     {
       name: 'tablet-chromium',
-      testIgnore: /onboarding\//,
+      testIgnore: /onboarding\/|ads-first\//,
       use: {
         ...devices['iPad Pro 11 landscape'],
         storageState: 'e2e/.auth/owner.json',
@@ -51,7 +51,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-chromium',
-      testIgnore: /onboarding\//,
+      testIgnore: /onboarding\/|ads-first\//,
       use: {
         ...devices['Pixel 7'],
         storageState: 'e2e/.auth/owner.json',
@@ -103,6 +103,28 @@ export default defineConfig({
         storageState: undefined,
         // A passing run keeps nothing: per-commit videos and traces were
         // ~110 MB per run and exhausted the Actions storage quota.
+        video: 'retain-on-failure',
+        trace: 'retain-on-failure',
+      },
+    },
+    {
+      // The new opening (ADR 0018, #204): empty Workspace to downloaded
+      // images on the Compose stack whose web is built with the switch on
+      // (docker-compose.ads-first.yml, `make ads-first-e2e`).
+      name: 'ads-first',
+      testMatch: [/ads-first\/.*\.spec\.ts/],
+      retries: 0,
+      timeout: 900_000,
+      expect: {
+        timeout:
+          process.env.E2E_STANDARD_GITHUB_RUNNER === 'true' ? 30_000 : 5_000,
+      },
+      use: {
+        ...devices['Desktop Chrome'],
+        actionTimeout: 15_000,
+        navigationTimeout: 30_000,
+        storageState: undefined,
+        acceptDownloads: true,
         video: 'retain-on-failure',
         trace: 'retain-on-failure',
       },

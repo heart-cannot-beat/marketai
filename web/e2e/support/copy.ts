@@ -4,6 +4,7 @@ import competitors from '../../locales/en/competitors.json';
 import directions from '../../locales/en/directions.json';
 import experiments from '../../locales/en/experiments.json';
 import external from '../../locales/en/external.json';
+import ideas from '../../locales/en/ideas.json';
 import learnings from '../../locales/en/learnings.json';
 import library from '../../locales/en/library.json';
 import localization from '../../locales/en/localization.json';
@@ -29,6 +30,7 @@ const EN = {
   directions,
   experiments,
   external,
+  ideas,
   learnings,
   library,
   localization,
