@@ -40,7 +40,7 @@
 
 ## 落地
 
-分块和依赖见 #187，逐步计划见[第 1 步实施计划](../superpowers/plans/2026-11-16-ads-first-step-1.md)。
+分块和依赖见 #187，逐步计划见[第 1 步实施计划](../superpowers/plans/2026-11-16-ads-first-step-1.md)。第 2 步“拿去测试”每次新开一个测试项目，见 [ADR 0019](0019-take-to-test-opens-a-test-project.md)，分块和依赖见 #245。
 
 首批确认一次总价之后，由 Worker 受理它自己的后续步骤；这是费用合同里唯一的这类例外，范围和条件见[费用合同 §11](../architecture/subscription-entitlement-usage-cost-ownership.md#11-spend-guardrail)“一次副作用命令的固定顺序”之后的一段（#193；出图之后的单图检查也在其中，#197）。
 
