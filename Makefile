@@ -71,7 +71,7 @@ restore-rehearsal:
 verify-all: verify web-verify
 
 # -------------------------------------------------------------- compose ------
-.PHONY: compose-up compose-down compose-smoke compose-logs compose-security compose-rehearsal compose-redaction golden-path-e2e
+.PHONY: compose-up compose-down compose-smoke compose-logs compose-security compose-rehearsal compose-redaction golden-path-e2e ads-first-e2e
 
 compose-up:
 	docker compose --env-file deploy/docker/.env.compose up -d --build --wait
@@ -114,6 +114,30 @@ golden-path-e2e:
 	  ENTITLEMENT_SNAPSHOT_SIGNING_KEY_ID=compose-beta-v1 \
 	  npx playwright test --project golden-path --workers 1 --reporter=html,json
 	@echo "Results in web/test-results/ and web/playwright-report/"
+
+# The new opening (ADR 0018, #204): the web built with NEXT_PUBLIC_MARKETAI_ADS_FIRST=true,
+# Controlled Mock only. Tear down with `docker compose -p ads-first down -v --rmi local`.
+ADS_FIRST_COMPOSE = docker compose -p ads-first -f docker-compose.yml -f docker-compose.ads-first.yml --env-file deploy/docker/.env.compose
+
+ads-first-e2e:
+	$(ADS_FIRST_COMPOSE) up -d --build --wait
+	scripts/compose-wait.sh 180 ads-first
+	cd web && \
+	  CONTROL_PLANE_DATABASE_URL='postgresql://marketai_control_owner:compose_control_owner@localhost:5432/marketai_control' \
+	  DOMAIN_OWNER_DATABASE_URL='postgresql://marketai_domain_owner:compose_domain_owner@localhost:5432/marketai_domain' \
+	  MARKETAI_DATABASE_URL='postgresql+psycopg://marketai_domain_owner:compose_domain_owner@localhost:5432/marketai_domain' \
+	  MARKETAI_TENANT_CONTEXT_SECRET=compose-tenant-context-secret-32-bytes-min \
+	  MFA_ENCRYPTION_KEY=Y29tcG9zZS1tZmEtZW5jcnlwdGlvbi1rZXktMzJiISE= \
+	  E2E_DOMAIN_BASE_URL='http://localhost:8787' \
+	  E2E_BASE_URL='http://localhost:4002' \
+	  E2E_COMPOSE_PROJECT=ads-first \
+	  E2E_COMPOSE_FILE='$(CURDIR)/docker-compose.yml' \
+	  E2E_COMPOSE_OVERRIDE_FILE='$(CURDIR)/docker-compose.ads-first.yml' \
+	  E2E_ADS_FIRST=true \
+	  CONTROL_PLANE_TO_DOMAIN_ENTITLEMENT_TOKEN=compose-entitlement-inbox-token \
+	  ENTITLEMENT_SNAPSHOT_SIGNING_KEY=compose-entitlement-signing-key-32-bytes-minimum \
+	  ENTITLEMENT_SNAPSHOT_SIGNING_KEY_ID=compose-beta-v1 \
+	  npx playwright test --project ads-first --workers 1 --reporter=list
 
 compose-logs:
 	docker compose logs --no-color

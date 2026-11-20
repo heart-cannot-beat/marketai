@@ -1,0 +1,9 @@
+# The new opening (ADR 0018, #204) on the Compose stack: the web is built with
+# the build-time switch on. Used by `make ads-first-e2e` and the manual
+# "Ads-first E2E" workflow on top of docker-compose.yml; never in production,
+# where the maintainer sets the switch on the web service (#204 checklist).
+services:
+  web:
+    build:
+      args:
+        NEXT_PUBLIC_MARKETAI_ADS_FIRST: "true"
