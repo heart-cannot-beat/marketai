@@ -547,7 +547,10 @@ export function ProfileBrand({
     >
       <ProfileLogos projectId={projectId} detail={detail} />
       <div className="rounded-xl border border-gray-200 px-4 pb-4 dark:border-gray-700 [&>details]:mt-0 [&>details]:border-t-0">
-        <ProductBrandKitSettings product={summary} />
+        <ProductBrandKitSettings
+          product={summary}
+          logoHint={t('profile-brand-logo-hint')}
+        />
       </div>
       <p className="text-xs text-gray-600 dark:text-gray-400">
         {t('profile-brand-logo-note')}

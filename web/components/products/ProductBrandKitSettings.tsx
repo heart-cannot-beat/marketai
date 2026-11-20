@@ -76,8 +76,15 @@ export function brandKitBody(form: Form): Input {
  * plans keep the exact version they referenced, so nothing here rewrites them. */
 export function ProductBrandKitSettings({
   product,
+  logoHint,
 }: {
   product: ProductSummary;
+  /**
+   * Where a logo comes from, when the page says it otherwise: the ads-first
+   * product profile adds logos under "Upload a logo", not under reference
+   * images (#204). Without it the product card's sentence stays.
+   */
+  logoHint?: string;
 }) {
   const { t } = useTranslation('products');
   const { current } = useWorkspace();
@@ -224,7 +231,7 @@ export function ProductBrandKitSettings({
               </label>
               {!logos.length && (
                 <p className="text-xs text-base-content/60">
-                  {t('brand-kit.logo-hint')}
+                  {logoHint ?? t('brand-kit.logo-hint')}
                 </p>
               )}
               {selectedLogo && (
