@@ -471,6 +471,34 @@ class GuardTests(unittest.TestCase):
             [(v.role, v.operation, v.table) for v in guard.unreported()], [(ROLE_B, "SELECT", "jobs")]
         )
 
+    def test_a_sqlite_only_read_needs_select_on_what_postgresql_reads_in_its_place(self):
+        """``credential_binding`` reads the binding tables on SQLite and a view on PostgreSQL: a role
+        SQLite lets read the tables is still refused there without SELECT on the view (#241)."""
+        self.matrix = evaluate(
+            f"GRANT SELECT ON jobs TO {ROLE_A};\n"
+            f"GRANT SELECT ON jobs TO {ROLE_B};\n"
+            f"GRANT SELECT ON bindings_view TO {ROLE_B};\n"
+        )
+        guard = self._guard(sqlite_only=(SqliteOnlyWrite(
+            "jobs", "SELECT", f"{__name__}:_sending_with_secret", "test",
+            when=("include_secret", False), postgres_reads="bindings_view",
+        ),))
+        with entered_as(ROLE_B):
+            _sending_with_secret(self.engine, select(self.jobs.c.id))
+        with entered_as(ROLE_A):
+            # PostgreSQL takes the same path as SQLite here, or the function is not the exempted one.
+            _sending_with_secret(self.engine, select(self.jobs.c.id), include_secret=True)
+            with self.engine.begin() as connection:
+                connection.execute(select(self.jobs.c.id))
+            self.assertEqual(guard.unreported(), [])
+            _sending_with_secret(self.engine, select(self.jobs.c.id))
+        violations = guard.unreported()
+        self.assertEqual(
+            [(v.role, v.operation, v.table, v.why) for v in violations],
+            [(ROLE_A, "SELECT", "bindings_view", "postgres")],
+        )
+        self.assertIn("which PostgreSQL reads in place of jobs", violations[0].describe())
+
 
 if __name__ == "__main__":
     unittest.main()
