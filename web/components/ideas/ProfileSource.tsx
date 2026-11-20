@@ -16,15 +16,22 @@ import { pastedLink } from './UnfinishedReadings';
  * #204): the product's name, the page it was read from, when, and where its
  * ads go. Read only: reading the page again is not part of step 1.
  */
-export function ProfileSource({ detail }: { detail: IdeasDetail }) {
+export function ProfileSource({
+  detail,
+  name,
+}: {
+  detail: IdeasDetail;
+  /** The product's name as the page title shows it. */
+  name: string | null;
+}) {
   const { t, i18n } = useTranslation('ideas');
   const { batch } = useFirstBatch(detail.first_batch?.id ?? null);
   const intake = useFirstBatchIntake(batch?.intake_id ?? null, false);
   const link = pastedLink(intake?.input?.url);
   const country = countryFromMarket(detail.market);
   const rows: [string, string][] = [];
-  if (detail.understanding?.product_name)
-    rows.push([t('profile-source-name'), detail.understanding.product_name]);
+  const shown = name || detail.understanding?.product_name;
+  if (shown) rows.push([t('profile-source-name'), shown]);
   // Only once the reading is known: a product page, or what was pasted.
   if (intake)
     rows.push([t('profile-source-page'), link ?? t('profile-source-pasted')]);

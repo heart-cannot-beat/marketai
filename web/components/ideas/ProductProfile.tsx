@@ -146,7 +146,7 @@ function Profile({
         projectId={projectId}
         detail={detail}
       />
-      <ProfileSource detail={detail} />
+      <ProfileSource detail={detail} name={product.name} />
     </div>
   );
 }
