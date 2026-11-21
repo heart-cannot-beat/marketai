@@ -57,7 +57,7 @@
 | T12 | 前端：“测试记录”画面、产品内“测试”视图、总览状态 | T9、T11 | C |
 | T13 | 收尾：端到端、教程、验收记录 | 全部 | C |
 
-**Issue：** 依赖图是 heart-cannot-beat/marketai#245。T0 到 T13 依次是 #246、#247、#248、#249、#250、#251、#252、#253、#254、#255、#256、#257、#258、#259。迁移的 revision 用所属块的 Issue 编号（T1 是 `zzs247a1b2c3`）。
+**Issue：** 依赖图是 heart-cannot-beat/marketai#245。T0 到 T13 依次是 #246、#247、#248、#249、#250、#251、#252、#253、#254、#255、#256、#257、#258、#259。迁移的 revision 用所属块的 Issue 编号（T1 是 `zzt247a1b2c3`：`s` 已被 #241 的 `zzs241a1b2c3` 用掉，T1 接在它后面）。
 
 **里程碑 A：留下的广告到广告包。** 做完 T0–T4、T10：在开关打开的环境里，从留下的广告回答三个问题、点开始，检查通过后下载广告包。
 
@@ -140,7 +140,7 @@
 ## T1：后端：测试项目和读接口
 
 **Files:**
-- Create: `migrations/versions/zzs247a1b2c3_marketing_test_projects.py`
+- Create: `migrations/versions/zzt247a1b2c3_marketing_test_projects.py`
 - Create: `app/marketing/ad_tests.py`
 - Create: `app/marketing/ad_tests_api.py`
 - Create: `app/marketing/ad_tests_contracts.py`

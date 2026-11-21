@@ -1,6 +1,6 @@
 """Test projects name the ads-first ideas they came from (#247, ADR 0019, step 2 design §5.1).
 
-Revision ID: zzs247a1b2c3
+Revision ID: zzt247a1b2c3
 Revises: zzs241a1b2c3
 
 Taking kept ads to a test opens a new marketing project with ``flow = "ads_test"`` under the same
@@ -20,7 +20,7 @@ check, the index, the foreign key and the column.
 from alembic import op
 import sqlalchemy as sa
 
-revision = "zzs247a1b2c3"
+revision = "zzt247a1b2c3"
 down_revision = "zzs241a1b2c3"
 branch_labels = None
 depends_on = None

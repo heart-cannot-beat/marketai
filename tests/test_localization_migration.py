@@ -130,8 +130,8 @@ class TestLocalizationMigration(unittest.TestCase):
             # zzq200a1b2c3 (ads-first revisions and uploads without a round, #200) and
             # zzr233a1b2c3 (photos the user adds to an ads-first product, #233) and
             # zzs241a1b2c3 (the Worker reads key readiness from the bindings view, #241) and
-            # zzs247a1b2c3 (test projects name the ads-first ideas they came from, #247).
-            self.assertIn("zzs247a1b2c3", revisions)
+            # zzt247a1b2c3 (test projects name the ads-first ideas they came from, #247).
+            self.assertIn("zzt247a1b2c3", revisions)
 
     def test_downgrade_and_upgrade(self):
         up = self._alembic("upgrade", "head")
