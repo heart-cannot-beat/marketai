@@ -913,6 +913,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'confirm_marketing_test_report',
+    {
+      operationId: 'confirm_marketing_test_report',
+      method: 'POST',
+      pathTemplate:
+        '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report/confirm',
+      pathParams: ['test_id', 'round_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 8192,
+      maxResponseBytes: 2097152,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'confirm_marketing_test_report_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'confirm_meta_launch_preview',
     {
       operationId: 'confirm_meta_launch_preview',
@@ -6114,6 +6142,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         201: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'preview_marketing_metrics_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'preview_marketing_test_report',
+    {
+      operationId: 'preview_marketing_test_report',
+      method: 'POST',
+      pathTemplate:
+        '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report/preview',
+      pathParams: ['test_id', 'round_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 1600000,
+      maxResponseBytes: 2097152,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'preview_marketing_test_report_201' },
           locationShapes: [],
         },
         422: {

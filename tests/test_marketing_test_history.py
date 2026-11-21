@@ -3,9 +3,10 @@
 ``GET /marketing/tests?product_id=`` lists the product's test projects with each round and each report upload
 and correction -- when (the batch's ``created_at``) and by whom (the audit event that recorded it) -- and the
 tests made the earlier way (plan first) that stand for the product through its card lineage
-(``app.marketing.card_lineage``). Test projects are built directly, as in ``tests/test_marketing_tests.py``;
-their report batches are written the way a confirmed upload stores them until the test-report commands (#251)
-exist. The earlier test runs the ordinary plan-first loop through HTTP, uploads included.
+(``app.marketing.card_lineage``). Test projects are built directly, as in ``tests/test_marketing_tests.py``.
+A test round's full reports (#251) go through the test-report commands in one test, and elsewhere are stored
+the way those commands store a confirmed one. The earlier test runs the ordinary plan-first loop through HTTP,
+uploads and a correction included.
 """
 from datetime import timedelta
 from unittest.mock import patch
@@ -21,10 +22,11 @@ from app.marketing.ad_tests_contracts import MarketingTestHistory, MoveMarketing
 from app.marketing.models import MarketingProjectRecord
 from app.marketing.workflow_models import MarketingMetricBatchRecord
 from app.platform.http_identity import request_tenant_context
-from tests.test_marketing_tests import SOURCE, MarketingTestFixtures
+from tests.test_marketing_test_reports import TestReportFixtures
+from tests.test_marketing_tests import SOURCE
 
 
-class MarketingTestHistoryFixtures(MarketingTestFixtures):
+class MarketingTestHistoryFixtures(TestReportFixtures):
     #: The product card the next plan-first test starts from (``None``: pasted text only).
     card = None
 
@@ -45,17 +47,19 @@ class MarketingTestHistoryFixtures(MarketingTestFixtures):
             return ideas.create_ideas_project(session, self.context, product_id=product_id, source_text=SOURCE,
                                               market="United States", ad_language="en-US").id
 
-    def report(self, round_id, ctx, *, replaces=None, days=3):
-        """A confirmed report upload of a test's round, stored like a confirmed batch, its event by ``ctx``'s person."""
+    def report(self, round_id, ctx, *, days=3):
+        """A confirmed full report of a test's round, stored as the test-report commands store one (#251): an
+        upload of its own (never a ``replaces_id``), previewed and confirmed by ``ctx``'s person."""
         with tenant_session(ctx) as session:
             row = workflow.get_round(session, ctx, round_id)
             batch = MarketingMetricBatchRecord(id=new_id("mmb"), workspace_id=ctx.workspace_id, round_id=round_id,
-                replaces_id=replaces, request_hash=new_id("req"), raw_hash="0" * 64, raw_csv="date,ad_id\n",
+                replaces_id=None, request_hash=new_id("req"), raw_hash="0" * 64, raw_csv="Day,Ad ID\n",
                 metadata_json={"source_mode": "customer_file"}, issues_json=[], state="confirmed",
                 rows_json=[{"date": f"2030-01-{day:02d}", "ad_id": "1001"} for day in range(1, days + 1)])
             session.add(batch)
             session.flush()
-            workflow.audit(session, row, "metrics_confirmed", {"batch_id": batch.id, "replaces_id": replaces})
+            workflow.audit(session, row, "test_report_previewed", {"batch_id": batch.id, "raw_hash": batch.raw_hash})
+            workflow.audit(session, row, "test_report_confirmed", {"batch_id": batch.id, "raw_hash": batch.raw_hash})
             return batch.id
 
     def earlier_test(self, product_id):
@@ -101,8 +105,9 @@ class ProductTestHistoryTests(MarketingTestHistoryFixtures):
         test_id, round_id = self.make_test(source=ideas_id)
         owner = self.owner_ctx(self.context)
         member = self.context
+        # Two full reports "from the start to today": the later one repeats the earlier days (#251).
         upload = self.report(round_id, member)
-        correction = self.report(round_id, owner, replaces=upload, days=2)
+        later = self.report(round_id, owner, days=5)
         with tenant_session(self.context) as session:
             frozen = workflow.get_round(session, self.context, round_id)
             closed = workflow.get_round(session, self.context, older_round)
@@ -115,7 +120,7 @@ class ProductTestHistoryTests(MarketingTestHistoryFixtures):
             expected_older = ad_tests.detail(session, self.context, session.get(MarketingProjectRecord, older_test))
             earlier_name = earlier.understanding_json["product_name"]
             earlier_created = earlier.created_at.isoformat()
-        first_at, second_at, uploaded_at, corrected_at = self.batch_times(first, second, upload, correction)
+        first_at, second_at, uploaded_at, later_at = self.batch_times(first, second, upload, later)
 
         for ctx in (self.context, owner):  # a Member and the Owner both read it
             self.use(ctx)
@@ -136,8 +141,8 @@ class ProductTestHistoryTests(MarketingTestHistoryFixtures):
                 "reports": [
                     {"batch_id": upload, "kind": "upload", "replaces_batch_id": None, "uploaded_at": uploaded_at,
                      "uploaded_by": member.initiator_id, "row_count": 3},
-                    {"batch_id": correction, "kind": "correction", "replaces_batch_id": upload,
-                     "uploaded_at": corrected_at, "uploaded_by": owner.initiator_id, "row_count": 2},
+                    {"batch_id": later, "kind": "upload", "replaces_batch_id": None, "uploaded_at": later_at,
+                     "uploaded_by": owner.initiator_id, "row_count": 5},
                 ]}])
             self.assertEqual(body["tests"][1]["current_round_id"], None)
             self.assertEqual(body["tests"][1]["rounds"], [{
@@ -159,6 +164,35 @@ class ProductTestHistoryTests(MarketingTestHistoryFixtures):
                         {"batch_id": second, "kind": "correction", "replaces_batch_id": first, "uploaded_at": second_at,
                          "uploaded_by": owner.initiator_id, "row_count": 35},
                     ]}]}])
+
+    def test_a_test_rounds_full_reports_are_listed_as_uploaded_through_the_test_report_commands(self):
+        # A test round with its ad package and matched Meta ads (#251's fixture): the Member uploads days 1-3 and
+        # confirms; the Owner uploads days 1-5 -- a later full report repeats the earlier days -- and confirms.
+        # A report in another currency is refused and never confirmed: it is not on record as an upload.
+        test_id, round_id = self.report_round()
+        with tenant_session(self.context) as session:
+            product = session.get(MarketingProjectRecord, test_id).product_id
+        member, owner = self.context, self.owner_ctx(self.context)
+        first = self.preview(test_id, round_id, self.meta_csv(range(1, 4)))
+        self.confirm(test_id, round_id, first)
+        self.context = owner
+        try:
+            second = self.preview(test_id, round_id, self.meta_csv(range(1, 6), spend=12, purchases=2))
+            self.confirm(test_id, round_id, second)
+            refused = self.preview(test_id, round_id, self.meta_csv(range(1, 6), currency="EUR"), currency="EUR")
+            self.assertTrue(refused["issues"])
+        finally:
+            self.context = member
+        first_at, second_at = self.batch_times(first["id"], second["id"])
+
+        (listed,) = self.history(product)["tests"]
+        self.assertEqual(listed["id"], test_id)
+        self.assertEqual(listed["rounds"][0]["reports"], [
+            {"batch_id": first["id"], "kind": "upload", "replaces_batch_id": None, "uploaded_at": first_at,
+             "uploaded_by": member.initiator_id, "row_count": 6},
+            {"batch_id": second["id"], "kind": "upload", "replaces_batch_id": None, "uploaded_at": second_at,
+             "uploaded_by": owner.initiator_id, "row_count": 10},
+        ])
 
     def test_another_products_tests_are_not_listed(self):
         product, elsewhere = self.product(), self.product()

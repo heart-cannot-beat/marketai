@@ -90,14 +90,28 @@ class ScheduleFixtures(MarketingTestFixtures):
                 rows_json=rows, issues_json=[], state="confirmed"))
 
     def upload(self, round_id, report_days, purchases):
-        """A report through the existing upload, inside the frozen dates."""
+        """A report inside the frozen dates: a test round's full report (#251), an earlier test's own upload."""
         row = self.round_row(round_id)
         text = "date,ad_id,spend,impressions,clicks,purchases,purchase_value\n" + "".join(
             f"{day},{binding['ad_id']},{10 + index},10000,100,{purchases},300\n"
             for index, day in enumerate(report_days) for binding in row["bindings"])
-        row = self.command(row, "metrics/preview", self.csv(row, csv_text=text), 201)
-        self.assertEqual(row["batches"][-1]["issues"], [])
-        return self.command(row, "metrics/confirm", {"batch_id": row["batches"][-1]["id"]})
+        body = self.csv(row, csv_text=text)
+        with tenant_session(self.context) as session:
+            frozen = workflow.get_round(session, self.context, round_id)
+            test_id = frozen.project_id if workflow.full_report_round(session, self.context, frozen) else None
+        if test_id is None:
+            row = self.command(row, "metrics/preview", body, 201)
+            self.assertEqual(row["batches"][-1]["issues"], [])
+            return self.command(row, "metrics/confirm", {"batch_id": row["batches"][-1]["id"]})
+        path = f"/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report"
+        preview = self.client.post(f"{path}/preview", headers=self.headers(row["revision"]),
+                                   json={**body, "source_mode": "customer_file"})
+        self.assertEqual(preview.status_code, 201, preview.text)
+        self.assertEqual(preview.json()["issues"], [])
+        confirmed = self.client.post(f"{path}/confirm", headers=self.headers(int(preview.headers["etag"].strip('"'))),
+                                     json={"batch_id": preview.json()["id"]})
+        self.assertEqual(confirmed.status_code, 200, confirmed.text)
+        return self.round_row(round_id)
 
     def changes(self, round_id):
         with tenant_session(self.context) as session:

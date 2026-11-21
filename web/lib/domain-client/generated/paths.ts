@@ -249,6 +249,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'confirm_marketing_test_report',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/report/confirm',
+    pathParams: ['test_id', 'round_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'confirm_meta_launch_preview',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/launch/previews/:preview_id/confirm',
@@ -1636,6 +1644,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     bffPattern:
       '/api/domain/v1/w/:slug/marketing/rounds/:round_id/metrics/preview',
     pathParams: ['round_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'preview_marketing_test_report',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/report/preview',
+    pathParams: ['test_id', 'round_id'],
     requiresIdempotency: true,
   },
   {
