@@ -960,6 +960,26 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['MarketingTestDetail'] };
   };
+  get_marketing_test_quote: {
+    pathParams: { project_id: string };
+    queryParams: {
+      target_cost: string;
+      round_budget: string;
+      duration_days: string;
+      landing_page?: string;
+      audience?: string;
+      offer?: string;
+      placement?: string;
+      currency?: string;
+      account_timezone?: string;
+      start_date?: string;
+      attribution_window?: string;
+      max_small_rounds?: string;
+      media_budget?: string;
+    };
+    requestBody: never;
+    successResponses: { 200: components['schemas']['MarketingTestQuote'] };
+  };
   get_marketing_test_result: {
     pathParams: { test_id: string; round_id: string };
     queryParams: Record<string, never>;

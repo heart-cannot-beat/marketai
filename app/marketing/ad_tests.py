@@ -76,3 +76,162 @@ def detail(session, ctx, row) -> dict:
             "source_project_id": row.source_project_id, "comparison": comparison(row.plan_json),
             "plan_summary": plan_summary(row.plan_json), "rounds": [round_summary(session, ctx, r) for r in rounds],
             "current_round_id": current.id if current else None, "created_at": row.created_at.isoformat()}
+
+
+def kept_ads(session, ctx, ideas_row) -> list:
+    """The ideas' kept ads, oldest first, each with the image and the recipe (or upload record) it was made from."""
+    from . import ideas
+    from .models import MarketingAdKeepRecord
+    marks = dict(session.execute(select(MarketingAdKeepRecord.asset_version_id, MarketingAdKeepRecord.kept).where(
+        MarketingAdKeepRecord.workspace_id == ctx.workspace_id, MarketingAdKeepRecord.project_id == ideas_row.id)).all())
+    return [(version, recipe) for version, recipe in ideas.project_ads(session, ctx, ideas_row) if marks.get(version.id)]
+
+
+def kept_ad(version, recipe):
+    """A kept ad as a test takes it (``ad_test_plans.KeptAd``): the combination its image was made from, the hash
+    of that intent (plan E4, E8) and its execution mode (a Controlled Mock example, or real)."""
+    from . import ideas
+    from .ad_test_plans import KeptAd
+    intent = ideas.intent_of(recipe)
+    combination = intent.get("combination") or {}
+    return KeptAd(asset_version_id=version.id, combination_id=combination.get("id", ""),
+                  angle_id=combination.get("angle_id", ""), expression_id=combination.get("expression_id", ""),
+                  intent_hash=service.digest(intent),
+                  execution_mode="mock" if version.execution_mode in ("mock", "controlled_mock") else "byok")
+
+
+def product_link(session, ctx, ideas_row) -> str | None:
+    """The product page link the user pasted for this product: the default landing page (design §5.2)."""
+    from app.adapters.persistence.models import LibraryDraftRecord, LibraryEntryRecord, LibraryVersionRecord, ProductRecord
+    product = session.scalar(select(ProductRecord).where(ProductRecord.workspace_id == ctx.workspace_id,
+                                                         ProductRecord.id == ideas_row.product_id))
+    entry_id = product.product_profile_entry_id if product else None
+    if not entry_id:
+        return None
+    draft = session.scalar(select(LibraryDraftRecord.content_json).where(
+        LibraryDraftRecord.workspace_id == ctx.workspace_id, LibraryDraftRecord.entry_id == entry_id))
+    published = session.scalar(select(LibraryVersionRecord.content_json).join(LibraryEntryRecord,
+            (LibraryEntryRecord.current_version_id == LibraryVersionRecord.id)
+            & (LibraryEntryRecord.workspace_id == LibraryVersionRecord.workspace_id))
+        .where(LibraryEntryRecord.workspace_id == ctx.workspace_id, LibraryEntryRecord.id == entry_id))
+    for content in (draft, published):
+        link = (content or {}).get("source_url")
+        if isinstance(link, str) and link.strip().lower().startswith(("http://", "https://")):
+            return link.strip()
+    return None
+
+
+def checks_quote(session, ctx, execution_mode: str, quantity: int) -> dict:
+    """The "look together" check of each kept ad (plan E6): who checks in this mode, and the most it costs."""
+    from decimal import Decimal
+    from app.generation.selection import SelectionError, check_budget
+    from .ai_qc import mode_capability
+    cap = mode_capability(session, ctx, execution_mode)
+    total = Decimal(cap["unit_maximum"]) * quantity
+    reason = cap["reason"]
+    if reason is None and execution_mode == "byok":
+        try:
+            check_budget(session, ctx, total)
+        except SelectionError as exc:
+            reason = exc.code
+    return {"available": reason is None, "unavailable_reason": reason, "quantity": quantity,
+            "maximum_cost": str(total), "currency": "USD", "provider": cap["provider"], "model": cap["model"]}
+
+
+def quote(session, ctx, ideas_row, answers) -> dict:
+    """``MarketingTestQuote``: what taking these ideas' kept ads to a test compares, whether the money is enough,
+    when the result is due and what starting costs at most (design §5.2, §5.6). Reads only.
+
+    ``available`` is false, with the first reason, when: the ideas are not ready, nothing is kept, a kept ad
+    may not be exported (each named), kept ads mix Controlled Mock and real ones, a real test would start in the
+    past, there is no landing page, the plan the template writes fails a confirming check (``plan_error``), or
+    the check cannot be admitted."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    from pydantic import ValidationError
+    from app.adapters.persistence.models import utcnow
+    from . import ad_test_plans as plans, ideas_export
+    from .ideas_contracts import Ideas
+    from .workflow_contracts import EvaluationProtocol, FreezeRound
+    service.ensure_active(session, ctx)
+    protocol = EvaluationProtocol()
+    ready = ideas_row.state == "ideas_ready" and bool(ideas_row.ideas_json)
+    pairs = kept_ads(session, ctx, ideas_row) if ready else []
+    kept = [kept_ad(version, recipe) for version, recipe in pairs]
+    reason, plan_error, refused = None, None, []
+    if not ready:
+        reason = "ideas_not_ready"
+    elif not kept:
+        reason = "no_kept_ads"
+    else:
+        statuses = ideas_export.statuses(session, ctx, ideas_row, pairs)
+        refused = [{"asset_version_id": ad.asset_version_id, **{k: statuses[ad.asset_version_id][k] for k in ("status", "reasons")}}
+                   for ad in kept if statuses[ad.asset_version_id]["status"] != "exportable"]
+        reason = "ads_not_exportable" if refused else None
+    modes = {ad.execution_mode for ad in kept}
+    if reason is None and len(modes) > 1:
+        reason = "ads_execution_mixed"
+    mode = next(iter(modes)) if len(modes) == 1 else None
+
+    timezone = answers.account_timezone or plans.ACCOUNT_TIMEZONE
+    today = utcnow().astimezone(ZoneInfo(timezone)).date()
+    start, end, conclusion = plans.schedule(answers.start_date or today + timedelta(days=1), answers.duration_days, protocol)
+    if reason is None and mode == "byok" and start < today:  # a real round's rules are set before it starts
+        reason = "start_date_past"
+    link = product_link(session, ctx, ideas_row)
+    landing = answers.landing_page or link
+    if reason is None and not landing:
+        reason = "landing_page_required"
+    currency = answers.currency or plans.CURRENCY
+    max_rounds = answers.max_small_rounds or plans.MAX_SMALL_ROUNDS
+    conditions = plans.Conditions(
+        audience=answers.audience or ideas_export.confirmed_audience(session, ctx, ideas_row)
+        or (ideas_row.understanding_json or {}).get("audience") or "",
+        landing_page=landing or "", offer=answers.offer, placement=answers.placement, currency=currency,
+        max_small_rounds=max_rounds, media_budget=answers.media_budget)
+
+    try:
+        doc = Ideas.model_validate(ideas_row.ideas_json) if kept else None
+    except ValueError:  # stored ideas a later contract no longer reads: their ads are not exportable either
+        doc = None
+    comparison = plans.comparison_of(kept) if kept else None
+    # A kept ad of a claim or ad taken out of the ideas since (it needs making again) is not a compared object.
+    present = doc is not None and all(ad.angle_id in {a.id for a in doc.angles}
+                                      and ad.combination_id in {c.id for c in doc.combinations} for ad in kept)
+    items = plans.subjects(doc, kept, comparison) if kept and present else []
+    share = plans.estimate(len(items), answers.round_budget, answers.target_cost, protocol) if items else None
+    plan = None
+    if reason is None:
+        try:
+            plan = plans.build_plan(ideas_row, kept, answers, conditions, protocol)
+            plans.check_plan(ideas_row, plan)
+            FreezeRound(start_date=start, end_date=end, account_timezone=timezone, execution_mode=mode, protocol=protocol,
+                        attribution_window=answers.attribution_window or plans.ATTRIBUTION_WINDOW)
+        except ValidationError as exc:
+            reason, plan_error, plan = "plan_invalid", exc.errors()[0]["type"], None
+        except service.MarketingError as exc:
+            reason, plan_error, plan = "plan_invalid", exc.code, None
+    checks = checks_quote(session, ctx, mode or "byok", len(kept))
+    if reason is None and not checks["available"]:
+        reason = "checks_unavailable"
+    window = answers.attribution_window or plans.ATTRIBUTION_WINDOW
+    resolved = {**plans.as_dict(conditions), "account_timezone": timezone, "start_date": start.isoformat(),
+                "attribution_window": window, "execution_mode": mode}
+    digest = plans.quote_hash(ideas_row.revision, kept, answers, resolved, checks, protocol,
+                              plan.model_dump(mode="json") if plan else None)
+    return {"available": reason is None, "unavailable_reason": reason, "plan_error": plan_error,
+            "not_exportable": refused, "ideas_revision": ideas_row.revision, "execution_mode": mode,
+            "comparison": comparison,
+            "question": plans.question(doc, comparison, items, answers.target_cost, currency) if items else None,
+            "subjects": [{key: item[key] for key in ("kind", "angle_id", "expression_id", "title", "combination_ids",
+                                                     "asset_version_ids")}
+                         | {"budget": share["budget"], "expected_orders": share["expected_orders"]} for item in items],
+            "target_cost": plans.money(answers.target_cost), "round_budget": plans.money(answers.round_budget),
+            "currency": currency, "duration_days": answers.duration_days, "min_purchases": protocol.min_purchases,
+            "tier": share["tier"] if share else None, "needed_budget": share["needed_budget"] if share else None,
+            "suggested_subjects": share["suggested_subjects"] if share else None,
+            "start_date": start, "end_date": end, "conclusion_date": conclusion, "account_timezone": timezone,
+            "attribution_window": window, "attribution_lag_days": protocol.attribution_lag_days,
+            "landing_page": landing, "landing_page_source": ("answer" if answers.landing_page else "product_link") if landing else None,
+            "checks": {key: checks[key] for key in ("available", "unavailable_reason", "quantity", "maximum_cost", "currency")},
+            "quote_hash": digest}

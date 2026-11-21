@@ -1,17 +1,20 @@
 """Authenticated v1 endpoints for test projects (ADR 0019, #247).
 
-A test's rounds are read and driven by round id through ``api.py``; these endpoints read the test itself.
+A test's rounds are read and driven by round id through ``api.py``; these endpoints read the test itself, and
+quote a test of the kept ads of ads-first ideas before it starts (#248).
 """
-from fastapi import APIRouter, Depends, Header, Request, Response
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 
 from app.adapters.persistence.database import tenant_session
 from app.generation.v1_router import _idempotency_key, _resource_command
 from app.platform.etag import extract_if_match, set_etag
 from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
-from . import ad_test_schedule, ad_tests, workflow
-from .ad_tests_contracts import (EndMarketingTestRoundEarly, MarketingTestDetail, MarketingTestResult,
-    MarketingTestRoundSchedule, MoveMarketingTestStart)
+from . import ad_test_schedule, ad_tests, ideas, workflow
+from .ad_tests_contracts import (EndMarketingTestRoundEarly, MarketingTestAnswers, MarketingTestDetail,
+    MarketingTestQuote, MarketingTestResult, MarketingTestRoundSchedule, MoveMarketingTestStart)
 from .service import MarketingError
 
 router = APIRouter(prefix="/marketing/tests", tags=["marketing"])
@@ -79,3 +82,16 @@ def get_result(test_id: str, round_id: str, response: Response, ctx: TenantConte
         test, row = _test_round(session, ctx, test_id, round_id)
         set_etag(response, row.revision)
         return ad_test_schedule.result(session, ctx, test, row)
+
+
+#: Taking the kept ads of ads-first ideas to a test starts from the ideas (#248).
+ideas_router = APIRouter(prefix="/marketing/ideas", tags=["marketing"])
+
+
+@ideas_router.get("/{project_id}/test-quote", operation_id="get_marketing_test_quote", response_model=MarketingTestQuote)
+def get_test_quote(project_id: str, answers: Annotated[MarketingTestAnswers, Query()],
+                   ctx: TenantContext = Depends(request_tenant_context)):
+    """What a test of these ideas' kept ads would compare, whether the round's budget is enough for a verdict,
+    when the result is due and what starting costs at most. Reads only; the start command confirms its hash."""
+    with tenant_session(ctx) as session:
+        return ad_tests.quote(session, ctx, ideas.get_ideas_project(session, ctx, project_id), answers)

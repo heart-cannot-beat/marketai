@@ -6,7 +6,7 @@ import json
 import httpx
 from PIL import Image, ImageOps
 from app import config
-from .ai_qc_contracts import AICheckTranscribedReport, report_model
+from .ai_qc_contracts import AICheckFullTranscribedReport, AICheckTranscribedReport, report_model
 from . import ai_qc_text as text
 
 MAX_OUTPUT_TOKENS = 8192
@@ -44,7 +44,7 @@ def system_prompt(inputs):
         if inputs.get("kind") == "paired":
             return text.paired_prompt(language, output_schema(inputs))
         return text.single_prompt(inputs.get("required_checks", {}), language, output_schema(inputs),
-            transcribe=report_model(inputs) is AICheckTranscribedReport)
+            transcribe=issubclass(report_model(inputs), AICheckTranscribedReport))
     return legacy_prompt(inputs)
 
 
@@ -214,7 +214,9 @@ def simulated_completion(inputs, images):
     # Explicit mock scenario, in the call's own language. Never report a placeholder image as visually good.
     # A placeholder shows no copy, so a transcribing call transcribes nothing and the copy check stays unknown.
     mock = text.MOCK[text.record_language(inputs)]
-    return {**({"rendered_text": {"headline": "", "body_copy": ""}} if report_model(inputs) is AICheckTranscribedReport else {}),
+    model = report_model(inputs)
+    rendered = {"headline": "", "body_copy": "", **({"other_text": []} if model is AICheckFullTranscribedReport else {})}
+    return {**({"rendered_text": rendered} if issubclass(model, AICheckTranscribedReport) else {}),
         "summary": mock["summary"], "findings": [
         {"check_id": key, "status": "unknown", "confidence": "low", "visual_evidence": mock["visual_evidence"],
          "rationale": mock["rationale"], "suggested_fix": mock["suggested_fix"], "fact_ids": []}

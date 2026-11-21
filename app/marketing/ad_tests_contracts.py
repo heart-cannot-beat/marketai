@@ -6,12 +6,16 @@ web's generated validators reject unknown keys.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import Field
+from pydantic import Field, field_validator
+from pydantic_core import PydanticCustomError
 
-from .contracts import Document
-from .reporting import MediaCurrency
+from .contracts import Document, Text
+from .ideas_contracts import AdReason
+from .reporting import AttributionWindow, MediaCurrency
 
 
 class MarketingTestPlanSummary(Document):
@@ -121,3 +125,113 @@ class MarketingTestResult(Document):
     evaluated_at: str | None
     current: bool
     comparisons: list[MarketingTestComparisonResult]
+
+
+class MarketingTestAnswers(Document):
+    """What taking kept ads to a test asks (design §5.2): three answers, the landing page when the product has
+    no link, and any default the user changed. Read from the quote's query; the start command (#249) sends the
+    same answers with the quote hash it confirms."""
+    #: Cost per order at or under which an ad meets the goal: the plan's CPA threshold.
+    target_cost: Decimal = Field(gt=0, max_digits=14, decimal_places=2, allow_inf_nan=False)
+    #: This round's budget, split evenly across the compared objects.
+    round_budget: Decimal = Field(gt=0, max_digits=14, decimal_places=2, allow_inf_nan=False)
+    #: At least the protocol's ``min_days`` (7).
+    duration_days: int = Field(ge=7, le=90)
+    #: Where the ads send people; the product link when omitted. Required when the product has none.
+    landing_page: str | None = Field(default=None, max_length=2000, pattern=r"^https?://\S+$")
+    # The defaults (design §5.2), each changeable; omitted keeps the default.
+    audience: Text | None = None
+    offer: Text | None = None
+    placement: Text | None = None
+    currency: MediaCurrency | None = None
+    #: The ad account's time zone (the browser's); UTC when omitted.
+    account_timezone: str | None = Field(default=None, max_length=64)
+    #: Tomorrow in the ad account's time zone when omitted.
+    start_date: date | None = None
+    attribution_window: AttributionWindow | None = None
+    #: The whole test's limits: at most this many rounds (3) and this budget (three times this round's).
+    max_small_rounds: int | None = Field(default=None, ge=1, le=20)
+    media_budget: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2, allow_inf_nan=False)
+
+    @field_validator("account_timezone")
+    @classmethod
+    def known_timezone(cls, value):
+        if value is not None:
+            try:
+                ZoneInfo(value)
+            except (KeyError, ValueError) as exc:
+                raise PydanticCustomError("marketing_timezone_invalid", "无效的广告账户时区") from exc
+        return value
+
+
+class MarketingTestSubject(Document):
+    """One compared object: a claim, one way of telling a claim, or the one ad."""
+    kind: Literal["claim", "expression", "ad"]
+    angle_id: str
+    expression_id: str | None
+    #: The claim, or the way of telling it, in the ideas' strategy language.
+    title: str
+    combination_ids: list[str]
+    asset_version_ids: list[str]
+    #: Its equal share of this round's budget.
+    budget: str
+    #: Orders that share buys at exactly the target cost, rounded down.
+    expected_orders: int
+
+
+class MarketingTestChecks(Document):
+    """The "look together" check the start command admits (plan E6): one call per kept ad, paid in BYOK."""
+    available: bool
+    unavailable_reason: str | None
+    quantity: int
+    #: The most it can cost: the start button's "at most".
+    maximum_cost: str
+    currency: Literal["USD"] = "USD"
+
+
+class MarketingTestRefusedAd(Document):
+    asset_version_id: str
+    status: Literal["draft", "needs_redo"]
+    reasons: list[AdReason]
+
+
+class MarketingTestQuote(Document):
+    """Whether the money answers the round's question, when the result is due and what starting costs at most.
+
+    Read-only; the page shows these numbers and does not compute its own (design §5.6). ``available`` false
+    names why (``unavailable_reason``); a plan the confirming checks refuse names their code (``plan_error``)."""
+    available: bool
+    unavailable_reason: Literal["ideas_not_ready", "no_kept_ads", "ads_not_exportable", "ads_execution_mixed",
+                                "start_date_past", "landing_page_required", "plan_invalid", "checks_unavailable"] | None
+    plan_error: str | None
+    #: The kept ads that may not be exported yet, with why: check them before download first.
+    not_exportable: list[MarketingTestRefusedAd]
+    ideas_revision: int
+    execution_mode: Literal["byok", "mock"] | None
+    comparison: Literal["claims", "expressions", "single"] | None
+    #: The round's question, in the ideas' strategy language.
+    question: str | None
+    subjects: list[MarketingTestSubject]
+    target_cost: str
+    round_budget: str
+    currency: MediaCurrency
+    duration_days: int
+    #: Orders each compared object needs for a verdict (the protocol's ``min_purchases``).
+    min_purchases: int
+    #: Enough for a verdict, a direction only, or a rough read only.
+    tier: Literal["enough", "direction", "rough"] | None
+    #: What a verdict on every compared object needs: objects x ``min_purchases`` x target cost.
+    needed_budget: str | None
+    #: Short of enough: compare this many and each would get enough.
+    suggested_subjects: int | None
+    start_date: date
+    end_date: date
+    #: The day the result is due: the last day plus the attribution wait, plus one.
+    conclusion_date: date
+    account_timezone: str
+    attribution_window: AttributionWindow
+    attribution_lag_days: int
+    landing_page: str | None
+    landing_page_source: Literal["product_link", "answer"] | None
+    checks: MarketingTestChecks
+    quote_hash: str

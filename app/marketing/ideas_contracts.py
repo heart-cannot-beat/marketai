@@ -106,6 +106,9 @@ class IdeasCheckFinding(Document):
     fact_ids: list[str]
     unsupported_claims: list[str] = Field(default_factory=list)
     rendered_text_diff: list[RenderedCopyDifference] = Field(default_factory=list)
+    # facts_supported of a v2 check (#265): what the image shows besides its copy, verbatim; the ad's facts do not
+    # stand behind these words (``gate_reason`` ``extra_text`` or ``extra_text_unsupported``).
+    extra_text: list[str] = Field(default_factory=list)
 
 
 class IdeasAdCheck(Document):

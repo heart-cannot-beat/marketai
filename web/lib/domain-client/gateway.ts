@@ -1093,6 +1093,12 @@ export interface DomainGateway {
     projectId: string;
     executionMode?: 'byok' | 'mock';
   }): Promise<DomainResultFor<'get_marketing_ideas_checks_quote'>>;
+  /** What taking the kept ads to a test compares, whether the budget is enough and what starting costs at most (#248). */
+  getMarketingTestQuote(params: {
+    workspaceSlug: string;
+    projectId: string;
+    query: DomainOperationMap['get_marketing_test_quote']['queryParams'];
+  }): Promise<DomainResultFor<'get_marketing_test_quote'>>;
   /** Check the ads the quote counted; each result is a suggestion on its ad (#197). */
   startMarketingIdeasChecks(params: {
     workspaceSlug: string;
@@ -5155,6 +5161,19 @@ export class DefaultDomainGateway implements DomainGateway {
         slug: params.workspaceSlug,
         project_id: params.projectId,
       }) + this.buildQuery({ execution_mode: params.executionMode })
+    );
+  }
+
+  async getMarketingTestQuote(params: {
+    workspaceSlug: string;
+    projectId: string;
+    query: DomainOperationMap['get_marketing_test_quote']['queryParams'];
+  }): Promise<DomainResultFor<'get_marketing_test_quote'>> {
+    return this.sendSafe<'get_marketing_test_quote'>(
+      buildBffPath('get_marketing_test_quote', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }) + this.buildQuery(params.query)
     );
   }
 

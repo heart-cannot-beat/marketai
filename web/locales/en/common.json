@@ -931,6 +931,8 @@
   "marketing-ai-qc-gate-brand_logo_missing": "The original brand logo is no longer available, so the logo in the image cannot be checked.",
   "marketing-ai-qc-gate-rendered_text_mismatch": "The text in the image differs from the confirmed copy.",
   "marketing-ai-qc-gate-rendered_text_missing": "The check could not read all of the headline and body in the image, so the copy could not be compared.",
+  "marketing-ai-qc-gate-extra_text": "The image shows words besides the headline and body. Confirm each is backed by the facts, or make the image again without them.",
+  "marketing-ai-qc-gate-extra_text_unsupported": "Words in the image besides the headline and body state a number, price or certification the facts don't.",
   "marketing-ai-qc-copy-field-headline": "Headline",
   "marketing-ai-qc-copy-field-body_copy": "Body text",
   "marketing-ai-qc-copy-confirmed": "Confirmed: {{text}}",

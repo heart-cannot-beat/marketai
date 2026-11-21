@@ -2187,6 +2187,36 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'get_marketing_test_quote',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/test-quote',
+    fastapiPathTemplate: '/api/v1/marketing/ideas/{project_id}/test-quote',
+    pathParams: ['project_id'],
+    querySchema: z
+      .object({
+        target_cost: z.string(),
+        round_budget: z.string(),
+        duration_days: z.coerce.number().int().min(7).max(90),
+        landing_page: z.string().optional(),
+        audience: z.string().optional(),
+        offer: z.string().optional(),
+        placement: z.string().optional(),
+        currency: z.string().optional(),
+        account_timezone: z.string().optional(),
+        start_date: z.string().optional(),
+        attribution_window: z.string().optional(),
+        max_small_rounds: z.string().optional(),
+        media_budget: z.string().optional(),
+      })
+      .strict(),
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 131072,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: false,
+  },
+  {
     operationId: 'get_marketing_test_result',
     method: 'GET',
     bffPattern:
