@@ -82,8 +82,9 @@ def full_report_round(session, ctx, row):
     """Whether ``row`` is a test project's round, which takes full reports (step 2 design §5.7, #251)."""
     from .ad_tests import FLOW
     from .models import MarketingProjectRecord as Project
-    return session.scalar(select(Project.flow).where(Project.workspace_id == ctx.workspace_id,
-                                                     Project.id == row.project_id)) == FLOW
+    # By primary key: the reads that count rows have usually loaded the project already, so this costs no query.
+    project = session.get(Project, row.project_id)
+    return bool(project and project.workspace_id == ctx.workspace_id and project.flow == FLOW)
 
 
 def counted_report_rows(session, ctx, row):
@@ -910,7 +911,9 @@ def workflow_dict(session, ctx, project_id, *, include_image_edits=False, includ
                   include_text_language=False, include_reuse_lineage=False):
     from .workflow_models import MarketingImageEditRecord
     from .ai_qc_models import MarketingAIQCRecord
-    get_project(session, ctx, project_id)
+    # Held for the whole read: the session keeps only weak references, and counting each round's rows looks the
+    # project up again by its key (``full_report_round``), which then costs no query.
+    project = get_project(session, ctx, project_id)  # noqa: F841
     rounds = sorted(scoped(session, ctx, Round, project_id=project_id), key=lambda r: r.ordinal)
     busy = False
     if rounds:
