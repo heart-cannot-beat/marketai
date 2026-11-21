@@ -931,6 +931,8 @@
   "marketing-ai-qc-gate-brand_logo_missing": "品牌 Logo 原件已不可用，无法核对图中的 Logo。",
   "marketing-ai-qc-gate-rendered_text_mismatch": "图中文字与已确认文案不一致。",
   "marketing-ai-qc-gate-rendered_text_missing": "检查没能读出图中的全部标题与正文，无法比对文案。",
+  "marketing-ai-qc-gate-extra_text": "图中除了标题和正文还有别的字。请确认每一处都有事实依据，或去掉它们重新出图。",
+  "marketing-ai-qc-gate-extra_text_unsupported": "图中标题和正文以外的字写了事实里没有的数字、价格或认证。",
   "marketing-ai-qc-copy-field-headline": "标题",
   "marketing-ai-qc-copy-field-body_copy": "正文",
   "marketing-ai-qc-copy-confirmed": "已确认：{{text}}",

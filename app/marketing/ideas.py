@@ -25,6 +25,9 @@ FLOW = "ads_first"
 FIRST_BATCH = {"angles": 3, "expressions": 2, "combinations": 1}
 #: States from which ideas may be drafted: an understanding exists, checked or not (ADR 0018 §1).
 DRAFTABLE = ("understanding_draft", "ideas_ready")
+#: The rules an ad's image prompt was written under, kept on its draft (``selectors.prompt_policy``): from v2 the
+#: image may show no words besides the copy (#265). A draft without it was prepared under v1 and keeps that prompt.
+PROMPT_POLICY = "ideas-brief-v2"
 
 
 def _product_anchor(session, ctx, product_id):
@@ -358,7 +361,7 @@ def selection_intent(session, ctx, project, link, draft) -> dict:
     except service.MarketingError as exc:
         raise SelectionError(exc.code, exc.detail) from None
     written = _prompt(combo, current, kit, logo=bool(selectors.get("brand_logo")),
-                      references=bool(selectors.get("product_references")))
+                      references=bool(selectors.get("product_references")), policy=selectors.get("prompt_policy"))
     if selectors.get("prompt") != written:
         raise SelectionError("ideas_prompt_changed", "这张广告的出图说明被改过。新开头的广告只按主张出图，请重新准备这张广告。")
     assert_photos_usable(session, ctx, project, selectors.get("product_references"))
@@ -376,12 +379,15 @@ def assert_photos_usable(session, ctx, project, references) -> None:
         raise SelectionError("product_reference_changed", "这张广告用到的产品照片已被否定或已不可用，请按当前的照片重新准备。")
 
 
-def _prompt(combo, intent, kit, *, logo: bool, references: bool) -> str:
-    """The image prompt the application writes for one ad of the ideas: nothing a client supplies."""
+def _prompt(combo, intent, kit, *, logo: bool, references: bool, policy: str | None) -> str:
+    """The image prompt the application writes for one ad of the ideas under ``policy``: nothing a client supplies.
+
+    ``None`` is a draft prepared before ``PROMPT_POLICY`` was recorded: its exact v1 prompt."""
     from . import brand_kits
     from .product_references import REFERENCE_BRIEF
     brand = brand_kits.brief_lines(kit.content_json, logo_supplied=logo) if kit else ()
-    return service.image_brief(combo, intent, brand=brand) + ("\n" + REFERENCE_BRIEF if references else "")
+    return (service.image_brief(combo, intent, brand=brand, only_copy_text=policy == PROMPT_POLICY)
+            + ("\n" + REFERENCE_BRIEF if references else ""))
 
 
 def check_intent(session, ctx, intent, references=()):
@@ -445,12 +451,12 @@ def generation_drafts(session, ctx, row, revision, provider, model, format_confi
         if combo.image_brief is None:  # drafted ideas always have one (``checked_ideas``)
             raise service.MarketingError("image_brief_language_mismatch", "Write the English image brief for every ad.")
         intent = ideas_intent(row, combo.id)
-        prompt = _prompt(combo, intent, kit, logo=bool(logo), references=bool(references))
+        prompt = _prompt(combo, intent, kit, logo=bool(logo), references=bool(references), policy=PROMPT_POLICY)
         if len(prompt) > MAX_PROMPT_LENGTH:
             raise service.MarketingError("ad_brief_too_long", "这张广告的画面说明太长，请重新起草主张。")
         draft = create_draft(session, ctx, product_id=row.product_id, provider=provider, model=model,
             execution_mode="mock" if provider == "mock" else "byok", combination_strategy={"mode": "single"},
-            format_config=format_config, selectors={"prompt": prompt, "marketing_intent": intent,
+            format_config=format_config, selectors={"prompt": prompt, "prompt_policy": PROMPT_POLICY, "marketing_intent": intent,
                 "product_references": references, "reference_actor_id": ctx.initiator_id or ctx.executor,
                 **({"brand_logo": logo} if logo else {})})
         session.add(MarketingGenerationLinkRecord(id=new_id("mgl"), workspace_id=ctx.workspace_id, project_id=row.id,

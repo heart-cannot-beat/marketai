@@ -15,10 +15,13 @@ def _normalize_grouped_quantities(value):
     )
 
 
+_CURRENCY_SYMBOLS = "$€£¥"
 _PATTERNS = (
     r"(?<![A-Za-z0-9])(?:UL|IEC|ISO|EN)\s*[-:]?\s*\d{2,6}(?:[-.]\d+)*",
     rf"(?<![A-Za-z0-9])\d+(?:\.\d+)?\s*(?:{_UNITS})(?![A-Za-z])",
-    r"[$€£¥]\s*\d+(?:[.,]\d+)*",
+    # A price keeps the uppercase currency prefix written onto its symbol ("US$449", "HK$1299", #243);
+    # a word glued to the symbol ("plus$5") is no prefix.
+    rf"(?:(?<![A-Za-z0-9])(?-i:[A-Z]{{1,3}}))?[{_CURRENCY_SYMBOLS}]\s*\d+(?:[.,]\d+)*",
 )
 #: "3x faster", "快 3 倍": a comparison is a literal claim too, though not a measurement (#224).
 _MULTIPLIER = r"(?<![A-Za-z0-9.])\d+(?:\.\d+)?\s*(?:x|×|倍|times)(?![A-Za-z])"
@@ -27,8 +30,36 @@ _MULTIPLIER = r"(?<![A-Za-z0-9.])\d+(?:\.\d+)?\s*(?:x|×|倍|times)(?![A-Za-z])"
 def _mentions(claim, text):
     """Whether ``text`` states this literal claim, whitespace and case aside."""
     value = re.sub(r"\s+", "", claim).casefold()
-    before = r"(?<![0-9])" if value[0].isdigit() else r"(?<![a-z0-9])"
+    if value[0].isdigit():
+        before = r"(?<![0-9])"
+    elif value[0] in _CURRENCY_SYMBOLS:
+        # A bare symbol names no currency, so "$449" is in "US$449" too; a prefixed price
+        # ("C$59") still needs its own prefix (#243).
+        before = r"(?:(?<![a-z0-9])[a-z]{1,3}|(?<![a-z0-9]))"
+    else:
+        before = r"(?<![a-z0-9])"
     pattern = before + r"\s*".join(re.escape(c) for c in value) + r"(?![a-z0-9])"
+    return re.search(pattern, text, re.IGNORECASE) is not None or _mentions_in_english(value, text)
+
+
+#: The English spellings of the Chinese units a Chinese fact translates from an English source (#244).
+#: They support a Chinese claim; on their own they are not claims, so no English sentence gets stricter.
+_ENGLISH_UNITS = {
+    "英里": r"miles?|mi",
+    "公里": r"km|kilomet(?:er|re)s?",
+    "小时": r"hours?|hrs?|h",
+    "分钟": r"minutes?|mins?",
+}
+
+
+def _mentions_in_english(value, text):
+    """Whether ``text`` states the measurement ``value`` ("25英里") in English ("25 miles", "25-mile")."""
+    match = re.fullmatch(rf"(\d+(?:\.\d+)?)({'|'.join(_ENGLISH_UNITS)})", value)
+    if match is None:
+        return False
+    number, unit = match.groups()
+    text = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text)
+    pattern = rf"(?<![0-9.]){re.escape(number)}[\s-]*(?:{_ENGLISH_UNITS[unit]})(?![a-z0-9])"
     return re.search(pattern, text, re.IGNORECASE) is not None
 
 
