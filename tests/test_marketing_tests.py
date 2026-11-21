@@ -309,7 +309,7 @@ class TestProjectMigrationDowngradeTests(unittest.TestCase):
             return {row[1] for row in connection.execute("PRAGMA table_info(marketing_projects)")}
 
     def test_downgrade_without_test_projects_drops_the_column(self):
-        downgraded = self.alembic("downgrade", "zzr233a1b2c3")
+        downgraded = self.alembic("downgrade", "zzs241a1b2c3")
         self.assertEqual(downgraded.returncode, 0, downgraded.stderr)
         self.assertNotIn("source_project_id", self.columns())
         with sqlite3.connect(self.database) as connection:
@@ -324,7 +324,7 @@ class TestProjectMigrationDowngradeTests(unittest.TestCase):
             connection.execute("INSERT INTO marketing_projects (id, workspace_id, revision, state, source_text, flow,"
                                " source_project_id, created_at, updated_at) VALUES ('mp_2', 'ws_1', 1, 'plan_confirmed',"
                                " 'Acme Charge', 'ads_test', 'mp_1', '2026-11-21', '2026-11-21')")
-        downgraded = self.alembic("downgrade", "zzr233a1b2c3")
+        downgraded = self.alembic("downgrade", "zzs241a1b2c3")
         self.assertNotEqual(downgraded.returncode, 0)
         self.assertIn("ads_test projects exist", downgraded.stderr)
         self.assertIn("source_project_id", self.columns())

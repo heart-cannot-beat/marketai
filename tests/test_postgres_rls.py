@@ -885,6 +885,21 @@ class RowLevelSecurityTests(unittest.TestCase):
         ).all()
         self.assertEqual([b.provider for b in bindings], ["meta"])
 
+    def test_both_runtime_roles_tell_whether_the_workspace_has_a_key(self):
+        """The Worker admits a first batch's next steps (#193) and checks the Workspace's key there the
+        way the API does, through the ``workspace_provider_bindings`` view (#241). Under one
+        Workspace's scope the view says nothing about another's key."""
+        from app.generation.selection import credential_binding
+        from app.platform.tenancy import apply_to_session
+
+        for url in (API_URL, WORKER_URL):
+            with self.subTest(role=url.split("://", 1)[1].split(":", 1)[0]):
+                session = self.orm_session(url)
+                apply_to_session(session, self.context(self.alpha))
+                found = credential_binding(session, self.context(self.alpha), "meta")
+                self.assertEqual((found[0].id, found[0].revision), (self.alpha_binding, 1))
+                self.assertIsNone(credential_binding(session, self.context(self.beta), "meta"))
+
     def test_generation_drafts_are_tenant_scoped_and_api_writable(self):
         conn = self.scoped_connection(self.engine(API_URL), self.alpha)
 

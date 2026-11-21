@@ -1382,7 +1382,6 @@
   "error-marketing_first_batch_failed": "A step of the first ads did not finish. Check its status.",
   "error-source_required": "Add more about the product before continuing.",
   "error-reading_failed": "What was read could not be saved as a product. Start again with pasted text or screenshots.",
-  "error-advance_failed": "A step could not be started. Continue to try it again.",
   "error-ad_brief_too_long": "This ad’s image description is too long. Draft the claims again.",
   "error-plan_review_unresolved": "Handle the blocking plan checks and answer the guiding questions before confirming.",
   "error-expression_details_required": "Add how to tell, the visual mechanism and the evidence basis for every expression, then reconfirm the plan.",

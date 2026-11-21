@@ -62,13 +62,16 @@ class SqliteOnlyWrite:
     """A statement only the SQLite path sends; ``site`` is the
     ``module:qualname`` of the function that sends it. ``when`` is
     ``(argument, value)`` when only calls with that argument take the
-    SQLite-only path."""
+    SQLite-only path. ``postgres_reads`` names the relation PostgreSQL reads
+    in its place: every role that calls the site on that path needs SELECT on
+    it, even a role SQLite lets read ``table`` itself (#241)."""
 
     table: str
     operation: str
     site: str
     reason: str
     when: tuple[str, object] | None = None
+    postgres_reads: str | None = None
 
 
 @dataclass(frozen=True)
@@ -102,9 +105,10 @@ _PLATFORM_WORKSPACE = (
 )
 
 _BINDINGS_VIEW = (
-    "PostgreSQL answers the API from the workspace_provider_bindings view (binding id and "
-    "revision, no secret column); only SQLite, which has no such view, reads the binding "
-    "and credential records themselves. include_secret=True (Worker) reads them everywhere"
+    "PostgreSQL answers whether a Workspace has a key from the workspace_provider_bindings view "
+    "(binding id and revision, no secret column), for the API and for the Worker admitting a first "
+    "batch's next step (#193, #241); only SQLite, which has no such view, reads the binding and "
+    "credential records themselves. include_secret=True (Worker) reads them everywhere"
 )
 
 _SETTLED_TOTAL = (
@@ -129,7 +133,7 @@ SQLITE_ONLY_WRITES: tuple[SqliteOnlyWrite, ...] = (
     ),
     SqliteOnlyWrite(
         "credential_versions", "SELECT", "app.generation.selection:credential_binding",
-        _BINDINGS_VIEW, when=("include_secret", False),
+        _BINDINGS_VIEW, when=("include_secret", False), postgres_reads="workspace_provider_bindings",
     ),
 )
 
@@ -473,6 +477,7 @@ _WHY = {
     "read": ", which the statement reads",
     "where": ", which the write's WHERE or SET expressions read",
     "lock": "",
+    "postgres": ", which PostgreSQL reads in place of {instead_of}",
 }
 
 
@@ -486,6 +491,8 @@ class Violation:
     site: str
     why: str = "write"
     reported: bool = False
+    #: For ``why == "postgres"``: the table SQLite reads instead.
+    instead_of: str | None = None
 
     def describe(self) -> str:
         columns = f" ({', '.join(sorted(self.columns))})" if self.columns else ""
@@ -495,7 +502,8 @@ class Violation:
                 "UPDATE/SHARE needs to lock its rows,"
             )
         else:
-            grant = f"no {self.operation} grant on {self.table}{columns}{_WHY[self.why]}"
+            why = _WHY[self.why].format(instead_of=self.instead_of)
+            grant = f"no {self.operation} grant on {self.table}{columns}{why}"
         return (
             f"{self.role} has {grant} in deploy/postgres/domain-tenant-roles.sql\n"
             f"    first made by {self.test}\n"
@@ -561,6 +569,7 @@ class GrantGuard:
         self._sqlite_sites: dict[tuple[str, str], dict[str, tuple[str, object] | None]] = {}
         for entry in self.sqlite_only:
             self._sqlite_sites.setdefault((entry.table, entry.operation), {})[entry.site] = entry.when
+        self._postgres_paths = tuple(entry for entry in self.sqlite_only if entry.postgres_reads)
         if os.environ.get("MARKETAI_GRANT_GUARD_PROFILE") == "1":
             self.unmarked_entries = Counter()
 
@@ -589,6 +598,8 @@ class GrantGuard:
             tally.count += 1
         for need in refused:
             self._refused(role, *need)
+        if role is not None and self._postgres_paths:
+            self._check_postgres_paths(role, plan)
         if role is None and self.unmarked_entries is not None:
             for operation, table, _columns in plan.writes:
                 if operation != "SELECT":
@@ -646,6 +657,20 @@ class GrantGuard:
             tally = self.seen[key] = _Tally(first_test=self.current_test())
         return tally
 
+    def _check_postgres_paths(self, role, plan: _Plan) -> None:
+        """A statement only SQLite sends stands for one PostgreSQL sends in
+        its place; the role needs that one's grant too, or PostgreSQL refuses
+        what SQLite let through (#241)."""
+        for entry in self._postgres_paths:
+            if self.matrix.allows(role, entry.postgres_reads, "SELECT"):
+                continue
+            if entry.operation == "SELECT":
+                sent = any(read.table == entry.table for read in plan.reads)
+            else:
+                sent = any(op == entry.operation and table == entry.table for op, table, _ in plan.writes)
+            if sent and _stack_contains({entry.site: entry.when}):
+                self._violation(role, "SELECT", entry.postgres_reads, None, "postgres", instead_of=entry.table)
+
     def _refused(self, role, operation, table, columns, why) -> None:
         sites = self._sqlite_sites.get((table, operation))
         if sites and _stack_contains(sites):
@@ -655,13 +680,16 @@ class GrantGuard:
         if gap_sites and _stack_contains(gap_sites):
             self.exempted[("known-gap", role, operation, table)] += 1
             return
+        self._violation(role, operation, table, columns, why)
+
+    def _violation(self, role, operation, table, columns, why, *, instead_of=None) -> None:
         # One violation per sending line: a second site with the same
         # missing grant is reported too, not hidden behind the first.
         site = _app_site()
         key = (role, operation, table, columns, site)
         if key not in self.violations:
             self.violations[key] = Violation(
-                role, table, operation, columns, self.current_test(), site, why
+                role, table, operation, columns, self.current_test(), site, why, instead_of=instead_of
             )
 
     # -- reporting ------------------------------------------------------

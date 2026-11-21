@@ -881,8 +881,11 @@ BEGIN
   IF to_regclass('public.spend_guardrails') IS NOT NULL THEN
     EXECUTE 'GRANT SELECT, UPDATE (workspace_id) ON public.spend_guardrails TO marketai_domain_worker';
   END IF;
+  -- Whether a Workspace has a key, without a secret column: the API, and the Worker when it admits
+  -- a first batch's next step (#193, #241).
   IF to_regclass('public.workspace_provider_bindings') IS NOT NULL THEN
     EXECUTE 'GRANT SELECT ON public.workspace_provider_bindings TO marketai_domain_api';
+    EXECUTE 'GRANT SELECT ON public.workspace_provider_bindings TO marketai_domain_worker';
   END IF;
 
   -- Projection function: API only.

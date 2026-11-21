@@ -63,8 +63,8 @@ from app.platform.tenancy import TenantContext
 ROOT = Path(__file__).resolve().parents[1]
 REVISION, DOWN_REVISION = "zzk145a1b2c3", "zzj113a1b2c3"
 #: The current head: zzl148a1b2c3 (#148), zzm189a1b2c3 (#189), zzn193a1b2c3 (#193), zzo197a1b2c3 (#197),
-#: zzp198a1b2c3 (#198), zzq200a1b2c3 (#200), zzr233a1b2c3 (#233) and zzs247a1b2c3 (#247) follow the checks and leave
-#: usage_events alone.
+#: zzp198a1b2c3 (#198), zzq200a1b2c3 (#200), zzr233a1b2c3 (#233), zzs241a1b2c3 (#241) and zzs247a1b2c3 (#247)
+#: follow the checks and leave usage_events alone.
 HEAD = "zzs247a1b2c3"
 WORKSPACE = "ws_usage_checks"
 CTX = TenantContext(workspace_id=WORKSPACE, role="owner", initiator_id="owner_c",

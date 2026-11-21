@@ -1382,7 +1382,6 @@
   "error-marketing_first_batch_failed": "第一批广告有一步没有完成，请查看状态。",
   "error-source_required": "请先补充产品资料再继续。",
   "error-reading_failed": "读到的内容存不成产品，请贴文字或截图重新开始。",
-  "error-advance_failed": "有一步没能开始，请点继续再试一次。",
   "error-ad_brief_too_long": "这张广告的画面说明太长，请重新起草主张。",
   "error-plan_review_unresolved": "确认前请先处理方案检查中的阻塞项，并回答引导问题。",
   "error-expression_details_required": "请为每种表达方式补充怎么讲、视觉机制和证据依据，然后重新确认方案。",

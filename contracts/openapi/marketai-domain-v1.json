@@ -31565,6 +31565,7 @@
               "over_budget",
               "ideas_refused",
               "step_failed",
+              "fault",
               "uncertain"
             ]
           },
@@ -31835,6 +31836,7 @@
                   "over_budget",
                   "ideas_refused",
                   "step_failed",
+                  "fault",
                   "uncertain"
                 ]
               },
@@ -32047,6 +32049,7 @@
                   "over_budget",
                   "ideas_refused",
                   "step_failed",
+                  "fault",
                   "uncertain"
                 ]
               },

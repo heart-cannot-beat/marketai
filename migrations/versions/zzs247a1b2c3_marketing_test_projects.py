@@ -1,7 +1,7 @@
 """Test projects name the ads-first ideas they came from (#247, ADR 0019, step 2 design §5.1).
 
 Revision ID: zzs247a1b2c3
-Revises: zzr233a1b2c3
+Revises: zzs241a1b2c3
 
 Taking kept ads to a test opens a new marketing project with ``flow = "ads_test"`` under the same
 product (a "test project"). ``marketing_projects`` gains ``source_project_id``: the ads-first ideas
@@ -21,7 +21,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "zzs247a1b2c3"
-down_revision = "zzr233a1b2c3"
+down_revision = "zzs241a1b2c3"
 branch_labels = None
 depends_on = None
 

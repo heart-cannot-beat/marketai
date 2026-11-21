@@ -8450,6 +8450,7 @@ export interface components {
         | 'over_budget'
         | 'ideas_refused'
         | 'step_failed'
+        | 'fault'
         | 'uncertain';
       /** @enum {string} */
       step: 'reading' | 'understanding' | 'ideas' | 'images' | 'checks';
@@ -8524,6 +8525,7 @@ export interface components {
             | 'over_budget'
             | 'ideas_refused'
             | 'step_failed'
+            | 'fault'
             | 'uncertain'
           )
         | null;
@@ -8600,6 +8602,7 @@ export interface components {
             | 'over_budget'
             | 'ideas_refused'
             | 'step_failed'
+            | 'fault'
             | 'uncertain'
           )
         | null;
