@@ -17,8 +17,10 @@ queues through ``notify``; ``resume`` runs it in the request after the user acte
 The batch stops and waits for the user (``needs_attention``) when the page lists several models, when
 the ideas have fewer than 2 claims (no images then), when the next step would pass the confirmed number,
 when the ideas were refused twice, when a step failed, or while a call's outcome is uncertain (an
-uncertain call is never sent again on its own). A page that cannot be read ends the batch (``failed``):
-the remedy is to start again with pasted text or screenshots.
+uncertain call is never sent again on its own). It also stops when the advance itself kept failing
+(``fault``, #269): an error of ours, not of a step, so continuing from it confirms no higher number. A
+page that cannot be read ends the batch (``failed``): the remedy is to start again with pasted text or
+screenshots.
 """
 from __future__ import annotations
 
@@ -55,7 +57,7 @@ QUOTE_VERSION = "first-batch-v1"
 #: Run item states of an image still being made.
 IMAGE_IN_FLIGHT = ("pending", "queued", "running", "qc_pending", "paused")
 #: Stops the user can continue from; the others end the batch or wait for a reconciliation.
-RESUMABLE = ("several_models", "too_few_claims", "over_budget", "ideas_refused", "step_failed")
+RESUMABLE = ("several_models", "too_few_claims", "over_budget", "ideas_refused", "step_failed", "fault")
 
 
 def _money(value: Decimal) -> str:
@@ -323,14 +325,18 @@ STEP_OF_STATE = {"reading": "reading", "understanding": "understanding", "ideas"
 
 @runs_as(WORKER_ROLE)
 def record_fault(ctx, batch_id: str) -> None:
-    """The advance Job failed on its last attempt: stop, so the user can continue it (``resume``)."""
+    """The advance Job failed on its last attempt: stop as ``fault``, so the user can continue it (``resume``).
+
+    The advance only writes this database and catches every refusal it can name (``_admission_errors``),
+    so what reaches here is an error of ours -- in the code or the database -- that the Job's own retries
+    did not get past, not a step that failed (#269). The step is where the batch was when it happened."""
     with tenant_session(ctx) as session:
         try:
             batch = get(session, ctx, batch_id, lock=True)
         except service.MarketingError:
             return
         if batch.state in ACTIVE:
-            _stop(session, ctx, batch, "step_failed", STEP_OF_STATE[batch.state], code="advance_failed")
+            _stop(session, ctx, batch, "fault", STEP_OF_STATE[batch.state])
 
 
 def advance(session, ctx, batch, *, resumed: bool = False) -> None:
@@ -744,7 +750,10 @@ def resume_offer(session, ctx, batch) -> dict | None:
     """What continuing from this stop needs and costs at most, or ``None`` when it cannot continue now.
 
     The maximum is the whole batch's new confirmed number: what was reserved so far plus the rest of
-    the steps from where it stopped. Continuing confirms it, like the start button."""
+    the steps from where it stopped. Continuing confirms it, like the start button. After a ``fault`` it
+    is the number already confirmed (#269): no step failed, and the step it names has mostly finished,
+    so counting it again would charge the user for our error. A step that then does not fit stops as
+    ``over_budget``, like any other."""
     attention = batch.attention_json or {}
     reason, step = attention.get("reason"), attention.get("step")
     if batch.state != "needs_attention":
@@ -764,7 +773,9 @@ def resume_offer(session, ctx, batch) -> dict | None:
         return None
     retries = 0 if (batch.progress_json or {}).get("ideas_retry_used") else IDEAS_RETRIES
     concerned = len(attention.get("combination_ids") or []) or ADS
-    if step == "checks":
+    if reason == "fault":
+        remaining = Decimal(0)
+    elif step == "checks":
         remaining = check * concerned
     elif step == "images":
         remaining = unit * concerned + check * ADS

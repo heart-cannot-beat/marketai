@@ -905,7 +905,7 @@ class WorkerRuntime:
             logger.exception("marketing_first_batch_advance_failed",
                              extra={"workspace_id": job.context.workspace_id, "job_id": job.id})
             if job.attempt >= job.max_attempts:
-                try:  # no retry is left: the batch waits for the user instead of staying silent
+                try:  # no retry is left: the batch waits for the user as our own fault (#269), not silently
                     record_fault(job.context, batch_id)
                 except Exception:
                     logger.exception("marketing_first_batch_fault_not_recorded",

@@ -162,6 +162,8 @@
   "stop-ideas_refused-body": "两次起草的主张都不合规则，所以先停下，不自动再试。可以让它再起草一次。",
   "stop-step_failed-title": "“{{step}}”这一步没成功",
   "stop-step_failed-body": "可能是暂时的问题。重试只会重做这一步。",
+  "stop-fault-title": "做到“{{step}}”时，我们这边出了错",
+  "stop-fault-body": "是我们系统出的错，不是你的资料或 AI 服务的问题。已经自动重试过几次都没成功，现在再试多半还是一样，要等我们修好；可以先告诉管理员。再试不会提高你确认的最高费用。",
   "stop-images-failed-title": "有 {{count}} 张广告没出成功",
   "stop-images-failed-title_one": "有 {{count}} 张广告没出成功",
   "stop-images-failed-body": "重试只会重出这几张，已经出好的不变。",

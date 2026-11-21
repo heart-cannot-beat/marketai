@@ -98,8 +98,9 @@ export function progressSteps(
  * - `start_again`: the batch ended (the page could not be read, or what was
  *   read could not become a product); paste text or a screenshot instead.
  * - `add_material`: too little to carry two claims; add material, continue.
- * - `continue`: a refused draft, a failed step or the confirmed maximum;
- *   continuing confirms the new maximum.
+ * - `continue`: a refused draft, a failed step, the confirmed maximum, or an
+ *   error of ours between steps (`fault`, #269); continuing confirms the new
+ *   maximum, which after a `fault` is the one already confirmed.
  * - `uncertain`: a call's result is unknown; it is never sent again on its
  *   own, so there is a way on only once it has been reconciled.
  */
@@ -135,6 +136,7 @@ const KIND_OF_REASON: Record<StopReason, StopKind> = {
   over_budget: 'continue',
   ideas_refused: 'continue',
   step_failed: 'continue',
+  fault: 'continue',
   uncertain: 'uncertain',
 };
 

@@ -20,7 +20,7 @@ from sqlalchemy import func, select, update
 from app import config
 from app.adapters.blob_store_local import LocalFileBlobStore
 from app.adapters.persistence.database import platform_session, tenant_session
-from app.adapters.persistence.models import (GenerationRunRecord, JobRecord, LibraryEntryRecord,
+from app.adapters.persistence.models import (AuditEventRecord, GenerationRunRecord, JobRecord, LibraryEntryRecord,
                                             OperationRecord, ProductIntakeRecord, ProductRecord, new_id, utcnow)
 from app.entitlements.cost_models import SpendReservationRecord
 from app.entitlements.credential_admin import CredentialAdmin
@@ -871,15 +871,82 @@ class FirstBatchFaultTests(FirstBatchFixtures):
     def test_an_advance_failing_on_its_last_attempt_waits_for_the_user(self):
         batch = self.start()
         self.drain(job_types=("products.intake",))
-        with platform_session() as session:  # the advance Job's last attempt
-            session.execute(update(JobRecord).where(JobRecord.workspace_id == self.context.workspace_id,
-                                                    JobRecord.type == first_batch.JOB_TYPE).values(max_attempts=1))
-        with patch("app.marketing.first_batch.advance", side_effect=RuntimeError("database went away")):
+        last_attempt(self.context)
+        with patch("app.marketing.first_batch.advance", side_effect=RuntimeError("permission denied for view x")):
             self.drain(job_types=("marketing.first_batch",))
         stopped = self.batch(batch["id"])
+        # Our own fault, not a step's (#269): no step failed, so there is no step's code to name.
         self.assertEqual((stopped["state"], stopped["attention"]["reason"], stopped["attention"]["code"]),
-                         ("needs_attention", "step_failed", "advance_failed"))
+                         ("needs_attention", "fault", None))
         self.assertEqual(stopped["attention"]["step"], "reading")
+        self.assertTrue(stopped["attention"]["resumable"])
+        with tenant_session(self.context) as session:
+            stops = session.scalars(select(AuditEventRecord.details_json).where(
+                AuditEventRecord.workspace_id == self.context.workspace_id, AuditEventRecord.resource_id == batch["id"],
+                AuditEventRecord.event_type == "marketing.first_batch_stopped")).all()
+        self.assertEqual(stops, [{"reason": "fault", "step": "reading"}])
         self.resume(stopped)
         self.drain()
         self.assertEqual(self.batch(batch["id"])["state"], "done")
+
+    def test_an_advance_failing_with_attempts_left_is_tried_again_without_stopping(self):
+        batch = self.start()
+        self.drain(job_types=("products.intake",))
+        with patch("app.marketing.first_batch.advance", side_effect=RuntimeError("database went away")):
+            self.drain(job_types=("marketing.first_batch",))
+        record = self.record(batch["id"])
+        self.assertEqual((record.state, record.attention_json), ("reading", None))
+        with platform_session() as session:  # the Worker's own retry comes due
+            session.execute(update(JobRecord).where(JobRecord.workspace_id == self.context.workspace_id,
+                                                    JobRecord.state == "retry_wait")
+                            .values(next_attempt_at=utcnow() - timedelta(seconds=1)))
+        self.drain()
+        self.assertEqual(self.batch(batch["id"])["state"], "done")
+
+
+class FirstBatchPaidFaultTests(FirstBatchFixtures):
+    """BYOK: continuing after our own fault (#269) never raises what the user confirmed."""
+
+    def setUp(self):
+        super().setUp()
+        self.byok()
+
+    def test_continuing_after_a_fault_costs_nothing_more_and_redoes_no_finished_step(self):
+        batch = self.start("byok")
+        self.drain(job_types=("products.intake", "marketing.first_batch"))
+        self.drain(job_types=("marketing.plan",))  # the understanding is drafted; the advance after it fails
+        last_attempt(self.context)
+        with patch("app.marketing.first_batch.advance", side_effect=RuntimeError("permission denied for view x")):
+            self.drain(job_types=("marketing.first_batch",))
+        stopped = self.batch(batch["id"])
+        self.assertEqual((stopped["state"], stopped["attention"]["reason"], stopped["attention"]["step"]),
+                         ("needs_attention", "fault", "understanding"))
+        offer = stopped["resume"]
+        self.assertEqual((Decimal(offer["additional_cost"]), offer["requires"]), (Decimal("0"), []))
+        self.assertEqual(Decimal(offer["maximum_cost"]), Decimal(stopped["confirmed_max_cost"]))
+        resumed = self.resume(stopped)
+        self.assertEqual(resumed["confirmed_max_cost"], stopped["confirmed_max_cost"])
+        self.drain()
+        done = self.batch(batch["id"])
+        self.assertEqual(done["state"], "done", done["attention"])
+        self.assertEqual([c.kind for c in self.calls(done["project_id"])], ["understanding", "ideas"])
+        self.assertEqual(Decimal(done["reserved_total"]), self.reserved(done))
+        self.assertLessEqual(Decimal(done["reserved_total"]), Decimal(done["confirmed_max_cost"]))
+
+    def test_a_step_the_provider_refused_still_offers_to_pay_for_it_again(self):
+        from app.marketing.planner import PlannerProviderRefused
+        self.complete.side_effect = PlannerProviderRefused("planner_rate_limited", http_status=429)
+        batch = self.start("byok")
+        self.drain()
+        stopped = self.batch(batch["id"])
+        self.assertEqual((stopped["attention"]["reason"], stopped["attention"]["step"], stopped["attention"]["code"]),
+                         ("step_failed", "understanding", "planner_rate_limited"))
+        # The refused call's maximum was reserved once; trying it again reserves it once more.
+        self.assertEqual(Decimal(stopped["resume"]["additional_cost"]), Decimal("0.1"))
+
+
+def last_attempt(context):
+    """Make the queued advance Jobs' next attempt their last, as after the Worker's own retries."""
+    with platform_session() as session:
+        session.execute(update(JobRecord).where(JobRecord.workspace_id == context.workspace_id,
+                                                JobRecord.type == first_batch.JOB_TYPE).values(max_attempts=1))

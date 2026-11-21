@@ -223,8 +223,10 @@ class IdeasImageEdit(Document):
 FirstBatchState = Literal["reading", "understanding", "ideas", "generating", "checking", "done", "needs_attention", "failed"]
 FirstBatchStep = Literal["reading", "understanding", "ideas", "images", "checks"]
 #: Why a first batch stopped (#193). ``page_unreadable`` and ``reading_failed`` end it; the others wait for the user.
+#: ``step_failed`` is a step that failed (the provider or an admission refused it, ``code`` says why); ``fault``
+#: is an error of ours while moving between steps that retrying did not get past (#269), with no ``code``.
 FirstBatchStopReason = Literal["several_models", "page_unreadable", "reading_failed", "too_few_claims", "over_budget",
-                               "ideas_refused", "step_failed", "uncertain"]
+                               "ideas_refused", "step_failed", "fault", "uncertain"]
 
 
 class FirstBatchSummary(Document):
