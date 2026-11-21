@@ -357,6 +357,22 @@ class TestQuoteTests(TestQuoteFixtures):
                          sorted(ads[cid]["asset_version_id"] for cid in ("c1_1", "c2_1")))
         self.assertTrue(all(item["status"] == "draft" and item["reasons"] for item in quote["not_exportable"]))
 
+    def test_a_kept_ad_of_a_claim_taken_out_since_is_named_not_compared(self):
+        project = self.exportable()
+        self.keep(project, "c1_1", "c3_1")
+        # The ideas without the third claim, as after taking it out (the first batch is still open here).
+        with tenant_session(self.context) as session:
+            row = session.get(MarketingProjectRecord, project["id"])
+            ideas_json = deepcopy(row.ideas_json)
+            ideas_json["angles"] = [a for a in ideas_json["angles"] if a["id"] != "a3"]
+            ideas_json["combinations"] = [c for c in ideas_json["combinations"] if c["angle_id"] != "a3"]
+            row.ideas_json = ideas_json
+        quote = self.quote_of(project)
+        self.assertEqual((quote["available"], quote["unavailable_reason"], quote["comparison"], quote["subjects"]),
+                         (False, "ads_not_exportable", "claims", []))
+        self.assertEqual([(item["asset_version_id"], item["status"]) for item in quote["not_exportable"]],
+                         [(self.ads(project)["c3_1"]["asset_version_id"], "needs_redo")])
+
     def test_without_a_product_link_the_landing_page_is_asked_for(self):
         project = self.exportable()
         self.keep(project, "c1_1", "c2_1")

@@ -188,9 +188,15 @@ def quote(session, ctx, ideas_row, answers) -> dict:
         landing_page=landing or "", offer=answers.offer, placement=answers.placement, currency=currency,
         max_small_rounds=max_rounds, media_budget=answers.media_budget)
 
-    doc = Ideas.model_validate(ideas_row.ideas_json) if kept else None
+    try:
+        doc = Ideas.model_validate(ideas_row.ideas_json) if kept else None
+    except ValueError:  # stored ideas a later contract no longer reads: their ads are not exportable either
+        doc = None
     comparison = plans.comparison_of(kept) if kept else None
-    items = plans.subjects(doc, kept, comparison) if kept else []
+    # A kept ad of a claim or ad taken out of the ideas since (it needs making again) is not a compared object.
+    present = doc is not None and all(ad.angle_id in {a.id for a in doc.angles}
+                                      and ad.combination_id in {c.id for c in doc.combinations} for ad in kept)
+    items = plans.subjects(doc, kept, comparison) if kept and present else []
     share = plans.estimate(len(items), answers.round_budget, answers.target_cost, protocol) if items else None
     plan = None
     if reason is None:
