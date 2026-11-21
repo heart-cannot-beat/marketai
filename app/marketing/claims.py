@@ -39,6 +39,27 @@ def _mentions(claim, text):
     else:
         before = r"(?<![a-z0-9])"
     pattern = before + r"\s*".join(re.escape(c) for c in value) + r"(?![a-z0-9])"
+    return re.search(pattern, text, re.IGNORECASE) is not None or _mentions_in_english(value, text)
+
+
+#: The English spellings of the Chinese units a Chinese fact translates from an English source (#244).
+#: They support a Chinese claim; on their own they are not claims, so no English sentence gets stricter.
+_ENGLISH_UNITS = {
+    "英里": r"miles?|mi",
+    "公里": r"km|kilomet(?:er|re)s?",
+    "小时": r"hours?|hrs?|h",
+    "分钟": r"minutes?|mins?",
+}
+
+
+def _mentions_in_english(value, text):
+    """Whether ``text`` states the measurement ``value`` ("25英里") in English ("25 miles", "25-mile")."""
+    match = re.fullmatch(rf"(\d+(?:\.\d+)?)({'|'.join(_ENGLISH_UNITS)})", value)
+    if match is None:
+        return False
+    number, unit = match.groups()
+    text = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text)
+    pattern = rf"(?<![0-9.]){re.escape(number)}[\s-]*(?:{_ENGLISH_UNITS[unit]})(?![a-z0-9])"
     return re.search(pattern, text, re.IGNORECASE) is not None
 
 
