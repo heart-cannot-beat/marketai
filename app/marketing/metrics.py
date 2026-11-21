@@ -54,6 +54,11 @@ ISSUE_PARAMS = {
     "replacement_not_current": (),
     "replacement_scope_mismatch": (),
     "already_imported_ad_day": (),
+    # A test's full report (#251) names each setting it does not share with the frozen round, and what it has.
+    "report_timezone_mismatch": ("expected", "found"),
+    "report_currency_mismatch": ("expected", "found"),
+    "report_attribution_mismatch": ("expected", "found"),
+    "report_account_mismatch": ("expected", "found"),
 }
 #: The ``field`` an issue points at: a metric key or one of the file-level parts.
 ISSUE_FIELDS = ("date", "ad_id", "spend", "impressions", "clicks", "purchases", "purchase_value",
@@ -76,7 +81,15 @@ def preflight_issue(number, field, code, **params):
             **({"params": {k: _bounded(v) for k, v in params.items()}} if params else {})}
 
 
+def plan_first_only(session, ctx, row):
+    """A test project's round takes its full reports on the test's own paths (``ad_test_reports``, #251)."""
+    from .workflow import full_report_round
+    if full_report_round(session, ctx, row):
+        raise MarketingError("test_report_required", "这一轮属于测试，请在测试页上传从开始到今天的完整报表。", 409)
+
+
 def preview(session, ctx, row, body):
+    plan_first_only(session, ctx, row)
     if len(body.csv_text.encode("utf-8")) > 262144:
         raise MarketingError("csv_too_large", "回传 CSV 不能超过 256KB，请按本轮日期导出每日广告数据。")
     metadata = body.model_dump(mode="json", exclude={"csv_text", "replaces_batch_id"})
@@ -85,7 +98,7 @@ def preview(session, ctx, row, body):
     prior = scoped(session, ctx, Batch, round_id=row.id, request_hash=fingerprint)
     if prior:
         return prior[0]
-    issues, rows = [], []
+    issues = []
     def issue(number, field, code, **params):
         if len(issues) < 100:
             issues.append(preflight_issue(number, field, code, **params))
@@ -98,6 +111,33 @@ def preview(session, ctx, row, body):
     bindings = {b.ad_id: b for b in scoped(session, ctx, Binding, round_id=row.id)}
     if not bindings or any(b.ad_account_id != metadata["ad_account_id"] for b in bindings.values()):
         issue(0, "ad_account_id", "account_or_binding_missing")
+    rows, mapping = read_rows(row, body, bindings, issue)
+    if mapping is not None:
+        metadata["resolved_mapping"] = mapping
+    record = Batch(id=new_id("mmb"), workspace_id=ctx.workspace_id, round_id=row.id,
+        replaces_id=body.replaces_batch_id, request_hash=fingerprint,
+        raw_hash=hashlib.sha256(body.csv_text.encode()).hexdigest(), raw_csv=body.csv_text,
+        metadata_json=metadata, rows_json=rows, issues_json=issues, state="preview")
+    # Never persist an arbitrary replacement FK supplied by another tenant.
+    if body.replaces_batch_id:
+        replaced = scoped(session, ctx, Batch, id=body.replaces_batch_id, round_id=row.id)
+        if not replaced:
+            raise MarketingError("replacement_not_found", "找不到本轮待更正的数据批次。", 404)
+    issues.extend(validate_conflicts(session, ctx, row, record))
+    record.issues_json = issues[:100]
+    session.add(record)
+    session.flush()
+    audit(session, row, "metrics_previewed", {"batch_id": record.id, "raw_hash": record.raw_hash, "issues": len(issues)})
+    return record
+
+
+def read_rows(row, body, bindings, issue):
+    """Read the daily rows of ``body.csv_text`` against the frozen ``row``, sending each problem to ``issue``.
+
+    Returns the rows read and the column each metric came from, or ``None`` for the columns when the file is
+    not readable CSV. A plan-first preview and a test's full report (``ad_test_reports``) share this reading;
+    ``bindings`` maps each matched Meta ad ID to its binding."""
+    rows, read = [], False
     try:
         reader = csv.DictReader(io.StringIO(body.csv_text.lstrip("\ufeff"), newline=""), strict=True)
         fields = reader.fieldnames or []
@@ -190,26 +230,12 @@ def preview(session, ctx, row, body):
             if item.get("clicks") is not None and item.get("impressions") is not None and item["clicks"] > item["impressions"]:
                 issue(number, "clicks", "clicks_exceed_impressions")
             rows.append(item)
-        metadata["resolved_mapping"] = mapping
+        read = True
     except (csv.Error, UnicodeError):
         issue(0, "file", "invalid_csv")
     if not rows:
         issue(0, "file", "no_daily_rows")
-    record = Batch(id=new_id("mmb"), workspace_id=ctx.workspace_id, round_id=row.id,
-        replaces_id=body.replaces_batch_id, request_hash=fingerprint,
-        raw_hash=hashlib.sha256(body.csv_text.encode()).hexdigest(), raw_csv=body.csv_text,
-        metadata_json=metadata, rows_json=rows, issues_json=issues, state="preview")
-    # Never persist an arbitrary replacement FK supplied by another tenant.
-    if body.replaces_batch_id:
-        replaced = scoped(session, ctx, Batch, id=body.replaces_batch_id, round_id=row.id)
-        if not replaced:
-            raise MarketingError("replacement_not_found", "找不到本轮待更正的数据批次。", 404)
-    issues.extend(validate_conflicts(session, ctx, row, record))
-    record.issues_json = issues[:100]
-    session.add(record)
-    session.flush()
-    audit(session, row, "metrics_previewed", {"batch_id": record.id, "raw_hash": record.raw_hash, "issues": len(issues)})
-    return record
+    return rows, mapping if read else None
 
 
 def keys(batch):
@@ -233,6 +259,7 @@ def validate_conflicts(session, ctx, row, record):
 
 
 def confirm(session, ctx, row, body):
+    plan_first_only(session, ctx, row)
     candidates = scoped(session, ctx, Batch, id=body.batch_id, round_id=row.id)
     if not candidates:
         raise MarketingError("batch_not_found", "找不到本轮数据预检。", 404)

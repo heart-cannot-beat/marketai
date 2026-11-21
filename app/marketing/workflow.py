@@ -78,9 +78,27 @@ def active_batches(session, ctx, row):
     return sorted((b for b in batches if b.id not in replaced), key=lambda b: b.id)
 
 
+def full_report_round(session, ctx, row):
+    """Whether ``row`` is a test project's round, which takes full reports (step 2 design §5.7, #251)."""
+    from .ad_tests import FLOW
+    from .models import MarketingProjectRecord as Project
+    return session.scalar(select(Project.flow).where(Project.workspace_id == ctx.workspace_id,
+                                                     Project.id == row.project_id)) == FLOW
+
+
+def counted_rows(session, ctx, row):
+    """The daily rows a round's numbers count, by day then Meta ad.
+
+    A plan-first round counts every row of its current batches; a correction replaces a whole batch. A test
+    project's round counts each day and ad's latest confirmed full report, for its own ads and days only (#251)."""
+    if full_report_round(session, ctx, row):
+        from .ad_test_reports import counted
+        return counted(session, ctx, row)
+    return sorted([item for b in active_batches(session, ctx, row) for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))
+
+
 def project_spend(session, ctx, rounds):
-    return sum((Decimal(item["spend"]) for r in rounds for b in active_batches(session, ctx, r)
-                for item in b.rows_json), Decimal("0"))
+    return sum((Decimal(item["spend"]) for r in rounds for item in counted_rows(session, ctx, r)), Decimal("0"))
 
 
 def freeze(session, ctx, project, revision, body):
@@ -520,7 +538,7 @@ def evaluate(session, ctx, row):
         "quality_changed": [e["entry_id"] for e in handoffs[0].manifest_json["entries"] if not ready(session, ctx, row, e["asset_version_id"])],
         "quality_review_ids": {e["asset_version_id"]: sorted(r.id for r in active_quality(session, ctx, e["asset_version_id"]))
             for e in handoffs[0].manifest_json["entries"]},
-        "batch_ids": [b.id for b in batches], "rows": sorted([item for b in batches for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))}
+        "batch_ids": [b.id for b in batches], "rows": counted_rows(session, ctx, row)}
     if "style_variation" in row.snapshot_json["plan"]:
         inputs["style_deviations"] = style_deviations(session, ctx, row)
     hashed = digest(inputs)
@@ -578,7 +596,7 @@ def evaluation_current(session, ctx, row, evaluation, *, _seen=None, _cache=None
         for b in sorted(scoped(session, ctx, Binding, round_id=row.id), key=lambda b: b.id)]
     quality_changed = {e["entry_id"] for e in inputs["entries"] if not ready(session, ctx, row, e["asset_version_id"])}
     if (inputs["batch_ids"] != [b.id for b in batches] or inputs["bindings"] != bindings
-            or inputs["rows"] != sorted([item for b in batches for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))
+            or inputs["rows"] != counted_rows(session, ctx, row)
             or set(inputs.get("quality_changed", [])) != quality_changed):
         return False
     from zoneinfo import ZoneInfo
@@ -802,7 +820,7 @@ def board_projection(session, ctx, row, executions, handoff, evaluation):
     return board.project(row.snapshot_json["plan"], executions, round_state=row.state,
         prepared_appearance={cid: appearance(session, ctx, selectors.get("product_references", [])) for cid, selectors in prepared},
         handoff={"state": handoff.state, "entries": {e["asset_version_id"]: e["entry_id"] for e in handoff.manifest_json["entries"]}} if handoff else None,
-        bindings=bindings, data_ad_ids={item["ad_id"] for b in active_batches(session, ctx, row) for item in b.rows_json},
+        bindings=bindings, data_ad_ids={item["ad_id"] for item in counted_rows(session, ctx, row)},
         generating={c["selection"]["marketing_intent"].get("combination", {}).get("id") for c in generating},
         # A test project's plan never generates images (ADR 0019): its round's board offers none.
         generation_open=row.state == "reviewing" and not handoff and project.flow == "plan_first"

@@ -47,7 +47,7 @@ def current_evidence(session, ctx, evaluation_id, asset_id, *, require_combinati
             or not latest or latest.id != evaluation.id or not batches
             or any(b.metadata_json.get("source_mode") != "customer_file" for b in batches)
             or sorted(inputs["batch_ids"]) != sorted(b.id for b in batches)
-            or inputs["rows"] != sorted([item for b in batches for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))
+            or inputs["rows"] != w.counted_rows(session, ctx, row)
             or inputs["bindings"] != bindings or digest(inputs) != evaluation.input_hash
             or inputs["snapshot"] != row.snapshot_json or inputs["round_id"] != row.id
             or inputs["timezone"] != row.timezone or inputs["start_date"] != str(row.start_date)

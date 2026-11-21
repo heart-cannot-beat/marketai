@@ -5,17 +5,19 @@ from dataclasses import replace
 from pathlib import Path
 
 from app.adapters.persistence.database import tenant_session
-from app.marketing import metrics
+from app.marketing import ad_test_reports, metrics
 from app.marketing.workflow_models import MarketingMetricBatchRecord
 from tests.test_marketing_workflow import MarketingWorkflowFixtures
 
 METRICS_SOURCE = Path(metrics.__file__).read_text(encoding="utf-8")
+#: A test's full reports (#251) raise the same declared issues from their own module.
+SOURCES = (METRICS_SOURCE, Path(ad_test_reports.__file__).read_text(encoding="utf-8"))
 
 
 def raised_codes():
-    """Every code literal passed to ``issue(...)`` or ``preflight_issue(...)`` in metrics.py."""
+    """Every code literal passed to ``issue(...)`` or ``preflight_issue(...)`` in metrics.py and ad_test_reports.py."""
     found = set()
-    for node in ast.walk(ast.parse(METRICS_SOURCE)):
+    for node in (node for source in SOURCES for node in ast.walk(ast.parse(source))):
         if isinstance(node, ast.Call) and getattr(node.func, "id", None) in ("issue", "preflight_issue"):
             code = node.args[2]
             if isinstance(code, ast.Name) and code.id == "code":
