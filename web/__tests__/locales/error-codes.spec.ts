@@ -586,6 +586,10 @@ const PARAMETERISED = [
   'error-learnings_text_too_long: limit',
   'error-library_rights_scope_too_long: limit',
   'error-source_invalid: limit',
+  // #253: app.marketing.ad_test_schedule sends the allowed dates of a test
+  // round's moved start or early end.
+  'error-start_date_out_of_range: earliest',
+  'error-end_date_out_of_range: earliest,latest',
   'error-text_too_long: limit',
   'error-too_many_images: limit',
   'error-string_too_long: max_length',
