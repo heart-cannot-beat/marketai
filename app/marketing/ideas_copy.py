@@ -58,7 +58,8 @@ def _overflow(session, ctx, row, doc, combination) -> int:
     except MarketingError:
         kit = None  # preparing refuses an unresolved brand baseline on its own
     intent = ideas.ideas_intent(row, combination.id)
-    prompt = ideas._prompt(combination, intent, kit, logo=bool(kit and kit.content_json.get("logo")), references=True)
+    prompt = ideas._prompt(combination, intent, kit, logo=bool(kit and kit.content_json.get("logo")), references=True,
+                           policy=ideas.PROMPT_POLICY)
     return len(prompt) - MAX_PROMPT_LENGTH
 
 

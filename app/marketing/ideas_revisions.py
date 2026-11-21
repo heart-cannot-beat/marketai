@@ -40,8 +40,9 @@ from .models import MarketingIdeasUploadRecord as Upload, MarketingProjectRecord
 from .service import MarketingError, digest
 from .workflow_models import MarketingFeedbackDraftRecord as Feedback, MarketingImageEditRecord as Edit
 
-#: The prompt policy of an ads-first correction or image tool.
-PROMPT_POLICY = "ideas-feedback-brief-v1"
+#: The prompt policy of an ads-first correction or image tool, frozen into its request. v2 (#265): the image may
+#: show no words besides the copy; a request frozen under v1 keeps its exact prompt.
+PROMPT_POLICY = "ideas-feedback-brief-v2"
 #: External-creative states whose image exists and may join ideas.
 UPLOAD_READY = ("ready", "tagging_failed", "confirmed")
 
@@ -115,7 +116,10 @@ def _prompt(session, ctx, row, frozen, intent, *, references: bool) -> str:
     brand = brand_kits.brief_lines(kit.content_json, logo_supplied=False, logo_in_source=True) if kit else ()
     lines = [f"- {item['check_id']} ({item['status']}): {item['correction']}" for item in frozen["corrections"]]
     lines += ["- Note: " + " ".join(frozen["note"].split())] if frozen["note"] else []
-    return (REVISION + service.image_brief(combo, intent, brand=brand) + ("\n" + REFERENCE_BRIEF if references else "")
+    # A request frozen under v1 keeps its exact prompt; from v2 the image may show no words besides the copy (#265).
+    only_copy_text = frozen.get("prompt_policy") == PROMPT_POLICY
+    return (REVISION + service.image_brief(combo, intent, brand=brand, only_copy_text=only_copy_text)
+            + ("\n" + REFERENCE_BRIEF if references else "")
             + "\n" + CORRECTIONS + "".join("\n" + line for line in lines))
 
 

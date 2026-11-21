@@ -1,5 +1,5 @@
 """AI suggestions remain distinct from the human quality decision."""
-from typing import Literal
+from typing import Annotated, Literal
 from pydantic import Field
 from .contracts import Document, Text
 
@@ -32,14 +32,30 @@ class AICheckTranscribedReport(Document):
     findings: list[AICheckFinding] = Field(min_length=1, max_length=30)
 
 
+class RenderedTextWithOthers(RenderedText):
+    """The headline and body as rendered, and every other text the image shows, each transcribed verbatim (#265)."""
+    other_text: list[Annotated[str, Field(max_length=300)]] = Field(max_length=40)
+
+
+class AICheckFullTranscribedReport(AICheckTranscribedReport):
+    """Ads-first ideas check from v2 (#265): the model also transcribes all text besides the copy; the server checks
+    it against the ad's facts, since the image model may add words the ad never said."""
+    rendered_text: RenderedTextWithOthers
+
+
 # Single-image policies whose output carries `rendered_text`; earlier calls keep the report they were asked for.
-# The ads-first ideas check (#197) transcribes too.
-TRANSCRIBED_POLICIES = frozenset({"marketing-vision-qc-single-v3", "marketing-ideas-qc-single-v1"})
+# The ads-first ideas check (#197) transcribes too; from v2 it transcribes every text (#265).
+FULL_TRANSCRIPTION_POLICIES = frozenset({"marketing-ideas-qc-single-v2"})
+TRANSCRIBED_POLICIES = frozenset({"marketing-vision-qc-single-v3", "marketing-ideas-qc-single-v1",
+                                  *FULL_TRANSCRIPTION_POLICIES})
 
 
 def report_model(inputs):
     """The report a call's model output must match, by the policy frozen into its input."""
-    return AICheckTranscribedReport if inputs.get("policy_version") in TRANSCRIBED_POLICIES else AICheckReport
+    policy = inputs.get("policy_version")
+    if policy in FULL_TRANSCRIPTION_POLICIES:
+        return AICheckFullTranscribedReport
+    return AICheckTranscribedReport if policy in TRANSCRIBED_POLICIES else AICheckReport
 
 
 QCKind = Literal["single", "paired"]
