@@ -59,10 +59,12 @@ def plan_summary(plan: dict) -> dict:
             "duration_days": plan["duration_days"], "currency": plan["currency"], "landing_page": plan["landing_page"]}
 
 
-def round_summary(row) -> dict:
-    # The effective dates are the frozen ones until a round can move its start or end early (#253).
+def round_summary(session, ctx, row) -> dict:
+    """A round's frozen dates and the effective ones, after a moved start or an early end (#253)."""
+    from .ad_test_schedule import effective_dates
+    start, end = effective_dates(session, ctx, row)
     return {"id": row.id, "ordinal": row.ordinal, "state": row.state, "start_date": row.start_date,
-            "end_date": row.end_date, "effective_start_date": row.start_date, "effective_end_date": row.end_date}
+            "end_date": row.end_date, "effective_start_date": start, "effective_end_date": end}
 
 
 def detail(session, ctx, row) -> dict:
@@ -72,5 +74,5 @@ def detail(session, ctx, row) -> dict:
     current = next((r for r in reversed(rounds) if r.state != "closed"), None)
     return {"id": row.id, "revision": row.revision, "product_id": row.product_id,
             "source_project_id": row.source_project_id, "comparison": comparison(row.plan_json),
-            "plan_summary": plan_summary(row.plan_json), "rounds": [round_summary(r) for r in rounds],
+            "plan_summary": plan_summary(row.plan_json), "rounds": [round_summary(session, ctx, r) for r in rounds],
             "current_round_id": current.id if current else None, "created_at": row.created_at.isoformat()}

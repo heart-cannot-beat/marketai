@@ -120,6 +120,9 @@ describe('DomainGateway operation coverage', () => {
     // `list_marketing_first_batches` (#204).
     // 266 -> 267: reading a test the kept ads were taken to
     // `get_marketing_test` (#247).
-    expect(DOMAIN_ALLOWLIST.length).toBe(267);
+    // 267 -> 270: a test round's schedule and minimal result
+    // `change_marketing_test_start`, `end_marketing_test_round_early` and
+    // `get_marketing_test_result` (#253).
+    expect(DOMAIN_ALLOWLIST.length).toBe(270);
   });
 });

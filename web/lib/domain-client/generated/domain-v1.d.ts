@@ -3425,6 +3425,67 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End Round Early
+     * @description Record the last day the ads ran; the result can be read once the attribution lag after it has passed (#253).
+     */
+    post: operations['end_marketing_test_round_early'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/result': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Result
+     * @description The round's schedule and minimal result: each compared group met the goal, missed it or cannot tell yet,
+     *     and how many orders it is short. Reading it never evaluates; "see the result" evaluates the round first.
+     */
+    get: operations['get_marketing_test_result'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/start-date': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Change Start
+     * @description Move the round's start to the day the ads went live, before its first report is confirmed (#253).
+     */
+    post: operations['change_marketing_test_start'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/meta/connections': {
     parameters: {
       query?: never;
@@ -7607,6 +7668,12 @@ export interface components {
         [key: string]: unknown;
       };
     };
+    /** @description The last day the ads ran; the evaluation takes it as the round's last day (#253). */
+    EndMarketingTestRoundEarly: {
+      /** Format: date */
+      end_date: string;
+      reason?: string | null;
+    };
     /**
      * @description Issue #86 Task 11: the only field a caller may supply is the id of an
      *     already-consumed-server-side ``ScaleActivationPreviewRecord`` --
@@ -10248,6 +10315,16 @@ export interface components {
       feedback_drafts: components['schemas']['FeedbackDraft'][];
       board?: components['schemas']['MarketingBoard'] | null;
     };
+    /** @description One compared group of ads (a claim, a way of telling it, or the one ad) in the round's latest evaluation. */
+    MarketingTestComparisonResult: {
+      id: string;
+      label: string;
+      /** @enum {string} */
+      status: 'meets_goal' | 'misses_goal' | 'not_clear';
+      purchases: string;
+      remaining_purchases: number;
+      asset_version_ids: string[];
+    };
     MarketingTestDetail: {
       id: string;
       revision: number;
@@ -10295,6 +10372,39 @@ export interface components {
         | 'ZAR';
       landing_page: string;
     };
+    /** @description The minimal result of a round (design §5.9): its schedule and, once evaluated, each group's status. */
+    MarketingTestResult: {
+      test_id: string;
+      round_id: string;
+      schedule: components['schemas']['MarketingTestRoundSchedule'];
+      mature: boolean;
+      min_purchases: number;
+      /** @constant */
+      scope: 'these_ads';
+      evaluation_id: string | null;
+      evaluated_at: string | null;
+      current: boolean;
+      comparisons: components['schemas']['MarketingTestComparisonResult'][];
+    };
+    /** @description This round's schedule (#253): the frozen dates never change; the effective ones are what is evaluated. */
+    MarketingTestRoundSchedule: {
+      test_id: string;
+      round_id: string;
+      revision: number;
+      /** Format: date */
+      start_date: string;
+      /** Format: date */
+      end_date: string;
+      /** Format: date */
+      effective_start_date: string;
+      /** Format: date */
+      effective_end_date: string;
+      ended_early: boolean;
+      /** Format: date */
+      result_date: string;
+      start_movable: boolean;
+      changes: components['schemas']['MarketingTestScheduleChange'][];
+    };
     MarketingTestRoundSummary: {
       id: string;
       ordinal: number;
@@ -10308,6 +10418,16 @@ export interface components {
       effective_start_date: string;
       /** Format: date */
       effective_end_date: string;
+    };
+    MarketingTestScheduleChange: {
+      id: string;
+      /** @enum {string} */
+      kind: 'start_moved' | 'ended_early';
+      /** Format: date */
+      date: string;
+      reason: string | null;
+      actor_id: string;
+      created_at: string;
     };
     MatrixCol: {
       angle_id: string;
@@ -10456,6 +10576,12 @@ export interface components {
       replaces_must_match_ids?: string[];
       image_ids?: string[];
       default_image_ids?: string[];
+    };
+    /** @description The day the ads actually went live; the round's end moves with it (#253). */
+    MoveMarketingTestStart: {
+      /** Format: date */
+      start_date: string;
+      reason?: string | null;
     };
     MultiCandidateConfirmInput: {
       meta_mode: string;
@@ -19755,6 +19881,116 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['MarketingTestDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  end_marketing_test_round_early: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EndMarketingTestRoundEarly'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestRoundSchedule'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_marketing_test_result: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestResult'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  change_marketing_test_start: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MoveMarketingTestStart'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestRoundSchedule'];
         };
       };
       /** @description Validation Error */

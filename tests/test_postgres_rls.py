@@ -50,6 +50,7 @@ CURRENT_AGGREGATE_TABLES = {
         "marketing_ideas_export_records",
         "marketing_ideas_uploads",
         "marketing_product_photos",
+        "marketing_round_schedule_changes",
     },
     "platform": {
         "workspaces",
@@ -365,6 +366,7 @@ def all_protected_tables() -> tuple[str, ...]:
     from migrations.versions.zzp198a1b2c3_marketing_ideas_export_records import NEW_WORKSPACE_OWNED as IDEAS_EXPORT
     from migrations.versions.zzq200a1b2c3_marketing_ideas_revisions import NEW_WORKSPACE_OWNED as IDEAS_UPLOADS
     from migrations.versions.zzr233a1b2c3_marketing_product_photos import NEW_WORKSPACE_OWNED as PRODUCT_PHOTOS
+    from migrations.versions.zzu253a1b2c3_marketing_round_schedule_changes import NEW_WORKSPACE_OWNED as ROUND_SCHEDULE
     from migrations.versions.zn9a0b1c2d3e_marketing_planning import NEW_WORKSPACE_OWNED as MARKETING_0
     from migrations.versions.zo0b1c2d3e4f_marketing_delivery import NEW_WORKSPACE_OWNED as MARKETING_1
     from migrations.versions.zp1c2d3e4f5a_marketing_ai_qc import NEW_WORKSPACE_OWNED as MARKETING_2
@@ -464,6 +466,7 @@ def all_protected_tables() -> tuple[str, ...]:
         + IDEAS_EXPORT
         + IDEAS_UPLOADS
         + PRODUCT_PHOTOS
+        + ROUND_SCHEDULE
         + NEW_WORKSPACE_OWNED
         + OPERATION_TABLES
         + IDEMPOTENCY_TABLES
@@ -1210,6 +1213,57 @@ class RowLevelSecurityTests(unittest.TestCase):
         readonly = self.scoped_connection(self.engine(READONLY_URL), self.alpha)
         self.assertEqual(readonly.execute(self.text("SELECT COUNT(*) FROM marketing_product_photos WHERE workspace_id = :ws"),
                                           {"ws": self.beta}).scalar(), 0)
+
+    def test_a_round_schedule_change_stays_in_its_workspace_and_is_never_rewritten(self):
+        """A test round's moved start or early end (#253): bound to the round by a Workspace-composite key; the API
+        adds one only in its own Workspace and never changes or removes one; the Worker and readonly only read
+        their own Workspace's."""
+        from sqlalchemy.exc import ProgrammingError
+
+        with self.owner.connect() as conn:
+            definitions = dict(conn.execute(self.text(
+                "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                " WHERE conrelid = 'public.marketing_round_schedule_changes'::regclass AND contype IN ('f', 'c')")).all())
+            rls = conn.execute(self.text(
+                "SELECT relrowsecurity, relforcerowsecurity FROM pg_class"
+                " WHERE oid = 'public.marketing_round_schedule_changes'::regclass")).one()
+        self.assertEqual(tuple(rls), (True, True))
+        self.assertEqual(
+            definitions["fk_marketing_round_schedule_change_round"],
+            "FOREIGN KEY (workspace_id, round_id) REFERENCES marketing_rounds(workspace_id, id) ON DELETE RESTRICT")
+        self.assertIn("'start_moved'", definitions["ck_marketing_round_schedule_changes_schedule_change_kind"])
+        self.assertIn("'ended_early'", definitions["ck_marketing_round_schedule_changes_schedule_change_kind"])
+
+        insert = ("INSERT INTO marketing_round_schedule_changes (id, workspace_id, round_id, kind, date, actor_id,"
+                  " created_at) VALUES (:id, :ws, 'mround_x', 'start_moved', '2026-11-24', 'user_a', now())")
+        api = self.scoped_connection(self.engine(API_URL), self.alpha)
+        with self.assertRaises(ProgrammingError) as smuggled:
+            with api.begin_nested():
+                api.execute(self.text(insert), {"id": f"mrsc_{uuid.uuid4().hex[:8]}", "ws": self.beta})
+        self.assertIn("row-level security", str(smuggled.exception))
+        # Append-only: the API can neither change nor remove one.
+        for statement in ("UPDATE marketing_round_schedule_changes SET date = '2026-11-25' WHERE id = 'mrsc_x'",
+                          "DELETE FROM marketing_round_schedule_changes WHERE id = 'mrsc_x'"):
+            with self.assertRaises(ProgrammingError) as refused:
+                with api.begin_nested():
+                    api.execute(self.text(statement))
+            self.assertIn("permission denied", str(refused.exception))
+        # The Worker reads a test round's effective dates when it checks an evaluation is current, but never
+        # writes one; readonly reads.
+        worker = self.scoped_connection(self.engine(WORKER_URL), self.alpha)
+        self.assertEqual(worker.execute(self.text(
+            "SELECT COUNT(*) FROM marketing_round_schedule_changes WHERE workspace_id = :ws"), {"ws": self.beta}).scalar(), 0)
+        with self.assertRaises(ProgrammingError) as denied:
+            with worker.begin_nested():
+                worker.execute(self.text(insert), {"id": f"mrsc_{uuid.uuid4().hex[:8]}", "ws": self.alpha})
+        self.assertIn("permission denied", str(denied.exception))
+        readonly = self.scoped_connection(self.engine(READONLY_URL), self.alpha)
+        self.assertEqual(readonly.execute(self.text(
+            "SELECT COUNT(*) FROM marketing_round_schedule_changes WHERE workspace_id = :ws"), {"ws": self.beta}).scalar(), 0)
+        with self.assertRaises(ProgrammingError) as read_only:
+            with readonly.begin_nested():
+                readonly.execute(self.text(insert), {"id": f"mrsc_{uuid.uuid4().hex[:8]}", "ws": self.alpha})
+        self.assertIn("permission denied", str(read_only.exception))
 
     def test_an_ideas_export_record_stays_in_its_workspace_and_is_never_rewritten(self):
         """Ads-first verification and download records (#198): bound to the ideas by a Workspace-composite
