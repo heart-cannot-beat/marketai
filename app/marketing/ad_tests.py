@@ -11,11 +11,13 @@ pytest ``test_*`` module.
 """
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
+
+from app.adapters.persistence.models import AuditEventRecord, ProductRecord
 
 from . import service
 from .models import MarketingProjectRecord
-from .workflow_models import MarketingRoundRecord as Round
+from .workflow_models import MarketingMetricBatchRecord as Batch, MarketingRoundRecord as Round
 
 FLOW = "ads_test"
 
@@ -74,3 +76,97 @@ def detail(session, ctx, row) -> dict:
             "source_project_id": row.source_project_id, "comparison": comparison(row.plan_json),
             "plan_summary": plan_summary(row.plan_json), "rounds": [round_summary(r) for r in rounds],
             "current_round_id": current.id if current else None, "created_at": row.created_at.isoformat()}
+
+
+def history(session, ctx, product_id: str) -> dict:
+    """``MarketingTestHistory``: the product's tests and earlier tests, each round with its confirmed reports (§5.10).
+
+    ``product_id`` is the product's ``prod_`` id or its Library entry id; a product this Workspace does not have
+    is not found, so another Workspace learns nothing about it. Reading writes nothing."""
+    product = _product(session, ctx, product_id)
+    tests = session.scalars(select(MarketingProjectRecord).where(
+        MarketingProjectRecord.workspace_id == ctx.workspace_id, MarketingProjectRecord.product_id == product,
+        MarketingProjectRecord.flow == FLOW)
+        .order_by(MarketingProjectRecord.created_at.desc(), MarketingProjectRecord.id.desc())).all()
+    earlier = _earlier_tests(session, ctx, product)
+    rounds = _rounds(session, ctx, [row.id for row in (*tests, *earlier)])
+    reports = _reports(session, ctx, [r.id for project in rounds.values() for r in project])
+
+    def history_rounds(row):
+        return [{**round_summary(r), "reports": reports.get(r.id, [])} for r in rounds.get(row.id, [])]
+
+    return {
+        "product_id": product,
+        "tests": [{"id": row.id, "source_project_id": row.source_project_id, "comparison": comparison(row.plan_json),
+                   "plan_summary": plan_summary(row.plan_json), "rounds": history_rounds(row),
+                   "current_round_id": next((r.id for r in reversed(rounds.get(row.id, [])) if r.state != "closed"), None),
+                   "created_at": row.created_at.isoformat()} for row in tests],
+        "earlier_tests": [{"id": row.id, "state": row.state,
+                           "product_name": (row.understanding_json or {}).get("product_name") or row.source_text[:80],
+                           "rounds": history_rounds(row), "created_at": row.created_at.isoformat()} for row in earlier],
+    }
+
+
+def _product(session, ctx, product_id: str) -> str:
+    """The Workspace product ``product_id`` names, its bridged ``prod_`` row first (as the ideas paths resolve it)."""
+    found = session.scalar(select(ProductRecord.id).where(ProductRecord.workspace_id == ctx.workspace_id,
+        (ProductRecord.id == product_id) | (ProductRecord.product_profile_entry_id == product_id))
+        .order_by(ProductRecord.product_profile_entry_id.is_(None), ProductRecord.id).limit(1))
+    if found is None:
+        raise service.MarketingError("product_not_found", "找不到这个产品。", 404)
+    return found
+
+
+def _earlier_tests(session, ctx, product: str) -> list[MarketingProjectRecord]:
+    """Plan-first tests that stand for ``product``, newest first.
+
+    A test started from a product card stands for that card while its source text is unrevised
+    (``card_lineage``), whatever anchor its confirmed understanding minted; any other test stands for the
+    product its own ``product_id`` names -- the same fold the product list makes (``app.products.catalog``)."""
+    from .card_lineage import card_ids, card_tests
+    lineage = card_tests(session, ctx)
+    cards = card_ids(session, ctx, (test.source for test in lineage.values()))
+    by_card = {project for project, test in lineage.items() if cards[test.source] == product}
+    rows = session.scalars(select(MarketingProjectRecord).where(
+        MarketingProjectRecord.workspace_id == ctx.workspace_id, MarketingProjectRecord.flow == "plan_first",
+        or_(MarketingProjectRecord.id.in_(by_card), MarketingProjectRecord.product_id == product))
+        .order_by(MarketingProjectRecord.created_at.desc(), MarketingProjectRecord.id.desc())).all()
+    return [row for row in rows if row.id in by_card or row.id not in lineage]
+
+
+def _rounds(session, ctx, project_ids) -> dict[str, list]:
+    """Each project's rounds, by ordinal."""
+    rounds: dict[str, list] = {}
+    if project_ids:
+        for row in session.scalars(select(Round).where(Round.workspace_id == ctx.workspace_id,
+                Round.project_id.in_(project_ids)).order_by(Round.project_id, Round.ordinal)).all():
+            rounds.setdefault(row.project_id, []).append(row)
+    return rounds
+
+
+def _reports(session, ctx, round_ids) -> dict[str, list[dict]]:
+    """Each round's confirmed reports, oldest first, with the person on the first audit event that names the batch.
+
+    The upload commands record the batch id on the round's events (previewed, then confirmed), so the first one
+    is the upload itself. The raw file is not read."""
+    if not round_ids:
+        return {}
+    batches = session.execute(select(Batch.id, Batch.round_id, Batch.replaces_id, Batch.created_at, Batch.rows_json)
+        .where(Batch.workspace_id == ctx.workspace_id, Batch.round_id.in_(round_ids), Batch.state == "confirmed")
+        .order_by(Batch.created_at, Batch.id)).all()
+    if not batches:
+        return {}
+    uploaders: dict[str, str | None] = {}
+    for initiator, details in session.execute(select(AuditEventRecord.initiator_id, AuditEventRecord.details_json).where(
+            AuditEventRecord.workspace_id == ctx.workspace_id, AuditEventRecord.resource_type == "marketing_round",
+            AuditEventRecord.resource_id.in_(round_ids))
+            .order_by(AuditEventRecord.created_at, AuditEventRecord.id)).all():
+        batch = (details or {}).get("batch_id")
+        if isinstance(batch, str):
+            uploaders.setdefault(batch, initiator)
+    reports: dict[str, list[dict]] = {}
+    for batch_id, round_id, replaces, created_at, rows in batches:
+        reports.setdefault(round_id, []).append({
+            "batch_id": batch_id, "kind": "correction" if replaces else "upload", "replaces_batch_id": replaces,
+            "uploaded_at": created_at.isoformat(), "uploaded_by": uploaders.get(batch_id), "row_count": len(rows or [])})
+    return reports
