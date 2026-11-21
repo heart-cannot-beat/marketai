@@ -9872,6 +9872,32 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'product_appearance',
     ],
   },
+  MarketingEarlierTest: {
+    properties: {
+      id: { type: 'string' },
+      state: {
+        type: 'string',
+        enum: [
+          'input',
+          'understanding_draft',
+          'understanding_confirmed',
+          'plan_draft',
+          'plan_confirmed',
+        ],
+      },
+      product_name: { type: 'string' },
+      rounds: {
+        items: { $ref: '#/components/schemas/MarketingTestHistoryRound' },
+        type: 'array',
+      },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'state', 'product_name', 'rounds', 'created_at'],
+    description:
+      "A test made the earlier way (plan first) that stands for the product, with each round's reports.",
+  },
   MarketingProjectDetail: {
     properties: {
       id: { type: 'string' },
@@ -10098,6 +10124,81 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'created_at',
     ],
   },
+  MarketingTestHistory: {
+    properties: {
+      product_id: { type: 'string' },
+      tests: {
+        items: { $ref: '#/components/schemas/MarketingTestHistoryItem' },
+        type: 'array',
+      },
+      earlier_tests: {
+        items: { $ref: '#/components/schemas/MarketingEarlierTest' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['product_id', 'tests', 'earlier_tests'],
+    description:
+      "``list_marketing_tests``: a product's tests and its earlier tests, each newest first (design §5.10).",
+  },
+  MarketingTestHistoryItem: {
+    properties: {
+      id: { type: 'string' },
+      source_project_id: { type: 'string' },
+      comparison: { type: 'string', enum: ['claims', 'expressions', 'single'] },
+      plan_summary: { $ref: '#/components/schemas/MarketingTestPlanSummary' },
+      rounds: {
+        items: { $ref: '#/components/schemas/MarketingTestHistoryRound' },
+        type: 'array',
+      },
+      current_round_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'source_project_id',
+      'comparison',
+      'plan_summary',
+      'rounds',
+      'current_round_id',
+      'created_at',
+    ],
+    description:
+      "A test of the product, as ``MarketingTestDetail`` shows it, with each round's reports.",
+  },
+  MarketingTestHistoryRound: {
+    properties: {
+      id: { type: 'string' },
+      ordinal: { type: 'integer' },
+      state: {
+        type: 'string',
+        enum: ['reviewing', 'handoff', 'awaiting_data', 'evaluated', 'closed'],
+      },
+      start_date: { type: 'string', format: 'date' },
+      end_date: { type: 'string', format: 'date' },
+      effective_start_date: { type: 'string', format: 'date' },
+      effective_end_date: { type: 'string', format: 'date' },
+      reports: {
+        items: { $ref: '#/components/schemas/MarketingTestReportUpload' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'ordinal',
+      'state',
+      'start_date',
+      'end_date',
+      'effective_start_date',
+      'effective_end_date',
+      'reports',
+    ],
+  },
   MarketingTestPlanSummary: {
     properties: {
       target_cost: { type: 'string' },
@@ -10147,6 +10248,28 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     ],
     description:
       "The parts of the test's plan the user chose or can see at a glance; money in the plan's currency.",
+  },
+  MarketingTestReportUpload: {
+    properties: {
+      batch_id: { type: 'string' },
+      kind: { type: 'string', enum: ['upload', 'correction'] },
+      replaces_batch_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      uploaded_at: { type: 'string' },
+      uploaded_by: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      row_count: { type: 'integer' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'batch_id',
+      'kind',
+      'replaces_batch_id',
+      'uploaded_at',
+      'uploaded_by',
+      'row_count',
+    ],
+    description:
+      'One confirmed report of a round: a first upload, or a correction that replaces an earlier one (#255).',
   },
   MarketingTestRoundSummary: {
     properties: {
@@ -21428,6 +21551,24 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['items', 'next_cursor'],
   },
+  list_marketing_tests_200: {
+    properties: {
+      product_id: { type: 'string' },
+      tests: {
+        items: { $ref: '#/components/schemas/MarketingTestHistoryItem' },
+        type: 'array',
+      },
+      earlier_tests: {
+        items: { $ref: '#/components/schemas/MarketingEarlierTest' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['product_id', 'tests', 'earlier_tests'],
+    description:
+      "``list_marketing_tests``: a product's tests and its earlier tests, each newest first (design §5.10).",
+  },
   list_meta_bindings_200: {},
   list_meta_connections_200: {},
   list_meta_contracts_200: {},
@@ -25372,6 +25513,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'list_marketing_reuse_candidates_200',
       VALIDATOR_FUNCTIONS['list_marketing_reuse_candidates_200'],
+    ],
+    [
+      'list_marketing_tests_200',
+      VALIDATOR_FUNCTIONS['list_marketing_tests_200'],
     ],
     ['list_meta_bindings_200', VALIDATOR_FUNCTIONS['list_meta_bindings_200']],
     [

@@ -3405,6 +3405,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/tests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Tests
+     * @description A product's tests, newest first, each round with its report uploads and corrections, and the tests made
+     *     the earlier way that stand for the product.
+     */
+    get: operations['list_marketing_tests'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/tests/{test_id}': {
     parameters: {
       query?: never;
@@ -10183,6 +10204,20 @@ export interface components {
       matrix: components['schemas']['BoardMatrix'];
       product_appearance: components['schemas']['BoardAppearanceSummary'];
     };
+    /** @description A test made the earlier way (plan first) that stands for the product, with each round's reports. */
+    MarketingEarlierTest: {
+      id: string;
+      /** @enum {string} */
+      state:
+        | 'input'
+        | 'understanding_draft'
+        | 'understanding_confirmed'
+        | 'plan_draft'
+        | 'plan_confirmed';
+      product_name: string;
+      rounds: components['schemas']['MarketingTestHistoryRound'][];
+      created_at: string;
+    };
     MarketingProjectDetail: {
       id: string;
       revision: number;
@@ -10260,6 +10295,38 @@ export interface components {
       current_round_id: string | null;
       created_at: string;
     };
+    /** @description ``list_marketing_tests``: a product's tests and its earlier tests, each newest first (design §5.10). */
+    MarketingTestHistory: {
+      product_id: string;
+      tests: components['schemas']['MarketingTestHistoryItem'][];
+      earlier_tests: components['schemas']['MarketingEarlierTest'][];
+    };
+    /** @description A test of the product, as ``MarketingTestDetail`` shows it, with each round's reports. */
+    MarketingTestHistoryItem: {
+      id: string;
+      source_project_id: string;
+      /** @enum {string} */
+      comparison: 'claims' | 'expressions' | 'single';
+      plan_summary: components['schemas']['MarketingTestPlanSummary'];
+      rounds: components['schemas']['MarketingTestHistoryRound'][];
+      current_round_id: string | null;
+      created_at: string;
+    };
+    MarketingTestHistoryRound: {
+      id: string;
+      ordinal: number;
+      /** @enum {string} */
+      state: 'reviewing' | 'handoff' | 'awaiting_data' | 'evaluated' | 'closed';
+      /** Format: date */
+      start_date: string;
+      /** Format: date */
+      end_date: string;
+      /** Format: date */
+      effective_start_date: string;
+      /** Format: date */
+      effective_end_date: string;
+      reports: components['schemas']['MarketingTestReportUpload'][];
+    };
     /** @description The parts of the test's plan the user chose or can see at a glance; money in the plan's currency. */
     MarketingTestPlanSummary: {
       target_cost: string;
@@ -10294,6 +10361,16 @@ export interface components {
         | 'VND'
         | 'ZAR';
       landing_page: string;
+    };
+    /** @description One confirmed report of a round: a first upload, or a correction that replaces an earlier one (#255). */
+    MarketingTestReportUpload: {
+      batch_id: string;
+      /** @enum {string} */
+      kind: 'upload' | 'correction';
+      replaces_batch_id: string | null;
+      uploaded_at: string;
+      uploaded_by: string | null;
+      row_count: number;
     };
     MarketingTestRoundSummary: {
       id: string;
@@ -19724,6 +19801,37 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ResourceEnvelope'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  list_marketing_tests: {
+    parameters: {
+      query: {
+        product_id: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestHistory'];
         };
       };
       /** @description Validation Error */

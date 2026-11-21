@@ -1421,6 +1421,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'list_marketing_tests',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/tests',
+    pathParams: [],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'list_meta_bindings',
     method: 'GET',
     bffPattern:

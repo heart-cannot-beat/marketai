@@ -1102,6 +1102,12 @@
     "maxResponseBytes": 65536,
     "forwardConditionalHeaders": true
   },
+  "list_marketing_tests": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/tests",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 524288,
+    "forwardConditionalHeaders": false
+  },
   "create_marketing_ideas": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas",
     "maxRequestBytes": 65536,

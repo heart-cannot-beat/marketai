@@ -3073,6 +3073,24 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: false,
   },
   {
+    operationId: 'list_marketing_tests',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/tests',
+    fastapiPathTemplate: '/api/v1/marketing/tests',
+    pathParams: [],
+    querySchema: z
+      .object({
+        product_id: z.string(),
+      })
+      .strict(),
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 524288,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: false,
+  },
+  {
     operationId: 'list_meta_bindings',
     method: 'GET',
     bffPattern:

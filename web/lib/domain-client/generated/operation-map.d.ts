@@ -1346,6 +1346,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['ReuseCandidatePage'] };
   };
+  list_marketing_tests: {
+    pathParams: Record<string, never>;
+    queryParams: { product_id: string };
+    requestBody: never;
+    successResponses: { 200: components['schemas']['MarketingTestHistory'] };
+  };
   list_meta_bindings: {
     pathParams: { connection_id: string };
     queryParams: { meta_mode: string; cursor?: string; limit?: string };

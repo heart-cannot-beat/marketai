@@ -5321,6 +5321,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'list_marketing_tests',
+    {
+      operationId: 'list_marketing_tests',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/tests',
+      pathParams: [],
+      queryParams: ['product_id'],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 524288,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'list_marketing_tests_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'list_meta_bindings',
     {
       operationId: 'list_meta_bindings',
