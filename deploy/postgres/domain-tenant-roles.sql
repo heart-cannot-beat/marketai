@@ -860,6 +860,14 @@ BEGIN
     EXECUTE 'GRANT SELECT, INSERT ON public.marketing_product_photos TO marketai_domain_api';
     EXECUTE 'GRANT SELECT ON public.marketing_product_photos TO marketai_domain_worker, marketai_domain_readonly';
   END IF;
+  -- A test round's schedule changes (#253), append-only: a moved start or an early end. The API records
+  -- the change and reads it for the round's effective dates; the Worker reads it because checking that a
+  -- round's evaluation is still current (before a paid explanation call, in Scale's evidence checks) reads
+  -- a test round's effective dates; readonly reads it. Nobody updates or deletes a row.
+  IF to_regclass('public.marketing_round_schedule_changes') IS NOT NULL THEN
+    EXECUTE 'GRANT SELECT, INSERT ON public.marketing_round_schedule_changes TO marketai_domain_api';
+    EXECUTE 'GRANT SELECT ON public.marketing_round_schedule_changes TO marketai_domain_worker, marketai_domain_readonly';
+  END IF;
   -- The Worker admits a first batch's next step once the current one finished (#193): the product
   -- draft and its ideas after the reading, a planning call, the image drafts, previews and runs, each
   -- with its own reservation in the same transaction. Before #193 only the API admitted paid work.

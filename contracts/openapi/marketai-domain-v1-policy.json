@@ -1102,6 +1102,24 @@
     "maxResponseBytes": 65536,
     "forwardConditionalHeaders": true
   },
+  "change_marketing_test_start": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/start-date",
+    "maxRequestBytes": 2048,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": true
+  },
+  "end_marketing_test_round_early": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/end",
+    "maxRequestBytes": 2048,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": true
+  },
+  "get_marketing_test_result": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/result",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 65536,
+    "forwardConditionalHeaders": true
+  },
   "create_marketing_ideas": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas",
     "maxRequestBytes": 65536,

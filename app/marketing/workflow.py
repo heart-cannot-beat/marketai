@@ -491,6 +491,30 @@ def style_deviations(session, ctx, row):
     return sorted(found)
 
 
+def evaluation_window(session, ctx, row):
+    """(first day, last day, schedule evidence) a round is evaluated on.
+
+    A round of an earlier test: its frozen dates and no schedule, so its inputs stay exactly what they were. A
+    test project's round (#253): its effective dates -- a moved start, an early end -- and the changes behind them."""
+    from .ad_test_schedule import evaluation_window as test_window
+    window = test_window(session, ctx, row)
+    if window is None:
+        return row.start_date, row.end_date, None
+    return window["start_date"], window["end_date"], window["evidence"]
+
+
+def counted_rows(batches, start, end, schedule):
+    """The confirmed daily rows an evaluation counts; a test round counts only the days inside its effective dates."""
+    rows = sorted([item for b in batches for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))
+    return rows if schedule is None else [item for item in rows if str(start) <= item["date"] <= str(end)]
+
+
+def round_mature(row, end):
+    """The final checkpoint is mature once the attribution lag after the last day has passed."""
+    from zoneinfo import ZoneInfo
+    return utcnow().astimezone(ZoneInfo(row.timezone)).date() > end + timedelta(days=row.snapshot_json["protocol"]["attribution_lag_days"])
+
+
 def evaluate(session, ctx, row):
     from .evaluation import evaluate_snapshot, combination_key
     handoffs = scoped(session, ctx, Handoff, round_id=row.id)
@@ -498,8 +522,8 @@ def evaluate(session, ctx, row):
         raise MarketingError("handoff_not_ready", "请先完成审核和导出。", 409)
     bindings = scoped(session, ctx, Binding, round_id=row.id)
     batches = active_batches(session, ctx, row)
-    from zoneinfo import ZoneInfo
-    mature = utcnow().astimezone(ZoneInfo(row.timezone)).date() > row.end_date + timedelta(days=row.snapshot_json["protocol"]["attribution_lag_days"])
+    start, end, schedule = evaluation_window(session, ctx, row)
+    mature = round_mature(row, end)
     prior_confirmations = []
     freshness = {}
     for previous in scoped(session, ctx, Round, project_id=row.project_id, state="closed"):
@@ -514,13 +538,15 @@ def evaluate(session, ctx, row):
                     "content_sha256": entry["content_sha256"], "evaluation_id": evidence.id,
                     "timezone": previous.timezone, "protocol": previous.snapshot_json["protocol"]})
     inputs = {"prior_confirmations": prior_confirmations, "timezone": row.timezone, "round_id": row.id, "snapshot": row.snapshot_json, "execution_mode": row.execution_mode,
-        "start_date": str(row.start_date), "end_date": str(row.end_date), "mature": mature,
+        "start_date": str(start), "end_date": str(end), "mature": mature,
         "entries": handoffs[0].manifest_json["entries"],
         "bindings": [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json} for b in sorted(bindings, key=lambda b: b.id)],
         "quality_changed": [e["entry_id"] for e in handoffs[0].manifest_json["entries"] if not ready(session, ctx, row, e["asset_version_id"])],
         "quality_review_ids": {e["asset_version_id"]: sorted(r.id for r in active_quality(session, ctx, e["asset_version_id"]))
             for e in handoffs[0].manifest_json["entries"]},
-        "batch_ids": [b.id for b in batches], "rows": sorted([item for b in batches for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))}
+        "batch_ids": [b.id for b in batches], "rows": counted_rows(batches, start, end, schedule)}
+    if schedule is not None:
+        inputs["schedule"] = schedule
     if "style_variation" in row.snapshot_json["plan"]:
         inputs["style_deviations"] = style_deviations(session, ctx, row)
     hashed = digest(inputs)
@@ -566,10 +592,11 @@ def evaluation_current(session, ctx, row, evaluation, *, _seen=None, _cache=None
     seen.add(evaluation.id)
     inputs = evaluation.input_json
     latest = latest_evaluation(session, ctx, row)
+    start, end, schedule = evaluation_window(session, ctx, row)
     if (not latest or latest.id != evaluation.id or digest(inputs) != evaluation.input_hash
             or inputs["snapshot"] != row.snapshot_json or inputs["round_id"] != row.id
             or inputs["execution_mode"] != row.execution_mode or inputs["timezone"] != row.timezone
-            or inputs["start_date"] != str(row.start_date) or inputs["end_date"] != str(row.end_date)):
+            or inputs["start_date"] != str(start) or inputs["end_date"] != str(end) or inputs.get("schedule") != schedule):
         return False
     if not review_evidence_current(session, ctx, evaluation):
         return False
@@ -578,12 +605,10 @@ def evaluation_current(session, ctx, row, evaluation, *, _seen=None, _cache=None
         for b in sorted(scoped(session, ctx, Binding, round_id=row.id), key=lambda b: b.id)]
     quality_changed = {e["entry_id"] for e in inputs["entries"] if not ready(session, ctx, row, e["asset_version_id"])}
     if (inputs["batch_ids"] != [b.id for b in batches] or inputs["bindings"] != bindings
-            or inputs["rows"] != sorted([item for b in batches for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))
+            or inputs["rows"] != counted_rows(batches, start, end, schedule)
             or set(inputs.get("quality_changed", [])) != quality_changed):
         return False
-    from zoneinfo import ZoneInfo
-    mature = utcnow().astimezone(ZoneInfo(row.timezone)).date() > row.end_date + timedelta(days=row.snapshot_json["protocol"]["attribution_lag_days"])
-    if inputs["mature"] != mature:
+    if inputs["mature"] != round_mature(row, end):
         return False
     from .evaluation import combination_key
     for proof in inputs.get("prior_confirmations", []):

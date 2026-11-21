@@ -125,6 +125,14 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['CancelResult'] };
   };
+  change_marketing_test_start: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['MoveMarketingTestStart'];
+    successResponses: {
+      200: components['schemas']['MarketingTestRoundSchedule'];
+    };
+  };
   check_library_data_source_connection: {
     pathParams: { data_source_entry_id: string };
     queryParams: Record<string, never>;
@@ -611,6 +619,14 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['EditProject'];
     successResponses: { 200: components['schemas']['MarketingProjectDetail'] };
   };
+  end_marketing_test_round_early: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['EndMarketingTestRoundEarly'];
+    successResponses: {
+      200: components['schemas']['MarketingTestRoundSchedule'];
+    };
+  };
   evaluate_marketing_round: {
     pathParams: { round_id: string };
     queryParams: Record<string, never>;
@@ -963,6 +979,12 @@ export type DomainOperationMap = {
     };
     requestBody: never;
     successResponses: { 200: components['schemas']['MarketingTestQuote'] };
+  };
+  get_marketing_test_result: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: { 200: components['schemas']['MarketingTestResult'] };
   };
   get_marketing_workflow: {
     pathParams: { project_id: string };
