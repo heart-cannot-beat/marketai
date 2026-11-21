@@ -1293,6 +1293,11 @@ export interface DomainGateway {
     testId: string;
     roundId: string;
   }): Promise<DomainResultFor<'get_marketing_test_result'>>;
+  /** A product's tests with each round's report uploads and corrections, and its earlier (plan-first) tests (#255). */
+  listMarketingTests(params: {
+    workspaceSlug: string;
+    productId: string;
+  }): Promise<DomainResultFor<'list_marketing_tests'>>;
   /** Continue a stopped first batch, confirming the maximum its `resume` offers (#193). */
   resumeMarketingFirstBatch(params: {
     workspaceSlug: string;
@@ -5663,6 +5668,16 @@ export class DefaultDomainGateway implements DomainGateway {
         round_id: params.roundId,
       })
     );
+  }
+
+  async listMarketingTests(params: {
+    workspaceSlug: string;
+    productId: string;
+  }): Promise<DomainResultFor<'list_marketing_tests'>> {
+    const path =
+      buildBffPath('list_marketing_tests', { slug: params.workspaceSlug }) +
+      this.buildQuery({ product_id: params.productId });
+    return this.sendSafe<'list_marketing_tests'>(path);
   }
 
   async resumeMarketingFirstBatch(params: {

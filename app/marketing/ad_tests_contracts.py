@@ -235,3 +235,51 @@ class MarketingTestQuote(Document):
     landing_page_source: Literal["product_link", "answer"] | None
     checks: MarketingTestChecks
     quote_hash: str
+
+
+class MarketingTestReportUpload(Document):
+    """One confirmed report of a round: a first upload, or a correction that replaces an earlier one (#255)."""
+    batch_id: str
+    #: A correction replaces the days of the upload it names; an upload adds its own.
+    kind: Literal["upload", "correction"]
+    replaces_batch_id: str | None
+    #: When the report was uploaded: its batch's ``created_at``.
+    uploaded_at: str
+    #: Who uploaded it: the person on the first audit event naming the batch; ``None`` when that event names nobody.
+    uploaded_by: str | None
+    row_count: int
+
+
+class MarketingTestHistoryRound(MarketingTestRoundSummary):
+    #: The round's confirmed reports, oldest first; a previewed upload that was never confirmed is not one.
+    reports: list[MarketingTestReportUpload]
+
+
+class MarketingTestHistoryItem(Document):
+    """A test of the product, as ``MarketingTestDetail`` shows it, with each round's reports."""
+    id: str
+    source_project_id: str
+    comparison: Literal["claims", "expressions", "single"]
+    plan_summary: MarketingTestPlanSummary
+    rounds: list[MarketingTestHistoryRound]
+    current_round_id: str | None
+    created_at: str
+
+
+class MarketingEarlierTest(Document):
+    """A test made the earlier way (plan first) that stands for the product, with each round's reports."""
+    id: str
+    state: Literal["input", "understanding_draft", "understanding_confirmed", "plan_draft", "plan_confirmed"]
+    #: The product name of its understanding, or the start of its source text, as the earlier test list shows it.
+    product_name: str
+    rounds: list[MarketingTestHistoryRound]
+    created_at: str
+
+
+class MarketingTestHistory(Document):
+    """``list_marketing_tests``: a product's tests and its earlier tests, each newest first (design §5.10)."""
+    product_id: str
+    tests: list[MarketingTestHistoryItem]
+    #: Plan-first tests started from this product's card (``app.marketing.card_lineage``), or from pasted text
+    #: whose confirmed understanding is this product.
+    earlier_tests: list[MarketingEarlierTest]

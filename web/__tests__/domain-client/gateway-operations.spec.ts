@@ -127,6 +127,8 @@ describe('DomainGateway operation coverage', () => {
     // `get_marketing_test_result` (#253).
     // 271 -> 273: a test round's full reports
     // `preview_marketing_test_report`, `confirm_marketing_test_report` (#251).
-    expect(DOMAIN_ALLOWLIST.length).toBe(273);
+    // 273 -> 274: a product's test history
+    // `list_marketing_tests` (#255).
+    expect(DOMAIN_ALLOWLIST.length).toBe(274);
   });
 });

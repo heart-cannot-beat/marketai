@@ -1,7 +1,8 @@
 """Authenticated v1 endpoints for test projects (ADR 0019, #247).
 
-A test's rounds are read and driven by round id through ``api.py``; these endpoints read the test itself, and
-quote a test of the kept ads of ads-first ideas before it starts (#248).
+A test's rounds are read and driven by round id through ``api.py``; these endpoints read the test itself,
+quote a test of the kept ads of ads-first ideas before it starts (#248), and list a product's test
+history (#255).
 """
 from typing import Annotated
 
@@ -14,10 +15,19 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
 from . import ad_test_schedule, ad_tests, ideas, workflow
 from .ad_tests_contracts import (EndMarketingTestRoundEarly, MarketingTestAnswers, MarketingTestDetail,
-    MarketingTestQuote, MarketingTestResult, MarketingTestRoundSchedule, MoveMarketingTestStart)
+    MarketingTestHistory, MarketingTestQuote, MarketingTestResult, MarketingTestRoundSchedule, MoveMarketingTestStart)
 from .service import MarketingError
 
 router = APIRouter(prefix="/marketing/tests", tags=["marketing"])
+
+
+@router.get("", operation_id="list_marketing_tests", response_model=MarketingTestHistory)
+def list_tests(product_id: str = Query(min_length=1, max_length=64),
+               ctx: TenantContext = Depends(request_tenant_context)):
+    """A product's tests, newest first, each round with its report uploads and corrections, and the tests made
+    the earlier way that stand for the product."""
+    with tenant_session(ctx) as session:
+        return ad_tests.history(session, ctx, product_id)
 
 
 @router.get("/{test_id}", operation_id="get_marketing_test", response_model=MarketingTestDetail)

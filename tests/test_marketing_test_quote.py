@@ -418,7 +418,9 @@ class TestQuoteTests(TestQuoteFixtures):
                      session.scalar(select(func.count()).select_from(MarketingRevisionRecord)),
                      session.scalar(select(func.count()).select_from(MarketingProjectRecord)))
             self.assertEqual(after, before)
+            # This Workspace's test projects: other test modules sharing the database make their own elsewhere.
             self.assertEqual(session.scalars(select(MarketingProjectRecord).where(
+                MarketingProjectRecord.workspace_id == self.context.workspace_id,
                 MarketingProjectRecord.flow == ad_tests.FLOW)).all(), [])
 
 
