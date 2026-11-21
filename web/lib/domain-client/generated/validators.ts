@@ -5036,6 +5036,17 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'placement',
     ],
   },
+  EndMarketingTestRoundEarly: {
+    properties: {
+      end_date: { type: 'string', format: 'date' },
+      reason: { anyOf: [{ type: 'string', maxLength: 500 }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['end_date'],
+    description:
+      "The last day the ads ran; the evaluation takes it as the round's last day (#253).",
+  },
   EnrollmentActivateRequest: {
     properties: {
       activation_preview_id: { type: 'string', maxLength: 64, minLength: 1 },
@@ -10110,6 +10121,31 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'The "look together" check the start command admits (plan E6): one call per kept ad, paid in BYOK.',
   },
+  MarketingTestComparisonResult: {
+    properties: {
+      id: { type: 'string' },
+      label: { type: 'string' },
+      status: {
+        type: 'string',
+        enum: ['meets_goal', 'misses_goal', 'not_clear'],
+      },
+      purchases: { type: 'string' },
+      remaining_purchases: { type: 'integer' },
+      asset_version_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'label',
+      'status',
+      'purchases',
+      'remaining_purchases',
+      'asset_version_ids',
+    ],
+    description:
+      "One compared group of ads (a claim, a way of telling it, or the one ad) in the round's latest evaluation.",
+  },
   MarketingTestDetail: {
     properties: {
       id: { type: 'string' },
@@ -10442,6 +10478,74 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'One confirmed report of a round: a first upload, or a correction that replaces an earlier one (#255).',
   },
+  MarketingTestResult: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      schedule: { $ref: '#/components/schemas/MarketingTestRoundSchedule' },
+      mature: { type: 'boolean' },
+      min_purchases: { type: 'integer' },
+      scope: { type: 'string', const: 'these_ads' },
+      evaluation_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      evaluated_at: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      current: { type: 'boolean' },
+      comparisons: {
+        items: { $ref: '#/components/schemas/MarketingTestComparisonResult' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'test_id',
+      'round_id',
+      'schedule',
+      'mature',
+      'min_purchases',
+      'scope',
+      'evaluation_id',
+      'evaluated_at',
+      'current',
+      'comparisons',
+    ],
+    description:
+      "The minimal result of a round (design §5.9): its schedule and, once evaluated, each group's status.",
+  },
+  MarketingTestRoundSchedule: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      revision: { type: 'integer' },
+      start_date: { type: 'string', format: 'date' },
+      end_date: { type: 'string', format: 'date' },
+      effective_start_date: { type: 'string', format: 'date' },
+      effective_end_date: { type: 'string', format: 'date' },
+      ended_early: { type: 'boolean' },
+      result_date: { type: 'string', format: 'date' },
+      start_movable: { type: 'boolean' },
+      changes: {
+        items: { $ref: '#/components/schemas/MarketingTestScheduleChange' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'test_id',
+      'round_id',
+      'revision',
+      'start_date',
+      'end_date',
+      'effective_start_date',
+      'effective_end_date',
+      'ended_early',
+      'result_date',
+      'start_movable',
+      'changes',
+    ],
+    description:
+      "This round's schedule (#253): the frozen dates never change; the effective ones are what is evaluated.",
+  },
   MarketingTestRoundSummary: {
     properties: {
       id: { type: 'string' },
@@ -10466,6 +10570,19 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'effective_start_date',
       'effective_end_date',
     ],
+  },
+  MarketingTestScheduleChange: {
+    properties: {
+      id: { type: 'string' },
+      kind: { type: 'string', enum: ['start_moved', 'ended_early'] },
+      date: { type: 'string', format: 'date' },
+      reason: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      actor_id: { type: 'string' },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'kind', 'date', 'reason', 'actor_id', 'created_at'],
   },
   MarketingTestSubject: {
     properties: {
@@ -10727,6 +10844,17 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     required: ['label'],
     description:
       "One variant the source sells: a model, size or power, or a colour /\nappearance edition of the same model (Issue #192). ``specs`` are only the\nspecs that differ; ``appearance`` are its own must-match items (colour,\nmaterial, pattern) and ``replaces_must_match_ids`` the shared items they\nsupersede once it is chosen; ``image_ids`` are the candidate images that\nshow it (an image no variant claims is general), and\n``default_image_ids`` what the card preselects when it is chosen: its\nown and the general images, never another variant's.",
+  },
+  MoveMarketingTestStart: {
+    properties: {
+      start_date: { type: 'string', format: 'date' },
+      reason: { anyOf: [{ type: 'string', maxLength: 500 }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['start_date'],
+    description:
+      "The day the ads actually went live; the round's end moves with it (#253).",
   },
   MultiCandidateConfirmInput: {
     properties: {
@@ -15482,6 +15610,52 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['batch_id', 'already_terminal'],
   },
+  change_marketing_test_start_200: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      revision: { type: 'integer' },
+      start_date: { type: 'string', format: 'date' },
+      end_date: { type: 'string', format: 'date' },
+      effective_start_date: { type: 'string', format: 'date' },
+      effective_end_date: { type: 'string', format: 'date' },
+      ended_early: { type: 'boolean' },
+      result_date: { type: 'string', format: 'date' },
+      start_movable: { type: 'boolean' },
+      changes: {
+        items: { $ref: '#/components/schemas/MarketingTestScheduleChange' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'test_id',
+      'round_id',
+      'revision',
+      'start_date',
+      'end_date',
+      'effective_start_date',
+      'effective_end_date',
+      'ended_early',
+      'result_date',
+      'start_movable',
+      'changes',
+    ],
+    description:
+      "This round's schedule (#253): the frozen dates never change; the effective ones are what is evaluated.",
+  },
+  change_marketing_test_start_request: {
+    properties: {
+      start_date: { type: 'string', format: 'date' },
+      reason: { anyOf: [{ type: 'string', maxLength: 500 }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['start_date'],
+    description:
+      "The day the ads actually went live; the round's end moves with it (#253).",
+  },
   check_library_data_source_connection_202: {
     properties: {
       operation_id: { type: 'string' },
@@ -18708,6 +18882,52 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['command'],
   },
+  end_marketing_test_round_early_200: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      revision: { type: 'integer' },
+      start_date: { type: 'string', format: 'date' },
+      end_date: { type: 'string', format: 'date' },
+      effective_start_date: { type: 'string', format: 'date' },
+      effective_end_date: { type: 'string', format: 'date' },
+      ended_early: { type: 'boolean' },
+      result_date: { type: 'string', format: 'date' },
+      start_movable: { type: 'boolean' },
+      changes: {
+        items: { $ref: '#/components/schemas/MarketingTestScheduleChange' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'test_id',
+      'round_id',
+      'revision',
+      'start_date',
+      'end_date',
+      'effective_start_date',
+      'effective_end_date',
+      'ended_early',
+      'result_date',
+      'start_movable',
+      'changes',
+    ],
+    description:
+      "This round's schedule (#253): the frozen dates never change; the effective ones are what is evaluated.",
+  },
+  end_marketing_test_round_early_request: {
+    properties: {
+      end_date: { type: 'string', format: 'date' },
+      reason: { anyOf: [{ type: 'string', maxLength: 500 }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['end_date'],
+    description:
+      "The last day the ads ran; the evaluation takes it as the round's last day (#253).",
+  },
   evaluate_marketing_round_200: {
     properties: {
       id: { type: 'string' },
@@ -20733,6 +20953,39 @@ const SCHEMAS: Record<string, object> = {
     ],
     description:
       "Whether the money answers the round's question, when the result is due and what starting costs at most.\n\nRead-only; the page shows these numbers and does not compute its own (design §5.6). ``available`` false\nnames why (``unavailable_reason``); a plan the confirming checks refuse names their code (``plan_error``).",
+  },
+  get_marketing_test_result_200: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      schedule: { $ref: '#/components/schemas/MarketingTestRoundSchedule' },
+      mature: { type: 'boolean' },
+      min_purchases: { type: 'integer' },
+      scope: { type: 'string', const: 'these_ads' },
+      evaluation_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      evaluated_at: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      current: { type: 'boolean' },
+      comparisons: {
+        items: { $ref: '#/components/schemas/MarketingTestComparisonResult' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'test_id',
+      'round_id',
+      'schedule',
+      'mature',
+      'min_purchases',
+      'scope',
+      'evaluation_id',
+      'evaluated_at',
+      'current',
+      'comparisons',
+    ],
+    description:
+      "The minimal result of a round (design §5.9): its schedule and, once evaluated, each group's status.",
   },
   get_marketing_workflow_200: {
     properties: {
@@ -24988,6 +25241,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['cancel_localization_batch_200'],
     ],
     [
+      'change_marketing_test_start_200',
+      VALIDATOR_FUNCTIONS['change_marketing_test_start_200'],
+    ],
+    [
+      'change_marketing_test_start_request',
+      VALIDATOR_FUNCTIONS['change_marketing_test_start_request'],
+    ],
+    [
       'check_library_data_source_connection_202',
       VALIDATOR_FUNCTIONS['check_library_data_source_connection_202'],
     ],
@@ -25508,6 +25769,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['edit_marketing_project_request'],
     ],
     [
+      'end_marketing_test_round_early_200',
+      VALIDATOR_FUNCTIONS['end_marketing_test_round_early_200'],
+    ],
+    [
+      'end_marketing_test_round_early_request',
+      VALIDATOR_FUNCTIONS['end_marketing_test_round_early_request'],
+    ],
+    [
       'evaluate_marketing_round_200',
       VALIDATOR_FUNCTIONS['evaluate_marketing_round_200'],
     ],
@@ -25687,6 +25956,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'get_marketing_test_quote_200',
       VALIDATOR_FUNCTIONS['get_marketing_test_quote_200'],
+    ],
+    [
+      'get_marketing_test_result_200',
+      VALIDATOR_FUNCTIONS['get_marketing_test_result_200'],
     ],
     [
       'get_marketing_workflow_200',
@@ -26408,6 +26681,11 @@ export const REQUEST_VALIDATORS = {
   ] as ValidateFunction<
     DomainOperationMap['bind_marketing_delivery']['requestBody']
   >,
+  change_marketing_test_start: VALIDATOR_FUNCTIONS[
+    'change_marketing_test_start_request'
+  ] as ValidateFunction<
+    DomainOperationMap['change_marketing_test_start']['requestBody']
+  >,
   check_library_data_source_connection: VALIDATOR_FUNCTIONS[
     'check_library_data_source_connection_request'
   ] as ValidateFunction<
@@ -26709,6 +26987,11 @@ export const REQUEST_VALIDATORS = {
     'edit_marketing_project_request'
   ] as ValidateFunction<
     DomainOperationMap['edit_marketing_project']['requestBody']
+  >,
+  end_marketing_test_round_early: VALIDATOR_FUNCTIONS[
+    'end_marketing_test_round_early_request'
+  ] as ValidateFunction<
+    DomainOperationMap['end_marketing_test_round_early']['requestBody']
   >,
   execute_meta_launch_preview: VALIDATOR_FUNCTIONS[
     'execute_meta_launch_preview_request'

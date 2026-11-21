@@ -1,7 +1,7 @@
 """Delivery evidence is append-only and independent of mutable planning drafts."""
 from datetime import date, datetime
 
-from sqlalchemy import JSON, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from app.adapters.persistence.database import Base
 from app.adapters.persistence.models import utcnow
@@ -198,4 +198,27 @@ class MarketingEvaluationRecord(Base):
     input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     input_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     result_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class MarketingRoundScheduleChangeRecord(Base):
+    """A moved start or an early end of a test project's round (#253), append-only.
+
+    The round's frozen dates never change; its effective dates are the frozen ones plus these rows, the latest
+    of each kind winning (``ad_test_schedule.effective_dates``)."""
+    __tablename__ = "marketing_round_schedule_changes"
+    __table_args__ = (
+        ForeignKeyConstraint(["workspace_id", "round_id"], ["marketing_rounds.workspace_id", "marketing_rounds.id"],
+                             ondelete="RESTRICT", name="fk_marketing_round_schedule_change_round"),
+        CheckConstraint("kind IN ('start_moved', 'ended_early')", name="schedule_change_kind"),
+        Index("ix_marketing_round_schedule_changes_round", "workspace_id", "round_id"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
+    round_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    #: ``start_moved``: the new first day; ``ended_early``: the last day the ads ran.
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(500))
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

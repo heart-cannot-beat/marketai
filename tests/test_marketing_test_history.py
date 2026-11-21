@@ -7,6 +7,7 @@ tests made the earlier way (plan first) that stand for the product through its c
 their report batches are written the way a confirmed upload stores them until the test-report commands (#251)
 exist. The earlier test runs the ordinary plan-first loop through HTTP, uploads included.
 """
+from datetime import timedelta
 from unittest.mock import patch
 
 from sqlalchemy import select
@@ -15,8 +16,8 @@ from app import config
 from app.adapters.persistence.database import tenant_session
 from app.adapters.persistence.models import AuditEventRecord, ProductRecord, new_id
 from app.main import app
-from app.marketing import ad_tests, ideas, service, workflow
-from app.marketing.ad_tests_contracts import MarketingTestHistory
+from app.marketing import ad_test_schedule, ad_tests, ideas, service, workflow
+from app.marketing.ad_tests_contracts import MarketingTestHistory, MoveMarketingTestStart
 from app.marketing.models import MarketingProjectRecord
 from app.marketing.workflow_models import MarketingMetricBatchRecord
 from app.platform.http_identity import request_tenant_context
@@ -218,6 +219,23 @@ class ProductTestHistoryTests(MarketingTestHistoryFixtures):
             body = self.history(asked)
             self.assertEqual((body["product_id"], [t["id"] for t in body["tests"]], [t["id"] for t in body["earlier_tests"]]),
                              (product, [test_id], [before_bridge]), asked)
+
+    def test_a_moved_start_shows_in_the_history_with_the_frozen_dates_kept(self):
+        # A test round whose ads went live two days late (#253): the history shows the effective dates the
+        # evaluation uses, next to the frozen ones.
+        product = self.product()
+        test_id, round_id = self.make_test(source=self.ideas_of(product))
+        with tenant_session(self.context) as session:
+            row = workflow.get_round(session, self.context, round_id)
+            frozen = (row.start_date, row.end_date)
+            ad_test_schedule.move_start(session, self.context, row, MoveMarketingTestStart(
+                start_date=row.start_date + timedelta(days=2), reason="The ads went live late"))
+        (listed,) = self.history(product)["tests"][0]["rounds"]
+        self.assertEqual((listed["start_date"], listed["end_date"]), tuple(str(day) for day in frozen))
+        self.assertEqual((listed["effective_start_date"], listed["effective_end_date"]),
+                         tuple(str(day + timedelta(days=2)) for day in frozen))
+        detail_round = self.client.get(f"/api/v1/marketing/tests/{test_id}").json()["rounds"][0]
+        self.assertEqual({k: v for k, v in listed.items() if k != "reports"}, detail_round)
 
     def test_a_product_without_tests_reads_an_empty_history(self):
         product = self.product()

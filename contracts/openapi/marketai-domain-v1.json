@@ -12469,6 +12469,219 @@
         }
       }
     },
+    "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/end": {
+      "post": {
+        "operationId": "end_marketing_test_round_early",
+        "summary": "End Round Early",
+        "description": "Record the last day the ads ran; the result can be read once the attribution lag after it has passed (#253).",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndMarketingTestRoundEarly"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestRoundSchedule"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/result": {
+      "get": {
+        "operationId": "get_marketing_test_result",
+        "summary": "Get Result",
+        "description": "The round's schedule and minimal result: each compared group met the goal, missed it or cannot tell yet,\nand how many orders it is short. Reading it never evaluates; \"see the result\" evaluates the round first.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/start-date": {
+      "post": {
+        "operationId": "change_marketing_test_start",
+        "summary": "Change Start",
+        "description": "Move the round's start to the day the ads went live, before its first report is confirmed (#253).",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveMarketingTestStart"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestRoundSchedule"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meta/connections": {
       "post": {
         "operationId": "create_meta_connection",
@@ -28323,6 +28536,31 @@
           "placement"
         ]
       },
+      "EndMarketingTestRoundEarly": {
+        "properties": {
+          "end_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "end_date"
+        ],
+        "description": "The last day the ads ran; the evaluation takes it as the round's last day (#253)."
+      },
       "EnrollmentActivateRequest": {
         "properties": {
           "activation_preview_id": {
@@ -39336,6 +39574,47 @@
         ],
         "description": "The \"look together\" check the start command admits (plan E6): one call per kept ad, paid in BYOK."
       },
+      "MarketingTestComparisonResult": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "meets_goal",
+              "misses_goal",
+              "not_clear"
+            ]
+          },
+          "purchases": {
+            "type": "string"
+          },
+          "remaining_purchases": {
+            "type": "integer"
+          },
+          "asset_version_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "status",
+          "purchases",
+          "remaining_purchases",
+          "asset_version_ids"
+        ],
+        "description": "One compared group of ads (a claim, a way of telling it, or the one ad) in the round's latest evaluation."
+      },
       "MarketingTestDetail": {
         "properties": {
           "id": {
@@ -39922,6 +40201,134 @@
         ],
         "description": "One confirmed report of a round: a first upload, or a correction that replaces an earlier one (#255)."
       },
+      "MarketingTestResult": {
+        "properties": {
+          "test_id": {
+            "type": "string"
+          },
+          "round_id": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/MarketingTestRoundSchedule"
+          },
+          "mature": {
+            "type": "boolean"
+          },
+          "min_purchases": {
+            "type": "integer"
+          },
+          "scope": {
+            "type": "string",
+            "const": "these_ads"
+          },
+          "evaluation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evaluated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "comparisons": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestComparisonResult"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "test_id",
+          "round_id",
+          "schedule",
+          "mature",
+          "min_purchases",
+          "scope",
+          "evaluation_id",
+          "evaluated_at",
+          "current",
+          "comparisons"
+        ],
+        "description": "The minimal result of a round (design §5.9): its schedule and, once evaluated, each group's status."
+      },
+      "MarketingTestRoundSchedule": {
+        "properties": {
+          "test_id": {
+            "type": "string"
+          },
+          "round_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "effective_start_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "effective_end_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "ended_early": {
+            "type": "boolean"
+          },
+          "result_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "start_movable": {
+            "type": "boolean"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestScheduleChange"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "test_id",
+          "round_id",
+          "revision",
+          "start_date",
+          "end_date",
+          "effective_start_date",
+          "effective_end_date",
+          "ended_early",
+          "result_date",
+          "start_movable",
+          "changes"
+        ],
+        "description": "This round's schedule (#253): the frozen dates never change; the effective ones are what is evaluated."
+      },
       "MarketingTestRoundSummary": {
         "properties": {
           "id": {
@@ -39967,6 +40374,50 @@
           "end_date",
           "effective_start_date",
           "effective_end_date"
+        ]
+      },
+      "MarketingTestScheduleChange": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "start_moved",
+              "ended_early"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "date",
+          "reason",
+          "actor_id",
+          "created_at"
         ]
       },
       "MarketingTestSubject": {
@@ -40492,6 +40943,31 @@
           "label"
         ],
         "description": "One variant the source sells: a model, size or power, or a colour /\nappearance edition of the same model (Issue #192). ``specs`` are only the\nspecs that differ; ``appearance`` are its own must-match items (colour,\nmaterial, pattern) and ``replaces_must_match_ids`` the shared items they\nsupersede once it is chosen; ``image_ids`` are the candidate images that\nshow it (an image no variant claims is general), and\n``default_image_ids`` what the card preselects when it is chosen: its\nown and the general images, never another variant's."
+      },
+      "MoveMarketingTestStart": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start_date"
+        ],
+        "description": "The day the ads actually went live; the round's end moves with it (#253)."
       },
       "MultiCandidateConfirmInput": {
         "properties": {
