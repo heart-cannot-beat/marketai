@@ -162,6 +162,8 @@
   "stop-ideas_refused-body": "Both drafts broke our rules, so we stopped instead of trying again on our own. You can have them drafted once more.",
   "stop-step_failed-title": "“{{step}}” didn't work",
   "stop-step_failed-body": "It may be a passing problem. Trying again repeats only this step.",
+  "stop-fault-title": "Something went wrong on our side at “{{step}}”",
+  "stop-fault-body": "The error is in our system, not in what you gave us or with the AI provider. We already tried again a few times without success, so trying again now will most likely fail the same way until we fix it; you may want to tell your administrator. Trying again doesn't raise the maximum you confirmed.",
   "stop-images-failed-title": "{{count}} ads didn't come out",
   "stop-images-failed-title_one": "{{count}} ad didn't come out",
   "stop-images-failed-body": "Trying again makes only those again. The ads already made stay as they are.",

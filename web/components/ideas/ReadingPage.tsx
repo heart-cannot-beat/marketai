@@ -502,8 +502,8 @@ function StopPanel({
         )
       : imagesFailed
         ? t('stop-images-failed-title', { count: view.failedAds })
-        : view.reason === 'step_failed'
-          ? t('stop-step_failed-title', {
+        : view.reason === 'step_failed' || view.reason === 'fault'
+          ? t(`stop-${view.reason}-title`, {
               step: t(`reading-step-${view.step}`),
             })
           : t(`stop-${view.reason}-title`);
@@ -627,7 +627,9 @@ function StopPanel({
       {(view.kind === 'continue' || view.kind === 'uncertain') &&
         offer &&
         button(
-          view.reason === 'step_failed' ? t('stop-retry') : t('stop-continue'),
+          view.reason === 'step_failed' || view.reason === 'fault'
+            ? t('stop-retry')
+            : t('stop-continue'),
           () => void go({})
         )}
 

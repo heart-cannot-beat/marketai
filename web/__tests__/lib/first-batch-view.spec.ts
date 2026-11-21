@@ -274,11 +274,12 @@ describe('stopView', () => {
     ).toMatchObject({ kind: 'add_material', reason: 'too_few_claims' });
   });
 
-  it('continues after a refusal, a failed step or the confirmed maximum', () => {
+  it('continues after a refusal, a failed step, the confirmed maximum or an error of ours (#269)', () => {
     for (const reason of [
       'over_budget',
       'ideas_refused',
       'step_failed',
+      'fault',
     ] as const)
       expect(
         stopView(
@@ -306,6 +307,16 @@ describe('stopView', () => {
         })
       )
     ).toMatchObject({ kind: 'continue', step: 'images', failedAds: 2 });
+    // An error of ours while making them is no ad that failed (#269).
+    expect(
+      stopView(
+        batch({
+          state: 'needs_attention',
+          attention: { reason: 'fault', step: 'images', resumable: true },
+          resume,
+        })
+      )
+    ).toMatchObject({ kind: 'continue', reason: 'fault', failedAds: 0 });
   });
 
   it('never offers to continue an uncertain call until it is reconciled', () => {

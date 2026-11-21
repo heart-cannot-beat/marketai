@@ -323,6 +323,11 @@ describe('ReadingPage (#195)', () => {
     expect(
       within(stop).getByRole('heading', { name: "“Check the ads” didn't work" })
     ).toBeInTheDocument();
+    expect(
+      within(stop).getByText(
+        'It may be a passing problem. Trying again repeats only this step.'
+      )
+    ).toBeInTheDocument();
     expect(within(stop).queryByText(/ads? didn't come out/)).toBeNull();
     expect(
       within(stop).getByRole('button', { name: 'Try again · up to $0.09 more' })
@@ -559,6 +564,45 @@ describe('ReadingPage (#195)', () => {
     );
     expect(screen.getByTestId('reading-progress')).toBeInTheDocument();
     expect(screen.queryByText("Couldn't load the progress.")).toBeNull();
+  });
+
+  it('an error of ours says so, and trying again costs nothing more (#269)', async () => {
+    mockGateway.resumeMarketingFirstBatch.mockResolvedValue(
+      ok(batch({ ...READ, state: 'ideas' }))
+    );
+    await renderPage(
+      batch({
+        ...READ,
+        state: 'needs_attention',
+        needs_attention: true,
+        attention: { reason: 'fault', step: 'understanding', resumable: true },
+        resume: { ...RESUME, maximum_cost: '0.8625', additional_cost: '0.00' },
+      })
+    );
+    const stop = screen.getByTestId('reading-stop');
+    expect(stop).toHaveAttribute('data-reason', 'fault');
+    expect(
+      within(stop).getByRole('heading', {
+        name: 'Something went wrong on our side at “Sort out the product facts”',
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(stop).getByText(
+        /The error is in our system, not in what you gave us/
+      )
+    ).toHaveTextContent(
+      "trying again now will most likely fail the same way until we fix it; you may want to tell your administrator. Trying again doesn't raise the maximum you confirmed."
+    );
+    expect(within(stop).queryByText(/passing problem/)).toBeNull();
+    expect(
+      within(stop).getByText('Everything done so far is kept.')
+    ).toBeInTheDocument();
+    fireEvent.click(within(stop).getByRole('button', { name: 'Try again' }));
+    await waitFor(() =>
+      expect(mockGateway.resumeMarketingFirstBatch).toHaveBeenCalledWith(
+        expect.objectContaining({ body: { quote_hash: 'rq_1' } })
+      )
+    );
   });
 
   it('an images stop with no ad admitted reads as a failed step, with its reason', async () => {
