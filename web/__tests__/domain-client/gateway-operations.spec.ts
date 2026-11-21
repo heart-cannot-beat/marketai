@@ -118,6 +118,8 @@ describe('DomainGateway operation coverage', () => {
     // `edit_marketing_ideas_copy` (#228).
     // 265 -> 266: the first batches with no product yet
     // `list_marketing_first_batches` (#204).
-    expect(DOMAIN_ALLOWLIST.length).toBe(266);
+    // 266 -> 267: reading a test the kept ads were taken to
+    // `get_marketing_test` (#247).
+    expect(DOMAIN_ALLOWLIST.length).toBe(267);
   });
 });
