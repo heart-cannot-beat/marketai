@@ -215,6 +215,8 @@
 - **规则：** 留下的广告必须全部可导出，否则报价写 `unavailable_reason = "ads_not_exportable"` 并列出哪几张。方案过 `TestPlan` 校验和 `service.validate_plan(confirming=True)`；过不了时报价写原因，不放宽校验。三档和建议按设计 §5.6；`min_purchases`、`attribution_lag_days` 取 `EvaluationProtocol()` 默认值。没有产品链接且没给落地页时 `unavailable_reason = "landing_page_required"`。报价带“一起看”的检查的最高费用（E6）和 `quote_hash`（E8）。
 - **测试要点：** 跨两个主张是 `claims`、同一主张两种讲法是 `expressions`、一张是 `single`；三种都生成能通过校验的方案；20 单、10 单的边界（够下结论 / 能看出方向 / 只能看个大概）；7 天测试的预计日期是开始后第 16 天；改了一张留下的广告报价 hash 就变；另一个工作区 404。
 - **开工前先确认：** 只有一张时用哪个 `stage`；`screen_angles` 每个主张只有一种讲法时 `limited_expression_coverage` 必须为真。
+- **已确认（维护者，2026-11-21，#248）：** 只有一张（或同一组合的几个版本）用 `confirm_combination`；比主张时只要有一个主张只留了一种讲法，`limited_expression_coverage` 为真，并在“局限”里逐个写明“这个主张只试了一种讲法，没达标也不能说明主张不行”；每个主张都留了两种讲法时为假。
+- **做成的样子（#248）：** 报价的查询参数是 `MarketingTestAnswers`（三个回答、落地页、改过的默认项），T3 的开始命令带同一份回答和报价 hash。报不了时 `unavailable_reason` 依次是 `ideas_not_ready`、`no_kept_ads`、`ads_not_exportable`（`not_exportable` 列出哪几张）、`ads_execution_mixed`（示例广告和真实广告混在一起）、`start_date_past`、`landing_page_required`、`plan_invalid`（`plan_error` 写校验码）、`checks_unavailable`。“一起看”的检查按每张留下的广告一次计费。
 
 ### T3 后端：开始测试
 

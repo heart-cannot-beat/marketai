@@ -2874,6 +2874,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/test-quote': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Test Quote
+     * @description What a test of these ideas' kept ads would compare, whether the round's budget is enough for a verdict,
+     *     when the result is due and what starting costs at most. Reads only; the start command confirms its hash.
+     */
+    get: operations['get_marketing_test_quote'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/understanding': {
     parameters: {
       query?: never;
@@ -10248,6 +10269,18 @@ export interface components {
       feedback_drafts: components['schemas']['FeedbackDraft'][];
       board?: components['schemas']['MarketingBoard'] | null;
     };
+    /** @description The "look together" check the start command admits (plan E6): one call per kept ad, paid in BYOK. */
+    MarketingTestChecks: {
+      available: boolean;
+      unavailable_reason: string | null;
+      quantity: number;
+      maximum_cost: string;
+      /**
+       * @default USD
+       * @constant
+       */
+      currency: 'USD';
+    };
     MarketingTestDetail: {
       id: string;
       revision: number;
@@ -10295,6 +10328,94 @@ export interface components {
         | 'ZAR';
       landing_page: string;
     };
+    /**
+     * @description Whether the money answers the round's question, when the result is due and what starting costs at most.
+     *
+     *     Read-only; the page shows these numbers and does not compute its own (design §5.6). ``available`` false
+     *     names why (``unavailable_reason``); a plan the confirming checks refuse names their code (``plan_error``).
+     */
+    MarketingTestQuote: {
+      available: boolean;
+      unavailable_reason:
+        | (
+            | 'ideas_not_ready'
+            | 'no_kept_ads'
+            | 'ads_not_exportable'
+            | 'ads_execution_mixed'
+            | 'start_date_past'
+            | 'landing_page_required'
+            | 'plan_invalid'
+            | 'checks_unavailable'
+          )
+        | null;
+      plan_error: string | null;
+      not_exportable: components['schemas']['MarketingTestRefusedAd'][];
+      ideas_revision: number;
+      execution_mode: ('byok' | 'mock') | null;
+      comparison: ('claims' | 'expressions' | 'single') | null;
+      question: string | null;
+      subjects: components['schemas']['MarketingTestSubject'][];
+      target_cost: string;
+      round_budget: string;
+      /** @enum {string} */
+      currency:
+        | 'AED'
+        | 'AUD'
+        | 'BRL'
+        | 'CAD'
+        | 'CHF'
+        | 'CNY'
+        | 'EUR'
+        | 'GBP'
+        | 'HKD'
+        | 'IDR'
+        | 'INR'
+        | 'JPY'
+        | 'KRW'
+        | 'MXN'
+        | 'MYR'
+        | 'NZD'
+        | 'PHP'
+        | 'PLN'
+        | 'SAR'
+        | 'SEK'
+        | 'SGD'
+        | 'THB'
+        | 'TWD'
+        | 'USD'
+        | 'VND'
+        | 'ZAR';
+      duration_days: number;
+      min_purchases: number;
+      tier: ('enough' | 'direction' | 'rough') | null;
+      needed_budget: string | null;
+      suggested_subjects: number | null;
+      /** Format: date */
+      start_date: string;
+      /** Format: date */
+      end_date: string;
+      /** Format: date */
+      conclusion_date: string;
+      account_timezone: string;
+      /** @enum {string} */
+      attribution_window:
+        | '1d_click'
+        | '7d_click'
+        | '1d_view'
+        | '1d_click_1d_view'
+        | '7d_click_1d_view';
+      attribution_lag_days: number;
+      landing_page: string | null;
+      landing_page_source: ('product_link' | 'answer') | null;
+      checks: components['schemas']['MarketingTestChecks'];
+      quote_hash: string;
+    };
+    MarketingTestRefusedAd: {
+      asset_version_id: string;
+      /** @enum {string} */
+      status: 'draft' | 'needs_redo';
+      reasons: components['schemas']['AdReason'][];
+    };
     MarketingTestRoundSummary: {
       id: string;
       ordinal: number;
@@ -10308,6 +10429,18 @@ export interface components {
       effective_start_date: string;
       /** Format: date */
       effective_end_date: string;
+    };
+    /** @description One compared object: a claim, one way of telling a claim, or the one ad. */
+    MarketingTestSubject: {
+      /** @enum {string} */
+      kind: 'claim' | 'expression' | 'ad';
+      angle_id: string;
+      expression_id: string | null;
+      title: string;
+      combination_ids: string[];
+      asset_version_ids: string[];
+      budget: string;
+      expected_orders: number;
     };
     MatrixCol: {
       angle_id: string;
@@ -18484,6 +18617,88 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['IdeasCallSummary'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_marketing_test_quote: {
+    parameters: {
+      query: {
+        target_cost: number | string;
+        round_budget: number | string;
+        duration_days: number;
+        landing_page?: string | null;
+        audience?: string | null;
+        offer?: string | null;
+        placement?: string | null;
+        currency?:
+          | (
+              | 'AED'
+              | 'AUD'
+              | 'BRL'
+              | 'CAD'
+              | 'CHF'
+              | 'CNY'
+              | 'EUR'
+              | 'GBP'
+              | 'HKD'
+              | 'IDR'
+              | 'INR'
+              | 'JPY'
+              | 'KRW'
+              | 'MXN'
+              | 'MYR'
+              | 'NZD'
+              | 'PHP'
+              | 'PLN'
+              | 'SAR'
+              | 'SEK'
+              | 'SGD'
+              | 'THB'
+              | 'TWD'
+              | 'USD'
+              | 'VND'
+              | 'ZAR'
+            )
+          | null;
+        account_timezone?: string | null;
+        start_date?: string | null;
+        attribution_window?:
+          | (
+              | '1d_click'
+              | '7d_click'
+              | '1d_view'
+              | '1d_click_1d_view'
+              | '7d_click_1d_view'
+            )
+          | null;
+        max_small_rounds?: number | null;
+        media_budget?: number | string | null;
+      };
+      header?: never;
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestQuote'];
         };
       };
       /** @description Validation Error */
