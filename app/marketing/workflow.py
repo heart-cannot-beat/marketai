@@ -86,7 +86,7 @@ def full_report_round(session, ctx, row):
                                                      Project.id == row.project_id)) == FLOW
 
 
-def counted_rows(session, ctx, row):
+def counted_report_rows(session, ctx, row):
     """The daily rows a round's numbers count, by day then Meta ad.
 
     A plan-first round counts every row of its current batches; a correction replaces a whole batch. A test
@@ -98,7 +98,7 @@ def counted_rows(session, ctx, row):
 
 
 def project_spend(session, ctx, rounds):
-    return sum((Decimal(item["spend"]) for r in rounds for item in counted_rows(session, ctx, r)), Decimal("0"))
+    return sum((Decimal(item["spend"]) for r in rounds for item in counted_report_rows(session, ctx, r)), Decimal("0"))
 
 
 def freeze(session, ctx, project, revision, body):
@@ -538,7 +538,7 @@ def evaluate(session, ctx, row):
         "quality_changed": [e["entry_id"] for e in handoffs[0].manifest_json["entries"] if not ready(session, ctx, row, e["asset_version_id"])],
         "quality_review_ids": {e["asset_version_id"]: sorted(r.id for r in active_quality(session, ctx, e["asset_version_id"]))
             for e in handoffs[0].manifest_json["entries"]},
-        "batch_ids": [b.id for b in batches], "rows": counted_rows(session, ctx, row)}
+        "batch_ids": [b.id for b in batches], "rows": counted_report_rows(session, ctx, row)}
     if "style_variation" in row.snapshot_json["plan"]:
         inputs["style_deviations"] = style_deviations(session, ctx, row)
     hashed = digest(inputs)
@@ -596,7 +596,7 @@ def evaluation_current(session, ctx, row, evaluation, *, _seen=None, _cache=None
         for b in sorted(scoped(session, ctx, Binding, round_id=row.id), key=lambda b: b.id)]
     quality_changed = {e["entry_id"] for e in inputs["entries"] if not ready(session, ctx, row, e["asset_version_id"])}
     if (inputs["batch_ids"] != [b.id for b in batches] or inputs["bindings"] != bindings
-            or inputs["rows"] != counted_rows(session, ctx, row)
+            or inputs["rows"] != counted_report_rows(session, ctx, row)
             or set(inputs.get("quality_changed", [])) != quality_changed):
         return False
     from zoneinfo import ZoneInfo
@@ -820,7 +820,7 @@ def board_projection(session, ctx, row, executions, handoff, evaluation):
     return board.project(row.snapshot_json["plan"], executions, round_state=row.state,
         prepared_appearance={cid: appearance(session, ctx, selectors.get("product_references", [])) for cid, selectors in prepared},
         handoff={"state": handoff.state, "entries": {e["asset_version_id"]: e["entry_id"] for e in handoff.manifest_json["entries"]}} if handoff else None,
-        bindings=bindings, data_ad_ids={item["ad_id"] for item in counted_rows(session, ctx, row)},
+        bindings=bindings, data_ad_ids={item["ad_id"] for item in counted_report_rows(session, ctx, row)},
         generating={c["selection"]["marketing_intent"].get("combination", {}).get("id") for c in generating},
         # A test project's plan never generates images (ADR 0019): its round's board offers none.
         generation_open=row.state == "reviewing" and not handoff and project.flow == "plan_first"

@@ -105,7 +105,7 @@ class TestReportFixtures(MarketingTestFixtures):
     def counted(self, round_id, ctx=None):
         ctx = ctx or self.context
         with tenant_session(ctx) as session:
-            return workflow.counted_rows(session, ctx, workflow.get_round(session, ctx, round_id))
+            return workflow.counted_report_rows(session, ctx, workflow.get_round(session, ctx, round_id))
 
     def batches(self, round_id):
         with tenant_session(self.context) as session:
