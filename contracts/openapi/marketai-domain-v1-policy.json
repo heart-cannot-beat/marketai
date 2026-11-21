@@ -1132,6 +1132,12 @@
     "maxResponseBytes": 65536,
     "forwardConditionalHeaders": false
   },
+  "get_marketing_test_quote": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/test-quote",
+    "maxRequestBytes": 0,
+    "maxResponseBytes": 131072,
+    "forwardConditionalHeaders": false
+  },
   "start_marketing_ideas_checks": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/ideas/:project_id/checks",
     "maxRequestBytes": 1024,

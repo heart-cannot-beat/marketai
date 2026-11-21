@@ -9545,6 +9545,288 @@
         }
       }
     },
+    "/api/v1/marketing/ideas/{project_id}/test-quote": {
+      "get": {
+        "operationId": "get_marketing_test_quote",
+        "summary": "Get Test Quote",
+        "description": "What a test of these ideas' kept ads would compare, whether the round's budget is enough for a verdict,\nwhen the result is due and what starting costs at most. Reads only; the start command confirms its hash.",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target_cost",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "round_budget",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "name": "duration_days",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 7
+            }
+          },
+          {
+            "name": "landing_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "pattern": "^https?://\\S+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "offer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "placement",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "AED",
+                    "AUD",
+                    "BRL",
+                    "CAD",
+                    "CHF",
+                    "CNY",
+                    "EUR",
+                    "GBP",
+                    "HKD",
+                    "IDR",
+                    "INR",
+                    "JPY",
+                    "KRW",
+                    "MXN",
+                    "MYR",
+                    "NZD",
+                    "PHP",
+                    "PLN",
+                    "SAR",
+                    "SEK",
+                    "SGD",
+                    "THB",
+                    "TWD",
+                    "USD",
+                    "VND",
+                    "ZAR"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "account_timezone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "attribution_window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "1d_click",
+                    "7d_click",
+                    "1d_view",
+                    "1d_click_1d_view",
+                    "7d_click_1d_view"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "max_small_rounds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 20,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "media_budget",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestQuote"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/ideas/{project_id}/understanding": {
       "patch": {
         "operationId": "edit_marketing_ideas_understanding",
@@ -38937,6 +39219,43 @@
           "feedback_drafts"
         ]
       },
+      "MarketingTestChecks": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "maximum_cost": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "const": "USD",
+            "default": "USD"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "available",
+          "unavailable_reason",
+          "quantity",
+          "maximum_cost"
+        ],
+        "description": "The \"look together\" check the start command admits (plan E6): one call per kept ad, paid in BYOK."
+      },
       "MarketingTestDetail": {
         "properties": {
           "id": {
@@ -39053,6 +39372,292 @@
         ],
         "description": "The parts of the test's plan the user chose or can see at a glance; money in the plan's currency."
       },
+      "MarketingTestQuote": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ideas_not_ready",
+                  "no_kept_ads",
+                  "ads_not_exportable",
+                  "ads_execution_mixed",
+                  "start_date_past",
+                  "landing_page_required",
+                  "plan_invalid",
+                  "checks_unavailable"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "not_exportable": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestRefusedAd"
+            },
+            "type": "array"
+          },
+          "ideas_revision": {
+            "type": "integer"
+          },
+          "execution_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "byok",
+                  "mock"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "claims",
+                  "expressions",
+                  "single"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subjects": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestSubject"
+            },
+            "type": "array"
+          },
+          "target_cost": {
+            "type": "string"
+          },
+          "round_budget": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AUD",
+              "BRL",
+              "CAD",
+              "CHF",
+              "CNY",
+              "EUR",
+              "GBP",
+              "HKD",
+              "IDR",
+              "INR",
+              "JPY",
+              "KRW",
+              "MXN",
+              "MYR",
+              "NZD",
+              "PHP",
+              "PLN",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TWD",
+              "USD",
+              "VND",
+              "ZAR"
+            ]
+          },
+          "duration_days": {
+            "type": "integer"
+          },
+          "min_purchases": {
+            "type": "integer"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "enough",
+                  "direction",
+                  "rough"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needed_budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggested_subjects": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "conclusion_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "account_timezone": {
+            "type": "string"
+          },
+          "attribution_window": {
+            "type": "string",
+            "enum": [
+              "1d_click",
+              "7d_click",
+              "1d_view",
+              "1d_click_1d_view",
+              "7d_click_1d_view"
+            ]
+          },
+          "attribution_lag_days": {
+            "type": "integer"
+          },
+          "landing_page": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "landing_page_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "product_link",
+                  "answer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checks": {
+            "$ref": "#/components/schemas/MarketingTestChecks"
+          },
+          "quote_hash": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "available",
+          "unavailable_reason",
+          "plan_error",
+          "not_exportable",
+          "ideas_revision",
+          "execution_mode",
+          "comparison",
+          "question",
+          "subjects",
+          "target_cost",
+          "round_budget",
+          "currency",
+          "duration_days",
+          "min_purchases",
+          "tier",
+          "needed_budget",
+          "suggested_subjects",
+          "start_date",
+          "end_date",
+          "conclusion_date",
+          "account_timezone",
+          "attribution_window",
+          "attribution_lag_days",
+          "landing_page",
+          "landing_page_source",
+          "checks",
+          "quote_hash"
+        ],
+        "description": "Whether the money answers the round's question, when the result is due and what starting costs at most.\n\nRead-only; the page shows these numbers and does not compute its own (design §5.6). ``available`` false\nnames why (``unavailable_reason``); a plan the confirming checks refuse names their code (``plan_error``)."
+      },
+      "MarketingTestRefusedAd": {
+        "properties": {
+          "asset_version_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "needs_redo"
+            ]
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/AdReason"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "asset_version_id",
+          "status",
+          "reasons"
+        ]
+      },
       "MarketingTestRoundSummary": {
         "properties": {
           "id": {
@@ -39099,6 +39704,65 @@
           "effective_start_date",
           "effective_end_date"
         ]
+      },
+      "MarketingTestSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "claim",
+              "expression",
+              "ad"
+            ]
+          },
+          "angle_id": {
+            "type": "string"
+          },
+          "expression_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "combination_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "asset_version_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "budget": {
+            "type": "string"
+          },
+          "expected_orders": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "angle_id",
+          "expression_id",
+          "title",
+          "combination_ids",
+          "asset_version_ids",
+          "budget",
+          "expected_orders"
+        ],
+        "description": "One compared object: a claim, one way of telling a claim, or the one ad."
       },
       "MatrixCol": {
         "properties": {
