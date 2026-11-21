@@ -12511,6 +12511,172 @@
         }
       }
     },
+    "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report/confirm": {
+      "post": {
+        "operationId": "confirm_marketing_test_report",
+        "summary": "Confirm Test Report",
+        "description": "Count an uploaded report: for each day and Meta ad it has, it replaces what an earlier report said.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCommand"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report/preview": {
+      "post": {
+        "operationId": "preview_marketing_test_report",
+        "summary": "Preview Test Report",
+        "description": "Upload Meta's report from the test's start to today: what it would count, replace and leave out.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewTestReport"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/result": {
       "get": {
         "operationId": "get_marketing_test_result",
@@ -30127,6 +30293,46 @@
           "end_local_day"
         ]
       },
+      "ExcludedReportRows": {
+        "properties": {
+          "ad_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "other_ad",
+              "before_start",
+              "after_end"
+            ]
+          },
+          "first_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "last_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "rows": {
+            "type": "integer"
+          },
+          "spend": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ad_id",
+          "reason",
+          "first_date",
+          "last_date",
+          "rows",
+          "spend"
+        ],
+        "description": "Rows of one Meta ad the report has but the test does not count, for one reason."
+      },
       "ExclusionSummary": {
         "properties": {
           "excluded_count": {
@@ -39937,6 +40143,147 @@
           "reasons"
         ]
       },
+      "MarketingTestReport": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "round_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "preview",
+              "confirmed"
+            ]
+          },
+          "filename": {
+            "type": "string"
+          },
+          "raw_hash": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "ad_account_id": {
+            "type": "string"
+          },
+          "account_timezone": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AUD",
+              "BRL",
+              "CAD",
+              "CHF",
+              "CNY",
+              "EUR",
+              "GBP",
+              "HKD",
+              "IDR",
+              "INR",
+              "JPY",
+              "KRW",
+              "MXN",
+              "MYR",
+              "NZD",
+              "PHP",
+              "PLN",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TWD",
+              "USD",
+              "VND",
+              "ZAR"
+            ]
+          },
+          "attribution_window": {
+            "type": "string",
+            "enum": [
+              "1d_click",
+              "7d_click",
+              "1d_view",
+              "1d_click_1d_view",
+              "7d_click_1d_view"
+            ]
+          },
+          "first_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "row_count": {
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/MetricsIssue"
+            },
+            "type": "array"
+          },
+          "counted_rows": {
+            "type": "integer"
+          },
+          "replaces_rows": {
+            "type": "integer"
+          },
+          "replaced_rows": {
+            "type": "integer"
+          },
+          "excluded": {
+            "items": {
+              "$ref": "#/components/schemas/ExcludedReportRows"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "round_id",
+          "state",
+          "filename",
+          "raw_hash",
+          "created_at",
+          "ad_account_id",
+          "account_timezone",
+          "currency",
+          "attribution_window",
+          "first_date",
+          "last_date",
+          "row_count",
+          "issues",
+          "counted_rows",
+          "replaces_rows",
+          "replaced_rows",
+          "excluded"
+        ]
+      },
       "MarketingTestResult": {
         "properties": {
           "test_id": {
@@ -41888,6 +42235,94 @@
           "attribution_window",
           "source_mode"
         ]
+      },
+      "PreviewTestReport": {
+        "properties": {
+          "csv_text": {
+            "type": "string",
+            "maxLength": 262144,
+            "minLength": 1
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1
+          },
+          "ad_account_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^(act_)?[0-9]+$"
+          },
+          "account_timezone": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AUD",
+              "BRL",
+              "CAD",
+              "CHF",
+              "CNY",
+              "EUR",
+              "GBP",
+              "HKD",
+              "IDR",
+              "INR",
+              "JPY",
+              "KRW",
+              "MXN",
+              "MYR",
+              "NZD",
+              "PHP",
+              "PLN",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TWD",
+              "USD",
+              "VND",
+              "ZAR"
+            ]
+          },
+          "attribution_window": {
+            "type": "string",
+            "enum": [
+              "1d_click",
+              "7d_click",
+              "1d_view",
+              "1d_click_1d_view",
+              "7d_click_1d_view"
+            ]
+          },
+          "source_mode": {
+            "type": "string",
+            "const": "customer_file"
+          },
+          "field_mapping": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "maxProperties": 10
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "csv_text",
+          "filename",
+          "ad_account_id",
+          "account_timezone",
+          "currency",
+          "attribution_window",
+          "source_mode"
+        ],
+        "description": "Meta's daily report from the start of the test to today, as the user exported it."
       },
       "ProblemDetails": {
         "type": "object",

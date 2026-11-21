@@ -1348,6 +1348,18 @@
     "maxResponseBytes": 8388608,
     "forwardConditionalHeaders": true
   },
+  "preview_marketing_test_report": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/report/preview",
+    "maxRequestBytes": 1600000,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": true
+  },
+  "confirm_marketing_test_report": {
+    "bffPattern": "/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/report/confirm",
+    "maxRequestBytes": 8192,
+    "maxResponseBytes": 2097152,
+    "forwardConditionalHeaders": true
+  },
   "evaluate_marketing_round": {
     "bffPattern": "/api/domain/v1/w/:slug/marketing/rounds/:round_id/evaluate",
     "maxRequestBytes": 0,

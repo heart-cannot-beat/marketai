@@ -78,9 +78,29 @@ def active_batches(session, ctx, row):
     return sorted((b for b in batches if b.id not in replaced), key=lambda b: b.id)
 
 
+def full_report_round(session, ctx, row):
+    """Whether ``row`` is a test project's round, which takes full reports (step 2 design §5.7, #251)."""
+    from .ad_tests import FLOW
+    from .models import MarketingProjectRecord as Project
+    # By primary key: the reads that count rows have usually loaded the project already, so this costs no query.
+    project = session.get(Project, row.project_id)
+    return bool(project and project.workspace_id == ctx.workspace_id and project.flow == FLOW)
+
+
+def counted_report_rows(session, ctx, row):
+    """The daily rows a round's numbers count, by day then Meta ad.
+
+    A plan-first round counts every row of its current batches; a correction replaces a whole batch. A test
+    project's round counts each day and ad's latest confirmed full report, for its own ads and only inside its
+    effective dates (#251, #253): the same days ``evaluation_window`` evaluates it on."""
+    if full_report_round(session, ctx, row):
+        from .ad_test_reports import counted
+        return counted(session, ctx, row)
+    return sorted([item for b in active_batches(session, ctx, row) for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))
+
+
 def project_spend(session, ctx, rounds):
-    return sum((Decimal(item["spend"]) for r in rounds for b in active_batches(session, ctx, r)
-                for item in b.rows_json), Decimal("0"))
+    return sum((Decimal(item["spend"]) for r in rounds for item in counted_report_rows(session, ctx, r)), Decimal("0"))
 
 
 def freeze(session, ctx, project, revision, body):
@@ -503,12 +523,6 @@ def evaluation_window(session, ctx, row):
     return window["start_date"], window["end_date"], window["evidence"]
 
 
-def counted_rows(batches, start, end, schedule):
-    """The confirmed daily rows an evaluation counts; a test round counts only the days inside its effective dates."""
-    rows = sorted([item for b in batches for item in b.rows_json], key=lambda d: (d["date"], d["ad_id"]))
-    return rows if schedule is None else [item for item in rows if str(start) <= item["date"] <= str(end)]
-
-
 def round_mature(row, end):
     """The final checkpoint is mature once the attribution lag after the last day has passed."""
     from zoneinfo import ZoneInfo
@@ -544,7 +558,7 @@ def evaluate(session, ctx, row):
         "quality_changed": [e["entry_id"] for e in handoffs[0].manifest_json["entries"] if not ready(session, ctx, row, e["asset_version_id"])],
         "quality_review_ids": {e["asset_version_id"]: sorted(r.id for r in active_quality(session, ctx, e["asset_version_id"]))
             for e in handoffs[0].manifest_json["entries"]},
-        "batch_ids": [b.id for b in batches], "rows": counted_rows(batches, start, end, schedule)}
+        "batch_ids": [b.id for b in batches], "rows": counted_report_rows(session, ctx, row)}
     if schedule is not None:
         inputs["schedule"] = schedule
     if "style_variation" in row.snapshot_json["plan"]:
@@ -605,7 +619,7 @@ def evaluation_current(session, ctx, row, evaluation, *, _seen=None, _cache=None
         for b in sorted(scoped(session, ctx, Binding, round_id=row.id), key=lambda b: b.id)]
     quality_changed = {e["entry_id"] for e in inputs["entries"] if not ready(session, ctx, row, e["asset_version_id"])}
     if (inputs["batch_ids"] != [b.id for b in batches] or inputs["bindings"] != bindings
-            or inputs["rows"] != counted_rows(batches, start, end, schedule)
+            or inputs["rows"] != counted_report_rows(session, ctx, row)
             or set(inputs.get("quality_changed", [])) != quality_changed):
         return False
     if inputs["mature"] != round_mature(row, end):
@@ -827,7 +841,7 @@ def board_projection(session, ctx, row, executions, handoff, evaluation):
     return board.project(row.snapshot_json["plan"], executions, round_state=row.state,
         prepared_appearance={cid: appearance(session, ctx, selectors.get("product_references", [])) for cid, selectors in prepared},
         handoff={"state": handoff.state, "entries": {e["asset_version_id"]: e["entry_id"] for e in handoff.manifest_json["entries"]}} if handoff else None,
-        bindings=bindings, data_ad_ids={item["ad_id"] for b in active_batches(session, ctx, row) for item in b.rows_json},
+        bindings=bindings, data_ad_ids={item["ad_id"] for item in counted_report_rows(session, ctx, row)},
         generating={c["selection"]["marketing_intent"].get("combination", {}).get("id") for c in generating},
         # A test project's plan never generates images (ADR 0019): its round's board offers none.
         generation_open=row.state == "reviewing" and not handoff and project.flow == "plan_first"
@@ -917,7 +931,9 @@ def workflow_dict(session, ctx, project_id, *, include_image_edits=False, includ
                   include_text_language=False, include_reuse_lineage=False):
     from .workflow_models import MarketingImageEditRecord
     from .ai_qc_models import MarketingAIQCRecord
-    get_project(session, ctx, project_id)
+    # Held for the whole read: the session keeps only weak references, and counting each round's rows looks the
+    # project up again by its key (``full_report_round``), which then costs no query.
+    project = get_project(session, ctx, project_id)  # noqa: F841
     rounds = sorted(scoped(session, ctx, Round, project_id=project_id), key=lambda r: r.ordinal)
     busy = False
     if rounds:

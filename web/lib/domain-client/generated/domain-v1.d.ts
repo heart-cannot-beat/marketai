@@ -3466,6 +3466,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm Test Report
+     * @description Count an uploaded report: for each day and Meta ad it has, it replaces what an earlier report said.
+     */
+    post: operations['confirm_marketing_test_report'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report/preview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview Test Report
+     * @description Upload Meta's report from the test's start to today: what it would count, replace and leave out.
+     */
+    post: operations['preview_marketing_test_report'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/result': {
     parameters: {
       query?: never;
@@ -8047,6 +8087,18 @@ export interface components {
       /** Format: date */
       end_local_day: string;
     };
+    /** @description Rows of one Meta ad the report has but the test does not count, for one reason. */
+    ExcludedReportRows: {
+      ad_id: string;
+      /** @enum {string} */
+      reason: 'other_ad' | 'before_start' | 'after_end';
+      /** Format: date */
+      first_date: string;
+      /** Format: date */
+      last_date: string;
+      rows: number;
+      spend: string;
+    };
     /** @description Summary of excluded combinations in a preview. */
     ExclusionSummary: {
       excluded_count: number;
@@ -10494,6 +10546,60 @@ export interface components {
       status: 'draft' | 'needs_redo';
       reasons: components['schemas']['AdReason'][];
     };
+    MarketingTestReport: {
+      id: string;
+      round_id: string;
+      /** @enum {string} */
+      state: 'preview' | 'confirmed';
+      filename: string;
+      raw_hash: string;
+      created_at: string;
+      ad_account_id: string;
+      account_timezone: string;
+      /** @enum {string} */
+      currency:
+        | 'AED'
+        | 'AUD'
+        | 'BRL'
+        | 'CAD'
+        | 'CHF'
+        | 'CNY'
+        | 'EUR'
+        | 'GBP'
+        | 'HKD'
+        | 'IDR'
+        | 'INR'
+        | 'JPY'
+        | 'KRW'
+        | 'MXN'
+        | 'MYR'
+        | 'NZD'
+        | 'PHP'
+        | 'PLN'
+        | 'SAR'
+        | 'SEK'
+        | 'SGD'
+        | 'THB'
+        | 'TWD'
+        | 'USD'
+        | 'VND'
+        | 'ZAR';
+      /** @enum {string} */
+      attribution_window:
+        | '1d_click'
+        | '7d_click'
+        | '1d_view'
+        | '1d_click_1d_view'
+        | '7d_click_1d_view';
+      first_date: string | null;
+      last_date: string | null;
+      row_count: number;
+      issues: components['schemas']['MetricsIssue'][];
+      counted_rows: number;
+      replaces_rows: number;
+      replaced_rows: number;
+      excluded: components['schemas']['ExcludedReportRows'][];
+    };
     /** @description The minimal result of a round (design §5.9): its schedule and, once evaluated, each group's status. */
     MarketingTestResult: {
       test_id: string;
@@ -11098,6 +11204,53 @@ export interface components {
         [key: string]: string;
       };
       replaces_batch_id?: string | null;
+    };
+    /** @description Meta's daily report from the start of the test to today, as the user exported it. */
+    PreviewTestReport: {
+      csv_text: string;
+      filename: string;
+      ad_account_id: string;
+      account_timezone: string;
+      /** @enum {string} */
+      currency:
+        | 'AED'
+        | 'AUD'
+        | 'BRL'
+        | 'CAD'
+        | 'CHF'
+        | 'CNY'
+        | 'EUR'
+        | 'GBP'
+        | 'HKD'
+        | 'IDR'
+        | 'INR'
+        | 'JPY'
+        | 'KRW'
+        | 'MXN'
+        | 'MYR'
+        | 'NZD'
+        | 'PHP'
+        | 'PLN'
+        | 'SAR'
+        | 'SEK'
+        | 'SGD'
+        | 'THB'
+        | 'TWD'
+        | 'USD'
+        | 'VND'
+        | 'ZAR';
+      /** @enum {string} */
+      attribution_window:
+        | '1d_click'
+        | '7d_click'
+        | '1d_view'
+        | '1d_click_1d_view'
+        | '7d_click_1d_view';
+      /** @constant */
+      source_mode: 'customer_file';
+      field_mapping?: {
+        [key: string]: string;
+      };
     };
     ProblemDetails: {
       type: string;
@@ -20136,6 +20289,84 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['MarketingTestRoundSchedule'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  confirm_marketing_test_report: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BatchCommand'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestReport'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  preview_marketing_test_report: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PreviewTestReport'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestReport'];
         };
       };
       /** @description Validation Error */

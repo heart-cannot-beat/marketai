@@ -209,6 +209,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['BatchCommand'];
     successResponses: { 200: components['schemas']['ResourceEnvelope'] };
   };
+  confirm_marketing_test_report: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['BatchCommand'];
+    successResponses: { 200: components['schemas']['MarketingTestReport'] };
+  };
   confirm_meta_launch_preview: {
     pathParams: { preview_id: string };
     queryParams: Record<string, never>;
@@ -1560,6 +1566,12 @@ export type DomainOperationMap = {
     queryParams: Record<string, never>;
     requestBody: components['schemas']['PreviewMetrics'];
     successResponses: { 201: components['schemas']['ResourceEnvelope'] };
+  };
+  preview_marketing_test_report: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['PreviewTestReport'];
+    successResponses: { 201: components['schemas']['MarketingTestReport'] };
   };
   preview_spend_guardrail: {
     pathParams: Record<string, never>;
