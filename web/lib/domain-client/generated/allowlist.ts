@@ -460,6 +460,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'confirm_marketing_test_report',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/report/confirm',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report/confirm',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.confirm_marketing_test_report,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 8192,
+    maxResponseBytes: 2097152,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'confirm_meta_launch_preview',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/launch/previews/:preview_id/confirm',
@@ -3481,6 +3497,22 @@ export const DOMAIN_ALLOWLIST = [
     requestMediaTypes: ['application/json'],
     maxRequestBytes: 1600000,
     maxResponseBytes: 8388608,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
+    operationId: 'preview_marketing_test_report',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/report/preview',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/report/preview',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.preview_marketing_test_report,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 1600000,
+    maxResponseBytes: 2097152,
     requiresIdempotency: true,
     forwardConditionalHeaders: true,
   },

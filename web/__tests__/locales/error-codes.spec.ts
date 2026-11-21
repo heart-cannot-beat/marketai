@@ -573,6 +573,12 @@ const PARAMETERISED = [
   'error-reporting_context_mismatch: attribution_window,currency,timezone',
   'error-row_attribution_mismatch: expected,found',
   'error-row_currency_mismatch: expected,found',
+  // #251: a test's full report names each setting it does not share with
+  // the frozen round, and what the report has.
+  'error-report_account_mismatch: expected,found',
+  'error-report_attribution_mismatch: expected,found',
+  'error-report_currency_mismatch: expected,found',
+  'error-report_timezone_mismatch: expected,found',
   // #157: lib/entitlements/seats.ts sends the Workspace's seat limit.
   'error-seat_limit_exceeded: limit',
   'error-seat_limit_reached: limit',

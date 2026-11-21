@@ -921,6 +921,28 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'confirm_marketing_metrics'> | ReconciliationRequired
   >;
+  /** Upload a test round's full Meta report: what it would count, replace and leave out (#251). */
+  previewMarketingTestReport(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['preview_marketing_test_report']['requestBody'];
+  }): Promise<
+    DomainResultFor<'preview_marketing_test_report'> | ReconciliationRequired
+  >;
+  /** Count an uploaded full report; it replaces earlier reports' overlapping days (#251). */
+  confirmMarketingTestReport(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['confirm_marketing_test_report']['requestBody'];
+  }): Promise<
+    DomainResultFor<'confirm_marketing_test_report'> | ReconciliationRequired
+  >;
   evaluateMarketingRound(params: {
     workspaceSlug: string;
     actionInstanceId: string;
@@ -4678,6 +4700,58 @@ export class DefaultDomainGateway implements DomainGateway {
       params.actionInstanceId,
       buildBffPath('confirm_marketing_metrics', {
         slug: params.workspaceSlug,
+        round_id: params.roundId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async previewMarketingTestReport(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['preview_marketing_test_report']['requestBody'];
+  }): Promise<
+    DomainResultFor<'preview_marketing_test_report'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'preview_marketing_test_report',
+      params.actionInstanceId,
+      buildBffPath('preview_marketing_test_report', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+        round_id: params.roundId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async confirmMarketingTestReport(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['confirm_marketing_test_report']['requestBody'];
+  }): Promise<
+    DomainResultFor<'confirm_marketing_test_report'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'confirm_marketing_test_report',
+      params.actionInstanceId,
+      buildBffPath('confirm_marketing_test_report', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
         round_id: params.roundId,
       }),
       'POST',
