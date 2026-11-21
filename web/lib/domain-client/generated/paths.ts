@@ -149,6 +149,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'change_marketing_test_start',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/start-date',
+    pathParams: ['test_id', 'round_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'check_library_data_source_connection',
     method: 'POST',
     bffPattern:
@@ -703,6 +711,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'end_marketing_test_round_early',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/end',
+    pathParams: ['test_id', 'round_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'evaluate_marketing_round',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/marketing/rounds/:round_id/evaluate',
@@ -1063,6 +1079,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/test-quote',
     pathParams: ['project_id'],
+    requiresIdempotency: false,
+  },
+  {
+    operationId: 'get_marketing_test_result',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/result',
+    pathParams: ['test_id', 'round_id'],
     requiresIdempotency: false,
   },
   {

@@ -8,9 +8,10 @@ What the round counts is worked out when it is read:
   replaces the days it repeats and leaves the others;
 * only this round's matched Meta ads on its days: the report's other rows are kept, not counted, and listed.
 
-Counting on read means a Meta ad matched later (#252) or a moved start (#253) changes what counts without
-touching an upload. A plan-first round keeps its own rules (``metrics``): each day and ad is imported once and
-a correction replaces a whole batch; its paths refuse a test's round, and these paths never reach its rounds.
+Counting on read means a Meta ad matched later (#252) or a moved start or early end (#253) changes what
+counts without touching an upload. A plan-first round keeps its own rules (``metrics``): each day and ad is
+imported once and a correction replaces a whole batch; its paths refuse a test's round, and these paths never
+reach its rounds.
 """
 from __future__ import annotations
 
@@ -48,8 +49,9 @@ def test_round(session, ctx, test_id, round_id):
 
 
 def counting_dates(session, ctx, row) -> tuple[date, date]:
-    """The days a round counts: its frozen dates, until a round can move its start or end early (#253)."""
-    return row.start_date, row.end_date
+    """The days a round counts: its effective dates, after a moved start or an early end (#253)."""
+    from .ad_test_schedule import effective_dates
+    return effective_dates(session, ctx, row)
 
 
 def _utc(value):

@@ -178,6 +178,26 @@ class FullReportTests(TestReportFixtures):
                          {(str(self.day(d)), ad) for d in range(1, 4) for ad in OURS})
         self.assertEqual(self.batches(round_id), [("confirmed", 12)])  # stored whole
 
+    def test_a_moved_start_moves_the_days_that_count(self):
+        # The ads went live two days late (#253): the round's days move, the report's earliest days fall outside.
+        test_id, round_id = self.report_round()
+        moved = self.client.post(f"/api/v1/marketing/tests/{test_id}/rounds/{round_id}/start-date",
+                                 headers=self.headers(self.revision(round_id)),
+                                 json={"start_date": str(self.day(3)), "reason": "The ads went live two days late"})
+        self.assertEqual(moved.status_code, 200, moved.text)
+        days = (self.end - self.start).days + 1
+        report = self.preview(test_id, round_id, self.meta_csv(range(1, days + 3)))
+        self.assertEqual(report["counted_rows"], days * len(OURS))
+        self.assertEqual([(g["ad_id"], g["reason"], g["first_date"], g["last_date"]) for g in report["excluded"]],
+                         [(ad, "before_start", str(self.day(1)), str(self.day(2))) for ad in OURS])
+        self.confirm(test_id, round_id, report)
+        self.assertEqual(sorted({r["date"] for r in self.counted(round_id)}),
+                         [str(self.day(d)) for d in range(3, days + 3)])
+        # Once a report is confirmed, the start stays where it is.
+        again = self.client.post(f"/api/v1/marketing/tests/{test_id}/rounds/{round_id}/start-date",
+                                 headers=self.headers(self.revision(round_id)), json={"start_date": str(self.day(2))})
+        self.assertEqual((again.status_code, again.json()["code"]), (409, "round_report_confirmed"))
+
     def test_a_report_in_another_currency_is_refused_by_name(self):
         test_id, round_id = self.report_round()
         # A Meta account billing in EUR, for a test set up in USD: the user says so, or the columns do.

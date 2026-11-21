@@ -5,14 +5,17 @@ quote a test of the kept ads of ads-first ideas before it starts (#248).
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 
 from app.adapters.persistence.database import tenant_session
-from app.platform.etag import set_etag
+from app.generation.v1_router import _idempotency_key, _resource_command
+from app.platform.etag import extract_if_match, set_etag
 from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
-from . import ad_tests, ideas
-from .ad_tests_contracts import MarketingTestAnswers, MarketingTestDetail, MarketingTestQuote
+from . import ad_test_schedule, ad_tests, ideas, workflow
+from .ad_tests_contracts import (EndMarketingTestRoundEarly, MarketingTestAnswers, MarketingTestDetail,
+    MarketingTestQuote, MarketingTestResult, MarketingTestRoundSchedule, MoveMarketingTestStart)
+from .service import MarketingError
 
 router = APIRouter(prefix="/marketing/tests", tags=["marketing"])
 
@@ -24,6 +27,61 @@ def get_test(test_id: str, response: Response, ctx: TenantContext = Depends(requ
         row = ad_tests.get_test(session, ctx, test_id)
         set_etag(response, row.revision)
         return ad_tests.detail(session, ctx, row)
+
+
+def _test_round(session, ctx, test_id, round_id):
+    """The test and one of its rounds; a round of another test or project is not found."""
+    test = ad_tests.get_test(session, ctx, test_id)
+    row = workflow.get_round(session, ctx, round_id)
+    if row.project_id != test.id:
+        raise MarketingError("round_not_found", "找不到这轮测试。", 404)
+    return test, row
+
+
+def _schedule_command(test_id, round_id, body, request, response, ctx, key, name, action):
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        def run(s):
+            _, row = _test_round(s, ctx, test_id, round_id)
+            workflow.mutate(s, ctx, row, revision)
+            action(s, ctx, row, body)
+            s.flush()
+            return row
+        row = _resource_command(session, ctx, request, key, name, body.model_dump(mode="json"), run,
+                                lambda s, resource: _test_round(s, ctx, test_id, resource)[1])
+        set_etag(response, row.revision)
+        return ad_test_schedule.schedule(session, ctx, ad_tests.get_test(session, ctx, test_id), row)
+
+
+@router.post("/{test_id}/rounds/{round_id}/start-date", operation_id="change_marketing_test_start",
+             response_model=MarketingTestRoundSchedule, openapi_extra={"x-marketai-idempotent": True})
+def change_start(test_id: str, round_id: str, body: MoveMarketingTestStart, request: Request, response: Response,
+                 ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                 if_match: str | None = Header(default=None, alias="If-Match")):
+    """Move the round's start to the day the ads went live, before its first report is confirmed (#253)."""
+    return _schedule_command(test_id, round_id, body, request, response, ctx, key, "marketing.test.move_start",
+                             ad_test_schedule.move_start)
+
+
+@router.post("/{test_id}/rounds/{round_id}/end", operation_id="end_marketing_test_round_early",
+             response_model=MarketingTestRoundSchedule, openapi_extra={"x-marketai-idempotent": True})
+def end_round_early(test_id: str, round_id: str, body: EndMarketingTestRoundEarly, request: Request, response: Response,
+                    ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                    if_match: str | None = Header(default=None, alias="If-Match")):
+    """Record the last day the ads ran; the result can be read once the attribution lag after it has passed (#253)."""
+    return _schedule_command(test_id, round_id, body, request, response, ctx, key, "marketing.test.end_early",
+                             ad_test_schedule.end_early)
+
+
+@router.get("/{test_id}/rounds/{round_id}/result", operation_id="get_marketing_test_result",
+            response_model=MarketingTestResult)
+def get_result(test_id: str, round_id: str, response: Response, ctx: TenantContext = Depends(request_tenant_context)):
+    """The round's schedule and minimal result: each compared group met the goal, missed it or cannot tell yet,
+    and how many orders it is short. Reading it never evaluates; "see the result" evaluates the round first."""
+    with tenant_session(ctx) as session:
+        test, row = _test_round(session, ctx, test_id, round_id)
+        set_etag(response, row.revision)
+        return ad_test_schedule.result(session, ctx, test, row)
 
 
 #: Taking the kept ads of ads-first ideas to a test starts from the ideas (#248).

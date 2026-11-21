@@ -279,6 +279,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'change_marketing_test_start',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/start-date',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/start-date',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.change_marketing_test_start,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 2048,
+    maxResponseBytes: 65536,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'check_library_data_source_connection',
     method: 'POST',
     bffPattern:
@@ -1405,6 +1421,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'end_marketing_test_round_early',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/end',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/end',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.end_marketing_test_round_early,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 2048,
+    maxResponseBytes: 65536,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'evaluate_marketing_round',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/marketing/rounds/:round_id/evaluate',
@@ -2199,6 +2231,22 @@ export const DOMAIN_ALLOWLIST = [
     maxResponseBytes: 131072,
     requiresIdempotency: false,
     forwardConditionalHeaders: false,
+  },
+  {
+    operationId: 'get_marketing_test_result',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/result',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/result',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 65536,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: true,
   },
   {
     operationId: 'get_marketing_workflow',

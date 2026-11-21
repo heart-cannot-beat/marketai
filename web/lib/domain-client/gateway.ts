@@ -1265,6 +1265,34 @@ export interface DomainGateway {
     workspaceSlug: string;
     testId: string;
   }): Promise<DomainResultFor<'get_marketing_test'>>;
+  /** Move a test round's start to the day its ads went live, before its first report is confirmed (#253). */
+  changeMarketingTestStart(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['change_marketing_test_start']['requestBody'];
+  }): Promise<
+    DomainResultFor<'change_marketing_test_start'> | ReconciliationRequired
+  >;
+  /** Record the last day a test round's ads ran; its result follows after the attribution lag (#253). */
+  endMarketingTestRoundEarly(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['end_marketing_test_round_early']['requestBody'];
+  }): Promise<
+    DomainResultFor<'end_marketing_test_round_early'> | ReconciliationRequired
+  >;
+  /** A test round's schedule and minimal result: each compared group's status and missing orders (#253). */
+  getMarketingTestResult(params: {
+    workspaceSlug: string;
+    testId: string;
+    roundId: string;
+  }): Promise<DomainResultFor<'get_marketing_test_result'>>;
   /** Continue a stopped first batch, confirming the maximum its `resume` offers (#193). */
   resumeMarketingFirstBatch(params: {
     workspaceSlug: string;
@@ -5567,6 +5595,72 @@ export class DefaultDomainGateway implements DomainGateway {
       buildBffPath('get_marketing_test', {
         slug: params.workspaceSlug,
         test_id: params.testId,
+      })
+    );
+  }
+
+  async changeMarketingTestStart(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['change_marketing_test_start']['requestBody'];
+  }): Promise<
+    DomainResultFor<'change_marketing_test_start'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'change_marketing_test_start',
+      params.actionInstanceId,
+      buildBffPath('change_marketing_test_start', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+        round_id: params.roundId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async endMarketingTestRoundEarly(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['end_marketing_test_round_early']['requestBody'];
+  }): Promise<
+    DomainResultFor<'end_marketing_test_round_early'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'end_marketing_test_round_early',
+      params.actionInstanceId,
+      buildBffPath('end_marketing_test_round_early', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+        round_id: params.roundId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async getMarketingTestResult(params: {
+    workspaceSlug: string;
+    testId: string;
+    roundId: string;
+  }): Promise<DomainResultFor<'get_marketing_test_result'>> {
+    return this.sendSafe<'get_marketing_test_result'>(
+      buildBffPath('get_marketing_test_result', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+        round_id: params.roundId,
       })
     );
   }
