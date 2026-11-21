@@ -19,6 +19,7 @@ class MarketingProjectRecord(Base):
         ForeignKeyConstraint(["workspace_id", "source_project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
                              ondelete="RESTRICT", name="fk_marketing_project_source"),
         Index("ix_marketing_projects_source", "workspace_id", "source_project_id"),
+        CheckConstraint("flow <> 'ads_test' OR source_project_id IS NOT NULL", name="test_project_source"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)

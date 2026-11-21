@@ -1323,6 +1323,7 @@
   "error-reuse_already_mapped": "这个版本已经属于另一个组合。要改变它的用途，请开始新的一小轮。",
   "error-reused_creative_not_editable": "从其他测试或产品卡片复用的素材，暂时不能在本测试里修改或裁剪；请在原测试里修改，或在这一轮重新生成。",
   "error-marketing_project_not_found": "找不到这个营销测试。",
+  "error-marketing_test_not_found": "找不到这次测试。",
   "error-workspace_inactive": "工作区授权已变化，请刷新后重试。",
   "error-source_invalid": "产品信息请控制在 {{limit}} 个字符以内。",
   "error-planning_in_progress": "AI 正在处理，或结果需要核对。请先查看任务状态。",

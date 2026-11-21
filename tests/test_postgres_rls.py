@@ -1276,7 +1276,7 @@ class RowLevelSecurityTests(unittest.TestCase):
         with self.owner.connect() as conn:
             definitions = dict(conn.execute(self.text(
                 "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
-                " WHERE conrelid = 'public.marketing_projects'::regclass AND contype = 'f'")).all())
+                " WHERE conrelid = 'public.marketing_projects'::regclass AND contype IN ('f', 'c')")).all())
             index = conn.execute(self.text(
                 "SELECT indexdef FROM pg_indexes WHERE tablename = 'marketing_projects'"
                 " AND indexname = 'ix_marketing_projects_source'")).scalar()
@@ -1284,6 +1284,7 @@ class RowLevelSecurityTests(unittest.TestCase):
             definitions["fk_marketing_project_source"],
             "FOREIGN KEY (workspace_id, source_project_id) REFERENCES marketing_projects(workspace_id, id) ON DELETE RESTRICT")
         self.assertIn("(workspace_id, source_project_id)", index)
+        self.assertIn("source_project_id IS NOT NULL", definitions["ck_marketing_projects_test_project_source"])
 
         ideas = {self.alpha: f"mp_{uuid.uuid4().hex[:8]}", self.beta: f"mp_{uuid.uuid4().hex[:8]}"}
         theirs = f"mp_{uuid.uuid4().hex[:8]}"
@@ -1315,6 +1316,11 @@ class RowLevelSecurityTests(unittest.TestCase):
                 api.execute(self.text(insert_test), {"id": f"mp_{uuid.uuid4().hex[:8]}", "ws": self.alpha,
                                                      "source": ideas[self.beta]})
         self.assertIn("fk_marketing_project_source", str(smuggled.exception))
+        # A test project always names its ideas.
+        with self.assertRaises(IntegrityError) as unnamed:
+            with api.begin_nested():
+                api.execute(self.text(insert_test), {"id": f"mp_{uuid.uuid4().hex[:8]}", "ws": self.alpha, "source": None})
+        self.assertIn("ck_marketing_projects_test_project_source", str(unnamed.exception))
         # The ideas cannot be removed while a test names them.
         with self.assertRaises(IntegrityError):
             with self.owner.begin() as conn:

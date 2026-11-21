@@ -107,6 +107,14 @@ class TestProjectSchemaTests(MarketingTestFixtures):
                 MarketingProjectRecord.workspace_id == other.workspace_id,
                 MarketingProjectRecord.flow == ad_tests.FLOW)).all(), [])
 
+    def test_a_test_project_must_name_its_ideas(self):
+        product = self.product()
+        with self.assertRaises(IntegrityError):
+            with tenant_session(self.context) as session:
+                session.add(MarketingProjectRecord(id=new_id("mp"), workspace_id=self.context.workspace_id, product_id=product,
+                    flow=ad_tests.FLOW, state="plan_confirmed", revision=1, source_text=SOURCE))
+                session.flush()
+
     def test_existing_projects_name_no_source(self):
         plan_first, _, _ = self.confirmed_plan()
         ideas_id = self.ideas_project()
