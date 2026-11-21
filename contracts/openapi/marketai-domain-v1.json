@@ -34099,6 +34099,12 @@
               "$ref": "#/components/schemas/RenderedCopyDifference"
             },
             "type": "array"
+          },
+          "extra_text": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "additionalProperties": false,

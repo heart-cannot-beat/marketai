@@ -129,6 +129,20 @@ SENTENCES = {
         "zh-CN": "先填写 rendered_text：按图中实际渲染的样子逐字转写标题与正文，包括错字、漏字、多字和错词；"
             "不要改正，也不要从输入中复制。Logo、产品标签和小字不属于标题或正文。图中没有或看不清的文字用空字符串。"
             "服务端会把 rendered_text 与这张广告的 headline 和 body_copy 比对，二者任何一个词不同，copy_consistent 都必须 fail。"},
+    # Ideas check v2 (#265): the image model may add words the ad never said, so every other text is transcribed too.
+    "transcribe_ideas_all": {
+        "en-US": "Fill rendered_text first: transcribe the headline and the body text exactly as the image renders them, character by "
+            "character, including misspellings, missing or extra letters and wrong words; never correct them or copy them from the input. "
+            "Use an empty string for text the image does not show or you cannot read. Then list in other_text, verbatim, every other "
+            "text the image shows, one item per separate piece: captions, labels, badges, numbers, prices, ratings, logos and small "
+            "print, and words on screens, papers, packaging, signs and the product itself; use an empty list when there is none. "
+            "The server compares rendered_text with the ad's headline and body_copy, and copy_consistent must fail when they differ "
+            "in any word; it checks other_text against the facts this ad was drafted on.",
+        "zh-CN": "先填写 rendered_text：按图中实际渲染的样子逐字转写标题与正文，包括错字、漏字、多字和错词；"
+            "不要改正，也不要从输入中复制。图中没有或看不清的文字用空字符串。再在 other_text 里逐条原样列出图中其他所有文字，"
+            "每处单独一条：说明、标签、徽章、数字、价格、评分、Logo 和小字，以及屏幕、纸张、包装、标牌和产品本身上的字；没有就用空列表。"
+            "服务端会把 rendered_text 与这张广告的 headline 和 body_copy 比对，二者任何一个词不同，copy_consistent 都必须 fail；"
+            "other_text 会对照这张广告起草时依据的事实检查。"},
     "role_paired": {
         "en-US": "You are MarketAI's visual marketing comparison checker. This is a paired check: the first image (target) is the exact "
             "version under review, each comparison is the exact version of a counterpart the plan names, and every image in the input "
@@ -201,16 +215,17 @@ def single_prompt(checks, language, schema, transcribe=False):
         *(("transcribe",) if transcribe else ()), *CLOSING], language, schema)
 
 
-def ideas_single_prompt(checks, language, schema, *, unverified_photos=False):
+def ideas_single_prompt(checks, language, schema, *, unverified_photos=False, all_text=False):
     """An ads-first ad draft (#197): the single-image check against the facts it was drafted on, not confirmed facts.
 
     ``unverified_photos`` (#199): the image was made with photos nobody has checked yet, and the prompt says so
-    instead of calling them confirmed. A check of an image made with checked photos keeps its exact prompt."""
+    instead of calling them confirmed. A check of an image made with checked photos keeps its exact prompt.
+    ``all_text`` (v2, #265) also transcribes every text besides the copy; a v1 call rebuilds its exact prompt."""
     product = ["product_reference_unverified" if unverified_photos and key == "product_reference" else key for key in PRODUCT]
     return _join([*(("language",) if "language_correct" in checks else ()),
         *(("brand_single", "readable") if "brand_style" in checks else ()),
         "role_ideas", "untrusted", "target_single", *product, *OUTPUT, "no_reference", "facts_ideas", "semantic",
-        "transcribe_ideas", *CLOSING], language, schema)
+        "transcribe_ideas_all" if all_text else "transcribe_ideas", *CLOSING], language, schema)
 
 
 def paired_prompt(language, schema):
@@ -238,11 +253,16 @@ GATE_FIX = {
         "claim_evidence_missing": "Provide confirmed product evidence for these certification, specification or price claims: ",
         "brand_logo_missing": "The original brand logo is no longer available, so the logo in the image cannot be checked; "
             "update the brand baseline or confirm by hand.",
-        "rendered_text_mismatch": "Render the confirmed copy exactly; correct: "},
+        "rendered_text_mismatch": "Render the confirmed copy exactly; correct: ",
+        # Ideas check v2 (#265), followed by the extra text the image shows.
+        "extra_text": "Show no words besides the headline and body, or confirm each of these is backed by the ad's facts: ",
+        "extra_text_unsupported": "Remove the words besides the headline and body; these are not in the ad's facts: "},
     "zh-CN": {"product_reference_missing": "请确认这些执行中的产品外观与真实产品一致；其他生成图片不能作为产品外观真值。",
         "claim_evidence_missing": "请提供已确认的产品依据，支持这些认证、参数或价格声明：",
         "brand_logo_missing": "品牌 Logo 原件已不可用，无法核对图中 Logo；请更新品牌底线或人工确认。",
-        "rendered_text_mismatch": "按已确认文案逐字渲染，改正："},
+        "rendered_text_mismatch": "按已确认文案逐字渲染，改正：",
+        "extra_text": "图里除了标题和正文不要有别的字；或者确认这些字都有这张广告的事实依据：",
+        "extra_text_unsupported": "去掉标题和正文以外的字；这些说法不在这张广告的事实里："},
 }
 CLAIM_SEPARATOR = {"en-US": ", ", "zh-CN": "、"}
 

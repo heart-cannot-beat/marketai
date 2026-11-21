@@ -176,7 +176,8 @@ def projection(call) -> dict:
                          "gate_reason": finding.get("gate_reason"), "visual_evidence": finding["visual_evidence"],
                          "rationale": finding["rationale"], "suggested_fix": finding.get("suggested_fix", ""),
                          "fact_ids": finding.get("fact_ids", []), "unsupported_claims": finding.get("unsupported_claims", []),
-                         "rendered_text_diff": finding.get("rendered_text_diff", [])})
+                         "rendered_text_diff": finding.get("rendered_text_diff", []),
+                         "extra_text": finding.get("extra_text", [])})
     return {"id": call.id, "state": call.state, "execution_mode": call.execution_mode,
             "source": result["source"] if result else None,
             "suggestion": result["quality_suggestion"] if result else None, "findings": findings,

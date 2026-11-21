@@ -7917,6 +7917,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         items: { $ref: '#/components/schemas/RenderedCopyDifference' },
         type: 'array',
       },
+      extra_text: { items: { type: 'string' }, type: 'array' },
     },
     additionalProperties: false,
     type: 'object',
