@@ -1268,6 +1268,63 @@ class RowLevelSecurityTests(unittest.TestCase):
         self.assertEqual(self.scoped_connection(self.engine(READONLY_URL), self.beta).execute(self.text(
             "SELECT COUNT(*) FROM marketing_ideas_export_records")).scalar(), 0)
 
+    def test_a_test_project_names_ideas_of_its_own_workspace(self):
+        """Test projects (#247, ADR 0019): ``source_project_id`` binds the ads-first ideas by a Workspace-composite
+        key, so the API cannot point a test at another Workspace's ideas, and no role sees another Workspace's test."""
+        from sqlalchemy.exc import IntegrityError
+
+        with self.owner.connect() as conn:
+            definitions = dict(conn.execute(self.text(
+                "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint"
+                " WHERE conrelid = 'public.marketing_projects'::regclass AND contype = 'f'")).all())
+            index = conn.execute(self.text(
+                "SELECT indexdef FROM pg_indexes WHERE tablename = 'marketing_projects'"
+                " AND indexname = 'ix_marketing_projects_source'")).scalar()
+        self.assertEqual(
+            definitions["fk_marketing_project_source"],
+            "FOREIGN KEY (workspace_id, source_project_id) REFERENCES marketing_projects(workspace_id, id) ON DELETE RESTRICT")
+        self.assertIn("(workspace_id, source_project_id)", index)
+
+        ideas = {self.alpha: f"mp_{uuid.uuid4().hex[:8]}", self.beta: f"mp_{uuid.uuid4().hex[:8]}"}
+        theirs = f"mp_{uuid.uuid4().hex[:8]}"
+        insert_test = ("INSERT INTO marketing_projects (id, workspace_id, revision, state, source_text, flow,"
+                       " source_project_id, created_at, updated_at)"
+                       " VALUES (:id, :ws, 1, 'plan_confirmed', 'Acme Charge Home', 'ads_test', :source, now(), now())")
+        with self.owner.begin() as conn:
+            for workspace, project in ideas.items():
+                conn.execute(self.text(
+                    "INSERT INTO marketing_projects (id, workspace_id, revision, state, source_text, flow, created_at, updated_at)"
+                    " VALUES (:id, :ws, 1, 'ideas_ready', 'Acme Charge Home', 'ads_first', now(), now())"),
+                    {"id": project, "ws": workspace})
+            conn.execute(self.text(insert_test), {"id": theirs, "ws": self.beta, "source": ideas[self.beta]})
+
+        def remove():
+            with self.owner.begin() as conn:
+                conn.execute(self.text("DELETE FROM marketing_projects WHERE id = :id"),
+                             {"id": theirs})
+                conn.execute(self.text("DELETE FROM marketing_projects WHERE id IN (:a, :b)"),
+                             {"a": ideas[self.alpha], "b": ideas[self.beta]})
+        self.addCleanup(remove)
+
+        api = self.scoped_connection(self.engine(API_URL), self.alpha)
+        # A test of this Workspace's ideas is accepted; one naming another Workspace's ideas is not.
+        api.execute(self.text(insert_test), {"id": f"mp_{uuid.uuid4().hex[:8]}", "ws": self.alpha,
+                                             "source": ideas[self.alpha]})
+        with self.assertRaises(IntegrityError) as smuggled:
+            with api.begin_nested():
+                api.execute(self.text(insert_test), {"id": f"mp_{uuid.uuid4().hex[:8]}", "ws": self.alpha,
+                                                     "source": ideas[self.beta]})
+        self.assertIn("fk_marketing_project_source", str(smuggled.exception))
+        # The ideas cannot be removed while a test names them.
+        with self.assertRaises(IntegrityError):
+            with self.owner.begin() as conn:
+                conn.execute(self.text("DELETE FROM marketing_projects WHERE id = :id"), {"id": ideas[self.beta]})
+        # Another Workspace's test stays invisible to every domain role.
+        for url in (API_URL, WORKER_URL, READONLY_URL):
+            scoped = self.scoped_connection(self.engine(url), self.alpha)
+            self.assertEqual(scoped.execute(self.text("SELECT COUNT(*) FROM marketing_projects WHERE id = :id"),
+                                            {"id": theirs}).scalar(), 0)
+
     # ------------------------------------------------------ child tables ----
 
     def test_a_child_row_is_visible_only_through_its_parent(self):

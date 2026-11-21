@@ -70,7 +70,7 @@
 ## 跨块的共同决定
 
 - **E1 测试项目。** `MarketingProjectRecord.flow = "ads_test"`（常量 `app/marketing/ad_tests.py::FLOW = "ads_test"`；模块名用 `ad_tests`，不和 pytest 的 `test_*.py` 规则、顶层 `tests` 包混淆）。新列 `source_project_id`（可空，`(workspace_id, source_project_id)` 组合外键指向 `marketing_projects`），测试项目必填、指向它来自的广告想法项目。测试项目的 `state` 只有 `plan_confirmed`；`revision` 照常递增。`understanding_json` 是 `app/marketing/contracts.py::Understanding` 的形状（从 `IdeasUnderstanding` 去掉 `unsupported_claims`）。
-- **E2 按小轮查项目。** 新函数 `service.get_round_project(session, ctx, project_id) -> MarketingProjectRecord`，接受 `flow in ("plan_first", "ads_test")`。按小轮编号操作的接口（冻结之后的：读轮次、复核、AI 检查、交接包、对上广告、报表、评估、结束）改用它；改方案、重新起草、改产品理解、按方案出图、`list_marketing_projects` 仍用 `get_project(flow="plan_first")`，对测试项目 404。
+- **E2 按小轮查项目。** 新函数 `service.get_round_project(session, ctx, project_id) -> MarketingProjectRecord`，接受 `flow in service.ROUND_FLOWS`（`("plan_first", "ads_test")`）。按小轮编号操作的接口（冻结之后的：读轮次、复核、AI 检查、交接包、对上广告、报表、评估、结束）用 `workflow.get_round` 按编号在本工作区里找轮次，本来就不看项目的 `flow`，测试项目的轮次照样找得到；这些路径里要读项目的地方改用 `get_round_project`（T1 时是读轮次的 `include_reuse_lineage` 和 `include_board` 两处，见 #247 的说明）。看板上的“可以出图”对测试项目恒为否。改方案、重新起草、改产品理解、按方案出图、冻结、读 `workflow`、`list_marketing_projects` 仍用 `get_project(flow="plan_first")`，对测试项目 404；按小轮编号的出图（`prepare_marketing_feedback`、`create_marketing_image_edit`）和结果解释（`start_marketing_explanation`，第 3 步）也一样。
 - **E3 进行中的测试。** 一个测试项目“进行中”＝它有一轮还没结束（`marketing_rounds.state != "closed"`）。`ad_tests.in_progress(session, ctx, product_id) -> MarketingProjectRecord | None`；开始测试时有进行中的就 409 `test_in_progress`。
 - **E4 留下的广告挂进小轮。** 复用 `MarketingCreativeReuseRecord`，`source_json = {"kind": "ideas", "ideas_project_id", "asset_version_id", "intent_hash", "verification_record_id"}`，`combination_id` 是这张广告出图意图里的组合编号。`reuse.creatives` 认这种记录；`workflow.ready` 对 `kind == "ideas"` 的图：照片是否最新按 `ideas_export` 的照片状态，不按 `product_references.lineage_current`；其余条件不变。广告包生成之后，这种图的“是否可用”按生成广告包那一刻的判断，不再随广告想法之后的修改变化（设计 §5.8）：评估不因之后的修改改变，广告包照样能下载；改了什么由 T8 的提示告诉用户。不加表、不加权限。
 - **E5 审核记录。** 只写这一轮的 `MarketingQCRecord`（`marketing_qc_reviews`），不写 `QualityReviewRecord`。开始测试前，若某张广告在共享审核链上当前是不通过，409 `ad_review_rejected`。每一项记为通过的检查在记录里带 `evidence`：`{"source": "ideas_check" | "paired_check" | "verification", "id": ..., "finding_id" | "fact_id" | "photo_id": ...}`；找不到依据的不记为通过。
@@ -78,7 +78,7 @@
 - **E7 检查之后谁接着做。** 不让 Worker 接着写。`complete_marketing_test_start`（T4）是幂等命令：页面在检查全部有结果后自动调用；页面关掉了，下次打开测试页时自动调用。检查有不通过的，页面先展开问题，用户处理后再调用。
 - **E8 报价 hash。** `test_quote_hash = digest([QUOTE_VERSION, ideas_revision, sorted((asset_version_id, intent_hash) for kept), answers, overrides, paired_maximum, protocol])`。开始测试时重算，不同就 409 `test_quote_changed`。
 - **E9 日期。** 开始日期默认是广告账户时区的明天；`end_date = start_date + duration_days - 1`；预计出结论的日期 `= end_date + attribution_lag_days + 1`（7 天测试从开始那天算是第 16 天）。改开始日期、提前结束都追加记录，不改冻结的快照；评估时用“有效开始、有效结束”。
-- **E10 新接口一览。** 第 2 步全部做完后接口数从 266 变成 281。各块可以改名，改了更新本表和总数。
+- **E10 新接口一览。** 第 2 步全部做完后接口数从 266 变成 281（T1 之后是 267）。各块可以改名，改了更新本表和总数。
 
 | 块 | operation_id | 路径 |
 | --- | --- | --- |
@@ -146,7 +146,7 @@
 - Create: `app/marketing/ad_tests_contracts.py`
 - Modify: `app/marketing/models.py`（`MarketingProjectRecord.source_project_id`）
 - Modify: `app/marketing/service.py`（`get_round_project`）
-- Modify: `app/marketing/api.py`（按小轮编号的接口改用 `get_round_project`）
+- Modify: `app/marketing/workflow.py`（读轮次时查项目的两处改用 `get_round_project`；`api.py` 里按小轮编号的接口不查项目，不用改，见 E2）
 - Modify: `app/main.py` 或路由注册处（挂 `ad_tests_api.router`）
 - Test: `tests/test_marketing_tests.py`、`tests/test_postgres_rls.py`
 
@@ -157,7 +157,8 @@
   - `ad_tests.in_progress(session, ctx, product_id: str) -> MarketingProjectRecord | None`
   - `ad_tests.detail(session, ctx, row) -> dict`（`MarketingTestDetail`）
   - `service.get_round_project(session, ctx, project_id: str) -> MarketingProjectRecord`
-  - `ad_tests_contracts.MarketingTestDetail`：`id`、`revision`、`product_id`、`source_project_id`、`comparison`（`"claims" | "expressions" | "single"`）、`plan_summary`（目标成本、本轮预算、天数、币种、落地页）、`rounds: list[MarketingTestRoundSummary]`（`id`、`ordinal`、`state`、`start_date`、`end_date`、`effective_start_date`、`effective_end_date`）、`current_round_id`、`created_at`
+  - `ad_tests_contracts.MarketingTestDetail`：`id`、`revision`、`product_id`、`source_project_id`、`comparison`（`"claims" | "expressions" | "single"`）、`plan_summary: MarketingTestPlanSummary`（`target_cost` 目标成本即方案的 CPA 门槛、`round_budget` 本轮预算、`duration_days`、`currency`、`landing_page`）、`rounds: list[MarketingTestRoundSummary]`（`id`、`ordinal`、`state`、`start_date`、`end_date`、`effective_start_date`、`effective_end_date`；T7 之前有效日期就是冻结的日期）、`current_round_id`、`created_at`
+  - `ad_tests.comparison(plan: dict) -> str`：`business_retest` 是 `single`；各组的组合跨两个以上主张是 `claims`，否则 `expressions`。T2 生成的方案要和 `comparison_of` 的结果一致。
 
 ### Task 1.1：表结构
 

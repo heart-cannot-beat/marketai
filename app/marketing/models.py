@@ -15,6 +15,10 @@ class MarketingProjectRecord(Base):
         UniqueConstraint("workspace_id", "id", name="uq_marketing_projects_workspace_id"),
         Index("ix_marketing_projects_history", "workspace_id", "created_at", "id"),
         ForeignKeyConstraint(["workspace_id", "product_id"], ["products.workspace_id", "products.id"], ondelete="RESTRICT"),
+        # ADR 0019: a test project names the ads-first ideas it came from, in its own Workspace.
+        ForeignKeyConstraint(["workspace_id", "source_project_id"], ["marketing_projects.workspace_id", "marketing_projects.id"],
+                             ondelete="RESTRICT", name="fk_marketing_project_source"),
+        Index("ix_marketing_projects_source", "workspace_id", "source_project_id"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
@@ -25,11 +29,14 @@ class MarketingProjectRecord(Base):
     understanding_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     plan_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # ADR 0018: "plan_first" projects keep the plan-confirmed flow; "ads_first" projects hold
-    # ideas (market, ad language and the Ideas document) and never a plan in step 1.
+    # ideas (market, ad language and the Ideas document) and never a plan in step 1. ADR 0019: an
+    # "ads_test" project (``app.marketing.ad_tests``) is kept ads taken to a test, plan-confirmed from the start.
     flow: Mapped[str] = mapped_column(String(20), nullable=False, default="plan_first", server_default="plan_first")
     market: Mapped[str | None] = mapped_column(String(80), nullable=True)
     ad_language: Mapped[str | None] = mapped_column(String(35), nullable=True)
     ideas_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # A test project's ads-first ideas; null for every other project (#247).
+    source_project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
