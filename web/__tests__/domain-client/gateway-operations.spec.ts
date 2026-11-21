@@ -125,7 +125,7 @@ describe('DomainGateway operation coverage', () => {
     // 268 -> 271: a test round's schedule and minimal result
     // `change_marketing_test_start`, `end_marketing_test_round_early` and
     // `get_marketing_test_result` (#253).
-        // 271 -> 272: a product's test history
+    // 271 -> 272: a product's test history
     // `list_marketing_tests` (#255).
     expect(DOMAIN_ALLOWLIST.length).toBe(272);
   });
