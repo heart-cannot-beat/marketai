@@ -1323,6 +1323,7 @@
   "error-reuse_already_mapped": "This version already belongs to another combination. Start a new small round to change its intent.",
   "error-reused_creative_not_editable": "A creative reused from another test or the product card cannot be revised or cropped in this test. Revise it in its original test, or generate a new one in this round.",
   "error-marketing_project_not_found": "This marketing test could not be found.",
+  "error-marketing_test_not_found": "This test could not be found.",
   "error-workspace_inactive": "Workspace authorization changed. Refresh and retry.",
   "error-source_invalid": "Provide product information of at most {{limit}} characters.",
   "error-planning_in_progress": "AI is working or the result needs reconciliation. Check the task status first.",

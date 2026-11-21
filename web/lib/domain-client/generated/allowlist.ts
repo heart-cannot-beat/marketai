@@ -2141,6 +2141,20 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'get_marketing_test',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/tests/:test_id',
+    fastapiPathTemplate: '/api/v1/marketing/tests/{test_id}',
+    pathParams: ['test_id'],
+    querySchema: null,
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 65536,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'get_marketing_workflow',
     method: 'GET',
     bffPattern:

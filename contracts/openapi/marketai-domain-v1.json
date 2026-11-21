@@ -12107,6 +12107,45 @@
         }
       }
     },
+    "/api/v1/marketing/tests/{test_id}": {
+      "get": {
+        "operationId": "get_marketing_test",
+        "summary": "Get Test",
+        "description": "A test of this workspace: where its ads came from, its plan at a glance and its rounds.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meta/connections": {
       "post": {
         "operationId": "create_meta_connection",
@@ -38890,6 +38929,169 @@
           "evaluation",
           "explanation",
           "feedback_drafts"
+        ]
+      },
+      "MarketingTestDetail": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "source_project_id": {
+            "type": "string"
+          },
+          "comparison": {
+            "type": "string",
+            "enum": [
+              "claims",
+              "expressions",
+              "single"
+            ]
+          },
+          "plan_summary": {
+            "$ref": "#/components/schemas/MarketingTestPlanSummary"
+          },
+          "rounds": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestRoundSummary"
+            },
+            "type": "array"
+          },
+          "current_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "revision",
+          "product_id",
+          "source_project_id",
+          "comparison",
+          "plan_summary",
+          "rounds",
+          "current_round_id",
+          "created_at"
+        ]
+      },
+      "MarketingTestPlanSummary": {
+        "properties": {
+          "target_cost": {
+            "type": "string"
+          },
+          "round_budget": {
+            "type": "string"
+          },
+          "duration_days": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AUD",
+              "BRL",
+              "CAD",
+              "CHF",
+              "CNY",
+              "EUR",
+              "GBP",
+              "HKD",
+              "IDR",
+              "INR",
+              "JPY",
+              "KRW",
+              "MXN",
+              "MYR",
+              "NZD",
+              "PHP",
+              "PLN",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TWD",
+              "USD",
+              "VND",
+              "ZAR"
+            ]
+          },
+          "landing_page": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_cost",
+          "round_budget",
+          "duration_days",
+          "currency",
+          "landing_page"
+        ],
+        "description": "The parts of the test's plan the user chose or can see at a glance; money in the plan's currency."
+      },
+      "MarketingTestRoundSummary": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reviewing",
+              "handoff",
+              "awaiting_data",
+              "evaluated",
+              "closed"
+            ]
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "effective_start_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "effective_end_date": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "ordinal",
+          "state",
+          "start_date",
+          "end_date",
+          "effective_start_date",
+          "effective_end_date"
         ]
       },
       "MatrixCol": {

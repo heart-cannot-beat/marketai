@@ -938,6 +938,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['ResourceEnvelope'] };
   };
+  get_marketing_test: {
+    pathParams: { test_id: string };
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: { 200: components['schemas']['MarketingTestDetail'] };
+  };
   get_marketing_workflow: {
     pathParams: { project_id: string };
     queryParams: {

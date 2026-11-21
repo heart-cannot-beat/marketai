@@ -14,7 +14,7 @@ from app.generation.review import create_review, ReviewError, ReviewConflictErro
 from app.platform.audit import append_event
 from app.platform.jobs import enqueue_in_session
 from app.platform.operations import create_operation
-from .service import MarketingError, digest, get_project, ensure_active, latest_call
+from .service import MarketingError, digest, get_project, get_round_project, ensure_active, latest_call
 from .workflow_models import (MarketingRoundRecord as Round, MarketingQCRecord as QC,
     MarketingHandoffRecord as Handoff, MarketingAdBindingRecord as Binding,
     MarketingMetricBatchRecord as Batch, MarketingEvaluationRecord as Evaluation)
@@ -666,7 +666,7 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
     from .reuse import editable
     appearances = {}
     # A creative reused from another test or its card is revised or cropped in its own test only (#7).
-    project = get_project(session, ctx, row.project_id) if include_reuse_lineage and any(
+    project = get_round_project(session, ctx, row.project_id) if include_reuse_lineage and any(
         r.canonical_json.get("reuse") for _, r, _ in creative_records) else None
     # An ad of ads-first ideas is changed on its ideas page, never in a round (#225).
     if project is not None:
@@ -782,7 +782,7 @@ def legacy_text_projection(result):
 
 def board_projection(session, ctx, row, executions, handoff, evaluation):
     from . import board
-    project = get_project(session, ctx, row.project_id)
+    project = get_round_project(session, ctx, row.project_id)
     generating = session.scalars(select(GenerationRecipeSnapshotRecord.canonical_json).join(GenerationRunRecord,
         (GenerationRunRecord.recipe_snapshot_id == GenerationRecipeSnapshotRecord.id) & (GenerationRunRecord.workspace_id == ctx.workspace_id))
         .where(GenerationRecipeSnapshotRecord.workspace_id == ctx.workspace_id, GenerationRunRecord.status.in_(("queued", "running")),
@@ -804,7 +804,9 @@ def board_projection(session, ctx, row, executions, handoff, evaluation):
         handoff={"state": handoff.state, "entries": {e["asset_version_id"]: e["entry_id"] for e in handoff.manifest_json["entries"]}} if handoff else None,
         bindings=bindings, data_ad_ids={item["ad_id"] for b in active_batches(session, ctx, row) for item in b.rows_json},
         generating={c["selection"]["marketing_intent"].get("combination", {}).get("id") for c in generating},
-        generation_open=row.state == "reviewing" and not handoff and project.state == "plan_confirmed" and project.revision == row.plan_revision,
+        # A test project's plan never generates images (ADR 0019): its round's board offers none.
+        generation_open=row.state == "reviewing" and not handoff and project.flow == "plan_first"
+        and project.state == "plan_confirmed" and project.revision == row.plan_revision,
         evaluation_current=bool(evaluation and evaluation["current"]))
 
 

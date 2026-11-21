@@ -1051,6 +1051,8 @@ v1_router.include_router(marketing_ideas_router)
 from .marketing.first_batch_api import quote_router as marketing_first_batch_quote_router, router as marketing_first_batch_router
 v1_router.include_router(marketing_first_batch_quote_router)
 v1_router.include_router(marketing_first_batch_router)
+from .marketing.ad_tests_api import router as marketing_tests_router
+v1_router.include_router(marketing_tests_router)
 register_marketing_handlers(app)
 
 from .learnings.v1_router import router as learnings_v1_router

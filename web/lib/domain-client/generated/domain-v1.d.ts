@@ -3405,6 +3405,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/tests/{test_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Test
+     * @description A test of this workspace: where its ads came from, its plan at a glance and its rounds.
+     */
+    get: operations['get_marketing_test'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/meta/connections': {
     parameters: {
       query?: never;
@@ -10227,6 +10247,67 @@ export interface components {
       explanation: components['schemas']['WorkflowExplanation'] | null;
       feedback_drafts: components['schemas']['FeedbackDraft'][];
       board?: components['schemas']['MarketingBoard'] | null;
+    };
+    MarketingTestDetail: {
+      id: string;
+      revision: number;
+      product_id: string;
+      source_project_id: string;
+      /** @enum {string} */
+      comparison: 'claims' | 'expressions' | 'single';
+      plan_summary: components['schemas']['MarketingTestPlanSummary'];
+      rounds: components['schemas']['MarketingTestRoundSummary'][];
+      current_round_id: string | null;
+      created_at: string;
+    };
+    /** @description The parts of the test's plan the user chose or can see at a glance; money in the plan's currency. */
+    MarketingTestPlanSummary: {
+      target_cost: string;
+      round_budget: string;
+      duration_days: number;
+      /** @enum {string} */
+      currency:
+        | 'AED'
+        | 'AUD'
+        | 'BRL'
+        | 'CAD'
+        | 'CHF'
+        | 'CNY'
+        | 'EUR'
+        | 'GBP'
+        | 'HKD'
+        | 'IDR'
+        | 'INR'
+        | 'JPY'
+        | 'KRW'
+        | 'MXN'
+        | 'MYR'
+        | 'NZD'
+        | 'PHP'
+        | 'PLN'
+        | 'SAR'
+        | 'SEK'
+        | 'SGD'
+        | 'THB'
+        | 'TWD'
+        | 'USD'
+        | 'VND'
+        | 'ZAR';
+      landing_page: string;
+    };
+    MarketingTestRoundSummary: {
+      id: string;
+      ordinal: number;
+      /** @enum {string} */
+      state: 'reviewing' | 'handoff' | 'awaiting_data' | 'evaluated' | 'closed';
+      /** Format: date */
+      start_date: string;
+      /** Format: date */
+      end_date: string;
+      /** Format: date */
+      effective_start_date: string;
+      /** Format: date */
+      effective_end_date: string;
     };
     MatrixCol: {
       angle_id: string;
@@ -19643,6 +19724,37 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ResourceEnvelope'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_marketing_test: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        test_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestDetail'];
         };
       };
       /** @description Validation Error */

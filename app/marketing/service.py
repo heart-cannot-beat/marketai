@@ -45,6 +45,23 @@ def get_project(session, ctx, project_id, *, flow: str = "plan_first"):
     return row
 
 
+#: The flows whose projects have small rounds: plan-first tests and test projects (``ad_tests.FLOW``, ADR 0019).
+ROUND_FLOWS = ("plan_first", "ads_test")
+
+
+def get_round_project(session, ctx, project_id):
+    """The project a small round belongs to: a plan-first test or a test project, never ads-first ideas.
+
+    Paths that act on a frozen round by its id read its project through here (#247); the paths that write a
+    plan-first project's plan, understanding or images keep ``get_project`` and never find a test project."""
+    row = session.scalar(select(MarketingProjectRecord).where(
+        MarketingProjectRecord.id == project_id, MarketingProjectRecord.workspace_id == ctx.workspace_id,
+        MarketingProjectRecord.flow.in_(ROUND_FLOWS)))
+    if row is None:
+        raise MarketingError("marketing_project_not_found", "找不到这次测试。", 404)
+    return row
+
+
 def call_project(session, ctx, project_id):
     """The project a planning call was admitted for, whatever its flow.
 

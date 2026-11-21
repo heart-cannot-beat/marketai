@@ -1232,6 +1232,11 @@ export interface DomainGateway {
   listMarketingFirstBatches(params: {
     workspaceSlug: string;
   }): Promise<DomainResultFor<'list_marketing_first_batches'>>;
+  /** A test the user's kept ads were taken to: its source ideas, plan at a glance and rounds (#247). */
+  getMarketingTest(params: {
+    workspaceSlug: string;
+    testId: string;
+  }): Promise<DomainResultFor<'get_marketing_test'>>;
   /** Continue a stopped first batch, confirming the maximum its `resume` offers (#193). */
   resumeMarketingFirstBatch(params: {
     workspaceSlug: string;
@@ -5457,6 +5462,18 @@ export class DefaultDomainGateway implements DomainGateway {
     return this.sendSafe<'list_marketing_first_batches'>(
       buildBffPath('list_marketing_first_batches', {
         slug: params.workspaceSlug,
+      })
+    );
+  }
+
+  async getMarketingTest(params: {
+    workspaceSlug: string;
+    testId: string;
+  }): Promise<DomainResultFor<'get_marketing_test'>> {
+    return this.sendSafe<'get_marketing_test'>(
+      buildBffPath('get_marketing_test', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
       })
     );
   }
