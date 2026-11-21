@@ -68,8 +68,11 @@ def check_report(inputs, **changes):
                  "rationale": "Matches the ad's claim, way of telling and copy.", "suggested_fix": "",
                  "fact_ids": inputs["evidence_fact_ids"][:1] if key == "facts_supported" else []}
                 for key in inputs["required_checks"]]
-    answer = {"rendered_text": {field: inputs["combination"][field] for field in ("headline", "body_copy")},
-              "summary": "The ad shows its claim clearly.", "findings": findings}
+    from app.marketing.ai_qc_contracts import FULL_TRANSCRIPTION_POLICIES
+    rendered = {field: inputs["combination"][field] for field in ("headline", "body_copy")}
+    if inputs.get("policy_version") in FULL_TRANSCRIPTION_POLICIES:
+        rendered["other_text"] = []  # a v2 check (#265) also lists every other text; this image shows none
+    answer = {"rendered_text": rendered, "summary": "The ad shows its claim clearly.", "findings": findings}
     for check_id, values in changes.items():
         if check_id == "rendered_text":
             answer["rendered_text"].update(values)

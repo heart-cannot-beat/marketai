@@ -26,6 +26,9 @@ const KNOWN_GATES = new Set([
   'product_reference_missing',
   'supporting_facts_missing',
   'brand_logo_missing',
+  // #265: the image shows words besides its copy.
+  'extra_text',
+  'extra_text_unsupported',
 ]);
 
 /** A finding's one-line name: what went wrong, else what the check asks. */
@@ -43,7 +46,8 @@ export function useFindingTitle() {
  * One check's findings, each on its own (#197, #201): what it is about,
  * whether it failed or could not be settled from the image, why, what to
  * change, and -- for the copy -- what the image says against what the ad
- * says. `actions` renders the controls of one finding.
+ * says, and the words it shows besides the copy (#265). `actions` renders
+ * the controls of one finding.
  */
 export function FindingList({
   findings,
@@ -79,6 +83,16 @@ export function FindingList({
               })}
             </p>
           ))}
+          {(finding.extra_text ?? []).length > 0 && (
+            <div>
+              <p>{t('finding-extra-text')}</p>
+              <ul className="list-disc pl-5" lang={language}>
+                {finding.extra_text!.map((text) => (
+                  <li key={text}>{text}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {(finding.unsupported_claims ?? []).length > 0 && (
             <div>
               <p>{t('finding-unsupported')}</p>

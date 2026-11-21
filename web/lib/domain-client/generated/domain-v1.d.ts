@@ -9126,6 +9126,7 @@ export interface components {
       fact_ids: string[];
       unsupported_claims?: string[];
       rendered_text_diff?: components['schemas']['RenderedCopyDifference'][];
+      extra_text?: string[];
     };
     /**
      * @description What checking these ideas' unchecked ads costs at most (#197): one single-image check per image.
