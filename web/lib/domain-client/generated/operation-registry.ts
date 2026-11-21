@@ -3936,6 +3936,47 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'get_marketing_test_quote',
+    {
+      operationId: 'get_marketing_test_quote',
+      method: 'GET',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/test-quote',
+      pathParams: ['project_id'],
+      queryParams: [
+        'target_cost',
+        'round_budget',
+        'duration_days',
+        'landing_page',
+        'audience',
+        'offer',
+        'placement',
+        'currency',
+        'account_timezone',
+        'start_date',
+        'attribution_window',
+        'max_small_rounds',
+        'media_budget',
+      ],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 131072,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'get_marketing_test_quote_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'get_marketing_workflow',
     {
       operationId: 'get_marketing_workflow',

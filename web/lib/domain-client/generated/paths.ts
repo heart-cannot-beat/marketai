@@ -1059,6 +1059,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'get_marketing_test_quote',
+    method: 'GET',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/test-quote',
+    pathParams: ['project_id'],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'get_marketing_workflow',
     method: 'GET',
     bffPattern:

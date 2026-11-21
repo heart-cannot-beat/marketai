@@ -15,7 +15,7 @@ from app.entitlements.reservation_book import ReservationBook
 from app.entitlements.types import BillableCallSpec, ReservationPlan
 from app.platform.jobs import enqueue_in_session
 from app.platform.operations import create_operation
-from .ai_qc_contracts import AICheckTranscribedReport, report_model
+from .ai_qc_contracts import AICheckFullTranscribedReport, AICheckTranscribedReport, FULL_TRANSCRIPTION_POLICIES, report_model
 from .ai_qc_models import MarketingAIQCRecord as Call
 from .languages import output_language
 from .service import MarketingError, digest, ensure_active
@@ -89,6 +89,43 @@ def missing_claim_evidence(finding, facts):
     from .claims import unsupported_claims
     support = "\n".join(f.statement + "\n" + f.source_quote for f in facts)
     return unsupported_claims(finding.visual_evidence + "\n" + finding.rationale, support)
+
+
+def extra_text(rendered, inputs):
+    """What an image shows besides its copy (#265): the transcribed ``other_text``, in order, without repeats and
+    without pieces of the headline, the body or the product's name (a logo or the product's own marking)."""
+    combo, understanding = inputs["combination"], inputs["understanding"]
+    own = [comparable(value) for value in (combo.get("headline", ""), combo.get("body_copy", ""),
+                                           understanding.get("product_name", ""))]
+    seen, extra = set(), []
+    for item in rendered.other_text:
+        key = comparable(item)
+        if key and key not in seen and not any(key in text for text in own):
+            seen.add(key)
+            extra.append(item)
+    return extra
+
+
+def extra_text_gate(finding, rendered, inputs, facts, fix, separator):
+    """facts_supported against every text the image shows besides its copy (#265).
+
+    The image model may add words the ad never said; the ad's facts do not stand behind them. A number, price
+    or certification there that the facts do not state fails; any other extra text needs a person to look,
+    since whether words agree with the facts cannot be told literally. The texts are listed on the finding."""
+    from .claims import unsupported_claims
+    extra = extra_text(rendered, inputs)
+    if not extra:
+        return
+    support = "\n".join(f.statement + "\n" + f.source_quote for f in facts)
+    missing = list(dict.fromkeys(claim for item in extra for claim in unsupported_claims(item, support)))[:20]
+    finding["extra_text"] = extra
+    if missing:
+        finding.update(status="fail", gate_reason="extra_text_unsupported",
+                       unsupported_claims=list(dict.fromkeys([*finding.get("unsupported_claims", []), *missing]))[:20],
+                       suggested_fix=(fix["extra_text_unsupported"] + separator.join(missing))[:320])
+    elif finding["status"] != "fail":
+        finding.update(status="unknown", gate_reason="extra_text",
+                       suggested_fix=(fix["extra_text"] + separator.join(f"“{item}”" for item in extra))[:320])
 
 
 def effective_report(call):
@@ -485,6 +522,9 @@ def normalize_report(data, inputs):
         if check.check_id == "copy_consistent" and transcribed:
             rendered_copy_gate(finding, report.rendered_text.model_dump(), inputs["combination"], fix,
                 text.CLAIM_SEPARATOR[text.record_language(inputs)])
+        if check.check_id == "facts_supported" and isinstance(report, AICheckFullTranscribedReport):
+            extra_text_gate(finding, report.rendered_text, inputs, list(facts.values()), fix,
+                            text.CLAIM_SEPARATOR[text.record_language(inputs)])
         findings.append(finding)
     # The summary is the model's own words: it reads as the verdict only when it is ready_to_confirm (#294).
     return {"summary": report.summary, "findings": findings, "source": "ai_visual_suggestion", "normalization_version": NORMALIZATION_POLICY,
@@ -552,7 +592,9 @@ def confirm(session, ctx, row, body):
 # --------------------------------------------------------------------------- ads-first ideas (#197)
 
 #: Single-image checks of an ads-first ad: against the ad's own generation intent, transcribing its copy.
-IDEAS_POLICY = "marketing-ideas-qc-single-v1"
+#: v2 (#265) also transcribes every other text the image shows, which the server checks against the ad's facts;
+#: a v1 call keeps its own prompt and schema, so its frozen input still reads as current.
+IDEAS_POLICY = "marketing-ideas-qc-single-v2"
 
 
 def ideas_required_checks(intent):
@@ -611,7 +653,8 @@ def ideas_input(session, ctx, project, version, recipe, *, policy=IDEAS_POLICY):
     # The recipe never changes, so neither does this: checking the photo later leaves the check's input as it was.
     inputs["system_prompt"] = text.ideas_single_prompt(
         required, language, inputs["output_schema"],
-        unverified_photos=any(ref.get("attestation") == UNVERIFIED for ref in references))
+        unverified_photos=any(ref.get("attestation") == UNVERIFIED for ref in references),
+        all_text=policy in FULL_TRANSCRIPTION_POLICIES)
     import json
     if len((inputs["system_prompt"] + json.dumps(public_input(inputs), ensure_ascii=False)).encode()) > MAX_TEXT_BYTES:
         raise MarketingError("qc_input_too_large", "检查意图与产品依据过长。")
