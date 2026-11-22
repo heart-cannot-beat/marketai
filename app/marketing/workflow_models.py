@@ -1,7 +1,8 @@
 """Delivery evidence is append-only and independent of mutable planning drafts."""
 from datetime import date, datetime
 
-from sqlalchemy import JSON, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import false, text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.adapters.persistence.database import Base
 from app.adapters.persistence.models import utcnow
@@ -145,11 +146,23 @@ class MarketingHandoffRecord(Base):
 
 
 class MarketingAdBindingRecord(Base):
+    """Which package ad a Meta ad of a round shows, by its Ad ID.
+
+    A record is never changed. A test round's match is changed or taken away by a new record that replaces
+    the current one (``replaces_id``; ``removed`` when it takes the match away, #252): each Meta ad has one
+    line of records per round, and its current match is the record no other replaces."""
     __tablename__ = "marketing_ad_bindings"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "round_id", "ad_account_id", "ad_id", name="uq_marketing_ad_round"),
+        UniqueConstraint("workspace_id", "id", name="uq_marketing_ad_bindings_workspace_id"),
+        # Each record is replaced at most once, so the records of one Meta ad stay one line.
+        UniqueConstraint("workspace_id", "replaces_id", name="uq_marketing_ad_binding_replaces"),
+        # One first record per Meta ad and round; the records after it replace it.
+        Index("uq_marketing_ad_round_first", "workspace_id", "round_id", "ad_account_id", "ad_id", unique=True,
+              sqlite_where=text("replaces_id IS NULL"), postgresql_where=text("replaces_id IS NULL")),
         ForeignKeyConstraint(["workspace_id", "round_id"], ["marketing_rounds.workspace_id", "marketing_rounds.id"], ondelete="RESTRICT"),
         ForeignKeyConstraint(["workspace_id", "handoff_id"], ["marketing_handoffs.workspace_id", "marketing_handoffs.id"], ondelete="RESTRICT"),
+        ForeignKeyConstraint(["workspace_id", "replaces_id"], ["marketing_ad_bindings.workspace_id", "marketing_ad_bindings.id"],
+                             ondelete="RESTRICT", name="fk_marketing_ad_binding_replaces"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
@@ -162,6 +175,10 @@ class MarketingAdBindingRecord(Base):
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     conditions_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    replaces_id: Mapped[str | None] = mapped_column(String(64))
+    removed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+    #: Who confirmed the record; empty on records written before #252.
+    actor_id: Mapped[str | None] = mapped_column(String(128))
 
 
 class MarketingMetricBatchRecord(Base):

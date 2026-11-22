@@ -154,3 +154,45 @@ def confirm_test_report(test_id: str, round_id: str, body: BatchCommand, request
     """Count an uploaded report: for each day and Meta ad it has, it replaces what an earlier report said."""
     return _report_command(test_id, round_id, body, request, response, ctx, key,
                            "marketing.test_report_confirm", ad_test_reports.confirm)
+
+
+# Which ad each Meta ad of a test round shows (#252): suggested from a report's ad names, confirmed at once.
+from .ad_test_reports_contracts import (ConfirmMarketingTestBindings, MarketingTestBindings,
+                                        MarketingTestBindingSuggestions, SuggestMarketingTestBindings)
+
+
+@router.post("/{test_id}/rounds/{round_id}/bindings/suggest", operation_id="suggest_marketing_test_bindings",
+             response_model=MarketingTestBindingSuggestions)
+def suggest_test_bindings(test_id: str, round_id: str, body: SuggestMarketingTestBindings, response: Response,
+                          ctx: TenantContext = Depends(request_tenant_context)):
+    """Read an uploaded report's ad names: the ad of this round's package each Meta ad's short key names, and
+    the Meta ads left for the user to choose or skip. Reads only; nothing is stored."""
+    with tenant_session(ctx) as session:
+        _, row = ad_test_reports.test_round(session, ctx, test_id, round_id)
+        set_etag(response, row.revision)
+        return ad_test_reports.suggest_bindings(session, ctx, row, body)
+
+
+@router.post("/{test_id}/rounds/{round_id}/bindings", operation_id="confirm_marketing_test_bindings",
+             response_model=MarketingTestBindings, openapi_extra={"x-marketai-idempotent": True})
+def confirm_test_bindings(test_id: str, round_id: str, body: ConfirmMarketingTestBindings, request: Request,
+                          response: Response, ctx: TenantContext = Depends(request_tenant_context),
+                          key: str = Depends(_idempotency_key),
+                          if_match: str | None = Header(default=None, alias="If-Match")):
+    """Confirm which ad each Meta ad shows, all at once: every match is written or none. Before the round's
+    first report is confirmed a match may be changed or taken away (a new record; the old one stays);
+    afterwards a match may only be added."""
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        def run(s):
+            _, row = ad_test_reports.test_round(s, ctx, test_id, round_id)
+            # A Meta ad added after the round ended may still be matched, as for any round.
+            workflow.mutate(s, ctx, row, revision, allow_closed_evidence=True)
+            ad_test_reports.confirm_bindings(s, ctx, row, body)
+            s.flush()
+            return row
+        row = _resource_command(session, ctx, request, key, "marketing.test_bindings_confirm",
+                                body.model_dump(mode="json"), run,
+                                lambda s, resource: ad_test_reports.test_round(s, ctx, test_id, resource)[1])
+        set_etag(response, row.revision)
+        return ad_test_reports.bindings_view(session, ctx, row)

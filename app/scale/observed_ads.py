@@ -506,14 +506,16 @@ def _marketing_ad_bindings(
     session: Session, context: TenantContext, ad: ObservedAd,
 ) -> Iterable[_CreativeBinding]:
     from app.marketing.evidence_handoff import POLICY, origin
+    from app.marketing.workflow import current_bindings
 
-    for binding in session.scalars(
+    # Only current matches: a test round's match changed or taken away (#252) no longer maps the ad.
+    for binding in current_bindings(session.scalars(
         select(MarketingAdBindingRecord).where(
             MarketingAdBindingRecord.workspace_id == context.workspace_id,
             MarketingAdBindingRecord.ad_account_id == ad.ad_account_id,
             MarketingAdBindingRecord.ad_id == ad.ad_remote_id,
         ).order_by(MarketingAdBindingRecord.id)
-    ):
+    ).all()):
         handoff = session.scalar(
             select(MarketingHandoffRecord).where(
                 MarketingHandoffRecord.workspace_id == context.workspace_id,

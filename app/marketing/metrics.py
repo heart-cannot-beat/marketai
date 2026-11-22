@@ -7,8 +7,8 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from .service import MarketingError, digest
-from .workflow import scoped, active_batches, audit
-from .workflow_models import MarketingAdBindingRecord as Binding, MarketingMetricBatchRecord as Batch
+from .workflow import scoped, active_batches, audit, round_bindings
+from .workflow_models import MarketingMetricBatchRecord as Batch
 from app.adapters.persistence.models import new_id
 
 ALIASES = {
@@ -108,7 +108,7 @@ def preview(session, ctx, row, body):
     expected_source = "controlled_mock" if row.execution_mode == "mock" else "customer_file"
     if body.source_mode != expected_source:
         issue(0, "source_mode", "execution_mode_mismatch")
-    bindings = {b.ad_id: b for b in scoped(session, ctx, Binding, round_id=row.id)}
+    bindings = {b.ad_id: b for b in round_bindings(session, ctx, row)}
     if not bindings or any(b.ad_account_id != metadata["ad_account_id"] for b in bindings.values()):
         issue(0, "ad_account_id", "account_or_binding_missing")
     rows, mapping = read_rows(row, body, bindings, issue)
