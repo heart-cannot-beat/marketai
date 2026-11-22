@@ -209,6 +209,12 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['BatchCommand'];
     successResponses: { 200: components['schemas']['ResourceEnvelope'] };
   };
+  confirm_marketing_test_bindings: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['ConfirmMarketingTestBindings'];
+    successResponses: { 200: components['schemas']['MarketingTestBindings'] };
+  };
   confirm_marketing_test_report: {
     pathParams: { test_id: string; round_id: string };
     queryParams: Record<string, never>;
@@ -1836,6 +1842,14 @@ export type DomainOperationMap = {
     requestBody: components['schemas']['SubmitClaimDecisionsInput'];
     successResponses: {
       200: components['schemas']['SubmitClaimDecisionsResult'];
+    };
+  };
+  suggest_marketing_test_bindings: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['SuggestMarketingTestBindings'];
+    successResponses: {
+      200: components['schemas']['MarketingTestBindingSuggestions'];
     };
   };
   supersede_meta_binding: {

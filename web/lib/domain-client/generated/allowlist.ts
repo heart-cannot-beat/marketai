@@ -476,6 +476,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'confirm_marketing_test_bindings',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/bindings',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.confirm_marketing_test_bindings,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 65536,
+    maxResponseBytes: 2097152,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'confirm_marketing_test_report',
     method: 'POST',
     bffPattern:
@@ -4222,6 +4238,22 @@ export const DOMAIN_ALLOWLIST = [
     maxRequestBytes: 131072,
     maxResponseBytes: 131072,
     requiresIdempotency: true,
+    forwardConditionalHeaders: true,
+  },
+  {
+    operationId: 'suggest_marketing_test_bindings',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/bindings/suggest',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings/suggest',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.suggest_marketing_test_bindings,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 8192,
+    maxResponseBytes: 8388608,
+    requiresIdempotency: false,
     forwardConditionalHeaders: true,
   },
   {

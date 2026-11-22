@@ -3718,6 +3718,27 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['expected_proposal_sequence'],
   },
+  ConfirmMarketingTestBindings: {
+    properties: {
+      ad_account_id: {
+        type: 'string',
+        maxLength: 64,
+        minLength: 1,
+        pattern: '^(act_)?[0-9]+$',
+      },
+      bindings: {
+        items: { $ref: '#/components/schemas/MarketingTestBindingChoice' },
+        type: 'array',
+        maxItems: 200,
+        minItems: 1,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['ad_account_id', 'bindings'],
+    description:
+      'Every match the user confirms at once: all of them are written, or none.',
+  },
   ConfirmResult: {
     properties: {
       batch_id: { type: 'string' },
@@ -10125,6 +10146,165 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'feedback_drafts',
     ],
   },
+  MarketingTestBinding: {
+    properties: {
+      id: { type: 'string' },
+      ad_id: { type: 'string' },
+      entry_id: { type: 'string' },
+      actor_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['id', 'ad_id', 'entry_id', 'actor_id', 'created_at'],
+    description:
+      'A current match: the Meta ad shows the package ad ``entry_id``.',
+  },
+  MarketingTestBindingChoice: {
+    properties: {
+      ad_id: {
+        type: 'string',
+        maxLength: 64,
+        minLength: 1,
+        pattern: '^[0-9]+$',
+      },
+      entry_id: {
+        anyOf: [
+          { type: 'string', maxLength: 64, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['ad_id', 'entry_id'],
+  },
+  MarketingTestBindingEntry: {
+    properties: {
+      entry_id: { type: 'string' },
+      ad_name: { type: 'string' },
+      display_name: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      asset_version_id: { type: 'string' },
+      asset_code: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'entry_id',
+      'ad_name',
+      'display_name',
+      'asset_version_id',
+      'asset_code',
+    ],
+    description: "An ad of the round's package that a Meta ad can show.",
+  },
+  MarketingTestBindingRecord: {
+    properties: {
+      id: { type: 'string' },
+      ad_id: { type: 'string' },
+      entry_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      replaces_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      current: { type: 'boolean' },
+      actor_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'ad_id',
+      'entry_id',
+      'replaces_id',
+      'current',
+      'actor_id',
+      'created_at',
+    ],
+    description:
+      'One record of a match, as confirmed: a later record replaces it; the history keeps it.',
+  },
+  MarketingTestBindingSuggestion: {
+    properties: {
+      ad_id: { type: 'string' },
+      ad_names: { items: { type: 'string' }, type: 'array' },
+      status: {
+        type: 'string',
+        enum: [
+          'bound',
+          'suggested',
+          'no_match',
+          'ambiguous',
+          'bound_elsewhere',
+        ],
+      },
+      entry_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      key_kind: {
+        anyOf: [
+          { type: 'string', enum: ['ma_key', 'mk_code'] },
+          { type: 'null' },
+        ],
+      },
+      candidate_entry_ids: { items: { type: 'string' }, type: 'array' },
+      other_round_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'ad_id',
+      'ad_names',
+      'status',
+      'entry_id',
+      'key_kind',
+      'candidate_entry_ids',
+      'other_round_ids',
+    ],
+    description: 'One Meta ad of the report and the ad its name suggests.',
+  },
+  MarketingTestBindingSuggestions: {
+    properties: {
+      round_id: { type: 'string' },
+      batch_id: { type: 'string' },
+      ad_account_id: { type: 'string' },
+      ad_name_column: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      locked: { type: 'boolean' },
+      entries: {
+        items: { $ref: '#/components/schemas/MarketingTestBindingEntry' },
+        type: 'array',
+      },
+      ads: {
+        items: { $ref: '#/components/schemas/MarketingTestBindingSuggestion' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'round_id',
+      'batch_id',
+      'ad_account_id',
+      'ad_name_column',
+      'locked',
+      'entries',
+      'ads',
+    ],
+  },
+  MarketingTestBindings: {
+    properties: {
+      round_id: { type: 'string' },
+      ad_account_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      locked: { type: 'boolean' },
+      bindings: {
+        items: { $ref: '#/components/schemas/MarketingTestBinding' },
+        type: 'array',
+      },
+      history: {
+        items: { $ref: '#/components/schemas/MarketingTestBindingRecord' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['round_id', 'ad_account_id', 'locked', 'bindings', 'history'],
+  },
   MarketingTestChecks: {
     properties: {
       available: { type: 'boolean' },
@@ -13480,6 +13660,14 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['preview_id', 'preview_hash'],
   },
+  SuggestMarketingTestBindings: {
+    properties: { batch_id: { type: 'string', maxLength: 64, minLength: 1 } },
+    additionalProperties: false,
+    type: 'object',
+    required: ['batch_id'],
+    description:
+      'An uploaded report of the round, whose ad names suggest the matches.',
+  },
   SuggestedTag: {
     properties: {
       factor_id: { type: 'string' },
@@ -16333,6 +16521,45 @@ const SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['batch_id'],
+  },
+  confirm_marketing_test_bindings_200: {
+    properties: {
+      round_id: { type: 'string' },
+      ad_account_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      locked: { type: 'boolean' },
+      bindings: {
+        items: { $ref: '#/components/schemas/MarketingTestBinding' },
+        type: 'array',
+      },
+      history: {
+        items: { $ref: '#/components/schemas/MarketingTestBindingRecord' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['round_id', 'ad_account_id', 'locked', 'bindings', 'history'],
+  },
+  confirm_marketing_test_bindings_request: {
+    properties: {
+      ad_account_id: {
+        type: 'string',
+        maxLength: 64,
+        minLength: 1,
+        pattern: '^(act_)?[0-9]+$',
+      },
+      bindings: {
+        items: { $ref: '#/components/schemas/MarketingTestBindingChoice' },
+        type: 'array',
+        maxItems: 200,
+        minItems: 1,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['ad_account_id', 'bindings'],
+    description:
+      'Every match the user confirms at once: all of them are written, or none.',
   },
   confirm_marketing_test_report_200: {
     properties: {
@@ -25106,6 +25333,42 @@ const SCHEMAS: Record<string, object> = {
       'requested_evidence_tier',
     ],
   },
+  suggest_marketing_test_bindings_200: {
+    properties: {
+      round_id: { type: 'string' },
+      batch_id: { type: 'string' },
+      ad_account_id: { type: 'string' },
+      ad_name_column: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      locked: { type: 'boolean' },
+      entries: {
+        items: { $ref: '#/components/schemas/MarketingTestBindingEntry' },
+        type: 'array',
+      },
+      ads: {
+        items: { $ref: '#/components/schemas/MarketingTestBindingSuggestion' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'round_id',
+      'batch_id',
+      'ad_account_id',
+      'ad_name_column',
+      'locked',
+      'entries',
+      'ads',
+    ],
+  },
+  suggest_marketing_test_bindings_request: {
+    properties: { batch_id: { type: 'string', maxLength: 64, minLength: 1 } },
+    additionalProperties: false,
+    type: 'object',
+    required: ['batch_id'],
+    description:
+      'An uploaded report of the round, whose ad names suggest the matches.',
+  },
   supersede_meta_binding_201: {},
   supersede_meta_binding_request: {
     properties: {
@@ -25785,6 +26048,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'confirm_marketing_metrics_request',
       VALIDATOR_FUNCTIONS['confirm_marketing_metrics_request'],
+    ],
+    [
+      'confirm_marketing_test_bindings_200',
+      VALIDATOR_FUNCTIONS['confirm_marketing_test_bindings_200'],
+    ],
+    [
+      'confirm_marketing_test_bindings_request',
+      VALIDATOR_FUNCTIONS['confirm_marketing_test_bindings_request'],
     ],
     [
       'confirm_marketing_test_report_200',
@@ -26988,6 +27259,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['submit_localization_claim_decisions_request'],
     ],
     [
+      'suggest_marketing_test_bindings_200',
+      VALIDATOR_FUNCTIONS['suggest_marketing_test_bindings_200'],
+    ],
+    [
+      'suggest_marketing_test_bindings_request',
+      VALIDATOR_FUNCTIONS['suggest_marketing_test_bindings_request'],
+    ],
+    [
       'supersede_meta_binding_201',
       VALIDATOR_FUNCTIONS['supersede_meta_binding_201'],
     ],
@@ -27205,6 +27484,11 @@ export const REQUEST_VALIDATORS = {
     'confirm_marketing_metrics_request'
   ] as ValidateFunction<
     DomainOperationMap['confirm_marketing_metrics']['requestBody']
+  >,
+  confirm_marketing_test_bindings: VALIDATOR_FUNCTIONS[
+    'confirm_marketing_test_bindings_request'
+  ] as ValidateFunction<
+    DomainOperationMap['confirm_marketing_test_bindings']['requestBody']
   >,
   confirm_marketing_test_report: VALIDATOR_FUNCTIONS[
     'confirm_marketing_test_report_request'
@@ -27690,6 +27974,11 @@ export const REQUEST_VALIDATORS = {
     'submit_localization_claim_decisions_request'
   ] as ValidateFunction<
     DomainOperationMap['submit_localization_claim_decisions']['requestBody']
+  >,
+  suggest_marketing_test_bindings: VALIDATOR_FUNCTIONS[
+    'suggest_marketing_test_bindings_request'
+  ] as ValidateFunction<
+    DomainOperationMap['suggest_marketing_test_bindings']['requestBody']
   >,
   supersede_meta_binding: VALIDATOR_FUNCTIONS[
     'supersede_meta_binding_request'

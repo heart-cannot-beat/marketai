@@ -3467,6 +3467,49 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm Test Bindings
+     * @description Confirm which ad each Meta ad shows, all at once: every match is written or none. Before the round's
+     *     first report is confirmed a match may be changed or taken away (a new record; the old one stays);
+     *     afterwards a match may only be added.
+     */
+    post: operations['confirm_marketing_test_bindings'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings/suggest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Suggest Test Bindings
+     * @description Read an uploaded report's ad names: the ad of this round's package each Meta ad's short key names, and
+     *     the Meta ads left for the user to choose or skip. Reads only; nothing is stored.
+     */
+    post: operations['suggest_marketing_test_bindings'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/end': {
     parameters: {
       query?: never;
@@ -7062,6 +7105,11 @@ export interface components {
     ConfirmExperimentProposalRequest: {
       expected_proposal_sequence: number;
     };
+    /** @description Every match the user confirms at once: all of them are written, or none. */
+    ConfirmMarketingTestBindings: {
+      ad_account_id: string;
+      bindings: components['schemas']['MarketingTestBindingChoice'][];
+    };
     ConfirmResult: {
       batch_id: string;
       item_ids?: string[];
@@ -10424,6 +10472,68 @@ export interface components {
       feedback_drafts: components['schemas']['FeedbackDraft'][];
       board?: components['schemas']['MarketingBoard'] | null;
     };
+    /** @description A current match: the Meta ad shows the package ad ``entry_id``. */
+    MarketingTestBinding: {
+      id: string;
+      ad_id: string;
+      entry_id: string;
+      actor_id: string | null;
+      created_at: string;
+    };
+    MarketingTestBindingChoice: {
+      ad_id: string;
+      entry_id: string | null;
+    };
+    /** @description An ad of the round's package that a Meta ad can show. */
+    MarketingTestBindingEntry: {
+      entry_id: string;
+      ad_name: string;
+      display_name: string | null;
+      asset_version_id: string;
+      asset_code: string;
+    };
+    /** @description One record of a match, as confirmed: a later record replaces it; the history keeps it. */
+    MarketingTestBindingRecord: {
+      id: string;
+      ad_id: string;
+      entry_id: string | null;
+      replaces_id: string | null;
+      current: boolean;
+      actor_id: string | null;
+      created_at: string;
+    };
+    /** @description One Meta ad of the report and the ad its name suggests. */
+    MarketingTestBindingSuggestion: {
+      ad_id: string;
+      ad_names: string[];
+      /** @enum {string} */
+      status:
+        | 'bound'
+        | 'suggested'
+        | 'no_match'
+        | 'ambiguous'
+        | 'bound_elsewhere';
+      entry_id: string | null;
+      key_kind: ('ma_key' | 'mk_code') | null;
+      candidate_entry_ids: string[];
+      other_round_ids: string[];
+    };
+    MarketingTestBindingSuggestions: {
+      round_id: string;
+      batch_id: string;
+      ad_account_id: string;
+      ad_name_column: string | null;
+      locked: boolean;
+      entries: components['schemas']['MarketingTestBindingEntry'][];
+      ads: components['schemas']['MarketingTestBindingSuggestion'][];
+    };
+    MarketingTestBindings: {
+      round_id: string;
+      ad_account_id: string | null;
+      locked: boolean;
+      bindings: components['schemas']['MarketingTestBinding'][];
+      history: components['schemas']['MarketingTestBindingRecord'][];
+    };
     /** @description The "look together" check the start command admits (plan E6): one call per kept ad, paid in BYOK. */
     MarketingTestChecks: {
       available: boolean;
@@ -12423,6 +12533,10 @@ export interface components {
     SubmitRunInput: {
       preview_id: string;
       preview_hash: string;
+    };
+    /** @description An uploaded report of the round, whose ad names suggest the matches. */
+    SuggestMarketingTestBindings: {
+      batch_id: string;
     };
     /** @description The model's pick for one factor: ``value_id`` null means "none of these". */
     SuggestedTag: {
@@ -20358,6 +20472,81 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['MarketingTestDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  confirm_marketing_test_bindings: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConfirmMarketingTestBindings'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestBindings'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  suggest_marketing_test_bindings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SuggestMarketingTestBindings'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestBindingSuggestions'];
         };
       };
       /** @description Validation Error */

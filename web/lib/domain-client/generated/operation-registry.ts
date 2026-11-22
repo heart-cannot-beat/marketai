@@ -913,6 +913,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'confirm_marketing_test_bindings',
+    {
+      operationId: 'confirm_marketing_test_bindings',
+      method: 'POST',
+      pathTemplate:
+        '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings',
+      pathParams: ['test_id', 'round_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 65536,
+      maxResponseBytes: 2097152,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'confirm_marketing_test_bindings_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'confirm_marketing_test_report',
     {
       operationId: 'confirm_marketing_test_report',
@@ -7287,6 +7315,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         200: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'submit_localization_claim_decisions_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'suggest_marketing_test_bindings',
+    {
+      operationId: 'suggest_marketing_test_bindings',
+      method: 'POST',
+      pathTemplate:
+        '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings/suggest',
+      pathParams: ['test_id', 'round_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: false,
+      maxRequestBytes: 8192,
+      maxResponseBytes: 8388608,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'suggest_marketing_test_bindings_200' },
           locationShapes: [],
         },
         422: {
