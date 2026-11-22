@@ -260,7 +260,46 @@ def ensure_not_an_ad_of_ideas(session, ctx, asset_version_id):
             409)
 
 
+#: The reuse record of a kept ad that a test took from ads-first ideas (plan E4, #249).
+IDEAS = "ideas"
+
+
+def ideas_source(recipe) -> dict | None:
+    """The source of a round creative that is a kept ad of ads-first ideas, or ``None`` for any other creative."""
+    source = ((getattr(recipe, "canonical_json", None) or {}).get("reuse")) or {}
+    return source if source.get("kind") == IDEAS else None
+
+
+def kept_ads(session, ctx, row, asset_version_ids) -> set[str]:
+    """Which of these images are in ``row`` as kept ads of ads-first ideas: one query, and none for no ids."""
+    ids = list(dict.fromkeys(asset_version_ids))
+    if not ids:
+        return set()
+    return {link.asset_version_id for link in session.scalars(select(Reuse).where(
+        Reuse.workspace_id == ctx.workspace_id, Reuse.round_id == row.id, Reuse.asset_version_id.in_(ids))).all()
+        if (link.source_json or {}).get("kind") == IDEAS}
+
+
+def kept_ad_photos_current(session, ctx, row, asset_version_ids) -> set[str]:
+    """Of these kept ads of ads-first ideas in ``row``, the ones whose product photos count as current (plan E4).
+
+    Before the round's ad package: by the ads-first photo rule as it is now (``ideas_export.photos_current``),
+    not by the creative-library rule a photo checked only before download never meets. Once the package
+    exists: as they were when it was made, which needed them current -- a later change to the ideas changes
+    neither the package nor the round's evaluation (design §5.8)."""
+    from . import workflow
+    from .ideas_export import photos_current
+    ids = list(dict.fromkeys(asset_version_ids))
+    if not ids:
+        return set()
+    if workflow.scoped(session, ctx, workflow.Handoff, round_id=row.id):
+        return set(ids)
+    return photos_current(session, ctx, ids)
+
+
 def creatives(session, ctx, row, combos):
+    """The round's reused creatives: a creative of this card's tests (#7) or a kept ad of ads-first ideas (plan
+    E4). Either counts only while its record still describes this exact file, plan and combination."""
     result = []
     records = session.execute(select(Reuse, AssetVersionRecord).join(AssetVersionRecord,
         (AssetVersionRecord.id == Reuse.asset_version_id) & (AssetVersionRecord.workspace_id == ctx.workspace_id))
