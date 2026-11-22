@@ -222,3 +222,26 @@ class MarketingRoundScheduleChangeRecord(Base):
     reason: Mapped[str | None] = mapped_column(String(500))
     actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class MarketingRoundDeviationRecord(Base):
+    """Something that ran differently from a test round's plan, recorded after the fact (#254), append-only.
+
+    It names the round's ads it concerns (``asset_version_ids``, entries of the round's ad package). The
+    evaluation reads it as a deviation noted when those ads' Meta ads were matched
+    (``ad_test_progress.evaluation_bindings``): the compared groups it names draw no conclusion this round."""
+    __tablename__ = "marketing_round_deviations"
+    __table_args__ = (
+        ForeignKeyConstraint(["workspace_id", "round_id"], ["marketing_rounds.workspace_id", "marketing_rounds.id"],
+                             ondelete="RESTRICT", name="fk_marketing_round_deviation_round"),
+        Index("ix_marketing_round_deviations_round", "workspace_id", "round_id"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
+    round_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: The round's ads the deviation concerns, as the user chose them.
+    asset_version_ids: Mapped[list] = mapped_column(JSON, nullable=False)
+    #: What was different from the plan, in the user's words.
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

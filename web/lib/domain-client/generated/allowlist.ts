@@ -2203,6 +2203,22 @@ export const DOMAIN_ALLOWLIST = [
     forwardConditionalHeaders: true,
   },
   {
+    operationId: 'get_marketing_test_progress',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/progress',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/progress',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: null,
+    requestMediaTypes: [],
+    maxRequestBytes: 0,
+    maxResponseBytes: 1048576,
+    requiresIdempotency: false,
+    forwardConditionalHeaders: true,
+  },
+  {
     operationId: 'get_marketing_test_quote',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/test-quote',
@@ -3766,6 +3782,22 @@ export const DOMAIN_ALLOWLIST = [
     maxResponseBytes: 131072,
     requiresIdempotency: false,
     forwardConditionalHeaders: false,
+  },
+  {
+    operationId: 'record_marketing_test_deviation',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/deviations',
+    fastapiPathTemplate:
+      '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/deviations',
+    pathParams: ['test_id', 'round_id'],
+    querySchema: null,
+    requestBodyValidator: REQUEST_VALIDATORS.record_marketing_test_deviation,
+    requestMediaTypes: ['application/json'],
+    maxRequestBytes: 16384,
+    maxResponseBytes: 1048576,
+    requiresIdempotency: true,
+    forwardConditionalHeaders: true,
   },
   {
     operationId: 'recover_meta_launch_operation',

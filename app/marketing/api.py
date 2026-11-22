@@ -441,8 +441,11 @@ async def download_handoff(round_id: str, request: Request, ctx: TenantContext =
         handoff = handoffs[0]
         if not workflow.handoff_quality_current(session, ctx, row, handoff):
             raise service.MarketingError("handoff_quality_changed", "导出素材的审核或参考资格已变化，暂不能获取新下载链接；原包保留为历史，请先复核。", 409)
-        workflow.assert_ads_exportable(session, ctx, [entry["asset_version_id"] for entry in handoff.manifest_json["entries"]],
-                                       workflow.HANDOFF_LINK_DRAFTS)
+        # A test's ad package holds what the test started on: a later change to its ads-first ideas does not stop
+        # the download, and the test page says which ads changed (#254, plan E4, design §5.8).
+        if not workflow.full_report_round(session, ctx, row):
+            workflow.assert_ads_exportable(session, ctx, [entry["asset_version_id"] for entry in handoff.manifest_json["entries"]],
+                                           workflow.HANDOFF_LINK_DRAFTS)
         ref = CommittedBlobRef(**handoff.blob_json)
         record = _resource_command(session, ctx, request, key, "marketing.download", None,
             lambda s: create_download_intent_record(s, intent_id=new_id("di"), owner_kind="marketing_handoff", owner_id=handoff.id,

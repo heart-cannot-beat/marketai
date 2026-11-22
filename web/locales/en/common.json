@@ -1326,6 +1326,7 @@
   "error-reused_creative_not_editable": "A creative reused from another test or the product card cannot be revised or cropped in this test. Revise it in its original test, or generate a new one in this round.",
   "error-marketing_project_not_found": "This marketing test could not be found.",
   "error-marketing_test_not_found": "This test could not be found.",
+  "error-ad_not_in_package": "Pick ads from this round’s ad package.",
   "error-round_report_confirmed": "A report for this round has been confirmed, so its start date can no longer change.",
   "error-round_ended_early": "This round has ended early, so its start date can no longer change.",
   "error-schedule_unchanged": "That is already the date on record.",

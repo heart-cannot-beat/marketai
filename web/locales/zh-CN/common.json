@@ -1326,6 +1326,7 @@
   "error-reused_creative_not_editable": "从其他测试或产品卡片复用的素材，暂时不能在本测试里修改或裁剪；请在原测试里修改，或在这一轮重新生成。",
   "error-marketing_project_not_found": "找不到这个营销测试。",
   "error-marketing_test_not_found": "找不到这次测试。",
+  "error-ad_not_in_package": "请选这一轮广告包里的广告。",
   "error-round_report_confirmed": "这一轮已经确认过报表，开始日期不能再改。",
   "error-round_ended_early": "这一轮已经提前结束，开始日期不能再改。",
   "error-schedule_unchanged": "记录里已经是这个日期。",

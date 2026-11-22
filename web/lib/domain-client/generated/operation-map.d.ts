@@ -966,6 +966,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['MarketingTestDetail'] };
   };
+  get_marketing_test_progress: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: never;
+    successResponses: { 200: components['schemas']['MarketingTestProgress'] };
+  };
   get_marketing_test_quote: {
     pathParams: { project_id: string };
     queryParams: {
@@ -1649,6 +1655,12 @@ export type DomainOperationMap = {
         | components['schemas']['LibraryCommandReconciliationRequired']
         | components['schemas']['LibraryCommandNotApplied'];
     };
+  };
+  record_marketing_test_deviation: {
+    pathParams: { test_id: string; round_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['RecordMarketingTestDeviation'];
+    successResponses: { 201: components['schemas']['MarketingTestProgress'] };
   };
   recover_meta_launch_operation: {
     pathParams: { operation_id: string };
