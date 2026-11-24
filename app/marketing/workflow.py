@@ -525,6 +525,17 @@ def style_deviations(session, ctx, row):
     return sorted(found)
 
 
+def evaluation_bindings(session, ctx, row):
+    """The matched Meta ads a round's evaluation reads, and the ids of the recorded deviations among them.
+
+    Each binding with the deviations noted when it was made; a test project's round adds the deviations the user
+    recorded later for its ads (#254). A round of an earlier test: exactly its bindings, and ``None``."""
+    from .ad_test_progress import with_recorded_deviations
+    bindings = [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json}
+        for b in sorted(scoped(session, ctx, Binding, round_id=row.id), key=lambda b: b.id)]
+    return with_recorded_deviations(session, ctx, row, bindings)
+
+
 def evaluation_window(session, ctx, row):
     """(first day, last day, schedule evidence) a round is evaluated on.
 
@@ -548,7 +559,7 @@ def evaluate(session, ctx, row):
     handoffs = scoped(session, ctx, Handoff, round_id=row.id)
     if not handoffs or handoffs[0].state != "ready":
         raise MarketingError("handoff_not_ready", "请先完成审核和导出。", 409)
-    bindings = scoped(session, ctx, Binding, round_id=row.id)
+    bindings, deviation_ids = evaluation_bindings(session, ctx, row)
     batches = active_batches(session, ctx, row)
     start, end, schedule = evaluation_window(session, ctx, row)
     mature = round_mature(row, end)
@@ -568,13 +579,15 @@ def evaluate(session, ctx, row):
     inputs = {"prior_confirmations": prior_confirmations, "timezone": row.timezone, "round_id": row.id, "snapshot": row.snapshot_json, "execution_mode": row.execution_mode,
         "start_date": str(start), "end_date": str(end), "mature": mature,
         "entries": handoffs[0].manifest_json["entries"],
-        "bindings": [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json} for b in sorted(bindings, key=lambda b: b.id)],
+        "bindings": bindings,
         "quality_changed": [e["entry_id"] for e in handoffs[0].manifest_json["entries"] if not ready(session, ctx, row, e["asset_version_id"])],
         "quality_review_ids": {e["asset_version_id"]: sorted(r.id for r in active_quality(session, ctx, e["asset_version_id"]))
             for e in handoffs[0].manifest_json["entries"]},
         "batch_ids": [b.id for b in batches], "rows": counted_report_rows(session, ctx, row)}
     if schedule is not None:
         inputs["schedule"] = schedule
+    if deviation_ids is not None:
+        inputs["deviation_ids"] = deviation_ids
     if "style_variation" in row.snapshot_json["plan"]:
         inputs["style_deviations"] = style_deviations(session, ctx, row)
     hashed = digest(inputs)
@@ -629,10 +642,10 @@ def evaluation_current(session, ctx, row, evaluation, *, _seen=None, _cache=None
     if not review_evidence_current(session, ctx, evaluation):
         return False
     batches = active_batches(session, ctx, row)
-    bindings = [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json}
-        for b in sorted(scoped(session, ctx, Binding, round_id=row.id), key=lambda b: b.id)]
+    bindings, deviation_ids = evaluation_bindings(session, ctx, row)
     quality_changed = {e["entry_id"] for e in inputs["entries"] if not ready(session, ctx, row, e["asset_version_id"])}
     if (inputs["batch_ids"] != [b.id for b in batches] or inputs["bindings"] != bindings
+            or inputs.get("deviation_ids") != deviation_ids
             or inputs["rows"] != counted_report_rows(session, ctx, row)
             or set(inputs.get("quality_changed", [])) != quality_changed):
         return False

@@ -1075,6 +1075,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: false,
   },
   {
+    operationId: 'get_marketing_test_progress',
+    method: 'GET',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/progress',
+    pathParams: ['test_id', 'round_id'],
+    requiresIdempotency: false,
+  },
+  {
     operationId: 'get_marketing_test_quote',
     method: 'GET',
     bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/test-quote',
@@ -1727,6 +1735,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
       '/api/domain/v1/w/:slug/library/command-outcomes/:command_identity/reconcile',
     pathParams: ['command_identity'],
     requiresIdempotency: false,
+  },
+  {
+    operationId: 'record_marketing_test_deviation',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/deviations',
+    pathParams: ['test_id', 'round_id'],
+    requiresIdempotency: true,
   },
   {
     operationId: 'recover_meta_launch_operation',
