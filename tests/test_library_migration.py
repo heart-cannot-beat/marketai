@@ -146,8 +146,9 @@ class LibraryMigrationDowngradeTests(unittest.TestCase):
         # zzs241a1b2c3 (the Worker reads key readiness from the bindings view, #241) and
         # zzt247a1b2c3 (test projects name the ads-first ideas they came from, #247) and
         # zzu253a1b2c3 (a test round's moved start and early end, #253) and
-        # zzv254a1b2c3 (a test round's recorded deviations, #254).
-        self.assertEqual(revision, "zzv254a1b2c3")
+        # zzv254a1b2c3 (a test round's recorded deviations, #254) and
+        # zzv252a1b2c3 (a test round's Meta ad matches changed by a new record, #252).
+        self.assertEqual(revision, "zzv252a1b2c3")
         self.assertEqual(event_type, "library.withdrawal.affects_market_asset_binding")
 
 
@@ -259,8 +260,9 @@ class LibraryTemplatesDatasourcesMigrationTests(unittest.TestCase):
         # zzs241a1b2c3 (the Worker reads key readiness from the bindings view, #241) and
         # zzt247a1b2c3 (test projects name the ads-first ideas they came from, #247) and
         # zzu253a1b2c3 (a test round's moved start and early end, #253) and
-        # zzv254a1b2c3 (a test round's recorded deviations, #254).
-        self.assertEqual(revision, "zzv254a1b2c3")
+        # zzv254a1b2c3 (a test round's recorded deviations, #254) and
+        # zzv252a1b2c3 (a test round's Meta ad matches changed by a new record, #252).
+        self.assertEqual(revision, "zzv252a1b2c3")
 
     def test_new_tables_exist_at_head(self) -> None:
         with sqlite3.connect(self.database) as connection:

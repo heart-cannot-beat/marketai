@@ -36,6 +36,11 @@ def execution_suffix(index, version):
     return f"#{index}" + (f"v{version}" if version > 1 else "")
 
 
+def ad_key(entry_id):
+    """The MA key that opens an entry's Meta ad name: one per ad of a package, so per round and image (#252)."""
+    return f"MA-{entry_id[:12]}"
+
+
 def ad_name(entry_id, combo, number):
     """The stable Meta ad name: MA key, the English image brief and the board's execution number.
 
@@ -46,7 +51,7 @@ def ad_name(entry_id, combo, number):
     brief = combo.get("image_brief") or {}
     proposition = _part(brief.get("proposition"), combo["angle_id"])
     expression = _part(brief.get("expression"), combo["expression_id"])
-    return f"MA-{entry_id[:12]} {proposition} / {expression} {execution_suffix(number['index'], number['version'])}"
+    return f"{ad_key(entry_id)} {proposition} / {expression} {execution_suffix(number['index'], number['version'])}"
 
 
 _EXECUTION = {"en": "Execution {index}", "zh-CN": "执行 {index}"}

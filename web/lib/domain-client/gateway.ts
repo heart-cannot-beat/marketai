@@ -943,6 +943,27 @@ export interface DomainGateway {
   }): Promise<
     DomainResultFor<'confirm_marketing_test_report'> | ReconciliationRequired
   >;
+  /** Read an uploaded report's ad names: the ad each Meta ad's short key names; stores nothing (#252). */
+  suggestMarketingTestBindings(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    body: DomainOperationMap['suggest_marketing_test_bindings']['requestBody'];
+  }): Promise<
+    DomainResultFor<'suggest_marketing_test_bindings'> | ReconciliationRequired
+  >;
+  /** Confirm which ad each Meta ad of a test round shows, all at once (#252). */
+  confirmMarketingTestBindings(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['confirm_marketing_test_bindings']['requestBody'];
+  }): Promise<
+    DomainResultFor<'confirm_marketing_test_bindings'> | ReconciliationRequired
+  >;
   evaluateMarketingRound(params: {
     workspaceSlug: string;
     actionInstanceId: string;
@@ -4814,6 +4835,56 @@ export class DefaultDomainGateway implements DomainGateway {
       'confirm_marketing_test_report',
       params.actionInstanceId,
       buildBffPath('confirm_marketing_test_report', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+        round_id: params.roundId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async suggestMarketingTestBindings(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    body: DomainOperationMap['suggest_marketing_test_bindings']['requestBody'];
+  }): Promise<
+    DomainResultFor<'suggest_marketing_test_bindings'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'suggest_marketing_test_bindings',
+      params.actionInstanceId,
+      buildBffPath('suggest_marketing_test_bindings', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+        round_id: params.roundId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok'
+    );
+  }
+
+  async confirmMarketingTestBindings(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['confirm_marketing_test_bindings']['requestBody'];
+  }): Promise<
+    DomainResultFor<'confirm_marketing_test_bindings'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'confirm_marketing_test_bindings',
+      params.actionInstanceId,
+      buildBffPath('confirm_marketing_test_bindings', {
         slug: params.workspaceSlug,
         test_id: params.testId,
         round_id: params.roundId,

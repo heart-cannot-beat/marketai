@@ -133,6 +133,8 @@ describe('DomainGateway operation coverage', () => {
     // `start_marketing_test` (#249).
     // 275 -> 277: a test round's numbers so far and recorded deviations
     // `get_marketing_test_progress`, `record_marketing_test_deviation` (#254).
-    expect(DOMAIN_ALLOWLIST.length).toBe(277);
+    // 277 -> 279: which ad each Meta ad of a test round shows
+    // `suggest_marketing_test_bindings`, `confirm_marketing_test_bindings` (#252).
+    expect(DOMAIN_ALLOWLIST.length).toBe(279);
   });
 });

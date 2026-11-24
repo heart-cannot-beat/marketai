@@ -249,6 +249,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'confirm_marketing_test_bindings',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/bindings',
+    pathParams: ['test_id', 'round_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'confirm_marketing_test_report',
     method: 'POST',
     bffPattern:
@@ -1982,6 +1990,14 @@ export const BFF_ROUTES: readonly BffRoute[] = [
       '/api/domain/v1/w/:slug/localization/batches/:batch_id/claim-decisions',
     pathParams: ['batch_id'],
     requiresIdempotency: true,
+  },
+  {
+    operationId: 'suggest_marketing_test_bindings',
+    method: 'POST',
+    bffPattern:
+      '/api/domain/v1/w/:slug/marketing/tests/:test_id/rounds/:round_id/bindings/suggest',
+    pathParams: ['test_id', 'round_id'],
+    requiresIdempotency: false,
   },
   {
     operationId: 'supersede_meta_binding',

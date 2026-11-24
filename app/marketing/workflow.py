@@ -72,6 +72,20 @@ def mutate(session, ctx, row, revision, *, allow_closed_evidence=False):
     session.refresh(row)
 
 
+def current_bindings(records):
+    """The records no later record replaces, less the ones that take a match away (#252).
+
+    ``records`` holds every record of the Meta ads it covers (all of a round's, or all of one Meta ad's), so
+    each line of records is whole. A round of an earlier test never has a replacing record: all are current."""
+    replaced = {b.replaces_id for b in records if b.replaces_id}
+    return [b for b in records if b.id not in replaced and not b.removed]
+
+
+def round_bindings(session, ctx, row):
+    """The round's current matches: which package ad each of its Meta ads shows now."""
+    return current_bindings(scoped(session, ctx, Binding, round_id=row.id))
+
+
 def active_batches(session, ctx, row):
     batches = scoped(session, ctx, Batch, round_id=row.id, state="confirmed")
     replaced = {batch.replaces_id for batch in batches if batch.replaces_id}
@@ -487,6 +501,9 @@ def retry_handoff(session, ctx, row):
 
 
 def bind(session, ctx, row, body):
+    if full_report_round(session, ctx, row):
+        # A test round's matches are confirmed together, on the test's own path (``ad_test_reports``, #252).
+        raise MarketingError("test_bindings_required", "这一轮属于测试，请在测试页确认每条 Meta 广告是哪张图。", 409)
     handoffs = scoped(session, ctx, Handoff, round_id=row.id)
     if not handoffs or handoffs[0].state != "ready":
         raise MarketingError("handoff_not_ready", "请先生成完整导出包。", 409)
@@ -494,14 +511,14 @@ def bind(session, ctx, row, body):
     if body.entry_id not in {e["entry_id"] for e in handoff.manifest_json["entries"]}:
         raise MarketingError("entry_not_found", "请选择本轮导出的素材。")
     account = body.ad_account_id.removeprefix("act_")
-    existing = scoped(session, ctx, Binding, ad_account_id=account, ad_id=body.ad_id)
+    existing = current_bindings(scoped(session, ctx, Binding, ad_account_id=account, ad_id=body.ad_id))
     if any(b.start_date <= row.end_date and b.end_date >= row.start_date for b in existing):
         raise MarketingError("overlapping_ad_binding", "该广告在这个日期范围内已对应其他记录，请核对广告 ID。", 409)
-    if any(b.ad_account_id != account for b in scoped(session, ctx, Binding, round_id=row.id)):
+    if any(b.ad_account_id != account for b in round_bindings(session, ctx, row)):
         raise MarketingError("account_mismatch", "同一小轮必须使用同一个广告账户。")
     record = Binding(id=new_id("mab"), workspace_id=ctx.workspace_id, round_id=row.id, handoff_id=handoff.id,
         entry_id=body.entry_id, ad_account_id=account, ad_id=body.ad_id, start_date=row.start_date, end_date=row.end_date,
-        conditions_json={"conditions_match": body.conditions_match, "deviations": body.deviations})
+        conditions_json={"conditions_match": body.conditions_match, "deviations": body.deviations}, actor_id=ctx.initiator_id)
     session.add(record)
     if row.state != "closed":
         row.state = "awaiting_data"
@@ -528,11 +545,11 @@ def style_deviations(session, ctx, row):
 def evaluation_bindings(session, ctx, row):
     """The matched Meta ads a round's evaluation reads, and the ids of the recorded deviations among them.
 
-    Each binding with the deviations noted when it was made; a test project's round adds the deviations the user
+    Each current binding (#252) with the deviations noted when it was made; a test project's round adds the deviations the user
     recorded later for its ads (#254). A round of an earlier test: exactly its bindings, and ``None``."""
     from .ad_test_progress import with_recorded_deviations
     bindings = [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json}
-        for b in sorted(scoped(session, ctx, Binding, round_id=row.id), key=lambda b: b.id)]
+        for b in sorted(round_bindings(session, ctx, row), key=lambda b: b.id)]
     return with_recorded_deviations(session, ctx, row, bindings)
 
 
@@ -776,7 +793,7 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
             "quality_current": handoff_quality_current(session, ctx, row, handoff),
             "manifest_hash": digest(handoff.manifest_json), "language": handoff.manifest_json.get("language"), "entries": [{k: v for k, v in e.items() if k not in ("blob", "qc")} for e in handoff.manifest_json["entries"]]} if handoff else None,
         "bindings": [{"id": b.id, "entry_id": b.entry_id, "ad_account_id": b.ad_account_id, "ad_id": b.ad_id, **b.conditions_json}
-                     for b in scoped(session, ctx, Binding, round_id=row.id)],
+                     for b in round_bindings(session, ctx, row)],
         "batches": [{"id": b.id, "state": b.state, "raw_hash": b.raw_hash, "metadata": b.metadata_json,
             "row_count": len(b.rows_json), "issues": b.issues_json, "replaces_batch_id": b.replaces_id}
             for b in sorted(scoped(session, ctx, Batch, round_id=row.id), key=lambda b: (b.created_at, b.id))],
@@ -855,7 +872,7 @@ def board_projection(session, ctx, row, executions, handoff, evaluation):
             GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']['project_id'].as_string() == row.project_id,
             GenerationRecipeSnapshotRecord.canonical_json['selection']['marketing_intent']['plan_revision'].as_integer() == row.plan_revision)).all()
     bindings = {}
-    for b in scoped(session, ctx, Binding, round_id=row.id):
+    for b in round_bindings(session, ctx, row):
         bindings.setdefault(b.entry_id, []).append(b.ad_id)
     from app.generation.models import GenerationDraftRecord
     from .models import MarketingGenerationLinkRecord

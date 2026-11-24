@@ -12544,6 +12544,146 @@
         }
       }
     },
+    "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings": {
+      "post": {
+        "operationId": "confirm_marketing_test_bindings",
+        "summary": "Confirm Test Bindings",
+        "description": "Confirm which ad each Meta ad shows, all at once: every match is written or none. Before the round's\nfirst report is confirmed a match may be changed or taken away (a new record; the old one stays);\nafterwards a match may only be added.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmMarketingTestBindings"
+              }
+            }
+          }
+        },
+        "x-marketai-idempotent": true,
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestBindings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings/suggest": {
+      "post": {
+        "operationId": "suggest_marketing_test_bindings",
+        "summary": "Suggest Test Bindings",
+        "description": "Read an uploaded report's ad names: the ad of this round's package each Meta ad's short key names, and\nthe Meta ads left for the user to choose or skip. Reads only; nothing is stored.",
+        "parameters": [
+          {
+            "name": "test_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestMarketingTestBindings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingTestBindingSuggestions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/marketing/tests/{test_id}/rounds/{round_id}/deviations": {
       "post": {
         "operationId": "record_marketing_test_deviation",
@@ -25925,6 +26065,31 @@
         "required": [
           "expected_proposal_sequence"
         ]
+      },
+      "ConfirmMarketingTestBindings": {
+        "properties": {
+          "ad_account_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^(act_)?[0-9]+$"
+          },
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestBindingChoice"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ad_account_id",
+          "bindings"
+        ],
+        "description": "Every match the user confirms at once: all of them are written, or none."
       },
       "ConfirmResult": {
         "properties": {
@@ -40138,6 +40303,325 @@
         ],
         "description": "What taking kept ads to a test asks (design §5.2): three answers, the landing page when the product has\nno link, and any default the user changed. Read from the quote's query; the start command (#249) sends the\nsame answers with the quote hash it confirms."
       },
+      "MarketingTestBinding": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ad_id": {
+            "type": "string"
+          },
+          "entry_id": {
+            "type": "string"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "ad_id",
+          "entry_id",
+          "actor_id",
+          "created_at"
+        ],
+        "description": "A current match: the Meta ad shows the package ad ``entry_id``."
+      },
+      "MarketingTestBindingChoice": {
+        "properties": {
+          "ad_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[0-9]+$"
+          },
+          "entry_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ad_id",
+          "entry_id"
+        ]
+      },
+      "MarketingTestBindingEntry": {
+        "properties": {
+          "entry_id": {
+            "type": "string"
+          },
+          "ad_name": {
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "asset_version_id": {
+            "type": "string"
+          },
+          "asset_code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entry_id",
+          "ad_name",
+          "display_name",
+          "asset_version_id",
+          "asset_code"
+        ],
+        "description": "An ad of the round's package that a Meta ad can show."
+      },
+      "MarketingTestBindingRecord": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ad_id": {
+            "type": "string"
+          },
+          "entry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "replaces_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "ad_id",
+          "entry_id",
+          "replaces_id",
+          "current",
+          "actor_id",
+          "created_at"
+        ],
+        "description": "One record of a match, as confirmed: a later record replaces it; the history keeps it."
+      },
+      "MarketingTestBindingSuggestion": {
+        "properties": {
+          "ad_id": {
+            "type": "string"
+          },
+          "ad_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "bound",
+              "suggested",
+              "no_match",
+              "ambiguous",
+              "bound_elsewhere"
+            ]
+          },
+          "entry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ma_key",
+                  "mk_code"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidate_entry_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "other_round_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ad_id",
+          "ad_names",
+          "status",
+          "entry_id",
+          "key_kind",
+          "candidate_entry_ids",
+          "other_round_ids"
+        ],
+        "description": "One Meta ad of the report and the ad its name suggests."
+      },
+      "MarketingTestBindingSuggestions": {
+        "properties": {
+          "round_id": {
+            "type": "string"
+          },
+          "batch_id": {
+            "type": "string"
+          },
+          "ad_account_id": {
+            "type": "string"
+          },
+          "ad_name_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestBindingEntry"
+            },
+            "type": "array"
+          },
+          "ads": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestBindingSuggestion"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "round_id",
+          "batch_id",
+          "ad_account_id",
+          "ad_name_column",
+          "locked",
+          "entries",
+          "ads"
+        ]
+      },
+      "MarketingTestBindings": {
+        "properties": {
+          "round_id": {
+            "type": "string"
+          },
+          "ad_account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestBinding"
+            },
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/MarketingTestBindingRecord"
+            },
+            "type": "array"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "round_id",
+          "ad_account_id",
+          "locked",
+          "bindings",
+          "history"
+        ]
+      },
       "MarketingTestChangedAd": {
         "properties": {
           "asset_version_id": {
@@ -47384,6 +47868,21 @@
           "preview_id",
           "preview_hash"
         ]
+      },
+      "SuggestMarketingTestBindings": {
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "batch_id"
+        ],
+        "description": "An uploaded report of the round, whose ad names suggest the matches."
       },
       "SuggestedTag": {
         "properties": {
