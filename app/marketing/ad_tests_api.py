@@ -1,8 +1,8 @@
 """Authenticated v1 endpoints for test projects (ADR 0019, #247).
 
 A test's rounds are read and driven by round id through ``api.py``; these endpoints read the test itself,
-quote a test of the kept ads of ads-first ideas before it starts (#248), and list a product's test
-history (#255).
+quote a test of the kept ads of ads-first ideas before it starts (#248), start it (#249), and list a
+product's test history (#255).
 """
 from typing import Annotated
 
@@ -15,7 +15,8 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
 from . import ad_test_schedule, ad_tests, ideas, workflow
 from .ad_tests_contracts import (EndMarketingTestRoundEarly, MarketingTestAnswers, MarketingTestDetail,
-    MarketingTestHistory, MarketingTestQuote, MarketingTestResult, MarketingTestRoundSchedule, MoveMarketingTestStart)
+    MarketingTestHistory, MarketingTestQuote, MarketingTestResult, MarketingTestRoundSchedule, MoveMarketingTestStart,
+    StartMarketingTest)
 from .service import MarketingError
 
 router = APIRouter(prefix="/marketing/tests", tags=["marketing"])
@@ -105,6 +106,24 @@ def get_test_quote(project_id: str, answers: Annotated[MarketingTestAnswers, Que
     when the result is due and what starting costs at most. Reads only; the start command confirms its hash."""
     with tenant_session(ctx) as session:
         return ad_tests.quote(session, ctx, ideas.get_ideas_project(session, ctx, project_id), answers)
+
+
+@ideas_router.post("/{project_id}/tests", operation_id="start_marketing_test", response_model=MarketingTestDetail,
+                   status_code=201, openapi_extra={"x-marketai-idempotent": True})
+def start_test(project_id: str, body: StartMarketingTest, request: Request, response: Response,
+               ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+               if_match: str | None = Header(default=None, alias="If-Match")):
+    """Start a test of these ideas' kept ads with the quote the page shows (#249): the test project and its
+    confirmed plan, its frozen round with every kept ad in it as it is, and the "look together" check of each ad
+    -- at most the quote's maximum. ``If-Match`` names the ideas' revision; the ideas themselves do not change.
+    Replaying the same key returns the same test."""
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.test.start", body.model_dump(mode="json"),
+            lambda s: ad_tests.start(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, body),
+            lambda s, resource: ad_tests.get_test(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ad_tests.detail(session, ctx, row)
 
 
 # A test round's full reports (#251): kept as uploaded, counted by day and Meta ad, latest confirmed first.

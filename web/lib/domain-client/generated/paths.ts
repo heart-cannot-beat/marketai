@@ -1946,6 +1946,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'start_marketing_test',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/ideas/:project_id/tests',
+    pathParams: ['project_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'submit_generation_run',
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/generation/runs',

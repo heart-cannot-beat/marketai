@@ -193,7 +193,11 @@ def execution_facts(session, ctx, row, assets, qcs=None):
     """The persisted facts `board.comparison_scope` reads, one dict per round asset version, with batched reads."""
     from app.generation.models import AssetQCAttemptRecord
     from .product_references import lineage_current
+    from .reuse import ideas_source, kept_ad_photos_current
     ids = [v.id for v, _, _ in assets]
+    # A test's kept ads answer their photos by the ads-first rule (plan E4); nothing is asked for any other round.
+    kept = {v.id for v, recipe, _ in assets if ideas_source(recipe)}
+    kept_current = kept_ad_photos_current(session, ctx, row, kept)
     if qcs is None:
         qcs = {}
         for qc in session.scalars(select(QC).where(QC.workspace_id == ctx.workspace_id, QC.round_id == row.id,
@@ -206,13 +210,16 @@ def execution_facts(session, ctx, row, assets, qcs=None):
     facts = []
     for version, recipe, combo in assets:
         key = digest(version.reference_sources_json)
-        if key not in current:
+        if version.id not in kept and key not in current:
             current[key] = lineage_current(session, ctx, version.reference_sources_json)
         qc = qcs.get(version.id)
         facts.append({"asset_version_id": version.id, "combination_id": combo["id"], "parent_version_id": version.parent_version_id,
             "content_sha256": version.content_sha256, "created_at": version.created_at.isoformat(),
-            "reused": operation_of(recipe) == "reuse", "quality": qc.findings_json["quality"] if qc else None,
-            "references_current": current[key], "blocking": version.id in blocking})
+            # A kept ad is the test's own execution, not an earlier ad a new one is checked against (plan E4).
+            "reused": operation_of(recipe) == "reuse" and version.id not in kept,
+            "quality": qc.findings_json["quality"] if qc else None,
+            "references_current": version.id in kept_current if version.id in kept else current[key],
+            "blocking": version.id in blocking})
     return facts
 
 
@@ -257,11 +264,18 @@ def active_quality(session, ctx, version_id):
 
 
 def ready(session, ctx, row, version_id):
+    """Whether a round image may go into the ad package: its round review approved, every active review of it
+    approved, no blocking file check, and its product photos current -- by the creative-library rule, or for a
+    kept ad of ads-first ideas by the ads-first rule (plan E4, ``reuse.kept_ad_photos_current``)."""
     qc = latest_qc(session, ctx, row, version_id)
     quality = active_quality(session, ctx, version_id)
     from .product_references import lineage_current
+    from .reuse import kept_ad_photos_current, kept_ads
     version = session.scalar(select(AssetVersionRecord).where(AssetVersionRecord.workspace_id == ctx.workspace_id, AssetVersionRecord.id == version_id))
-    references_ready = bool(version and lineage_current(session, ctx, version.reference_sources_json))
+    if version is not None and kept_ads(session, ctx, row, [version_id]):
+        references_ready = version_id in kept_ad_photos_current(session, ctx, row, [version_id])
+    else:
+        references_ready = bool(version and lineage_current(session, ctx, version.reference_sources_json))
     return bool(references_ready and qc and qc.findings_json["quality"] == "approved" and quality
         and all(r.review_value == "approved" for r in quality)
         and not _has_blocking_qc_failure(session, ctx, version_id))
