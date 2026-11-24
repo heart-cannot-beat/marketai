@@ -292,3 +292,74 @@ class MarketingTestHistory(Document):
     #: Plan-first tests started from this product's card (``app.marketing.card_lineage``), or from pasted text
     #: whose confirmed understanding is this product.
     earlier_tests: list[MarketingEarlierTest]
+
+
+class AcceptedTestFindings(Document):
+    """Findings of one kept ad's "look together" check the user accepts as they are ("this is fine"), and why."""
+    asset_version_id: str = Field(min_length=1, max_length=64)
+    #: The round's check the user looked at (``paired_ai_qc.id`` of the round's asset). A newer check has to be
+    #: looked at again.
+    check_id: str = Field(min_length=1, max_length=64)
+    #: The ``check_id`` of each accepted finding of that check.
+    finding_ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(min_length=1, max_length=20)
+    #: Why the ad may go as it is; kept on the round's review record of the ad.
+    note: str = Field(min_length=1, max_length=500)
+
+
+class CompleteMarketingTestStart(Document):
+    """After the checks (#250): record the round's review of each kept ad and make its ad package. The page sends
+    it once every check has its result, with the findings the user accepted; it is safe to send again."""
+    accepted_findings: list[AcceptedTestFindings] = Field(default_factory=list, max_length=60)
+
+
+class MarketingTestCheckEvidence(Document):
+    """What one passed check stands on (plan E5): a finding of the ad's own check (``ideas_check``) or of the round's
+    "look together" check (``paired_check``) that passed or that the user accepted, or what a check before download
+    (``verification``) recorded -- an accepted finding, a checked fact or photo, the look of an ad made without a
+    photo. ``id`` is the check's or the record's."""
+    source: Literal["ideas_check", "paired_check", "verification"]
+    id: str
+    finding_id: str | None = None
+    fact_id: str | None = None
+    photo_id: str | None = None
+    #: The ad whose product the user confirmed looks right (it was made without a product photo).
+    asset_version_id: str | None = None
+
+
+class MarketingTestAcceptedFinding(Document):
+    """A finding of the "look together" check the user accepted as it is, with the reason they gave."""
+    #: The round's check the finding is in.
+    check_id: str
+    finding_id: str
+    status: Literal["fail", "unknown"]
+    note: str
+
+
+class MarketingTestAdReview(Document):
+    """The round's review record of one kept ad: every check it was asked, passed, each with its evidence."""
+    asset_version_id: str
+    review_id: str
+    checks: dict[str, Literal["pass"]]
+    evidence: dict[str, list[MarketingTestCheckEvidence]]
+    accepted_findings: list[MarketingTestAcceptedFinding]
+    #: Who completed the start.
+    actor_id: str
+    created_at: str
+
+
+class MarketingTestPackage(Document):
+    """``complete_marketing_test_start``: the round's ad package and the review of each ad in it.
+
+    The Worker builds the ZIP (``handoff_state`` queued, running, ready or failed); the round's own handoff paths
+    download it or try again."""
+    test_id: str
+    round_id: str
+    handoff_id: str
+    handoff_state: Literal["queued", "running", "ready", "failed"]
+    reviews: list[MarketingTestAdReview]
+
+
+class CancelMarketingTest(Document):
+    """Cancel a test before its ad package is made: its round ends as stopped by the user, kept as it is."""
+    #: Why, e.g. an ad to swap or leave out; the round's close note (a short default without one).
+    note: Text | None = None

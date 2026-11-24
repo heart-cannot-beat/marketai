@@ -43,7 +43,9 @@ class MarketingQCRecord(Base):
     round_id: Mapped[str] = mapped_column(String(64), nullable=False)
     asset_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     findings_json: Mapped[dict] = mapped_column(JSON, nullable=False)
-    quality_review_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: The review written on the Workspace's shared review chain with this record. ``None`` for a test project's
+    #: review of a kept ad (#250, plan E5): it writes only the round's own record, never the shared chain.
+    quality_review_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 

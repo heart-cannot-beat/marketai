@@ -558,6 +558,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'cancel_marketing_test',
+    {
+      operationId: 'cancel_marketing_test',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/tests/{test_id}/cancel',
+      pathParams: ['test_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 4096,
+      maxResponseBytes: 65536,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'cancel_marketing_test_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'change_marketing_test_start',
     {
       operationId: 'change_marketing_test_start',
@@ -712,6 +739,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         200: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'commit_results_import_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'complete_marketing_test_start',
+    {
+      operationId: 'complete_marketing_test_start',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/tests/{test_id}/package',
+      pathParams: ['test_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 131072,
+      maxResponseBytes: 1048576,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'complete_marketing_test_start_200' },
           locationShapes: [],
         },
         422: {

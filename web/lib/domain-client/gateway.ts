@@ -1294,6 +1294,26 @@ export interface DomainGateway {
     workspaceSlug: string;
     testId: string;
   }): Promise<DomainResultFor<'get_marketing_test'>>;
+  /** After the "look together" checks: the round's review of each kept ad, with evidence, and its ad package (#250). */
+  completeMarketingTestStart(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['complete_marketing_test_start']['requestBody'];
+  }): Promise<
+    DomainResultFor<'complete_marketing_test_start'> | ReconciliationRequired
+  >;
+  /** Cancel a test before its ad package is made; its round ends as stopped by the user (#250). */
+  cancelMarketingTest(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['cancel_marketing_test']['requestBody'];
+  }): Promise<
+    DomainResultFor<'cancel_marketing_test'> | ReconciliationRequired
+  >;
   /** Move a test round's start to the day its ads went live, before its first report is confirmed (#253). */
   changeMarketingTestStart(params: {
     workspaceSlug: string;
@@ -5721,6 +5741,54 @@ export class DefaultDomainGateway implements DomainGateway {
         slug: params.workspaceSlug,
         test_id: params.testId,
       })
+    );
+  }
+
+  async completeMarketingTestStart(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['complete_marketing_test_start']['requestBody'];
+  }): Promise<
+    DomainResultFor<'complete_marketing_test_start'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'complete_marketing_test_start',
+      params.actionInstanceId,
+      buildBffPath('complete_marketing_test_start', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
+  async cancelMarketingTest(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['cancel_marketing_test']['requestBody'];
+  }): Promise<
+    DomainResultFor<'cancel_marketing_test'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'cancel_marketing_test',
+      params.actionInstanceId,
+      buildBffPath('cancel_marketing_test', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+      }),
+      'POST',
+      params.body,
+      200,
+      'ok',
+      { ifMatch: params.expectedRevision }
     );
   }
 

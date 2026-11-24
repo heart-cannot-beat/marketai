@@ -256,3 +256,50 @@ def confirm_test_bindings(test_id: str, round_id: str, body: ConfirmMarketingTes
                                 lambda s, resource: ad_test_reports.test_round(s, ctx, test_id, resource)[1])
         set_etag(response, row.revision)
         return ad_test_reports.bindings_view(session, ctx, row)
+
+
+# After the "look together" checks (#250): the round's review of each kept ad and its ad package; or cancelling the
+# test before its package is made.
+from .ad_tests_contracts import CancelMarketingTest, CompleteMarketingTestStart, MarketingTestPackage
+
+
+@router.post("/{test_id}/package", operation_id="complete_marketing_test_start", response_model=MarketingTestPackage,
+             response_model_exclude_none=True, openapi_extra={"x-marketai-idempotent": True})
+def complete_test_start(test_id: str, body: CompleteMarketingTestStart, request: Request, response: Response,
+                        ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                        if_match: str | None = Header(default=None, alias="If-Match")):
+    """Once every "look together" check has its result: record the round's review of each kept ad -- each passed
+    check with the evidence it stands on, the findings the user accepted with their reason -- and request its ad
+    package. ``If-Match`` names the round's revision. Safe to send again: once the package exists, it is returned
+    whatever is sent."""
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        def run(s):
+            row = ad_tests.complete_start(s, ctx, ad_tests.get_test(s, ctx, test_id), revision, body)
+            s.flush()
+            return row
+        row = _resource_command(session, ctx, request, key, "marketing.test.package", body.model_dump(mode="json"), run,
+                                lambda s, resource: _test_round(s, ctx, test_id, resource)[1])
+        set_etag(response, row.revision)
+        return ad_tests.package(session, ctx, ad_tests.get_test(session, ctx, test_id), row)
+
+
+@router.post("/{test_id}/cancel", operation_id="cancel_marketing_test", response_model=MarketingTestDetail,
+             openapi_extra={"x-marketai-idempotent": True})
+def cancel_test(test_id: str, body: CancelMarketingTest, request: Request, response: Response,
+                ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                if_match: str | None = Header(default=None, alias="If-Match")):
+    """Cancel the test before its ad package is made: its round ends as stopped by the user and is kept, so the
+    product has no test in progress. ``If-Match`` names the round's revision; the response is the test, with its
+    own revision as the ETag."""
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        def run(s):
+            row = ad_tests.cancel(s, ctx, ad_tests.get_test(s, ctx, test_id), revision, body)
+            s.flush()
+            return row
+        _resource_command(session, ctx, request, key, "marketing.test.cancel", body.model_dump(mode="json"), run,
+                          lambda s, resource: _test_round(s, ctx, test_id, resource)[1])
+        test = ad_tests.get_test(session, ctx, test_id)
+        set_etag(response, test.revision)
+        return ad_tests.detail(session, ctx, test)
