@@ -10125,6 +10125,113 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'feedback_drafts',
     ],
   },
+  MarketingTestAnswers: {
+    properties: {
+      target_cost: {
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
+      },
+      round_budget: {
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
+      },
+      duration_days: { type: 'integer', maximum: 90, minimum: 7 },
+      landing_page: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, pattern: '^https?://\\S+$' },
+          { type: 'null' },
+        ],
+      },
+      audience: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+      offer: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+      placement: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+      currency: {
+        anyOf: [
+          {
+            type: 'string',
+            enum: [
+              'AED',
+              'AUD',
+              'BRL',
+              'CAD',
+              'CHF',
+              'CNY',
+              'EUR',
+              'GBP',
+              'HKD',
+              'IDR',
+              'INR',
+              'JPY',
+              'KRW',
+              'MXN',
+              'MYR',
+              'NZD',
+              'PHP',
+              'PLN',
+              'SAR',
+              'SEK',
+              'SGD',
+              'THB',
+              'TWD',
+              'USD',
+              'VND',
+              'ZAR',
+            ],
+          },
+          { type: 'null' },
+        ],
+      },
+      account_timezone: {
+        anyOf: [{ type: 'string', maxLength: 64 }, { type: 'null' }],
+      },
+      start_date: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      attribution_window: {
+        anyOf: [
+          {
+            type: 'string',
+            enum: [
+              '1d_click',
+              '7d_click',
+              '1d_view',
+              '1d_click_1d_view',
+              '7d_click_1d_view',
+            ],
+          },
+          { type: 'null' },
+        ],
+      },
+      max_small_rounds: {
+        anyOf: [{ type: 'integer', maximum: 20, minimum: 1 }, { type: 'null' }],
+      },
+      media_budget: {
+        anyOf: [
+          { type: 'number', exclusiveMinimum: 0 },
+          { type: 'string' },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['target_cost', 'round_budget', 'duration_days'],
+    description:
+      "What taking kept ads to a test asks (design §5.2): three answers, the landing page when the product has\nno link, and any default the user changed. Read from the quote's query; the start command (#249) sends the\nsame answers with the quote hash it confirms.",
+  },
   MarketingTestChangedAd: {
     properties: {
       asset_version_id: { type: 'string' },
@@ -13522,6 +13629,22 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     required: ['kind', 'execution_mode'],
     description:
       'Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).\n\nWith ``addition`` (``kind = "ideas"`` only, #200) the call adds one claim or one way of telling to the\ndrafted ideas instead of drafting them again; it costs one planning call, quoted like any other.',
+  },
+  StartMarketingTest: {
+    properties: {
+      answers: { $ref: '#/components/schemas/MarketingTestAnswers' },
+      quote_hash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+      asset_version_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 200,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['answers', 'quote_hash', 'asset_version_ids'],
+    description:
+      'The start command (#249): what the user saw on the quote -- the answers it was read with, its hash and the\nkept ads -- confirmed with one click. Anything that changed since refuses the start (``test_quote_changed``).',
   },
   StartPreparationInput: {
     properties: {
@@ -25368,6 +25491,51 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['kind', 'execution_mode'],
   },
+  start_marketing_test_201: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      product_id: { type: 'string' },
+      source_project_id: { type: 'string' },
+      comparison: { type: 'string', enum: ['claims', 'expressions', 'single'] },
+      plan_summary: { $ref: '#/components/schemas/MarketingTestPlanSummary' },
+      rounds: {
+        items: { $ref: '#/components/schemas/MarketingTestRoundSummary' },
+        type: 'array',
+      },
+      current_round_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'product_id',
+      'source_project_id',
+      'comparison',
+      'plan_summary',
+      'rounds',
+      'current_round_id',
+      'created_at',
+    ],
+  },
+  start_marketing_test_request: {
+    properties: {
+      answers: { $ref: '#/components/schemas/MarketingTestAnswers' },
+      quote_hash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+      asset_version_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 200,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['answers', 'quote_hash', 'asset_version_ids'],
+    description:
+      'The start command (#249): what the user saw on the quote -- the answers it was read with, its hash and the\nkept ads -- confirmed with one click. Anything that changed since refuses the start (``test_quote_changed``).',
+  },
   submit_generation_run_202: {
     properties: {
       operation_id: { type: 'string' },
@@ -27311,6 +27479,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['start_marketing_planning_request'],
     ],
     [
+      'start_marketing_test_201',
+      VALIDATOR_FUNCTIONS['start_marketing_test_201'],
+    ],
+    [
+      'start_marketing_test_request',
+      VALIDATOR_FUNCTIONS['start_marketing_test_request'],
+    ],
+    [
       'submit_generation_run_202',
       VALIDATOR_FUNCTIONS['submit_generation_run_202'],
     ],
@@ -28024,6 +28200,11 @@ export const REQUEST_VALIDATORS = {
     'start_marketing_planning_request'
   ] as ValidateFunction<
     DomainOperationMap['start_marketing_planning']['requestBody']
+  >,
+  start_marketing_test: VALIDATOR_FUNCTIONS[
+    'start_marketing_test_request'
+  ] as ValidateFunction<
+    DomainOperationMap['start_marketing_test']['requestBody']
   >,
   submit_generation_run: VALIDATOR_FUNCTIONS[
     'submit_generation_run_request'

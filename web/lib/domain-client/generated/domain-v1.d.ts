@@ -2895,6 +2895,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/tests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start Test
+     * @description Start a test of these ideas' kept ads with the quote the page shows (#249): the test project and its
+     *     confirmed plan, its frozen round with every kept ad in it as it is, and the "look together" check of each ad
+     *     -- at most the quote's maximum. ``If-Match`` names the ideas' revision; the ideas themselves do not change.
+     *     Replaying the same key returns the same test.
+     */
+    post: operations['start_marketing_test'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/understanding': {
     parameters: {
       query?: never;
@@ -10466,6 +10489,63 @@ export interface components {
       board?: components['schemas']['MarketingBoard'] | null;
     };
     /**
+     * @description What taking kept ads to a test asks (design §5.2): three answers, the landing page when the product has
+     *     no link, and any default the user changed. Read from the quote's query; the start command (#249) sends the
+     *     same answers with the quote hash it confirms.
+     */
+    MarketingTestAnswers: {
+      target_cost: number | string;
+      round_budget: number | string;
+      duration_days: number;
+      landing_page?: string | null;
+      audience?: string | null;
+      offer?: string | null;
+      placement?: string | null;
+      currency?:
+        | (
+            | 'AED'
+            | 'AUD'
+            | 'BRL'
+            | 'CAD'
+            | 'CHF'
+            | 'CNY'
+            | 'EUR'
+            | 'GBP'
+            | 'HKD'
+            | 'IDR'
+            | 'INR'
+            | 'JPY'
+            | 'KRW'
+            | 'MXN'
+            | 'MYR'
+            | 'NZD'
+            | 'PHP'
+            | 'PLN'
+            | 'SAR'
+            | 'SEK'
+            | 'SGD'
+            | 'THB'
+            | 'TWD'
+            | 'USD'
+            | 'VND'
+            | 'ZAR'
+          )
+        | null;
+      account_timezone?: string | null;
+      start_date?: string | null;
+      attribution_window?:
+        | (
+            | '1d_click'
+            | '7d_click'
+            | '1d_view'
+            | '1d_click_1d_view'
+            | '7d_click_1d_view'
+          )
+        | null;
+      max_small_rounds?: number | null;
+      media_budget?: number | string | null;
+    };
+    /**
      * @description An ad of the round whose fact, photo or copy the ads-first ideas changed after the test started (§5.8).
      *
      *     The running test keeps what it started on: its evaluation and ad package do not change. The Meta ad still
@@ -12480,6 +12560,15 @@ export interface components {
       /** @default  */
       quote_hash: string;
       addition?: components['schemas']['IdeasAddition'] | null;
+    };
+    /**
+     * @description The start command (#249): what the user saw on the quote -- the answers it was read with, its hash and the
+     *     kept ads -- confirmed with one click. Anything that changed since refuses the start (``test_quote_changed``).
+     */
+    StartMarketingTest: {
+      answers: components['schemas']['MarketingTestAnswers'];
+      quote_hash: string;
+      asset_version_ids: string[];
     };
     StartPreparationInput: {
       truth_resolution_policy_version_id: string;
@@ -19187,6 +19276,44 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['MarketingTestQuote'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  start_marketing_test: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StartMarketingTest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestDetail'];
         };
       };
       /** @description Validation Error */

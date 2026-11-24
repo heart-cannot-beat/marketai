@@ -325,16 +325,9 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
                 reasons.append(_reason(name, fact_ids=ids))
         references = _references(recipe)
         if references:
-            # A photo the user rejected, or one no longer usable as it was sent or as it was checked, cannot be
-            # rescued (#199). A photo frozen as a creative-library reference the user has since renewed (#233)
-            # counts by the renewal: the same bytes, now checked again.
-            live = [reference for reference in references if not _renewed(session, ctx, reference, decisions, states)]
-            if (not references_current(session, ctx, live) or _photo_rejected(session, ctx, live, photo_sets)
-                    or any(states.get(reference.get("content_sha256")) in PHOTO_GONE for reference in references)):
-                reasons.append(_reason("photo_unavailable"))
-            elif any(reference.get("attestation") not in VERIFIED_PHOTOS
-                     and states.get(reference.get("content_sha256")) != "verified" for reference in references):
-                reasons.append(_reason("photo_unverified"))
+            photo = _photo_reason(session, ctx, references, decisions, states, photo_sets)
+            if photo:
+                reasons.append(_reason(photo))
         elif version.id not in appearance:
             reasons.append(_reason("appearance_unconfirmed"))
         state = items.get(version.producing_run_item_id)
@@ -363,6 +356,50 @@ def statuses(session, ctx, row, ads=None, calls=None, states=None) -> dict:
         result[version.id] = {"status": status, "cited_fact_ids": cited, "appearance_confirmed": version.id in appearance,
                               "reasons": reasons}
     return result
+
+
+def _photo_reason(session, ctx, references, decisions, states, photo_sets) -> str | None:
+    """Why the product photos an ad was made with keep it from leaving, or ``None`` when they are checked and usable.
+
+    A photo the user rejected, or one no longer usable as it was sent or as it was checked, cannot be rescued
+    (``photo_unavailable``, #199); one nobody checked yet leaves the ad a draft (``photo_unverified``). A photo
+    frozen as a creative-library reference the user has since renewed (#233) counts by the renewal: the same
+    bytes, now checked again. ``photo_sets`` caches each product's published photo set."""
+    if not references:
+        return None
+    live = [reference for reference in references if not _renewed(session, ctx, reference, decisions, states)]
+    if (not references_current(session, ctx, live) or _photo_rejected(session, ctx, live, photo_sets)
+            or any(states.get(reference.get("content_sha256")) in PHOTO_GONE for reference in references)):
+        return "photo_unavailable"
+    if any(reference.get("attestation") not in VERIFIED_PHOTOS
+           and states.get(reference.get("content_sha256")) != "verified" for reference in references):
+        return "photo_unverified"
+    return None
+
+
+def photos_current(session, ctx, asset_version_ids) -> set[str]:
+    """Of these ads of ads-first ideas, the ones whose product photos count as current now: made with none, or
+    with photos that are checked and still usable by the rule above (plan E4, #249).
+
+    The rule a test round asks about the kept ads it took, in place of the creative-library rule
+    (``product_references.lineage_current``) that a photo checked only before download never meets. An image
+    that is not an ad of readable ads-first ideas is not current; an ad of several ideas, only when all agree."""
+    ids = list(dict.fromkeys(asset_version_ids))
+    owners = _ideas_of(session, ctx, ids)
+    current = {asset_id for asset_id in ids if owners.get(asset_id)}
+    for project_id in dict.fromkeys(project for asset_id in ids for project in owners.get(asset_id, [])):
+        mine = [asset_id for asset_id in ids if project_id in owners.get(asset_id, [])]
+        row = session.scalar(select(MarketingProjectRecord).where(MarketingProjectRecord.workspace_id == ctx.workspace_id,
+            MarketingProjectRecord.id == project_id, MarketingProjectRecord.flow == ideas.FLOW))
+        try:
+            recipes = {version.id: recipe for version, recipe in ideas.project_ads(session, ctx, row)} if row else {}
+            states, decisions, sets = (photo_states(session, ctx, row), photo_decisions(session, ctx, row), {}) if row else ({}, {}, {})
+            for asset_id in mine:
+                if asset_id not in recipes or _photo_reason(session, ctx, _references(recipes[asset_id]), decisions, states, sets):
+                    current.discard(asset_id)
+        except (ValueError, LookupError, StopIteration, TypeError):
+            current.difference_update(mine)  # ideas a later contract no longer reads: their images are not current
+    return current
 
 
 def _renewed(session, ctx, reference, decisions, states) -> bool:

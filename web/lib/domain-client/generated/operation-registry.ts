@@ -7300,6 +7300,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'start_marketing_test',
+    {
+      operationId: 'start_marketing_test',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/tests',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 65536,
+      maxResponseBytes: 65536,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'start_marketing_test_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'submit_generation_run',
     {
       operationId: 'submit_generation_run',

@@ -1121,6 +1121,14 @@ export interface DomainGateway {
     projectId: string;
     query: DomainOperationMap['get_marketing_test_quote']['queryParams'];
   }): Promise<DomainResultFor<'get_marketing_test_quote'>>;
+  /** Start a test of the kept ads with the quote the page shows: its plan, round, ads and "look together" checks (#249). */
+  startMarketingTest(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['start_marketing_test']['requestBody'];
+  }): Promise<DomainResultFor<'start_marketing_test'> | ReconciliationRequired>;
   /** Check the ads the quote counted; each result is a suggestion on its ad (#197). */
   startMarketingIdeasChecks(params: {
     workspaceSlug: string;
@@ -5270,6 +5278,30 @@ export class DefaultDomainGateway implements DomainGateway {
         slug: params.workspaceSlug,
         project_id: params.projectId,
       }) + this.buildQuery(params.query)
+    );
+  }
+
+  async startMarketingTest(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['start_marketing_test']['requestBody'];
+  }): Promise<
+    DomainResultFor<'start_marketing_test'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'start_marketing_test',
+      params.actionInstanceId,
+      buildBffPath('start_marketing_test', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created',
+      { ifMatch: params.expectedRevision }
     );
   }
 
