@@ -1142,6 +1142,14 @@ export interface DomainGateway {
     projectId: string;
     query: DomainOperationMap['get_marketing_test_quote']['queryParams'];
   }): Promise<DomainResultFor<'get_marketing_test_quote'>>;
+  /** Start a test of the kept ads with the quote the page shows: its plan, round, ads and "look together" checks (#249). */
+  startMarketingTest(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['start_marketing_test']['requestBody'];
+  }): Promise<DomainResultFor<'start_marketing_test'> | ReconciliationRequired>;
   /** Check the ads the quote counted; each result is a suggestion on its ad (#197). */
   startMarketingIdeasChecks(params: {
     workspaceSlug: string;
@@ -1314,6 +1322,23 @@ export interface DomainGateway {
     testId: string;
     roundId: string;
   }): Promise<DomainResultFor<'get_marketing_test_result'>>;
+  /** A test round's numbers so far, recorded deviations and the ads its ideas changed; evaluates nothing (#254). */
+  getMarketingTestProgress(params: {
+    workspaceSlug: string;
+    testId: string;
+    roundId: string;
+  }): Promise<DomainResultFor<'get_marketing_test_progress'>>;
+  /** Record that some of a test round's ads ran differently from the plan; their groups draw no conclusion (#254). */
+  recordMarketingTestDeviation(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['record_marketing_test_deviation']['requestBody'];
+  }): Promise<
+    DomainResultFor<'record_marketing_test_deviation'> | ReconciliationRequired
+  >;
   /** A product's tests with each round's report uploads and corrections, and its earlier (plan-first) tests (#255). */
   listMarketingTests(params: {
     workspaceSlug: string;
@@ -5327,6 +5352,30 @@ export class DefaultDomainGateway implements DomainGateway {
     );
   }
 
+  async startMarketingTest(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    projectId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['start_marketing_test']['requestBody'];
+  }): Promise<
+    DomainResultFor<'start_marketing_test'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'start_marketing_test',
+      params.actionInstanceId,
+      buildBffPath('start_marketing_test', {
+        slug: params.workspaceSlug,
+        project_id: params.projectId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created',
+      { ifMatch: params.expectedRevision }
+    );
+  }
+
   async startMarketingIdeasChecks(params: {
     workspaceSlug: string;
     actionInstanceId: string;
@@ -5738,6 +5787,46 @@ export class DefaultDomainGateway implements DomainGateway {
         test_id: params.testId,
         round_id: params.roundId,
       })
+    );
+  }
+
+  async getMarketingTestProgress(params: {
+    workspaceSlug: string;
+    testId: string;
+    roundId: string;
+  }): Promise<DomainResultFor<'get_marketing_test_progress'>> {
+    return this.sendSafe<'get_marketing_test_progress'>(
+      buildBffPath('get_marketing_test_progress', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+        round_id: params.roundId,
+      })
+    );
+  }
+
+  async recordMarketingTestDeviation(params: {
+    workspaceSlug: string;
+    actionInstanceId: string;
+    testId: string;
+    roundId: string;
+    expectedRevision?: number;
+    body: DomainOperationMap['record_marketing_test_deviation']['requestBody'];
+  }): Promise<
+    DomainResultFor<'record_marketing_test_deviation'> | ReconciliationRequired
+  > {
+    return this.runCommand(
+      'record_marketing_test_deviation',
+      params.actionInstanceId,
+      buildBffPath('record_marketing_test_deviation', {
+        slug: params.workspaceSlug,
+        test_id: params.testId,
+        round_id: params.roundId,
+      }),
+      'POST',
+      params.body,
+      201,
+      'created',
+      { ifMatch: params.expectedRevision }
     );
   }
 

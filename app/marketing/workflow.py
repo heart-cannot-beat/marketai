@@ -207,7 +207,11 @@ def execution_facts(session, ctx, row, assets, qcs=None):
     """The persisted facts `board.comparison_scope` reads, one dict per round asset version, with batched reads."""
     from app.generation.models import AssetQCAttemptRecord
     from .product_references import lineage_current
+    from .reuse import ideas_source, kept_ad_photos_current
     ids = [v.id for v, _, _ in assets]
+    # A test's kept ads answer their photos by the ads-first rule (plan E4); nothing is asked for any other round.
+    kept = {v.id for v, recipe, _ in assets if ideas_source(recipe)}
+    kept_current = kept_ad_photos_current(session, ctx, row, kept)
     if qcs is None:
         qcs = {}
         for qc in session.scalars(select(QC).where(QC.workspace_id == ctx.workspace_id, QC.round_id == row.id,
@@ -220,13 +224,16 @@ def execution_facts(session, ctx, row, assets, qcs=None):
     facts = []
     for version, recipe, combo in assets:
         key = digest(version.reference_sources_json)
-        if key not in current:
+        if version.id not in kept and key not in current:
             current[key] = lineage_current(session, ctx, version.reference_sources_json)
         qc = qcs.get(version.id)
         facts.append({"asset_version_id": version.id, "combination_id": combo["id"], "parent_version_id": version.parent_version_id,
             "content_sha256": version.content_sha256, "created_at": version.created_at.isoformat(),
-            "reused": operation_of(recipe) == "reuse", "quality": qc.findings_json["quality"] if qc else None,
-            "references_current": current[key], "blocking": version.id in blocking})
+            # A kept ad is the test's own execution, not an earlier ad a new one is checked against (plan E4).
+            "reused": operation_of(recipe) == "reuse" and version.id not in kept,
+            "quality": qc.findings_json["quality"] if qc else None,
+            "references_current": version.id in kept_current if version.id in kept else current[key],
+            "blocking": version.id in blocking})
     return facts
 
 
@@ -271,11 +278,18 @@ def active_quality(session, ctx, version_id):
 
 
 def ready(session, ctx, row, version_id):
+    """Whether a round image may go into the ad package: its round review approved, every active review of it
+    approved, no blocking file check, and its product photos current -- by the creative-library rule, or for a
+    kept ad of ads-first ideas by the ads-first rule (plan E4, ``reuse.kept_ad_photos_current``)."""
     qc = latest_qc(session, ctx, row, version_id)
     quality = active_quality(session, ctx, version_id)
     from .product_references import lineage_current
+    from .reuse import kept_ad_photos_current, kept_ads
     version = session.scalar(select(AssetVersionRecord).where(AssetVersionRecord.workspace_id == ctx.workspace_id, AssetVersionRecord.id == version_id))
-    references_ready = bool(version and lineage_current(session, ctx, version.reference_sources_json))
+    if version is not None and kept_ads(session, ctx, row, [version_id]):
+        references_ready = version_id in kept_ad_photos_current(session, ctx, row, [version_id])
+    else:
+        references_ready = bool(version and lineage_current(session, ctx, version.reference_sources_json))
     return bool(references_ready and qc and qc.findings_json["quality"] == "approved" and quality
         and all(r.review_value == "approved" for r in quality)
         and not _has_blocking_qc_failure(session, ctx, version_id))
@@ -528,6 +542,17 @@ def style_deviations(session, ctx, row):
     return sorted(found)
 
 
+def evaluation_bindings(session, ctx, row):
+    """The matched Meta ads a round's evaluation reads, and the ids of the recorded deviations among them.
+
+    Each current binding (#252) with the deviations noted when it was made; a test project's round adds the deviations the user
+    recorded later for its ads (#254). A round of an earlier test: exactly its bindings, and ``None``."""
+    from .ad_test_progress import with_recorded_deviations
+    bindings = [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json}
+        for b in sorted(round_bindings(session, ctx, row), key=lambda b: b.id)]
+    return with_recorded_deviations(session, ctx, row, bindings)
+
+
 def evaluation_window(session, ctx, row):
     """(first day, last day, schedule evidence) a round is evaluated on.
 
@@ -551,7 +576,7 @@ def evaluate(session, ctx, row):
     handoffs = scoped(session, ctx, Handoff, round_id=row.id)
     if not handoffs or handoffs[0].state != "ready":
         raise MarketingError("handoff_not_ready", "请先完成审核和导出。", 409)
-    bindings = round_bindings(session, ctx, row)
+    bindings, deviation_ids = evaluation_bindings(session, ctx, row)
     batches = active_batches(session, ctx, row)
     start, end, schedule = evaluation_window(session, ctx, row)
     mature = round_mature(row, end)
@@ -571,13 +596,15 @@ def evaluate(session, ctx, row):
     inputs = {"prior_confirmations": prior_confirmations, "timezone": row.timezone, "round_id": row.id, "snapshot": row.snapshot_json, "execution_mode": row.execution_mode,
         "start_date": str(start), "end_date": str(end), "mature": mature,
         "entries": handoffs[0].manifest_json["entries"],
-        "bindings": [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json} for b in sorted(bindings, key=lambda b: b.id)],
+        "bindings": bindings,
         "quality_changed": [e["entry_id"] for e in handoffs[0].manifest_json["entries"] if not ready(session, ctx, row, e["asset_version_id"])],
         "quality_review_ids": {e["asset_version_id"]: sorted(r.id for r in active_quality(session, ctx, e["asset_version_id"]))
             for e in handoffs[0].manifest_json["entries"]},
         "batch_ids": [b.id for b in batches], "rows": counted_report_rows(session, ctx, row)}
     if schedule is not None:
         inputs["schedule"] = schedule
+    if deviation_ids is not None:
+        inputs["deviation_ids"] = deviation_ids
     if "style_variation" in row.snapshot_json["plan"]:
         inputs["style_deviations"] = style_deviations(session, ctx, row)
     hashed = digest(inputs)
@@ -632,10 +659,10 @@ def evaluation_current(session, ctx, row, evaluation, *, _seen=None, _cache=None
     if not review_evidence_current(session, ctx, evaluation):
         return False
     batches = active_batches(session, ctx, row)
-    bindings = [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json}
-        for b in sorted(round_bindings(session, ctx, row), key=lambda b: b.id)]
+    bindings, deviation_ids = evaluation_bindings(session, ctx, row)
     quality_changed = {e["entry_id"] for e in inputs["entries"] if not ready(session, ctx, row, e["asset_version_id"])}
     if (inputs["batch_ids"] != [b.id for b in batches] or inputs["bindings"] != bindings
+            or inputs.get("deviation_ids") != deviation_ids
             or inputs["rows"] != counted_report_rows(session, ctx, row)
             or set(inputs.get("quality_changed", [])) != quality_changed):
         return False

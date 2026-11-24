@@ -1,7 +1,7 @@
 """A test round's Meta ad matches can be changed or taken away by a new record (#252, ADR 0019, design §5.7).
 
 Revision ID: zzv252a1b2c3
-Revises: zzu253a1b2c3
+Revises: zzv254a1b2c3
 
 ``marketing_ad_bindings`` records which package ad a Meta ad of a round shows, by its Ad ID. Until now a round
 had at most one record per Meta ad and nobody changes a record (the API may only read and insert it). A test
@@ -32,7 +32,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "zzv252a1b2c3"
-down_revision = "zzu253a1b2c3"
+down_revision = "zzv254a1b2c3"
 branch_labels = None
 depends_on = None
 

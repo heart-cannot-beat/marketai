@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import Field, field_validator
@@ -162,6 +162,15 @@ class MarketingTestAnswers(Document):
             except (KeyError, ValueError) as exc:
                 raise PydanticCustomError("marketing_timezone_invalid", "无效的广告账户时区") from exc
         return value
+
+
+class StartMarketingTest(Document):
+    """The start command (#249): what the user saw on the quote -- the answers it was read with, its hash and the
+    kept ads -- confirmed with one click. Anything that changed since refuses the start (``test_quote_changed``)."""
+    answers: MarketingTestAnswers
+    quote_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    #: The kept ads the page showed, in any order.
+    asset_version_ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(max_length=200)
 
 
 class MarketingTestSubject(Document):

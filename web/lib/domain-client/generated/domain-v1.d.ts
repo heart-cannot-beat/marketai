@@ -2895,6 +2895,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/ideas/{project_id}/tests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start Test
+     * @description Start a test of these ideas' kept ads with the quote the page shows (#249): the test project and its
+     *     confirmed plan, its frozen round with every kept ad in it as it is, and the "look together" check of each ad
+     *     -- at most the quote's maximum. ``If-Match`` names the ideas' revision; the ideas themselves do not change.
+     *     Replaying the same key returns the same test.
+     */
+    post: operations['start_marketing_test'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/ideas/{project_id}/understanding': {
     parameters: {
       query?: never;
@@ -3510,6 +3533,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/deviations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record Deviation
+     * @description Record that these ads ran differently from the plan; the groups holding them draw no conclusion this round.
+     */
+    post: operations['record_marketing_test_deviation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/end': {
     parameters: {
       query?: never;
@@ -3524,6 +3567,27 @@ export interface paths {
      * @description Record the last day the ads ran; the result can be read once the attribution lag after it has passed (#253).
      */
     post: operations['end_marketing_test_round_early'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/progress': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Progress
+     * @description Each compared group's spend, orders, cost per order and missing orders so far -- not a conclusion --, the
+     *     recorded deviations and the ads the ideas changed since the test started. Reading it evaluates nothing.
+     */
+    get: operations['get_marketing_test_progress'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -10472,6 +10536,63 @@ export interface components {
       feedback_drafts: components['schemas']['FeedbackDraft'][];
       board?: components['schemas']['MarketingBoard'] | null;
     };
+    /**
+     * @description What taking kept ads to a test asks (design §5.2): three answers, the landing page when the product has
+     *     no link, and any default the user changed. Read from the quote's query; the start command (#249) sends the
+     *     same answers with the quote hash it confirms.
+     */
+    MarketingTestAnswers: {
+      target_cost: number | string;
+      round_budget: number | string;
+      duration_days: number;
+      landing_page?: string | null;
+      audience?: string | null;
+      offer?: string | null;
+      placement?: string | null;
+      currency?:
+        | (
+            | 'AED'
+            | 'AUD'
+            | 'BRL'
+            | 'CAD'
+            | 'CHF'
+            | 'CNY'
+            | 'EUR'
+            | 'GBP'
+            | 'HKD'
+            | 'IDR'
+            | 'INR'
+            | 'JPY'
+            | 'KRW'
+            | 'MXN'
+            | 'MYR'
+            | 'NZD'
+            | 'PHP'
+            | 'PLN'
+            | 'SAR'
+            | 'SEK'
+            | 'SGD'
+            | 'THB'
+            | 'TWD'
+            | 'USD'
+            | 'VND'
+            | 'ZAR'
+          )
+        | null;
+      account_timezone?: string | null;
+      start_date?: string | null;
+      attribution_window?:
+        | (
+            | '1d_click'
+            | '7d_click'
+            | '1d_view'
+            | '1d_click_1d_view'
+            | '7d_click_1d_view'
+          )
+        | null;
+      max_small_rounds?: number | null;
+      media_budget?: number | string | null;
+    };
     /** @description A current match: the Meta ad shows the package ad ``entry_id``. */
     MarketingTestBinding: {
       id: string;
@@ -10534,6 +10655,17 @@ export interface components {
       bindings: components['schemas']['MarketingTestBinding'][];
       history: components['schemas']['MarketingTestBindingRecord'][];
     };
+    /**
+     * @description An ad of the round whose fact, photo or copy the ads-first ideas changed after the test started (§5.8).
+     *
+     *     The running test keeps what it started on: its evaluation and ad package do not change. The Meta ad still
+     *     shows the old content, so the page suggests stopping it or making it again.
+     */
+    MarketingTestChangedAd: {
+      asset_version_id: string;
+      changes: ('fact' | 'photo' | 'copy')[];
+      fact_ids: string[];
+    };
     /** @description The "look together" check the start command admits (plan E6): one call per kept ad, paid in BYOK. */
     MarketingTestChecks: {
       available: boolean;
@@ -10566,6 +10698,14 @@ export interface components {
       plan_summary: components['schemas']['MarketingTestPlanSummary'];
       rounds: components['schemas']['MarketingTestRoundSummary'][];
       current_round_id: string | null;
+      created_at: string;
+    };
+    MarketingTestDeviation: {
+      id: string;
+      asset_version_ids: string[];
+      note: string;
+      comparison_ids: string[];
+      actor_id: string;
       created_at: string;
     };
     /** @description ``list_marketing_tests``: a product's tests and its earlier tests, each newest first (design §5.10). */
@@ -10634,6 +10774,68 @@ export interface components {
         | 'VND'
         | 'ZAR';
       landing_page: string;
+    };
+    /** @description ``get_marketing_test_progress``: the round's numbers so far (design §5.7). Reading it evaluates nothing. */
+    MarketingTestProgress: {
+      test_id: string;
+      round_id: string;
+      revision: number;
+      /**
+       * @default true
+       * @constant
+       */
+      provisional: true;
+      /** @enum {string} */
+      currency:
+        | 'AED'
+        | 'AUD'
+        | 'BRL'
+        | 'CAD'
+        | 'CHF'
+        | 'CNY'
+        | 'EUR'
+        | 'GBP'
+        | 'HKD'
+        | 'IDR'
+        | 'INR'
+        | 'JPY'
+        | 'KRW'
+        | 'MXN'
+        | 'MYR'
+        | 'NZD'
+        | 'PHP'
+        | 'PLN'
+        | 'SAR'
+        | 'SEK'
+        | 'SGD'
+        | 'THB'
+        | 'TWD'
+        | 'USD'
+        | 'VND'
+        | 'ZAR';
+      target_cost: string;
+      min_purchases: number;
+      /** Format: date */
+      effective_start_date: string;
+      /** Format: date */
+      effective_end_date: string;
+      /** Format: date */
+      result_date: string;
+      data_through: string | null;
+      comparisons: components['schemas']['MarketingTestProgressComparison'][];
+      deviations: components['schemas']['MarketingTestDeviation'][];
+      changed_ads: components['schemas']['MarketingTestChangedAd'][];
+    };
+    /** @description One compared group of ads (a claim, a way of telling it, or the one ad) as its reports stand today. */
+    MarketingTestProgressComparison: {
+      id: string;
+      label: string;
+      asset_version_ids: string[];
+      spend: string;
+      purchases: string;
+      cost_per_purchase: string | null;
+      remaining_purchases: number;
+      conditions_changed: boolean;
     };
     /**
      * @description Whether the money answers the round's question, when the result is due and what starting costs at most.
@@ -11763,6 +11965,15 @@ export interface components {
       /** @default  */
       operator_note: string;
     };
+    /**
+     * @description Something that ran differently from the plan for these ads of the round's package (design §5.7).
+     *
+     *     The compared groups holding them draw no conclusion this round; the page says so before it is sent.
+     */
+    RecordMarketingTestDeviation: {
+      asset_version_ids: string[];
+      note: string;
+    };
     RecoveryPreviewInput: {
       command: string;
       selection: components['schemas']['RecoveryPreviewSelection'];
@@ -12459,6 +12670,15 @@ export interface components {
       /** @default  */
       quote_hash: string;
       addition?: components['schemas']['IdeasAddition'] | null;
+    };
+    /**
+     * @description The start command (#249): what the user saw on the quote -- the answers it was read with, its hash and the
+     *     kept ads -- confirmed with one click. Anything that changed since refuses the start (``test_quote_changed``).
+     */
+    StartMarketingTest: {
+      answers: components['schemas']['MarketingTestAnswers'];
+      quote_hash: string;
+      asset_version_ids: string[];
     };
     StartPreparationInput: {
       truth_resolution_policy_version_id: string;
@@ -19183,6 +19403,44 @@ export interface operations {
       };
     };
   };
+  start_marketing_test: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StartMarketingTest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   edit_marketing_ideas_understanding: {
     parameters: {
       query?: never;
@@ -20560,6 +20818,45 @@ export interface operations {
       };
     };
   };
+  record_marketing_test_deviation: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RecordMarketingTestDeviation'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestProgress'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   end_marketing_test_round_early: {
     parameters: {
       query?: never;
@@ -20586,6 +20883,38 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['MarketingTestRoundSchedule'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  get_marketing_test_progress: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        test_id: string;
+        round_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestProgress'];
         };
       };
       /** @description Validation Error */

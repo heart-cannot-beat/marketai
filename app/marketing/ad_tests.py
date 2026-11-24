@@ -11,9 +11,12 @@ pytest ``test_*`` module.
 """
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import or_, select
 
-from app.adapters.persistence.models import AuditEventRecord, ProductRecord
+from app.adapters.persistence.models import AuditEventRecord, ProductRecord, new_id
+from app.platform.audit import append_event
 
 from . import service
 from .models import MarketingProjectRecord
@@ -148,7 +151,15 @@ def quote(session, ctx, ideas_row, answers) -> dict:
     may not be exported (each named), kept ads mix Controlled Mock and real ones, a real test would start in the
     past, there is no landing page, the plan the template writes fails a confirming check (``plan_error``), or
     the check cannot be admitted."""
+    return _quoted(session, ctx, ideas_row, answers)[0]
+
+
+def _quoted(session, ctx, ideas_row, answers):
+    """The quote, and what starting the test takes from it: the kept ads with their images and recipes, the plan
+    and the round to freeze. The start command (#249) runs this same computation, so the hash it confirms
+    covers exactly what it starts."""
     from datetime import timedelta
+    from types import SimpleNamespace
     from zoneinfo import ZoneInfo
     from pydantic import ValidationError
     from app.adapters.persistence.models import utcnow
@@ -202,13 +213,13 @@ def quote(session, ctx, ideas_row, answers) -> dict:
                                       and ad.combination_id in {c.id for c in doc.combinations} for ad in kept)
     items = plans.subjects(doc, kept, comparison) if kept and present else []
     share = plans.estimate(len(items), answers.round_budget, answers.target_cost, protocol) if items else None
-    plan = None
+    plan = freeze = None
     if reason is None:
         try:
             plan = plans.build_plan(ideas_row, kept, answers, conditions, protocol)
             plans.check_plan(ideas_row, plan)
-            FreezeRound(start_date=start, end_date=end, account_timezone=timezone, execution_mode=mode, protocol=protocol,
-                        attribution_window=answers.attribution_window or plans.ATTRIBUTION_WINDOW)
+            freeze = FreezeRound(start_date=start, end_date=end, account_timezone=timezone, execution_mode=mode,
+                                 protocol=protocol, attribution_window=answers.attribution_window or plans.ATTRIBUTION_WINDOW)
         except ValidationError as exc:
             reason, plan_error, plan = "plan_invalid", exc.errors()[0]["type"], None
         except service.MarketingError as exc:
@@ -221,6 +232,7 @@ def quote(session, ctx, ideas_row, answers) -> dict:
                 "attribution_window": window, "execution_mode": mode}
     digest = plans.quote_hash(ideas_row.revision, kept, answers, resolved, checks, protocol,
                               plan.model_dump(mode="json") if plan else None)
+    made = SimpleNamespace(pairs=pairs, kept=kept, plan=plan, freeze=freeze)
     return {"available": reason is None, "unavailable_reason": reason, "plan_error": plan_error,
             "not_exportable": refused, "ideas_revision": ideas_row.revision, "execution_mode": mode,
             "comparison": comparison,
@@ -236,7 +248,147 @@ def quote(session, ctx, ideas_row, answers) -> dict:
             "attribution_window": window, "attribution_lag_days": protocol.attribution_lag_days,
             "landing_page": landing, "landing_page_source": ("answer" if answers.landing_page else "product_link") if landing else None,
             "checks": {key: checks[key] for key in ("available", "unavailable_reason", "quantity", "maximum_cost", "currency")},
-            "quote_hash": digest}
+            "quote_hash": digest}, made
+
+
+#: Shared review values that mean a person judged the image not good enough (plan E5).
+NOT_PASSED = ("rejected", "needs_changes")
+
+
+def start(session, ctx, ideas_row, revision: int, body) -> MarketingProjectRecord:
+    """Start a test of these ideas' kept ads (design §5.1, §5.3-§5.5, #249): one command, one transaction.
+
+    It creates the test project with the plan the quote wrote, confirmed as revision 1; freezes its round with the
+    quoted dates, mode and protocol (plan E9); puts each kept ad into the round as it is, under the combination
+    its image was made from (plan E4); and admits the "look together" check of each ad, reserving its maximum in
+    BYOK (plan E6). Each step writes its own audit event. The ideas and their ads are not changed.
+
+    Refused with 409, writing nothing: the ideas changed since the page read them (``stale_marketing_revision``);
+    the product has a test in progress (``test_in_progress``, plan E3); what the quote covered changed since --
+    a kept ad, what it was made from, an answer, a default, the check maximum (``test_quote_changed``, plan E8);
+    the quote cannot start a test (its ``unavailable_reason``, ``ads_not_exportable`` naming each ad); a kept ad
+    is not passed on the Workspace's shared review chain (``ad_review_rejected``, plan E5)."""
+    from app.generation.review import project_effective_review
+    from . import workflow
+    from .ad_test_plans import understanding
+    from .plan_review import stored_plan
+    service.ensure_active(session, ctx)
+    # One start at a time in a Workspace (PostgreSQL), and no change of the ideas meanwhile: what is in progress,
+    # what is kept and what the quote says are all read after both locks. SQLite serializes writers anyway.
+    workflow.serialize_workspace(session, ctx)
+    session.execute(select(MarketingProjectRecord.id).where(MarketingProjectRecord.workspace_id == ctx.workspace_id,
+        MarketingProjectRecord.id == ideas_row.id).with_for_update())
+    session.refresh(ideas_row)
+    if ideas_row.revision != revision:
+        raise service.MarketingError("stale_marketing_revision", "内容已更新，请刷新后重试。", 409)
+    running = in_progress(session, ctx, ideas_row.product_id)
+    if running is not None:
+        raise service.MarketingError("test_in_progress", "这个产品已有一个进行中的测试：结束或取消它之后，才能开始下一个。",
+                                     409, params={"test_id": running.id})
+    quoted, made = _quoted(session, ctx, ideas_row, body.answers)
+    if quoted["quote_hash"] != body.quote_hash or sorted(set(body.asset_version_ids)) != sorted(
+            ad.asset_version_id for ad in made.kept):
+        raise service.MarketingError("test_quote_changed", "留下的广告或报价有变化，请看一眼再开始。", 409)
+    if not quoted["available"]:
+        _refuse(quoted)
+    rejected = sorted(ad.asset_version_id for ad in made.kept
+                      if project_effective_review(session, ctx, ad.asset_version_id) in NOT_PASSED)
+    if rejected:
+        raise service.MarketingError("ad_review_rejected", "有留下的广告在别处已被判为不通过，不能拿去测试：换一张或去掉它。",
+                                     409, params={"asset_version_ids": rejected})
+
+    row = MarketingProjectRecord(id=new_id("mp"), workspace_id=ctx.workspace_id, product_id=ideas_row.product_id,
+        flow=FLOW, state="plan_confirmed", revision=1, source_text=ideas_row.source_text,
+        understanding_json=understanding(ideas_row), plan_json=stored_plan(made.plan, None),
+        market=ideas_row.market, ad_language=ideas_row.ad_language, source_project_id=ideas_row.id)
+    session.add(row)
+    session.flush()
+    service.checkpoint(session, ctx, row, "confirm_plan")
+    frozen = workflow.freeze(session, ctx, row, row.revision, made.freeze)
+    _attach_kept(session, ctx, ideas_row, frozen, made)
+    calls, maximum = _admit_checks(session, ctx, frozen, quoted)
+    append_event(session, event_type="marketing.test_started", resource_type="marketing_project", resource_id=row.id,
+                 details={"source_project_id": ideas_row.id, "ideas_revision": ideas_row.revision,
+                          "quote_hash": quoted["quote_hash"], "round_id": frozen.id,
+                          "asset_version_ids": sorted(ad.asset_version_id for ad in made.kept),
+                          "check_ids": [call.id for call in calls], "maximum_cost": maximum})
+    session.flush()
+    return row
+
+
+def _refuse(quoted) -> None:
+    """The quote's own reason as the start's refusal: the page shows the same quote, so it already says why."""
+    reason = quoted["unavailable_reason"]
+    if reason == "ads_not_exportable":
+        raise service.MarketingError("ads_not_exportable", "有留下的广告还不能导出：先到广告想法页核对，需要重出的请先重出。",
+                                     409, params={"ads": quoted["not_exportable"]})
+    if reason == "checks_unavailable":
+        raise service.MarketingError("checks_unavailable", "现在不能受理“一起看”的检查，测试没有开始。", 409,
+                                     params={"reason": quoted["checks"]["unavailable_reason"]})
+    if reason == "plan_invalid":
+        raise service.MarketingError("plan_invalid", "按这些回答生成的方案没有通过检查，测试没有开始。", 409,
+                                     params={"plan_error": quoted["plan_error"]})
+    if reason == "ideas_not_ready":
+        raise service.MarketingError("ideas_not_ready", "广告想法还没准备好。", 409)
+    if reason == "no_kept_ads":
+        raise service.MarketingError("no_kept_ads", "还没有留下的广告：先在广告想法页留下要测试的广告。", 409)
+    if reason == "ads_execution_mixed":
+        raise service.MarketingError("ads_execution_mixed", "留下的广告里既有示例广告又有真实广告，不能放在同一个测试里。", 409)
+    if reason == "start_date_past":
+        raise service.MarketingError("start_date_past", "真实投放的开始日期不能早于今天。", 409)
+    if reason == "landing_page_required":
+        raise service.MarketingError("landing_page_required", "请填写广告点进去的网址。", 409)
+    raise RuntimeError(f"Unknown quote refusal: {reason}")
+
+
+def _attach_kept(session, ctx, ideas_row, frozen, made) -> None:
+    """Each kept ad goes into the round as it is (plan E4, design §5.4): a reuse record naming the ideas, the ad,
+    the intent its image was made from and the verification it stands on, under that intent's combination."""
+    from app.generation.paid_execution import asset_blob_ref
+    from . import workflow
+    from .models import MarketingIdeasExportRecord
+    from .reuse import IDEAS, MAX_CHECKABLE_BYTES
+    from .workflow_models import MarketingCreativeReuseRecord as Reuse
+    combos = {c["id"]: c for c in frozen.snapshot_json["plan"]["combinations"]}
+    verification = session.scalar(select(MarketingIdeasExportRecord.id).where(
+        MarketingIdeasExportRecord.workspace_id == ctx.workspace_id, MarketingIdeasExportRecord.project_id == ideas_row.id,
+        MarketingIdeasExportRecord.kind == "verification")
+        .order_by(MarketingIdeasExportRecord.created_at.desc(), MarketingIdeasExportRecord.id.desc()).limit(1))
+    for (version, _), ad in zip(made.pairs, made.kept):
+        if not version.mime_type.startswith("image/") or version.byte_size > MAX_CHECKABLE_BYTES:
+            raise service.MarketingError("asset_not_checkable", "素材不是支持检查的图片。", 409,
+                                         params={"asset_version_id": version.id})
+        asset_blob_ref(session, ctx, version.id)  # the exact committed file is required, as for any reuse
+        source = {"kind": IDEAS, "ideas_project_id": ideas_row.id, "asset_version_id": version.id,
+                  "asset_id": version.asset_id, "product_id": ideas_row.product_id, "execution_mode": version.execution_mode,
+                  "content_sha256": version.content_sha256, "intent_hash": ad.intent_hash,
+                  "verification_record_id": verification, "plan_hash": frozen.snapshot_json["plan_hash"],
+                  "combination": combos[ad.combination_id]}
+        session.add(Reuse(id=new_id("mreuse"), workspace_id=ctx.workspace_id, round_id=frozen.id,
+                          asset_version_id=version.id, combination_id=ad.combination_id, source_json=source,
+                          source_hash=service.digest(source), actor_id=ctx.initiator_id or ctx.executor))
+        workflow.audit(session, frozen, "creative_reused", {"asset_version_id": version.id,
+            "combination_id": ad.combination_id, "source_hash": service.digest(source), "kind": IDEAS,
+            "ideas_project_id": ideas_row.id})
+    session.flush()
+
+
+def _admit_checks(session, ctx, frozen, quoted):
+    """The "look together" check of every kept ad (plan E6): the round's own paired check, admitted by the API --
+    one Operation, one single-attempt Job and, in BYOK, the reservation of its maximum each. It must be exactly
+    what the quote put on the button; anything else refuses the start (``checks_unavailable``)."""
+    from . import ai_qc, workflow
+    checks, inputs, cap = ai_qc.quote_and_inputs(session, ctx, frozen, "paired")
+    expected = quoted["checks"]
+    if (not checks["available"] or checks["quantity"] != expected["quantity"]
+            or Decimal(checks["maximum_cost"]) != Decimal(expected["maximum_cost"])):
+        raise service.MarketingError("checks_unavailable", "现在不能受理“一起看”的检查，测试没有开始。", 409,
+                                     params={"reason": checks["unavailable_reason"] or "checks_changed"})
+    calls = [ai_qc.admit_call(session, ctx, item, cap, kind="paired", policy=ai_qc.POLICIES["paired"],
+                              execution_mode=frozen.execution_mode, round_id=frozen.id) for item in inputs]
+    workflow.audit(session, frozen, "ai_qc_requested", {"kind": "paired", "call_ids": [call.id for call in calls],
+        "quote_hash": checks["quote_hash"], "maximum_cost": checks["maximum_cost"]})
+    return calls, checks["maximum_cost"]
 
 
 def history(session, ctx, product_id: str) -> dict:

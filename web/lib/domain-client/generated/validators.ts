@@ -10146,6 +10146,113 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'feedback_drafts',
     ],
   },
+  MarketingTestAnswers: {
+    properties: {
+      target_cost: {
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
+      },
+      round_budget: {
+        anyOf: [{ type: 'number', exclusiveMinimum: 0 }, { type: 'string' }],
+      },
+      duration_days: { type: 'integer', maximum: 90, minimum: 7 },
+      landing_page: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, pattern: '^https?://\\S+$' },
+          { type: 'null' },
+        ],
+      },
+      audience: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+      offer: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+      placement: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+      currency: {
+        anyOf: [
+          {
+            type: 'string',
+            enum: [
+              'AED',
+              'AUD',
+              'BRL',
+              'CAD',
+              'CHF',
+              'CNY',
+              'EUR',
+              'GBP',
+              'HKD',
+              'IDR',
+              'INR',
+              'JPY',
+              'KRW',
+              'MXN',
+              'MYR',
+              'NZD',
+              'PHP',
+              'PLN',
+              'SAR',
+              'SEK',
+              'SGD',
+              'THB',
+              'TWD',
+              'USD',
+              'VND',
+              'ZAR',
+            ],
+          },
+          { type: 'null' },
+        ],
+      },
+      account_timezone: {
+        anyOf: [{ type: 'string', maxLength: 64 }, { type: 'null' }],
+      },
+      start_date: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      attribution_window: {
+        anyOf: [
+          {
+            type: 'string',
+            enum: [
+              '1d_click',
+              '7d_click',
+              '1d_view',
+              '1d_click_1d_view',
+              '7d_click_1d_view',
+            ],
+          },
+          { type: 'null' },
+        ],
+      },
+      max_small_rounds: {
+        anyOf: [{ type: 'integer', maximum: 20, minimum: 1 }, { type: 'null' }],
+      },
+      media_budget: {
+        anyOf: [
+          { type: 'number', exclusiveMinimum: 0 },
+          { type: 'string' },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['target_cost', 'round_budget', 'duration_days'],
+    description:
+      "What taking kept ads to a test asks (design §5.2): three answers, the landing page when the product has\nno link, and any default the user changed. Read from the quote's query; the start command (#249) sends the\nsame answers with the quote hash it confirms.",
+  },
   MarketingTestBinding: {
     properties: {
       id: { type: 'string' },
@@ -10305,6 +10412,21 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['round_id', 'ad_account_id', 'locked', 'bindings', 'history'],
   },
+  MarketingTestChangedAd: {
+    properties: {
+      asset_version_id: { type: 'string' },
+      changes: {
+        items: { type: 'string', enum: ['fact', 'photo', 'copy'] },
+        type: 'array',
+      },
+      fact_ids: { items: { type: 'string' }, type: 'array' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_id', 'changes', 'fact_ids'],
+    description:
+      'An ad of the round whose fact, photo or copy the ads-first ideas changed after the test started (§5.8).\n\nThe running test keeps what it started on: its evaluation and ad package do not change. The Meta ad still\nshows the old content, so the page suggests stopping it or making it again.',
+  },
   MarketingTestChecks: {
     properties: {
       available: { type: 'boolean' },
@@ -10370,6 +10492,26 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'plan_summary',
       'rounds',
       'current_round_id',
+      'created_at',
+    ],
+  },
+  MarketingTestDeviation: {
+    properties: {
+      id: { type: 'string' },
+      asset_version_ids: { items: { type: 'string' }, type: 'array' },
+      note: { type: 'string' },
+      comparison_ids: { items: { type: 'string' }, type: 'array' },
+      actor_id: { type: 'string' },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'asset_version_ids',
+      'note',
+      'comparison_ids',
+      'actor_id',
       'created_at',
     ],
   },
@@ -10497,6 +10639,110 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     ],
     description:
       "The parts of the test's plan the user chose or can see at a glance; money in the plan's currency.",
+  },
+  MarketingTestProgress: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      revision: { type: 'integer' },
+      provisional: { type: 'boolean', const: true, default: true },
+      currency: {
+        type: 'string',
+        enum: [
+          'AED',
+          'AUD',
+          'BRL',
+          'CAD',
+          'CHF',
+          'CNY',
+          'EUR',
+          'GBP',
+          'HKD',
+          'IDR',
+          'INR',
+          'JPY',
+          'KRW',
+          'MXN',
+          'MYR',
+          'NZD',
+          'PHP',
+          'PLN',
+          'SAR',
+          'SEK',
+          'SGD',
+          'THB',
+          'TWD',
+          'USD',
+          'VND',
+          'ZAR',
+        ],
+      },
+      target_cost: { type: 'string' },
+      min_purchases: { type: 'integer' },
+      effective_start_date: { type: 'string', format: 'date' },
+      effective_end_date: { type: 'string', format: 'date' },
+      result_date: { type: 'string', format: 'date' },
+      data_through: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      comparisons: {
+        items: { $ref: '#/components/schemas/MarketingTestProgressComparison' },
+        type: 'array',
+      },
+      deviations: {
+        items: { $ref: '#/components/schemas/MarketingTestDeviation' },
+        type: 'array',
+      },
+      changed_ads: {
+        items: { $ref: '#/components/schemas/MarketingTestChangedAd' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'test_id',
+      'round_id',
+      'revision',
+      'currency',
+      'target_cost',
+      'min_purchases',
+      'effective_start_date',
+      'effective_end_date',
+      'result_date',
+      'data_through',
+      'comparisons',
+      'deviations',
+      'changed_ads',
+    ],
+    description:
+      "``get_marketing_test_progress``: the round's numbers so far (design §5.7). Reading it evaluates nothing.",
+  },
+  MarketingTestProgressComparison: {
+    properties: {
+      id: { type: 'string' },
+      label: { type: 'string' },
+      asset_version_ids: { items: { type: 'string' }, type: 'array' },
+      spend: { type: 'string' },
+      purchases: { type: 'string' },
+      cost_per_purchase: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      remaining_purchases: { type: 'integer' },
+      conditions_changed: { type: 'boolean' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'label',
+      'asset_version_ids',
+      'spend',
+      'purchases',
+      'cost_per_purchase',
+      'remaining_purchases',
+      'conditions_changed',
+    ],
+    description:
+      'One compared group of ads (a claim, a way of telling it, or the one ad) as its reports stand today.',
   },
   MarketingTestQuote: {
     properties: {
@@ -12425,6 +12671,22 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     },
     type: 'object',
   },
+  RecordMarketingTestDeviation: {
+    properties: {
+      asset_version_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 50,
+        minItems: 1,
+      },
+      note: { type: 'string', maxLength: 2000, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_ids', 'note'],
+    description:
+      "Something that ran differently from the plan for these ads of the round's package (design §5.7).\n\nThe compared groups holding them draw no conclusion this round; the page says so before it is sent.",
+  },
   RecoveryPreviewInput: {
     properties: {
       command: { type: 'string', minLength: 1 },
@@ -13547,6 +13809,22 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     required: ['kind', 'execution_mode'],
     description:
       'Draft the product understanding, or the ideas from it; no fact needs checking first (ADR 0018).\n\nWith ``addition`` (``kind = "ideas"`` only, #200) the call adds one claim or one way of telling to the\ndrafted ideas instead of drafting them again; it costs one planning call, quoted like any other.',
+  },
+  StartMarketingTest: {
+    properties: {
+      answers: { $ref: '#/components/schemas/MarketingTestAnswers' },
+      quote_hash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+      asset_version_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 200,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['answers', 'quote_hash', 'asset_version_ids'],
+    description:
+      'The start command (#249): what the user saw on the quote -- the answers it was read with, its hash and the\nkept ads -- confirmed with one click. Anything that changed since refuses the start (``test_quote_changed``).',
   },
   StartPreparationInput: {
     properties: {
@@ -21321,6 +21599,84 @@ const SCHEMAS: Record<string, object> = {
       'created_at',
     ],
   },
+  get_marketing_test_progress_200: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      revision: { type: 'integer' },
+      provisional: { type: 'boolean', const: true, default: true },
+      currency: {
+        type: 'string',
+        enum: [
+          'AED',
+          'AUD',
+          'BRL',
+          'CAD',
+          'CHF',
+          'CNY',
+          'EUR',
+          'GBP',
+          'HKD',
+          'IDR',
+          'INR',
+          'JPY',
+          'KRW',
+          'MXN',
+          'MYR',
+          'NZD',
+          'PHP',
+          'PLN',
+          'SAR',
+          'SEK',
+          'SGD',
+          'THB',
+          'TWD',
+          'USD',
+          'VND',
+          'ZAR',
+        ],
+      },
+      target_cost: { type: 'string' },
+      min_purchases: { type: 'integer' },
+      effective_start_date: { type: 'string', format: 'date' },
+      effective_end_date: { type: 'string', format: 'date' },
+      result_date: { type: 'string', format: 'date' },
+      data_through: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      comparisons: {
+        items: { $ref: '#/components/schemas/MarketingTestProgressComparison' },
+        type: 'array',
+      },
+      deviations: {
+        items: { $ref: '#/components/schemas/MarketingTestDeviation' },
+        type: 'array',
+      },
+      changed_ads: {
+        items: { $ref: '#/components/schemas/MarketingTestChangedAd' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'test_id',
+      'round_id',
+      'revision',
+      'currency',
+      'target_cost',
+      'min_purchases',
+      'effective_start_date',
+      'effective_end_date',
+      'result_date',
+      'data_through',
+      'comparisons',
+      'deviations',
+      'changed_ads',
+    ],
+    description:
+      "``get_marketing_test_progress``: the round's numbers so far (design §5.7). Reading it evaluates nothing.",
+  },
   get_marketing_test_quote_200: {
     properties: {
       available: { type: 'boolean' },
@@ -24018,6 +24374,100 @@ const SCHEMAS: Record<string, object> = {
       { $ref: '#/components/schemas/LibraryCommandNotApplied' },
     ],
   },
+  record_marketing_test_deviation_201: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      revision: { type: 'integer' },
+      provisional: { type: 'boolean', const: true, default: true },
+      currency: {
+        type: 'string',
+        enum: [
+          'AED',
+          'AUD',
+          'BRL',
+          'CAD',
+          'CHF',
+          'CNY',
+          'EUR',
+          'GBP',
+          'HKD',
+          'IDR',
+          'INR',
+          'JPY',
+          'KRW',
+          'MXN',
+          'MYR',
+          'NZD',
+          'PHP',
+          'PLN',
+          'SAR',
+          'SEK',
+          'SGD',
+          'THB',
+          'TWD',
+          'USD',
+          'VND',
+          'ZAR',
+        ],
+      },
+      target_cost: { type: 'string' },
+      min_purchases: { type: 'integer' },
+      effective_start_date: { type: 'string', format: 'date' },
+      effective_end_date: { type: 'string', format: 'date' },
+      result_date: { type: 'string', format: 'date' },
+      data_through: {
+        anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+      },
+      comparisons: {
+        items: { $ref: '#/components/schemas/MarketingTestProgressComparison' },
+        type: 'array',
+      },
+      deviations: {
+        items: { $ref: '#/components/schemas/MarketingTestDeviation' },
+        type: 'array',
+      },
+      changed_ads: {
+        items: { $ref: '#/components/schemas/MarketingTestChangedAd' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'test_id',
+      'round_id',
+      'revision',
+      'currency',
+      'target_cost',
+      'min_purchases',
+      'effective_start_date',
+      'effective_end_date',
+      'result_date',
+      'data_through',
+      'comparisons',
+      'deviations',
+      'changed_ads',
+    ],
+    description:
+      "``get_marketing_test_progress``: the round's numbers so far (design §5.7). Reading it evaluates nothing.",
+  },
+  record_marketing_test_deviation_request: {
+    properties: {
+      asset_version_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 50,
+        minItems: 1,
+      },
+      note: { type: 'string', maxLength: 2000, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_ids', 'note'],
+    description:
+      "Something that ran differently from the plan for these ads of the round's package (design §5.7).\n\nThe compared groups holding them draw no conclusion this round; the page says so before it is sent.",
+  },
   recover_meta_launch_operation_202: {
     properties: {
       id: { type: 'string' },
@@ -25267,6 +25717,51 @@ const SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['kind', 'execution_mode'],
+  },
+  start_marketing_test_201: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      product_id: { type: 'string' },
+      source_project_id: { type: 'string' },
+      comparison: { type: 'string', enum: ['claims', 'expressions', 'single'] },
+      plan_summary: { $ref: '#/components/schemas/MarketingTestPlanSummary' },
+      rounds: {
+        items: { $ref: '#/components/schemas/MarketingTestRoundSummary' },
+        type: 'array',
+      },
+      current_round_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'product_id',
+      'source_project_id',
+      'comparison',
+      'plan_summary',
+      'rounds',
+      'current_round_id',
+      'created_at',
+    ],
+  },
+  start_marketing_test_request: {
+    properties: {
+      answers: { $ref: '#/components/schemas/MarketingTestAnswers' },
+      quote_hash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+      asset_version_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 200,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['answers', 'quote_hash', 'asset_version_ids'],
+    description:
+      'The start command (#249): what the user saw on the quote -- the answers it was read with, its hash and the\nkept ads -- confirmed with one click. Anything that changed since refuses the start (``test_quote_changed``).',
   },
   submit_generation_run_202: {
     properties: {
@@ -26682,6 +27177,10 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     ['get_marketing_round_200', VALIDATOR_FUNCTIONS['get_marketing_round_200']],
     ['get_marketing_test_200', VALIDATOR_FUNCTIONS['get_marketing_test_200']],
     [
+      'get_marketing_test_progress_200',
+      VALIDATOR_FUNCTIONS['get_marketing_test_progress_200'],
+    ],
+    [
       'get_marketing_test_quote_200',
       VALIDATOR_FUNCTIONS['get_marketing_test_quote_200'],
     ],
@@ -27049,6 +27548,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['reconcile_library_command_outcome_200'],
     ],
     [
+      'record_marketing_test_deviation_201',
+      VALIDATOR_FUNCTIONS['record_marketing_test_deviation_201'],
+    ],
+    [
+      'record_marketing_test_deviation_request',
+      VALIDATOR_FUNCTIONS['record_marketing_test_deviation_request'],
+    ],
+    [
       'recover_meta_launch_operation_202',
       VALIDATOR_FUNCTIONS['recover_meta_launch_operation_202'],
     ],
@@ -27241,6 +27748,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'start_marketing_planning_request',
       VALIDATOR_FUNCTIONS['start_marketing_planning_request'],
+    ],
+    [
+      'start_marketing_test_201',
+      VALIDATOR_FUNCTIONS['start_marketing_test_201'],
+    ],
+    [
+      'start_marketing_test_request',
+      VALIDATOR_FUNCTIONS['start_marketing_test_request'],
     ],
     [
       'submit_generation_run_202',
@@ -27853,6 +28368,11 @@ export const REQUEST_VALIDATORS = {
   ] as ValidateFunction<
     DomainOperationMap['reconcile_generation_run']['requestBody']
   >,
+  record_marketing_test_deviation: VALIDATOR_FUNCTIONS[
+    'record_marketing_test_deviation_request'
+  ] as ValidateFunction<
+    DomainOperationMap['record_marketing_test_deviation']['requestBody']
+  >,
   recover_meta_launch_operation: VALIDATOR_FUNCTIONS[
     'recover_meta_launch_operation_request'
   ] as ValidateFunction<
@@ -27964,6 +28484,11 @@ export const REQUEST_VALIDATORS = {
     'start_marketing_planning_request'
   ] as ValidateFunction<
     DomainOperationMap['start_marketing_planning']['requestBody']
+  >,
+  start_marketing_test: VALIDATOR_FUNCTIONS[
+    'start_marketing_test_request'
+  ] as ValidateFunction<
+    DomainOperationMap['start_marketing_test']['requestBody']
   >,
   submit_generation_run: VALIDATOR_FUNCTIONS[
     'submit_generation_run_request'

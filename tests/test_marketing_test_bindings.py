@@ -434,7 +434,7 @@ class BindingMigrationDowngradeTests(unittest.TestCase):
                            " '{}', '2026-11-22', ?, 0)", (binding_id, replaces_id))
 
     def test_downgrade_without_changes_restores_one_binding_per_meta_ad(self):
-        downgraded = self.alembic("downgrade", "zzu253a1b2c3")
+        downgraded = self.alembic("downgrade", "zzv254a1b2c3")
         self.assertEqual(downgraded.returncode, 0, downgraded.stderr)
         self.assertFalse({"replaces_id", "removed", "actor_id"} & self.columns())
         with sqlite3.connect(self.database) as connection:
@@ -451,7 +451,7 @@ class BindingMigrationDowngradeTests(unittest.TestCase):
             connection.execute("PRAGMA foreign_keys = OFF")
             self.insert(connection, "mab_1")
             self.insert(connection, "mab_2", replaces_id="mab_1")
-        downgraded = self.alembic("downgrade", "zzu253a1b2c3")
+        downgraded = self.alembic("downgrade", "zzv254a1b2c3")
         self.assertNotEqual(downgraded.returncode, 0)
         self.assertIn("binding changes exist", downgraded.stderr)
         self.assertIn("replaces_id", self.columns())
@@ -469,3 +469,22 @@ class ScaleReadsCurrentMatchesTests(BindingFixtures):
                 observed = SimpleNamespace(ad_account_id=ACCOUNT, ad_remote_id=ad)
                 found = list(_marketing_ad_bindings(session, self.context, observed))
                 self.assertEqual([b.asset_version_id for b in found], expected, ad)
+
+
+class BindingsWithDeviationsTests(BindingFixtures):
+    def test_an_evaluation_reads_the_current_matches_with_the_deviations_of_their_ads(self):
+        test_id, round_id, (first, second) = self.package_round()
+        self.bind(test_id, round_id, {"1001": first["entry_id"], "1002": second["entry_id"]})
+        self.bind(test_id, round_id, {"1001": second["entry_id"], "1002": None})
+        # A deviation recorded for the image the Meta ad shows now (#254).
+        response = self.client.post(f"/api/v1/marketing/tests/{test_id}/rounds/{round_id}/deviations",
+                                    headers=self.headers(self.revision(round_id)),
+                                    json={"asset_version_ids": [second["asset_version_id"]],
+                                          "note": "The Brightvolt-style audience was added in Meta on day 2"})
+        self.assertEqual(response.status_code, 201, response.text)
+        with tenant_session(self.context) as session:
+            row = workflow.get_round(session, self.context, round_id)
+            bindings, deviation_ids = workflow.evaluation_bindings(session, self.context, row)
+        self.assertEqual([(b["ad_id"], b["entry_id"], b["deviations"]) for b in bindings],
+                         [("1001", second["entry_id"], ["The Brightvolt-style audience was added in Meta on day 2"])])
+        self.assertEqual(len(deviation_ids), 1)

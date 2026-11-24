@@ -40,8 +40,7 @@ def current_evidence(session, ctx, evaluation_id, asset_id, *, require_combinati
     latest = w.latest_evaluation(session, ctx, row)
     batches = w.active_batches(session, ctx, row)
     inputs = evaluation.input_json
-    bindings = [{"entry_id": b.entry_id, "ad_id": b.ad_id, **b.conditions_json}
-        for b in sorted(w.round_bindings(session, ctx, row), key=lambda b: b.id)]
+    bindings, _ = w.evaluation_bindings(session, ctx, row)
     if (not w.evaluation_current(session, ctx, row, evaluation)
             or row.state not in ("evaluated", "closed") or row.execution_mode != "byok"
             or not latest or latest.id != evaluation.id or not batches

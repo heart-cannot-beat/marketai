@@ -1,8 +1,8 @@
 """Authenticated v1 endpoints for test projects (ADR 0019, #247).
 
 A test's rounds are read and driven by round id through ``api.py``; these endpoints read the test itself,
-quote a test of the kept ads of ads-first ideas before it starts (#248), and list a product's test
-history (#255).
+quote a test of the kept ads of ads-first ideas before it starts (#248), start it (#249), and list a
+product's test history (#255).
 """
 from typing import Annotated
 
@@ -15,7 +15,8 @@ from app.platform.http_identity import request_tenant_context
 from app.platform.tenancy import TenantContext
 from . import ad_test_schedule, ad_tests, ideas, workflow
 from .ad_tests_contracts import (EndMarketingTestRoundEarly, MarketingTestAnswers, MarketingTestDetail,
-    MarketingTestHistory, MarketingTestQuote, MarketingTestResult, MarketingTestRoundSchedule, MoveMarketingTestStart)
+    MarketingTestHistory, MarketingTestQuote, MarketingTestResult, MarketingTestRoundSchedule, MoveMarketingTestStart,
+    StartMarketingTest)
 from .service import MarketingError
 
 router = APIRouter(prefix="/marketing/tests", tags=["marketing"])
@@ -107,6 +108,24 @@ def get_test_quote(project_id: str, answers: Annotated[MarketingTestAnswers, Que
         return ad_tests.quote(session, ctx, ideas.get_ideas_project(session, ctx, project_id), answers)
 
 
+@ideas_router.post("/{project_id}/tests", operation_id="start_marketing_test", response_model=MarketingTestDetail,
+                   status_code=201, openapi_extra={"x-marketai-idempotent": True})
+def start_test(project_id: str, body: StartMarketingTest, request: Request, response: Response,
+               ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+               if_match: str | None = Header(default=None, alias="If-Match")):
+    """Start a test of these ideas' kept ads with the quote the page shows (#249): the test project and its
+    confirmed plan, its frozen round with every kept ad in it as it is, and the "look together" check of each ad
+    -- at most the quote's maximum. ``If-Match`` names the ideas' revision; the ideas themselves do not change.
+    Replaying the same key returns the same test."""
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        row = _resource_command(session, ctx, request, key, "marketing.test.start", body.model_dump(mode="json"),
+            lambda s: ad_tests.start(s, ctx, ideas.get_ideas_project(s, ctx, project_id), revision, body),
+            lambda s, resource: ad_tests.get_test(s, ctx, resource))
+        set_etag(response, row.revision)
+        return ad_tests.detail(session, ctx, row)
+
+
 # A test round's full reports (#251): kept as uploaded, counted by day and Meta ad, latest confirmed first.
 from fastapi import Header, Request
 
@@ -154,6 +173,47 @@ def confirm_test_report(test_id: str, round_id: str, body: BatchCommand, request
     """Count an uploaded report: for each day and Meta ad it has, it replaces what an earlier report said."""
     return _report_command(test_id, round_id, body, request, response, ctx, key,
                            "marketing.test_report_confirm", ad_test_reports.confirm)
+
+
+# A test round's numbers so far, recorded deviations and changed ads (#254).
+from . import ad_test_progress
+from .ad_test_progress_contracts import MarketingTestProgress, RecordMarketingTestDeviation
+
+
+@router.get("/{test_id}/rounds/{round_id}/progress", operation_id="get_marketing_test_progress",
+            response_model=MarketingTestProgress)
+def get_progress(test_id: str, round_id: str, response: Response, ctx: TenantContext = Depends(request_tenant_context)):
+    """Each compared group's spend, orders, cost per order and missing orders so far -- not a conclusion --, the
+    recorded deviations and the ads the ideas changed since the test started. Reading it evaluates nothing."""
+    with tenant_session(ctx) as session:
+        test, row = _test_round(session, ctx, test_id, round_id)
+        set_etag(response, row.revision)
+        return ad_test_progress.progress(session, ctx, test, row)
+
+
+@router.post("/{test_id}/rounds/{round_id}/deviations", operation_id="record_marketing_test_deviation",
+             response_model=MarketingTestProgress, status_code=201, openapi_extra={"x-marketai-idempotent": True})
+def record_deviation(test_id: str, round_id: str, body: RecordMarketingTestDeviation, request: Request, response: Response,
+                     ctx: TenantContext = Depends(request_tenant_context), key: str = Depends(_idempotency_key),
+                     if_match: str | None = Header(default=None, alias="If-Match")):
+    """Record that these ads ran differently from the plan; the groups holding them draw no conclusion this round."""
+    revision = extract_if_match(request)
+    with tenant_session(ctx) as session:
+        def run(s):
+            _, row = _test_round(s, ctx, test_id, round_id)
+            # What ran differently can come to light at any time, also once the round has ended (design §5.7).
+            workflow.mutate(s, ctx, row, revision, allow_closed_evidence=True)
+            deviation = ad_test_progress.record(s, ctx, row, body)
+            s.flush()
+            return deviation
+
+        def replay(s, deviation_id):
+            return workflow.scoped(s, ctx, ad_test_progress.Deviation, id=deviation_id)[0]
+        _resource_command(session, ctx, request, key, "marketing.test.record_deviation", body.model_dump(mode="json"),
+                          run, replay)
+        test, row = _test_round(session, ctx, test_id, round_id)
+        set_etag(response, row.revision)
+        return ad_test_progress.progress(session, ctx, test, row)
 
 
 # Which ad each Meta ad of a test round shows (#252): suggested from a report's ad names, confirmed at once.

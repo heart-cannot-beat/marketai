@@ -4019,6 +4019,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'get_marketing_test_progress',
+    {
+      operationId: 'get_marketing_test_progress',
+      method: 'GET',
+      pathTemplate:
+        '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/progress',
+      pathParams: ['test_id', 'round_id'],
+      queryParams: [],
+      requestMediaTypes: [],
+      requiresIdempotency: false,
+      maxRequestBytes: 0,
+      maxResponseBytes: 1048576,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        200: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'get_marketing_test_progress_200' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'get_marketing_test_quote',
     {
       operationId: 'get_marketing_test_quote',
@@ -6480,6 +6508,34 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
     },
   ],
   [
+    'record_marketing_test_deviation',
+    {
+      operationId: 'record_marketing_test_deviation',
+      method: 'POST',
+      pathTemplate:
+        '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/deviations',
+      pathParams: ['test_id', 'round_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 16384,
+      maxResponseBytes: 1048576,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'record_marketing_test_deviation_201' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
     'recover_meta_launch_operation',
     {
       operationId: 'recover_meta_launch_operation',
@@ -7261,6 +7317,33 @@ export const OPERATION_REGISTRY: ReadonlyMap<string, OperationEntry> = new Map([
         202: {
           mediaTypes: ['application/json'],
           body: { validatorId: 'start_marketing_planning_202' },
+          locationShapes: [],
+        },
+        422: {
+          mediaTypes: ['application/problem+json'],
+          body: { validatorId: 'problem_details' },
+          locationShapes: [],
+        },
+      },
+    },
+  ],
+  [
+    'start_marketing_test',
+    {
+      operationId: 'start_marketing_test',
+      method: 'POST',
+      pathTemplate: '/api/v1/marketing/ideas/{project_id}/tests',
+      pathParams: ['project_id'],
+      queryParams: [],
+      requestMediaTypes: ['application/json'],
+      requiresIdempotency: true,
+      maxRequestBytes: 65536,
+      maxResponseBytes: 65536,
+      responses: {
+        ...COMMON_ERROR_RESPONSES,
+        201: {
+          mediaTypes: ['application/json'],
+          body: { validatorId: 'start_marketing_test_201' },
           locationShapes: [],
         },
         422: {
