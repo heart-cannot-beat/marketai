@@ -3490,6 +3490,51 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/marketing/tests/{test_id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cancel Test
+     * @description Cancel the test before its ad package is made: its round ends as stopped by the user and is kept, so the
+     *     product has no test in progress. ``If-Match`` names the round's revision; the response is the test, with its
+     *     own revision as the ETag.
+     */
+    post: operations['cancel_marketing_test'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/marketing/tests/{test_id}/package': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Complete Test Start
+     * @description Once every "look together" check has its result: record the round's review of each kept ad -- each passed
+     *     check with the evidence it stands on, the findings the user accepted with their reason -- and request its ad
+     *     package. ``If-Match`` names the round's revision. Safe to send again: once the package exists, it is returned
+     *     whatever is sent.
+     */
+    post: operations['complete_marketing_test_start'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/marketing/tests/{test_id}/rounds/{round_id}/bindings': {
     parameters: {
       query?: never;
@@ -4833,6 +4878,13 @@ export interface components {
       check_id: string;
       finding_ids: string[];
     };
+    /** @description Findings of one kept ad's "look together" check the user accepts as they are ("this is fine"), and why. */
+    AcceptedTestFindings: {
+      asset_version_id: string;
+      check_id: string;
+      finding_ids: string[];
+      note: string;
+    };
     ActionEligibility: {
       action?: string;
       allowed?: boolean;
@@ -5677,6 +5729,10 @@ export interface components {
     BrushPoint: {
       x: number;
       y: number;
+    };
+    /** @description Cancel a test before its ad package is made: its round ends as stopped by the user, kept as it is. */
+    CancelMarketingTest: {
+      note?: string | null;
     };
     CancelResult: {
       batch_id: string;
@@ -7139,6 +7195,13 @@ export interface components {
     CompetitorTagVocabularyValue: {
       value_id: string;
       label: string;
+    };
+    /**
+     * @description After the checks (#250): record the round's review of each kept ad and make its ad package. The page sends
+     *     it once every check has its result, with the findings the user accepted; it is safe to send again.
+     */
+    CompleteMarketingTestStart: {
+      accepted_findings?: components['schemas']['AcceptedTestFindings'][];
     };
     ConceptResolutionActionRequest: {
       duplicate_group_hash: string;
@@ -10536,6 +10599,28 @@ export interface components {
       feedback_drafts: components['schemas']['FeedbackDraft'][];
       board?: components['schemas']['MarketingBoard'] | null;
     };
+    /** @description A finding of the "look together" check the user accepted as it is, with the reason they gave. */
+    MarketingTestAcceptedFinding: {
+      check_id: string;
+      finding_id: string;
+      /** @enum {string} */
+      status: 'fail' | 'unknown';
+      note: string;
+    };
+    /** @description The round's review record of one kept ad: every check it was asked, passed, each with its evidence. */
+    MarketingTestAdReview: {
+      asset_version_id: string;
+      review_id: string;
+      checks: {
+        [key: string]: 'pass';
+      };
+      evidence: {
+        [key: string]: components['schemas']['MarketingTestCheckEvidence'][];
+      };
+      accepted_findings: components['schemas']['MarketingTestAcceptedFinding'][];
+      actor_id: string;
+      created_at: string;
+    };
     /**
      * @description What taking kept ads to a test asks (design §5.2): three answers, the landing page when the product has
      *     no link, and any default the user changed. Read from the quote's query; the start command (#249) sends the
@@ -10666,6 +10751,21 @@ export interface components {
       changes: ('fact' | 'photo' | 'copy')[];
       fact_ids: string[];
     };
+    /**
+     * @description What one passed check stands on (plan E5): a finding of the ad's own check (``ideas_check``) or of the round's
+     *     "look together" check (``paired_check``) that passed or that the user accepted, or what a check before download
+     *     (``verification``) recorded -- an accepted finding, a checked fact or photo, the look of an ad made without a
+     *     photo. ``id`` is the check's or the record's.
+     */
+    MarketingTestCheckEvidence: {
+      /** @enum {string} */
+      source: 'ideas_check' | 'paired_check' | 'verification';
+      id: string;
+      finding_id?: string | null;
+      fact_id?: string | null;
+      photo_id?: string | null;
+      asset_version_id?: string | null;
+    };
     /** @description The "look together" check the start command admits (plan E6): one call per kept ad, paid in BYOK. */
     MarketingTestChecks: {
       available: boolean;
@@ -10739,6 +10839,20 @@ export interface components {
       /** Format: date */
       effective_end_date: string;
       reports: components['schemas']['MarketingTestReportUpload'][];
+    };
+    /**
+     * @description ``complete_marketing_test_start``: the round's ad package and the review of each ad in it.
+     *
+     *     The Worker builds the ZIP (``handoff_state`` queued, running, ready or failed); the round's own handoff paths
+     *     download it or try again.
+     */
+    MarketingTestPackage: {
+      test_id: string;
+      round_id: string;
+      handoff_id: string;
+      /** @enum {string} */
+      handoff_state: 'queued' | 'running' | 'ready' | 'failed';
+      reviews: components['schemas']['MarketingTestAdReview'][];
     };
     /** @description The parts of the test's plan the user chose or can see at a glance; money in the plan's currency. */
     MarketingTestPlanSummary: {
@@ -20730,6 +20844,82 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['MarketingTestDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  cancel_marketing_test: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        test_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CancelMarketingTest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestDetail'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  complete_marketing_test_start: {
+    parameters: {
+      query?: never;
+      header: {
+        'If-Match'?: string | null;
+        'Idempotency-Key': string;
+      };
+      path: {
+        test_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CompleteMarketingTestStart'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MarketingTestPackage'];
         };
       };
       /** @description Validation Error */

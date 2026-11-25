@@ -232,6 +232,7 @@
 - **改哪里：** `app/marketing/ad_tests.py`：`complete_start(session, ctx, test_row, revision, body) -> dict`（为每张广告写这一轮的 `MarketingQCRecord`，带 E5 的 `evidence`，再调 `workflow.create_handoff`）、`cancel(session, ctx, test_row, revision, body)`（广告包生成之前，`workflow.close(..., reason="user_stopped")`）；单图检查各项到小轮检查项的对应表。
 - **规则：** 检查没全部有结果 409 `checks_running`；有不通过且没被接受的 409 `check_findings_open`（列出）；结果不确定的不重发，按现有核对；不写 `QualityReviewRecord`；交接包生成后再调用返回同一个结果。
 - **测试要点：** 全部通过 → 一张一条审核记录、每项都有 `evidence`、广告包生成；有一项找不到依据 → 拒绝、不生成；接受一条发现后可以生成；取消后产品没有进行中的测试，可以重新开始；页面关掉再打开重放同一命令不出第二个包（Review Focus 4）；改版前测试的审核结果不变（同一张图在改版前的测试里 `ready` 不变）。
+- **做成的样子（#250）：** 要加一个迁移（`zzw250a1b2c3`）：`marketing_qc_reviews.quality_review_id` 改成可空，测试的审核记录不指向共享审核链。两个接口的 If-Match 是测试当前轮次的修订号。`complete_marketing_test_start` 的请求体是 `accepted_findings`（每张广告：看过的那次“一起看”的检查 `check_id`、接受的发现、理由 `note`），回应 `MarketingTestPackage`（广告包和每张广告的审核记录、依据）；有了广告包后无论再发什么都返回同一个结果。依据除 E5 列的三种键外，没用产品照片、用户确认过外观的广告用 `asset_version_id`。检查失败或过期、或者找不到依据的是 409 `check_evidence_missing`；结果不确定的算在 `checks_running` 里。留下的广告的 `ready` 不要求共享审核链上有通过的审核，只要那里没有不通过的；旧的小轮复核接口遇到留下的广告返回 409 `test_review_by_checks`。`get_marketing_round` 不加字段：测试的审核记录显示为 `ai_assisted_human_review`、去掉依据，广告包条目里留下的广告的来源显示为 `existing_creative`。`cancel_marketing_test` 回应测试详情，广告包生成之后返回 409 `test_package_exists`。细节见 [`2026-11-24-ads-first-step-2-t4-after-checks.md`](2026-11-24-ads-first-step-2-t4-after-checks.md)。
 
 ### T5 后端：测试轮次的报表
 

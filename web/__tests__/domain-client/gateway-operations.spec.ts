@@ -135,6 +135,8 @@ describe('DomainGateway operation coverage', () => {
     // `get_marketing_test_progress`, `record_marketing_test_deviation` (#254).
     // 277 -> 279: which ad each Meta ad of a test round shows
     // `suggest_marketing_test_bindings`, `confirm_marketing_test_bindings` (#252).
-    expect(DOMAIN_ALLOWLIST.length).toBe(279);
+    // 279 -> 281: after the checks, the kept ads' reviews and ad package, or cancelling the test
+    // `complete_marketing_test_start`, `cancel_marketing_test` (#250).
+    expect(DOMAIN_ALLOWLIST.length).toBe(281);
   });
 });

@@ -149,6 +149,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     requiresIdempotency: true,
   },
   {
+    operationId: 'cancel_marketing_test',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/tests/:test_id/cancel',
+    pathParams: ['test_id'],
+    requiresIdempotency: true,
+  },
+  {
     operationId: 'change_marketing_test_start',
     method: 'POST',
     bffPattern:
@@ -192,6 +199,13 @@ export const BFF_ROUTES: readonly BffRoute[] = [
     method: 'POST',
     bffPattern: '/api/domain/v1/w/:slug/results/imports/:import_id/commit',
     pathParams: ['import_id'],
+    requiresIdempotency: true,
+  },
+  {
+    operationId: 'complete_marketing_test_start',
+    method: 'POST',
+    bffPattern: '/api/domain/v1/w/:slug/marketing/tests/:test_id/package',
+    pathParams: ['test_id'],
     requiresIdempotency: true,
   },
   {

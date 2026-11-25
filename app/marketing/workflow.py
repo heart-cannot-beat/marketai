@@ -280,24 +280,58 @@ def active_quality(session, ctx, version_id):
 def ready(session, ctx, row, version_id):
     """Whether a round image may go into the ad package: its round review approved, every active review of it
     approved, no blocking file check, and its product photos current -- by the creative-library rule, or for a
-    kept ad of ads-first ideas by the ads-first rule (plan E4, ``reuse.kept_ad_photos_current``)."""
+    kept ad of ads-first ideas by the ads-first rule (plan E4, ``reuse.kept_ad_photos_current``).
+
+    A kept ad's review is the round's own only (plan E5, #250): it needs no review on the Workspace's shared chain,
+    and is held back only by one there that did not pass it."""
     qc = latest_qc(session, ctx, row, version_id)
     quality = active_quality(session, ctx, version_id)
     from .product_references import lineage_current
     from .reuse import kept_ad_photos_current, kept_ads
     version = session.scalar(select(AssetVersionRecord).where(AssetVersionRecord.workspace_id == ctx.workspace_id, AssetVersionRecord.id == version_id))
-    if version is not None and kept_ads(session, ctx, row, [version_id]):
+    kept = version is not None and bool(kept_ads(session, ctx, row, [version_id]))
+    if kept:
         references_ready = version_id in kept_ad_photos_current(session, ctx, row, [version_id])
     else:
         references_ready = bool(version and lineage_current(session, ctx, version.reference_sources_json))
-    return bool(references_ready and qc and qc.findings_json["quality"] == "approved" and quality
-        and all(r.review_value == "approved" for r in quality)
-        and not _has_blocking_qc_failure(session, ctx, version_id))
+    return bool(references_ready and _quality_ready(qc, quality, _has_blocking_qc_failure(session, ctx, version_id), kept=kept))
 
 
-def _quality_ready(qc, quality, blocked):
-    return bool(qc and qc.findings_json['quality'] == 'approved' and quality
-        and all(r.review_value == 'approved' for r in quality) and not blocked)
+def _quality_ready(qc, quality, blocked, *, kept=False):
+    """The round review approved and no blocking file check; every active shared review approved -- or, for a kept
+    ad of ads-first ideas (plan E5), none that did not pass it."""
+    if not (qc and qc.findings_json['quality'] == 'approved') or blocked:
+        return False
+    if kept:
+        from .ad_tests import NOT_PASSED
+        return not any(r.review_value in NOT_PASSED for r in quality)
+    return bool(quality) and all(r.review_value == 'approved' for r in quality)
+
+
+#: The source of a test project's review record of a kept ad (#250): the ad's own check, the round's "look
+#: together" check and the check before download, each passed check with its ``evidence``.
+TEST_REVIEW = "test_checks"
+#: What such a record holds that the round's strict readers never had; the test's own path returns it.
+TEST_REVIEW_KEYS = frozenset({"evidence", "accepted_findings"})
+
+
+def quality_projection(findings):
+    """A round review as the round's readers know it. A test's record shows as the AI-assisted review it is, with
+    its checks, overrides and note; its evidence is read on the test's own path (``ad_tests.package``)."""
+    if findings is None or findings.get("source") != TEST_REVIEW:
+        return findings
+    return {**{k: v for k, v in findings.items() if k not in TEST_REVIEW_KEYS}, "source": "ai_assisted_human_review"}
+
+
+def provenance_projection(provenance):
+    """A package entry's provenance as the round's readers know it. A kept ad of ads-first ideas (plan E4) shows as
+    the existing creative it is, from the ideas named as ``source_project_id`` (with ``include_reuse_lineage``)."""
+    from .reuse import IDEAS
+    if (provenance or {}).get("kind") != IDEAS:
+        return provenance
+    keep = ("asset_version_id", "asset_id", "product_id", "execution_mode", "content_sha256", "plan_hash", "combination")
+    return {"kind": "existing_creative", **{k: provenance[k] for k in keep if k in provenance},
+            "source_project_id": provenance.get("ideas_project_id")}
 
 
 #: Why a handoff is refused for an ad of ads-first ideas that may not be exported (#225), when it is built
@@ -345,6 +379,10 @@ def review_evidence_current(session, ctx, evaluation):
 def review(session, ctx, row, body):
     if scoped(session, ctx, Handoff, round_id=row.id):
         raise MarketingError("handoff_frozen", "导出已冻结；新版本请放到下一轮审核。", 409)
+    from .reuse import kept_ads
+    if kept_ads(session, ctx, row, [body.asset_version_id]):
+        # A test records its own review of a kept ad after its checks (#250), never on the shared chain (plan E5).
+        raise MarketingError("test_review_by_checks", "这张广告在测试里：它的审核由检查和下载前核对记录，请到测试页处理。", 409)
     assets = {v.id: (v, recipe, combo) for v, recipe, combo in creative_assets(session, ctx, row)}
     if body.asset_version_id not in assets:
         raise MarketingError("asset_not_in_round", "素材不属于当前方案与生成模式。")
@@ -746,7 +784,7 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
         return projected[call.id] if call else None
     assets, executions = [], []
     from .product_references import appearance
-    from .reuse import editable
+    from .reuse import editable, ideas_source
     appearances = {}
     # A creative reused from another test or its card is revised or cropped in its own test only (#7).
     project = get_round_project(session, ctx, row.project_id) if include_reuse_lineage and any(
@@ -764,11 +802,13 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
         if include_board and appearance_key not in appearances:
             appearances[appearance_key] = appearance(session, ctx, frozen_references, version)
         single, paired = check(ai_calls.get((version.id, "single"))), check(ai_calls.get((version.id, "paired")))
+        kept = ideas_source(recipe) is not None
         assets.append({**({"parent_version_id": version.parent_version_id} if include_image_edits else {}),
             **({"asset_id": version.asset_id, "created_at": version.created_at.isoformat(), "edit_operation": operation_of(recipe)} if include_version_history else {}),
             "ai_qc": single, "paired_ai_qc": paired, "asset_version_id": version.id, "combination_id": combo["id"], "headline": combo["headline"],
-            "body_copy": combo["body_copy"], "required_checks": required_checks(combo, row.snapshot_json["plan"]), "quality": qc.findings_json if qc else None,
-            "ready": fact["references_current"] and _quality_ready(qc, quality, fact["blocking"]), "mime_type": version.mime_type,
+            "body_copy": combo["body_copy"], "required_checks": required_checks(combo, row.snapshot_json["plan"]),
+            "quality": quality_projection(qc.findings_json) if qc else None,
+            "ready": fact["references_current"] and _quality_ready(qc, quality, fact["blocking"], kept=kept), "mime_type": version.mime_type,
             **({"editable": project is None or (editable(project, recipe) and version.id not in ads)}
                if include_reuse_lineage else {})})
         executions.append({**fact, "ready": assets[-1]["ready"],
@@ -791,7 +831,8 @@ def round_dict(session, ctx, row, *, include_image_edits=False, include_version_
         "end_date": str(row.end_date), "timezone": row.timezone, "assets": assets,
         "handoff": {"id": handoff.id, "state": handoff.state, "error_code": handoff.error_code,
             "quality_current": handoff_quality_current(session, ctx, row, handoff),
-            "manifest_hash": digest(handoff.manifest_json), "language": handoff.manifest_json.get("language"), "entries": [{k: v for k, v in e.items() if k not in ("blob", "qc")} for e in handoff.manifest_json["entries"]]} if handoff else None,
+            "manifest_hash": digest(handoff.manifest_json), "language": handoff.manifest_json.get("language"), "entries": [{k: provenance_projection(v) if k == "provenance" else v for k, v in e.items() if k not in ("blob", "qc")}
+                        for e in handoff.manifest_json["entries"]]} if handoff else None,
         "bindings": [{"id": b.id, "entry_id": b.entry_id, "ad_account_id": b.ad_account_id, "ad_id": b.ad_id, **b.conditions_json}
                      for b in round_bindings(session, ctx, row)],
         "batches": [{"id": b.id, "state": b.state, "raw_hash": b.raw_hash, "metadata": b.metadata_json,

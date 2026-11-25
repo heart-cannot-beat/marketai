@@ -125,6 +125,12 @@ export type DomainOperationMap = {
     requestBody: never;
     successResponses: { 200: components['schemas']['CancelResult'] };
   };
+  cancel_marketing_test: {
+    pathParams: { test_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['CancelMarketingTest'];
+    successResponses: { 200: components['schemas']['MarketingTestDetail'] };
+  };
   change_marketing_test_start: {
     pathParams: { test_id: string; round_id: string };
     queryParams: Record<string, never>;
@@ -162,6 +168,12 @@ export type DomainOperationMap = {
     queryParams: Record<string, never>;
     requestBody: never;
     successResponses: { 200: components['schemas']['ResultsImportView'] };
+  };
+  complete_marketing_test_start: {
+    pathParams: { test_id: string };
+    queryParams: Record<string, never>;
+    requestBody: components['schemas']['CompleteMarketingTestStart'];
+    successResponses: { 200: components['schemas']['MarketingTestPackage'] };
   };
   confirm_competitor: {
     pathParams: { competitor_id: string };

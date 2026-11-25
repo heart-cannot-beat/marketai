@@ -96,6 +96,24 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'Findings of one ad\'s check the user accepts as they are ("this is fine").',
   },
+  AcceptedTestFindings: {
+    properties: {
+      asset_version_id: { type: 'string', maxLength: 64, minLength: 1 },
+      check_id: { type: 'string', maxLength: 64, minLength: 1 },
+      finding_ids: {
+        items: { type: 'string', maxLength: 64, minLength: 1 },
+        type: 'array',
+        maxItems: 20,
+        minItems: 1,
+      },
+      note: { type: 'string', maxLength: 500, minLength: 1 },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['asset_version_id', 'check_id', 'finding_ids', 'note'],
+    description:
+      'Findings of one kept ad\'s "look together" check the user accepts as they are ("this is fine"), and why.',
+  },
   ActionEligibility: {
     properties: {
       action: { type: 'string' },
@@ -1601,6 +1619,20 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     additionalProperties: false,
     type: 'object',
     required: ['x', 'y'],
+  },
+  CancelMarketingTest: {
+    properties: {
+      note: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    description:
+      'Cancel a test before its ad package is made: its round ends as stopped by the user, kept as it is.',
   },
   CancelResult: {
     properties: {
@@ -3654,6 +3686,19 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     properties: { value_id: { type: 'string' }, label: { type: 'string' } },
     type: 'object',
     required: ['value_id', 'label'],
+  },
+  CompleteMarketingTestStart: {
+    properties: {
+      accepted_findings: {
+        items: { $ref: '#/components/schemas/AcceptedTestFindings' },
+        type: 'array',
+        maxItems: 60,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    description:
+      "After the checks (#250): record the round's review of each kept ad and make its ad package. The page sends\nit once every check has its result, with the findings the user accepted; it is safe to send again.",
   },
   ConceptResolutionActionRequest: {
     properties: {
@@ -10146,6 +10191,55 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'feedback_drafts',
     ],
   },
+  MarketingTestAcceptedFinding: {
+    properties: {
+      check_id: { type: 'string' },
+      finding_id: { type: 'string' },
+      status: { type: 'string', enum: ['fail', 'unknown'] },
+      note: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['check_id', 'finding_id', 'status', 'note'],
+    description:
+      'A finding of the "look together" check the user accepted as it is, with the reason they gave.',
+  },
+  MarketingTestAdReview: {
+    properties: {
+      asset_version_id: { type: 'string' },
+      review_id: { type: 'string' },
+      checks: {
+        additionalProperties: { type: 'string', const: 'pass' },
+        type: 'object',
+      },
+      evidence: {
+        additionalProperties: {
+          items: { $ref: '#/components/schemas/MarketingTestCheckEvidence' },
+          type: 'array',
+        },
+        type: 'object',
+      },
+      accepted_findings: {
+        items: { $ref: '#/components/schemas/MarketingTestAcceptedFinding' },
+        type: 'array',
+      },
+      actor_id: { type: 'string' },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'asset_version_id',
+      'review_id',
+      'checks',
+      'evidence',
+      'accepted_findings',
+      'actor_id',
+      'created_at',
+    ],
+    description:
+      "The round's review record of one kept ad: every check it was asked, passed, each with its evidence.",
+  },
   MarketingTestAnswers: {
     properties: {
       target_cost: {
@@ -10427,6 +10521,24 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
     description:
       'An ad of the round whose fact, photo or copy the ads-first ideas changed after the test started (§5.8).\n\nThe running test keeps what it started on: its evaluation and ad package do not change. The Meta ad still\nshows the old content, so the page suggests stopping it or making it again.',
   },
+  MarketingTestCheckEvidence: {
+    properties: {
+      source: {
+        type: 'string',
+        enum: ['ideas_check', 'paired_check', 'verification'],
+      },
+      id: { type: 'string' },
+      finding_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      fact_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      photo_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      asset_version_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['source', 'id'],
+    description:
+      "What one passed check stands on (plan E5): a finding of the ad's own check (``ideas_check``) or of the round's\n\"look together\" check (``paired_check``) that passed or that the user accepted, or what a check before download\n(``verification``) recorded -- an accepted finding, a checked fact or photo, the look of an ad made without a\nphoto. ``id`` is the check's or the record's.",
+  },
   MarketingTestChecks: {
     properties: {
       available: { type: 'boolean' },
@@ -10589,6 +10701,26 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
       'effective_end_date',
       'reports',
     ],
+  },
+  MarketingTestPackage: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      handoff_id: { type: 'string' },
+      handoff_state: {
+        type: 'string',
+        enum: ['queued', 'running', 'ready', 'failed'],
+      },
+      reviews: {
+        items: { $ref: '#/components/schemas/MarketingTestAdReview' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['test_id', 'round_id', 'handoff_id', 'handoff_state', 'reviews'],
+    description:
+      "``complete_marketing_test_start``: the round's ad package and the review of each ad in it.\n\nThe Worker builds the ZIP (``handoff_state`` queued, running, ready or failed); the round's own handoff paths\ndownload it or try again.",
   },
   MarketingTestPlanSummary: {
     properties: {
@@ -16260,6 +16392,49 @@ const SCHEMAS: Record<string, object> = {
     type: 'object',
     required: ['batch_id', 'already_terminal'],
   },
+  cancel_marketing_test_200: {
+    properties: {
+      id: { type: 'string' },
+      revision: { type: 'integer' },
+      product_id: { type: 'string' },
+      source_project_id: { type: 'string' },
+      comparison: { type: 'string', enum: ['claims', 'expressions', 'single'] },
+      plan_summary: { $ref: '#/components/schemas/MarketingTestPlanSummary' },
+      rounds: {
+        items: { $ref: '#/components/schemas/MarketingTestRoundSummary' },
+        type: 'array',
+      },
+      current_round_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      created_at: { type: 'string' },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+      'id',
+      'revision',
+      'product_id',
+      'source_project_id',
+      'comparison',
+      'plan_summary',
+      'rounds',
+      'current_round_id',
+      'created_at',
+    ],
+  },
+  cancel_marketing_test_request: {
+    properties: {
+      note: {
+        anyOf: [
+          { type: 'string', maxLength: 2000, minLength: 1 },
+          { type: 'null' },
+        ],
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    description:
+      'Cancel a test before its ad package is made: its round ends as stopped by the user, kept as it is.',
+  },
   change_marketing_test_start_200: {
     properties: {
       test_id: { type: 'string' },
@@ -16493,6 +16668,39 @@ const SCHEMAS: Record<string, object> = {
     required: ['import_id', 'product_id', 'source', 'status', 'summary'],
     description:
       'A previewed (``previewed``) or committed (``committed``) import.\n``rows`` lists every rejected row and the first accepted ones\n(``rows_truncated``); ``duplicate`` is true when the same rows were\nalready imported for this product (the existing import is returned).',
+  },
+  complete_marketing_test_start_200: {
+    properties: {
+      test_id: { type: 'string' },
+      round_id: { type: 'string' },
+      handoff_id: { type: 'string' },
+      handoff_state: {
+        type: 'string',
+        enum: ['queued', 'running', 'ready', 'failed'],
+      },
+      reviews: {
+        items: { $ref: '#/components/schemas/MarketingTestAdReview' },
+        type: 'array',
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: ['test_id', 'round_id', 'handoff_id', 'handoff_state', 'reviews'],
+    description:
+      "``complete_marketing_test_start``: the round's ad package and the review of each ad in it.\n\nThe Worker builds the ZIP (``handoff_state`` queued, running, ready or failed); the round's own handoff paths\ndownload it or try again.",
+  },
+  complete_marketing_test_start_request: {
+    properties: {
+      accepted_findings: {
+        items: { $ref: '#/components/schemas/AcceptedTestFindings' },
+        type: 'array',
+        maxItems: 60,
+      },
+    },
+    additionalProperties: false,
+    type: 'object',
+    description:
+      "After the checks (#250): record the round's review of each kept ad and make its ad package. The page sends\nit once every check has its result, with the findings the user accepted; it is safe to send again.",
   },
   confirm_competitor_200: {
     properties: {
@@ -26448,6 +26656,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
       VALIDATOR_FUNCTIONS['cancel_localization_batch_200'],
     ],
     [
+      'cancel_marketing_test_200',
+      VALIDATOR_FUNCTIONS['cancel_marketing_test_200'],
+    ],
+    [
+      'cancel_marketing_test_request',
+      VALIDATOR_FUNCTIONS['cancel_marketing_test_request'],
+    ],
+    [
       'change_marketing_test_start_200',
       VALIDATOR_FUNCTIONS['change_marketing_test_start_200'],
     ],
@@ -26490,6 +26706,14 @@ export const RESPONSE_VALIDATORS: ReadonlyMap<string, ValidateFunction> =
     [
       'commit_results_import_200',
       VALIDATOR_FUNCTIONS['commit_results_import_200'],
+    ],
+    [
+      'complete_marketing_test_start_200',
+      VALIDATOR_FUNCTIONS['complete_marketing_test_start_200'],
+    ],
+    [
+      'complete_marketing_test_start_request',
+      VALIDATOR_FUNCTIONS['complete_marketing_test_start_request'],
     ],
     ['confirm_competitor_200', VALIDATOR_FUNCTIONS['confirm_competitor_200']],
     [
@@ -27940,6 +28164,11 @@ export const REQUEST_VALIDATORS = {
   ] as ValidateFunction<
     DomainOperationMap['bind_marketing_delivery']['requestBody']
   >,
+  cancel_marketing_test: VALIDATOR_FUNCTIONS[
+    'cancel_marketing_test_request'
+  ] as ValidateFunction<
+    DomainOperationMap['cancel_marketing_test']['requestBody']
+  >,
   change_marketing_test_start: VALIDATOR_FUNCTIONS[
     'change_marketing_test_start_request'
   ] as ValidateFunction<
@@ -27964,6 +28193,11 @@ export const REQUEST_VALIDATORS = {
     'close_scale_enrollment_request'
   ] as ValidateFunction<
     DomainOperationMap['close_scale_enrollment']['requestBody']
+  >,
+  complete_marketing_test_start: VALIDATOR_FUNCTIONS[
+    'complete_marketing_test_start_request'
+  ] as ValidateFunction<
+    DomainOperationMap['complete_marketing_test_start']['requestBody']
   >,
   confirm_competitor: VALIDATOR_FUNCTIONS[
     'confirm_competitor_request'
