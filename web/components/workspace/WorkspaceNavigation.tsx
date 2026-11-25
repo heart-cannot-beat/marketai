@@ -283,10 +283,13 @@ function ProductLink({
   slug,
   product,
   active,
+  statusPending = false,
 }: {
   slug: string;
   product: WorkspaceProduct;
   active: boolean;
+  /** The products' tests are still being read: the status may still change (#258). */
+  statusPending?: boolean;
 }) {
   const { t } = useTranslation('common');
   return (
@@ -310,7 +313,9 @@ function ProductLink({
           active ? 'text-gray-300' : 'text-gray-500 dark:text-gray-400'
         )}
       >
-        {t(STEP_COPY[product.step].status, { count: product.stepCount })}
+        {statusPending
+          ? '\u00a0'
+          : t(STEP_COPY[product.step].status, { count: product.stepCount })}
       </span>
     </GuardedLink>
   );
@@ -329,7 +334,8 @@ function ProductNavigation({
   const { t } = useTranslation('common');
   const isActive = areaMatcher(slug, activePathname);
   const pathOnly = pathOf(activePathname);
-  const { products, isLoading, problem, refresh } = useWorkspaceProducts();
+  const { products, isLoading, testsLoading, problem, refresh } =
+    useWorkspaceProducts();
   const productActive = (productId: string) => {
     const base = `/w/${slug}/p/${encodeURIComponent(productId)}`;
     return (
@@ -474,6 +480,7 @@ function ProductNavigation({
                   slug={slug}
                   product={product}
                   active={productActive(product.productId)}
+                  statusPending={testsLoading}
                 />
               </li>
             ))}

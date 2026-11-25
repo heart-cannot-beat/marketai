@@ -54,10 +54,12 @@ function workspaceProduct(
     productId,
     name,
     ideas,
+    test: null,
     signals: {
       needsAttention: step === 'attention',
       reportMissing: step === 'report_missing',
       conclusionUnseen: step === 'conclusion_unseen',
+      testInProgress: step === 'testing',
       keptUntested: step === 'kept_untested' ? stepCount : 0,
       draftsUnhandled: step === 'drafts_unhandled' ? stepCount : 0,
       hasIdeas: ideas !== null,
@@ -74,6 +76,7 @@ function productsResult(
   return {
     products,
     isLoading: false,
+    testsLoading: false,
     problem: undefined,
     find: (id) => products.find((p) => p.productId === id),
     refresh: jest.fn().mockResolvedValue(undefined),
@@ -120,31 +123,37 @@ const ALL_STEPS: [NextStepKind, string, string, string][] = [
     'conclusion_unseen',
     "There is a result you haven't looked at yet.",
     'See the result',
-    '/w/acme/p/prod_3/results',
+    '/w/acme/p/prod_3/tests',
+  ],
+  [
+    'testing',
+    'A test is under way. Open it to see where it stands.',
+    'Open the test',
+    '/w/acme/p/prod_4/tests',
   ],
   [
     'kept_untested',
     "You kept 4 ads that haven't been tested yet.",
     'Review kept ads',
-    '/w/acme/p/prod_4/ideas',
+    '/w/acme/p/prod_5/ideas',
   ],
   [
     'drafts_unhandled',
     '6 ad drafts, none kept yet.',
     'See the ads',
-    '/w/acme/p/prod_5/ideas',
+    '/w/acme/p/prod_6/ideas',
   ],
   [
     'preparing',
     'The ads are still being prepared.',
     'See progress',
-    '/w/acme/p/prod_6/ideas',
+    '/w/acme/p/prod_7/ideas',
   ],
   [
     'no_ideas',
     'This product has no ad ideas yet.',
     'Open the product',
-    '/w/acme/p/prod_7/ideas',
+    '/w/acme/p/prod_8/ideas',
   ],
 ];
 
@@ -185,6 +194,45 @@ describe('WorkspaceOverview (#194)', () => {
       'href',
       '/w/acme/products/new'
     );
+  });
+
+  it('opens the test itself for a test step: its page, or the take-to-test screen during its checks (#258)', () => {
+    const withTest = (
+      productId: string,
+      step: NextStepKind,
+      packageMade: boolean
+    ): WorkspaceProduct => ({
+      ...workspaceProduct(productId, 'Acme Charge Home', step),
+      test: { id: `mt_${productId}`, packageMade },
+    });
+    mockProducts = productsResult([
+      withTest('prod_1', 'report_missing', true),
+      withTest('prod_2', 'conclusion_unseen', true),
+      withTest('prod_3', 'testing', false),
+    ]);
+    render(<WorkspaceOverview />);
+    const hrefs = screen
+      .getAllByTestId('overview-product-action')
+      .map((link) => link.getAttribute('href'));
+    expect(hrefs).toEqual([
+      '/w/acme/p/prod_1/tests/mt_prod_1',
+      '/w/acme/p/prod_2/tests/mt_prod_2',
+      '/w/acme/p/prod_3/take-to-test',
+    ]);
+    expect(screen.getAllByText('Testing')).toHaveLength(2);
+    expect(screen.getByText('New result')).toBeInTheDocument();
+  });
+
+  it('waits for the tests before showing a step that may still change (#258)', () => {
+    mockProducts = productsResult(
+      [workspaceProduct('prod_1', 'Acme Charge Home', 'kept_untested', 2)],
+      { testsLoading: true }
+    );
+    render(<WorkspaceOverview />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading your products…'
+    );
+    expect(screen.queryAllByTestId('overview-product')).toHaveLength(0);
   });
 
   it('names an unnamed product as such, never by its id', () => {

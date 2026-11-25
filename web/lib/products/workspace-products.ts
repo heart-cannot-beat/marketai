@@ -4,14 +4,17 @@ type ProductSummary = components['schemas']['ProductSummary'];
 type IdeasProjectSummary = components['schemas']['IdeasProjectSummary'];
 
 /**
- * The one thing to do now for a product (design §5.6). The first five are the
- * overview's order: the first that holds wins. `preparing` and `no_ideas`
- * apply only when none of them does.
+ * The one thing to do now for a product (design §5.6). The overview's order:
+ * the first that holds wins. `testing` (a test in progress that needs
+ * nothing from the user now, #258) outranks the kept ads, since a product
+ * runs one test at a time (plan E3). `preparing` and `no_ideas` apply only
+ * when nothing else does.
  */
 export type NextStepKind =
   | 'attention'
   | 'report_missing'
   | 'conclusion_unseen'
+  | 'testing'
   | 'kept_untested'
   | 'drafts_unhandled'
   | 'preparing'
@@ -21,11 +24,19 @@ export interface ProductSignals {
   /** An error waiting for the user: a first batch of one of the product's
    * ad ideas stopped and waits (`first_batch.needs_attention`, #193, #195). */
   needsAttention: boolean;
-  /** A running test whose delivery report is missing (step 2). */
+  /** The test in progress has its ad package and a day of delivery, and no
+   * report has come back yet (#258). */
   reportMissing: boolean;
-  /** A result the user has not opened yet (step 3). */
+  /** The test in progress is past its result day and nobody has read the
+   * result since its data last changed: its "See the result" is waiting
+   * (`get_marketing_test_result`: mature, no current evaluation, #258). */
   conclusionUnseen: boolean;
-  /** Kept ads that no test uses yet; in step 1 no ad is tested. */
+  /** The product has a test in progress (a round not closed, plan E3). */
+  testInProgress: boolean;
+  /** Kept ads that can be taken to a test now: none while a test is in
+   * progress (one at a time, plan E3); otherwise every kept ad, since a
+   * step-2 test ends only when it is cancelled before its package, so its
+   * ads never ran. */
   keptUntested: number;
   /** Ads the user has neither kept nor otherwise dealt with. */
   draftsUnhandled: number;
@@ -37,6 +48,7 @@ export function nextStep(signals: ProductSignals): NextStepKind {
   if (signals.needsAttention) return 'attention';
   if (signals.reportMissing) return 'report_missing';
   if (signals.conclusionUnseen) return 'conclusion_unseen';
+  if (signals.testInProgress) return 'testing';
   if (signals.keptUntested > 0) return 'kept_untested';
   if (signals.draftsUnhandled > 0) return 'drafts_unhandled';
   return signals.hasIdeas ? 'preparing' : 'no_ideas';
@@ -49,11 +61,31 @@ export interface ProductIdeas {
   keptCount: number;
 }
 
+/**
+ * What the overview reads from a product's tests (`list_marketing_tests`,
+ * #258): its test in progress, if any. Earlier tests (plan first) open from
+ * "More" and do not count here.
+ */
+export interface ProductTestState {
+  testId: string;
+  /** The round is past its checks: its ad package is asked for or made. */
+  packageMade: boolean;
+  /** Today is after the round's effective first day: a report can have a day in it. */
+  started: boolean;
+  /** Reports the round has counted (confirmed uploads). */
+  reportCount: number;
+  /** The result day has come and nobody has read the result since the data
+   * last changed; false when the result was not read. */
+  resultUnseen: boolean;
+}
+
 export interface WorkspaceProduct {
   productId: string;
   /** `null` when nothing names the product; render "Unnamed product". */
   name: string | null;
   ideas: ProductIdeas | null;
+  /** The product's test in progress, if any (#258). */
+  test: { id: string; packageMade: boolean } | null;
   signals: ProductSignals;
   step: NextStepKind;
   /** The step's count, for the copy that names one. */
@@ -67,11 +99,14 @@ const newest = (a: string | null | undefined, b: string | null | undefined) =>
  * The sidebar's and the overview's product list: `list_products` merged with
  * `list_marketing_ideas` by product id, most recently changed first. A
  * product that only an ideas project names (its card is not listed) still
- * appears, under the name the project carries.
+ * appears, under the name the project carries. `tests` holds each product's
+ * test in progress as read so far (#258); a product it does not name is
+ * treated as having none.
  */
 export function mergeWorkspaceProducts(
   products: ProductSummary[],
-  ideasProjects: IdeasProjectSummary[]
+  ideasProjects: IdeasProjectSummary[],
+  tests: Readonly<Record<string, ProductTestState | null>> = {}
 ): WorkspaceProduct[] {
   const rows = new Map<
     string,
@@ -121,11 +156,17 @@ export function mergeWorkspaceProducts(
             keptCount: row.ideas.keptCount,
           }
         : null;
+      const test = tests[productId] ?? null;
       const signals: ProductSignals = {
         needsAttention: row.needsAttention ?? false,
-        reportMissing: false,
-        conclusionUnseen: false,
-        keptUntested: ideas?.keptCount ?? 0,
+        reportMissing: Boolean(
+          test && test.packageMade && test.started && test.reportCount === 0
+        ),
+        conclusionUnseen: Boolean(
+          test && test.packageMade && test.reportCount > 0 && test.resultUnseen
+        ),
+        testInProgress: test !== null,
+        keptUntested: test ? 0 : (ideas?.keptCount ?? 0),
         draftsUnhandled: ideas ? ideas.adCount - ideas.keptCount : 0,
         hasIdeas: ideas !== null,
       };
@@ -134,6 +175,7 @@ export function mergeWorkspaceProducts(
         productId,
         name: row.name,
         ideas,
+        test: test ? { id: test.testId, packageMade: test.packageMade } : null,
         signals,
         step,
         stepCount:
@@ -166,6 +208,11 @@ export const STEP_COPY: Record<
     status: 'product-status-conclusion-unseen',
     line: 'overview-step-conclusion-unseen',
     action: 'overview-action-conclusion-unseen',
+  },
+  testing: {
+    status: 'product-status-testing',
+    line: 'overview-step-testing',
+    action: 'overview-action-testing',
   },
   kept_untested: {
     status: 'product-status-kept-untested',
@@ -214,9 +261,26 @@ export function testHref(
   return `/w/${slug}/p/${encodeURIComponent(productId)}/tests/${encodeURIComponent(testId)}`;
 }
 
-/** The product view the overview's main button opens for a step. */
+const TEST_STEPS: ReadonlySet<NextStepKind> = new Set<NextStepKind>([
+  'report_missing',
+  'conclusion_unseen',
+  'testing',
+]);
+
+/** The product view a step belongs to: the test steps under Tests, the rest under Ad ideas. */
 export function stepView(step: NextStepKind): ProductView {
-  if (step === 'report_missing') return 'tests';
-  if (step === 'conclusion_unseen') return 'results';
-  return 'ideas';
+  return TEST_STEPS.has(step) ? 'tests' : 'ideas';
+}
+
+/**
+ * Where the overview's main button goes for a product: a test step opens the
+ * test itself -- its page once the package is asked for, the "take to test"
+ * screen while its checks run (#258) --, any other step the product view.
+ */
+export function stepHref(slug: string, product: WorkspaceProduct): string {
+  if (TEST_STEPS.has(product.step) && product.test)
+    return product.test.packageMade
+      ? testHref(slug, product.productId, product.test.id)
+      : takeToTestHref(slug, product.productId);
+  return productViewHref(slug, product.productId, stepView(product.step));
 }

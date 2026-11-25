@@ -203,10 +203,12 @@ export function product(
     productId: 'prod_home',
     name: 'Acme Charge Home',
     ideas,
+    test: null,
     signals: {
       needsAttention: false,
       reportMissing: false,
       conclusionUnseen: false,
+      testInProgress: false,
       keptUntested: 0,
       draftsUnhandled: 0,
       hasIdeas: ideas !== null,

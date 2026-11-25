@@ -4,10 +4,10 @@ import { GuardedLink } from '@/components/workspace/GuardedLink';
 
 /**
  * The bodies of a product's views until their own slices fill them (ADR
- * 0018, step-1 plan): step 2 the tests and step 3 the results. The ad ideas
- * (#196) and the product profile (#202) have their own components
- * (`components/ideas`). The placeholders point at the page that holds the
- * same thing today.
+ * 0018, step-1 plan): step 3 the results. The ad ideas (#196) and the
+ * product profile (#202) have their own components (`components/ideas`),
+ * and so does the test history (#258, `components/tests/TestHistory`). The
+ * placeholder points at the page that holds the same thing today.
  */
 
 function Placeholder({
@@ -31,19 +31,6 @@ function Placeholder({
         {label}
       </GuardedLink>
     </div>
-  );
-}
-
-export function ProductTestsPlaceholder() {
-  const { t } = useTranslation('common');
-  const { current } = useWorkspace();
-  return (
-    <Placeholder
-      text={t('product-tests-placeholder')}
-      href={`/w/${current.slug}/experiments`}
-      label={t('product-open-earlier-tests')}
-      testId="product-tests-placeholder"
-    />
   );
 }
 
