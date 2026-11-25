@@ -18,6 +18,11 @@ import {
   type TestRound,
   type UnprovenAd,
 } from '@/lib/tests/take-to-test';
+import {
+  productTestsKey,
+  readProductTests,
+  useRefreshProductTests,
+} from './useTestHistory';
 
 /** How often the page asks again while a check or the ad package is on its way. */
 export const TEST_POLL_MS = 3_000;
@@ -88,9 +93,7 @@ export function useRunner() {
   );
 }
 
-/** The SWR key of a product's tests; starting or cancelling one refreshes it. */
-export const productTestsKey = (workspaceId: string, productId: string) =>
-  ['marketing-tests', workspaceId, productId] as const;
+export { productTestsKey };
 
 export interface ProductTestInProgress {
   /** Still reading the product's tests. */
@@ -114,19 +117,11 @@ export function useProductTestInProgress(
   const gateway = useDomainGateway();
   const query = useSWR(
     productTestsKey(current.workspaceId, productId),
-    async () => {
-      const result = await gateway.listMarketingTests({
-        workspaceSlug: current.slug,
-        productId,
-      });
-      return result.kind === 'ok' ? result.data : null;
-    },
+    () => readProductTests(gateway, current.slug, productId),
     { revalidateOnFocus: false }
   );
-  const { mutate } = query;
-  const refresh = useCallback(async () => {
-    await mutate();
-  }, [mutate]);
+  // Starting or cancelling a test also reads the overview's list again (#258).
+  const refresh = useRefreshProductTests();
   const running = query.data?.tests.find((test) => test.current_round_id);
   return {
     loading: query.data === undefined && !query.error,

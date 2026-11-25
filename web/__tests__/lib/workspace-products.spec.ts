@@ -2,8 +2,10 @@ import {
   mergeWorkspaceProducts,
   nextStep,
   productViewHref,
+  stepHref,
   stepView,
   type ProductSignals,
+  type ProductTestState,
 } from '@/lib/products/workspace-products';
 import type { components } from '@/lib/domain-client/generated/domain-v1';
 
@@ -14,6 +16,7 @@ const quiet: ProductSignals = {
   needsAttention: false,
   reportMissing: false,
   conclusionUnseen: false,
+  testInProgress: false,
   keptUntested: 0,
   draftsUnhandled: 0,
   hasIdeas: true,
@@ -55,6 +58,7 @@ describe('nextStep (#194): the first rule that holds, in the overview order', ()
         needsAttention: true,
         reportMissing: true,
         conclusionUnseen: true,
+        testInProgress: false,
         keptUntested: 4,
         draftsUnhandled: 2,
         hasIdeas: true,
@@ -68,6 +72,7 @@ describe('nextStep (#194): the first rule that holds, in the overview order', ()
         ...quiet,
         reportMissing: true,
         conclusionUnseen: true,
+        testInProgress: false,
         keptUntested: 4,
         draftsUnhandled: 2,
       })
@@ -79,9 +84,24 @@ describe('nextStep (#194): the first rule that holds, in the overview order', ()
       nextStep({
         ...quiet,
         conclusionUnseen: true,
+        testInProgress: false,
         keptUntested: 4,
         draftsUnhandled: 2,
       })
+    ).toBe('conclusion_unseen');
+  });
+
+  it('then a test in progress that needs nothing now, before kept ads and drafts (#258)', () => {
+    expect(
+      nextStep({
+        ...quiet,
+        testInProgress: true,
+        keptUntested: 4,
+        draftsUnhandled: 2,
+      })
+    ).toBe('testing');
+    expect(
+      nextStep({ ...quiet, conclusionUnseen: true, testInProgress: true })
     ).toBe('conclusion_unseen');
   });
 
@@ -100,9 +120,11 @@ describe('nextStep (#194): the first rule that holds, in the overview order', ()
     expect(nextStep({ ...quiet, hasIdeas: false })).toBe('no_ideas');
   });
 
-  it('sends the report and result steps to their views, the rest to ad ideas', () => {
+  it('sends the test steps to Tests, the rest to ad ideas', () => {
     expect(stepView('report_missing')).toBe('tests');
-    expect(stepView('conclusion_unseen')).toBe('results');
+    // A step-2 result is read on the test's page (#258); Results is step 3's.
+    expect(stepView('conclusion_unseen')).toBe('tests');
+    expect(stepView('testing')).toBe('tests');
     expect(stepView('kept_untested')).toBe('ideas');
     expect(stepView('no_ideas')).toBe('ideas');
   });
@@ -195,6 +217,7 @@ describe('mergeWorkspaceProducts (#194): list_products + list_marketing_ideas', 
       needsAttention: false,
       reportMissing: false,
       conclusionUnseen: false,
+      testInProgress: false,
     });
   });
 
@@ -217,6 +240,82 @@ describe('mergeWorkspaceProducts (#194): list_products + list_marketing_ideas', 
     expect(merged.signals.needsAttention).toBe(true);
     expect(merged.step).toBe('attention');
     expect(stepView(merged.step)).toBe('ideas');
+  });
+});
+
+describe("mergeWorkspaceProducts with the products' tests (#258)", () => {
+  const lists = () =>
+    [
+      [product('prod_home', 'Acme Charge Home', '2026-11-01T00:00:00Z')],
+      [ideas('mp_1', 'prod_home', 6, 2, '2026-11-15T00:00:00Z')],
+    ] as const;
+  const merge = (test: ProductTestState | null) => {
+    const [products, projects] = lists();
+    return mergeWorkspaceProducts([...products], [...projects], {
+      prod_home: test,
+    })[0];
+  };
+  const running = (extra: Partial<ProductTestState>): ProductTestState => ({
+    testId: 'mt_1',
+    packageMade: true,
+    started: true,
+    reportCount: 0,
+    resultUnseen: false,
+    ...extra,
+  });
+
+  it('with no test in progress, the kept ads wait to be tested', () => {
+    const merged = merge(null);
+    expect(merged.test).toBeNull();
+    expect(merged.signals).toMatchObject({
+      testInProgress: false,
+      keptUntested: 2,
+    });
+    expect(merged.step).toBe('kept_untested');
+  });
+
+  it('a running test with no report after its first day is missing its report', () => {
+    const merged = merge(running({}));
+    expect(merged.signals).toMatchObject({
+      reportMissing: true,
+      conclusionUnseen: false,
+      testInProgress: true,
+      // The kept ads are in the test: they are no longer "not tested".
+      keptUntested: 0,
+    });
+    expect(merged.step).toBe('report_missing');
+    expect(merged.test).toEqual({ id: 'mt_1', packageMade: true });
+    expect(stepHref('acme', merged)).toBe('/w/acme/p/prod_home/tests/mt_1');
+  });
+
+  it('before its first full day, or while its checks run, nothing is missing yet', () => {
+    expect(merge(running({ started: false })).step).toBe('testing');
+    const checking = merge(running({ packageMade: false, started: false }));
+    expect(checking.step).toBe('testing');
+    expect(checking.signals.reportMissing).toBe(false);
+    expect(stepHref('acme', checking)).toBe('/w/acme/p/prod_home/take-to-test');
+  });
+
+  it('with a report in, the step follows the result: unseen, or the test simply running', () => {
+    expect(merge(running({ reportCount: 1, resultUnseen: true })).step).toBe(
+      'conclusion_unseen'
+    );
+    expect(merge(running({ reportCount: 2, resultUnseen: false })).step).toBe(
+      'testing'
+    );
+  });
+
+  it('a missing report outranks a result: the result needs the data first', () => {
+    const merged = merge(running({ reportCount: 0, resultUnseen: true }));
+    expect(merged.signals.conclusionUnseen).toBe(false);
+    expect(merged.step).toBe('report_missing');
+  });
+
+  it('a product the tests do not name keeps the steps its ads give it', () => {
+    const [products, projects] = lists();
+    const [merged] = mergeWorkspaceProducts([...products], [...projects], {});
+    expect(merged.step).toBe('kept_untested');
+    expect(stepHref('acme', merged)).toBe('/w/acme/p/prod_home/ideas');
   });
 });
 

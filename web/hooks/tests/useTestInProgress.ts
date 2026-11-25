@@ -9,6 +9,7 @@ import {
   useRunner,
   type TestCommandOutcome,
 } from '@/hooks/tests/useTestStart';
+import { useRefreshProductTests } from '@/hooks/tests/useTestHistory';
 import type { TestDetail, TestRound } from '@/lib/tests/take-to-test';
 import {
   packageReady,
@@ -167,14 +168,17 @@ export function useTestInProgress(testId: string): TestInProgress {
   const { mutate: mutateRound } = roundQuery;
   const { mutate: mutateProgress } = progressQuery;
   const { mutate: mutateResult } = resultQuery;
+  // The product's test lists too, so the sidebar and the overview follow (#258).
+  const refreshTests = useRefreshProductTests();
   const refresh = useCallback(async () => {
     await Promise.all([
       mutateTest(),
       mutateRound(),
       mutateProgress(),
       mutateResult(),
+      refreshTests(),
     ]);
-  }, [mutateProgress, mutateResult, mutateRound, mutateTest]);
+  }, [mutateProgress, mutateResult, mutateRound, mutateTest, refreshTests]);
 
   /** Run one command, then read everything again (also after a refusal: something changed). */
   const command = useCallback(

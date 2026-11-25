@@ -105,10 +105,12 @@ function workspaceProduct(
     productId,
     name,
     ideas: projectId ? { projectId, adCount: 6, keptCount: 0 } : null,
+    test: null,
     signals: {
       needsAttention: false,
       reportMissing: false,
       conclusionUnseen: false,
+      testInProgress: false,
       keptUntested: 0,
       draftsUnhandled: projectId ? 6 : 0,
       hasIdeas: projectId !== null,
@@ -125,6 +127,7 @@ function productsResult(
   return {
     products,
     isLoading: false,
+    testsLoading: false,
     problem: undefined,
     find: (id) => products.find((p) => p.productId === id),
     refresh: jest.fn().mockResolvedValue(undefined),

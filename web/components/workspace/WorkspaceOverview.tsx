@@ -12,8 +12,7 @@ import env from '@/lib/env';
 import { newProductHref } from '@/lib/workspace-navigator';
 import {
   STEP_COPY,
-  productViewHref,
-  stepView,
+  stepHref,
   type NextStepKind,
   type WorkspaceProduct,
 } from '@/lib/products/workspace-products';
@@ -22,6 +21,7 @@ const BADGE: Record<NextStepKind, string> = {
   attention: 'badge-error',
   report_missing: 'badge-info',
   conclusion_unseen: 'badge-success',
+  testing: 'badge-info',
   kept_untested: 'badge-warning',
   drafts_unhandled: 'badge-warning',
   preparing: 'badge-ghost',
@@ -59,7 +59,7 @@ function ProductCard({
         </p>
       </div>
       <GuardedLink
-        href={productViewHref(slug, product.productId, stepView(product.step))}
+        href={stepHref(slug, product)}
         data-testid="overview-product-action"
         className="btn btn-primary w-full sm:w-auto"
       >
@@ -79,7 +79,8 @@ export function WorkspaceOverview() {
   const { t } = useTranslation('common');
   const router = useRouter();
   const { current } = useWorkspace();
-  const { products, isLoading, problem, refresh } = useWorkspaceProducts();
+  const { products, isLoading, testsLoading, problem, refresh } =
+    useWorkspaceProducts();
   const unfinished = useUnfinishedFirstBatches();
   const slug = current.slug;
   const empty =
@@ -131,7 +132,7 @@ export function WorkspaceOverview() {
             {t('workspace-retry')}
           </button>
         </div>
-      ) : isLoading ? (
+      ) : isLoading || testsLoading ? (
         <div className="flex justify-center py-12" role="status">
           <span className="loading loading-spinner" aria-hidden="true" />
           <span className="sr-only">{t('overview-loading')}</span>

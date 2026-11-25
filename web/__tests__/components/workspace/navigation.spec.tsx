@@ -23,10 +23,12 @@ function workspaceProduct(
     productId,
     name,
     ideas: null,
+    test: null,
     signals: {
       needsAttention: false,
       reportMissing: false,
       conclusionUnseen: false,
+      testInProgress: false,
       keptUntested: 0,
       draftsUnhandled: 0,
       hasIdeas: false,
@@ -42,6 +44,7 @@ function productsResult(
   return {
     products,
     isLoading: false,
+    testsLoading: false,
     problem: undefined,
     find: (id) => products.find((p) => p.productId === id),
     refresh: jest.fn().mockResolvedValue(undefined),
@@ -224,6 +227,31 @@ describe('WorkspaceNavigation with the ads-first switch on (#194)', () => {
       'href',
       '/w/acme/members'
     );
+  });
+
+  it('shows a test step, and holds the status back while the tests are read (#258)', () => {
+    mockProducts = productsResult([
+      workspaceProduct('prod_home', 'Acme Charge Home', 'report_missing', 0),
+      workspaceProduct('prod_go', 'Acme Charge Go', 'testing', 0),
+    ]);
+    const { rerender } = render(
+      <WorkspaceNavigation slug="acme" activePathname="/w/acme/overview" />
+    );
+    expect(
+      screen
+        .getAllByTestId('workspace-nav-product')
+        .map((link) => link.textContent)
+    ).toEqual(['Acme Charge HomeTesting', 'Acme Charge GoTesting']);
+
+    mockProducts = { ...mockProducts, testsLoading: true };
+    rerender(
+      <WorkspaceNavigation slug="acme" activePathname="/w/acme/overview" />
+    );
+    expect(
+      screen
+        .getAllByTestId('workspace-nav-product')
+        .map((link) => link.textContent?.trim())
+    ).toEqual(['Acme Charge Home', 'Acme Charge Go']);
   });
 
   it('marks the product whose view is open', () => {
