@@ -101,10 +101,10 @@ export function BindingConfirm({
           return (
             <li
               key={ad.ad_id}
-              className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center"
+              className="space-y-2 py-3"
               data-testid="binding-row"
             >
-              <div className="min-w-0 flex-1 space-y-1 text-sm">
+              <div className="min-w-0 space-y-1 text-sm">
                 <p className="break-words font-semibold">
                   {ad.ad_names[0] ?? t('run-bind-unnamed')}
                 </p>
@@ -117,7 +117,7 @@ export function BindingConfirm({
                     : t(`run-bind-status-${ad.status}`)}
                 </p>
               </div>
-              <div className="flex items-center gap-3 sm:w-80">
+              <div className="flex items-center gap-3 sm:max-w-2xl">
                 {entry ? (
                   <AdThumbnail
                     versionId={entry.asset_version_id}

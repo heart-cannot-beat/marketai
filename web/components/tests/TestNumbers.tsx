@@ -147,6 +147,12 @@ function Deviations({
   const [uncertain, setUncertain] = useState(false);
   const affected = affectedComparisons(progress.comparisons, picked);
   const labels = new Map(progress.comparisons.map((c) => [c.id, c.label]));
+  // Ads of one package can share a headline: their group tells them apart.
+  const groups = new Map(
+    progress.comparisons.flatMap((c) =>
+      c.asset_version_ids.map((version) => [version, c.label] as const)
+    )
+  );
 
   function reset() {
     setOpen(false);
@@ -239,6 +245,11 @@ function Deviations({
                     />
                     <span className="min-w-0 break-words">
                       {entry.headline}
+                      {groups.get(entry.asset_version_id) && (
+                        <span className="block text-xs text-gray-600 dark:text-gray-400">
+                          {groups.get(entry.asset_version_id)}
+                        </span>
+                      )}
                     </span>
                   </label>
                 </li>
