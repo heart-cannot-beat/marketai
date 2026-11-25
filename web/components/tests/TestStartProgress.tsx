@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
 import classNames from 'classnames';
@@ -37,10 +37,13 @@ const CANCELLABLE: ReadonlySet<StartStage> = new Set<StartStage>([
 export function TestStartProgress({
   testId,
   ideasHref,
+  runHref,
   onRestart,
 }: {
   testId: string;
   ideasHref: string;
+  /** The test's "test in progress" screen (#257), where its reports go once the package is out. */
+  runHref: string;
   /** The test was cancelled elsewhere: back to the questions. */
   onRestart: () => void;
 }) {
@@ -49,6 +52,15 @@ export function TestStartProgress({
   const progress = useStartProgress(testId);
   const { stage, round } = progress;
   const [confirming, setConfirming] = useState(false);
+  // A package that was ready before this page opened has been handed out:
+  // the test carries on on its own screen. One made while the page is open
+  // is shown here first, to download, with the way on.
+  const sawWork = useRef(false);
+  useEffect(() => {
+    if (stage === 'loading') return;
+    if (stage !== 'ready') sawWork.current = true;
+    else if (!sawWork.current) void router.replace(runHref);
+  }, [stage, router, runHref]);
 
   if (stage === 'loading') {
     if (progress.problem)
@@ -278,6 +290,13 @@ export function TestStartProgress({
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {t('take-ready-next')}
           </p>
+          <GuardedLink
+            href={runHref}
+            className={classNames(BUTTON, 'w-full sm:w-auto')}
+            data-testid="test-open-run"
+          >
+            {t('take-open-run')}
+          </GuardedLink>
           <ul
             role="list"
             className="divide-y divide-gray-200 border-y border-gray-200 dark:divide-gray-700 dark:border-gray-700"
@@ -348,7 +367,8 @@ export function TestStartProgress({
   );
 }
 
-function Step({
+/** One step of a three-step list; the "test in progress" screen (#257) uses it too. */
+export function Step({
   number,
   title,
   done,

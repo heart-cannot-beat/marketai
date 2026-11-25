@@ -4,6 +4,11 @@ import {
   type DomainProblem,
 } from '@/lib/i18n/domain-errors';
 import { metricsIssueText } from './marketing-issues';
+import {
+  columnMapping,
+  readReportFile,
+  REPORT_COLUMNS,
+} from './marketing-report-file';
 import { MarketingImageEdit } from './MarketingImageEdit';
 import { MarketingImageTools } from './MarketingImageTools';
 import { MarketingVersionHistory } from './MarketingVersionHistory';
@@ -1552,11 +1557,7 @@ function MetricsForm({
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
-          const fields = Object.fromEntries(
-            Object.entries(mapping)
-              .filter(([, value]) => value.trim())
-              .map(([key, value]) => [key, value.trim()])
-          );
+          const fields = columnMapping(mapping);
           setError('');
           void onPreview({
             csv_text: text,
@@ -1586,18 +1587,20 @@ function MetricsForm({
               setContextConfirmed(false);
               const file = e.target.files?.[0];
               if (!file) return;
-              if (file.size > 262144) {
-                setError(t('marketing-csv-size-limit'));
-                return;
-              }
-              void file
-                .text()
-                .then((value) => {
-                  setText(value);
-                  setFilename(file.name);
+              void readReportFile(file).then((read) => {
+                if (read.ok) {
+                  setText(read.text);
+                  setFilename(read.filename);
                   setError('');
-                })
-                .catch(() => setError(t('marketing-file-read-failed')));
+                } else
+                  setError(
+                    t(
+                      read.reason === 'too_large'
+                        ? 'marketing-csv-size-limit'
+                        : 'marketing-file-read-failed'
+                    )
+                  );
+              });
             }}
           />
         </label>
@@ -1624,15 +1627,7 @@ function MetricsForm({
             {t('marketing-custom-column-mapping')}
           </summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {[
-              'date',
-              'ad_id',
-              'spend',
-              'impressions',
-              'clicks',
-              'purchases',
-              'purchase_value',
-            ].map((field) => (
+            {REPORT_COLUMNS.map((field) => (
               <Input
                 key={field}
                 label={t(`marketing-column-${field}`)}
