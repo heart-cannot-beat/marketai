@@ -233,13 +233,16 @@ describe('IdeasPage (#196)', () => {
 
     // The mark shows at once and the count follows.
     expect(screen.getByTestId('ideas-kept-bar')).toHaveTextContent('2 kept');
-    expect(mockGateway.setMarketingAdKept).toHaveBeenCalledWith({
-      workspaceSlug: 'acme',
-      actionInstanceId: expect.any(String),
-      projectId: 'mp_secret',
-      assetVersionId: 'av_2',
-      body: { kept: true },
-    });
+    // Sent once the keeps before it are answered (#285): none here.
+    await waitFor(() =>
+      expect(mockGateway.setMarketingAdKept).toHaveBeenCalledWith({
+        workspaceSlug: 'acme',
+        actionInstanceId: expect.any(String),
+        projectId: 'mp_secret',
+        assetVersionId: 'av_2',
+        body: { kept: true },
+      })
+    );
     await act(async () => answer(ok(kept)));
     expect(
       within(claim(1)).getAllByRole('button', { name: 'Kept' })
@@ -288,6 +291,164 @@ describe('IdeasPage (#196)', () => {
     expect(
       within(claim(1)).getByRole('button', { name: 'Keep this one' })
     ).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  describe('two keeps clicked one right after the other', () => {
+    type Detail = ReturnType<typeof ideasDetail>;
+    const none = () =>
+      ideasDetail({
+        ads: ideasDetail().ads.map((item) => ({ ...item, kept: false })),
+      });
+
+    /**
+     * A server that holds every keep it is sent until the test lets it take
+     * one; taking a keep applies it and answers with every mark the server
+     * holds at that moment, as `set_marketing_ad_kept` does. Overlapping
+     * keeps can reach the server, and be answered, in either order.
+     */
+    function keepServer(start: Detail) {
+      let held = start;
+      const waiting: {
+        id: string;
+        kept: boolean;
+        answer: (value: unknown) => void;
+      }[] = [];
+      mockGateway.setMarketingAdKept.mockImplementation(
+        ({
+          assetVersionId,
+          body,
+        }: {
+          assetVersionId: string;
+          body: { kept: boolean };
+        }) =>
+          new Promise((answer) => {
+            waiting.push({ id: assetVersionId, kept: body.kept, answer });
+          })
+      );
+      const next = async (newestFirst: boolean) => {
+        await waitFor(() => expect(waiting.length).toBeGreaterThan(0));
+        return waiting.splice(newestFirst ? waiting.length - 1 : 0, 1)[0];
+      };
+      return {
+        waiting: () => waiting.map((item) => item.id),
+        /** Takes one waiting keep: the newest if several overlap. */
+        async take({ newestFirst = true } = {}) {
+          const mark = await next(newestFirst);
+          held = {
+            ...held,
+            ads: held.ads.map((item) =>
+              item.asset_version_id === mark.id
+                ? { ...item, kept: mark.kept }
+                : item
+            ),
+          };
+          const answer = held;
+          await act(async () => mark.answer(ok(answer)));
+        },
+        /** Refuses the oldest waiting keep: the ad is gone. */
+        async refuse() {
+          const mark = await next(false);
+          await act(async () =>
+            mark.answer({
+              kind: 'problem',
+              status: 404,
+              problem: {
+                type: 'about:blank',
+                title: 'Not found',
+                status: 404,
+                detail: '',
+                instance: '',
+                code: 'ad_not_found',
+                trace_id: 'trace-2',
+                retryable: false,
+                field_errors: [],
+              },
+              meta: {},
+            })
+          );
+        },
+      };
+    }
+
+    const keepFirstOf = (number: number) =>
+      fireEvent.click(
+        within(claim(number)).getAllByRole('button', {
+          name: 'Keep this one',
+        })[0]
+      );
+
+    it('shows both marks at once and keeps both once the server has answered, whichever it took first', async () => {
+      await renderPage(none());
+      const server = keepServer(none());
+      const bar = screen.getByTestId('ideas-kept-bar');
+
+      keepFirstOf(1);
+      keepFirstOf(2);
+
+      // The second click must not hide the first ad's mark while both wait.
+      expect(bar).toHaveTextContent('2 kept');
+      expect(
+        within(claim(1)).getAllByRole('button', { name: 'Kept' })
+      ).toHaveLength(1);
+      expect(
+        within(claim(2)).getAllByRole('button', { name: 'Kept' })
+      ).toHaveLength(1);
+
+      // The server takes the newest waiting keep first each time.
+      await server.take();
+      await server.take();
+      expect(server.waiting()).toEqual([]);
+
+      // What the page settles on is what the server holds: both kept.
+      await waitFor(() => expect(bar).toHaveTextContent('2 kept'));
+      expect(
+        within(claim(1)).getAllByRole('button', { name: 'Kept' })
+      ).toHaveLength(1);
+      expect(
+        within(claim(2)).getAllByRole('button', { name: 'Kept' })
+      ).toHaveLength(1);
+      expect(
+        mockGateway.setMarketingAdKept.mock.calls.map(
+          ([call]) => call.assetVersionId
+        )
+      ).toEqual(['av_1', 'av_3']);
+    });
+
+    it('sends the second keep once the first is answered, so each answer holds every earlier mark', async () => {
+      await renderPage(none());
+      const server = keepServer(none());
+
+      keepFirstOf(1);
+      keepFirstOf(2);
+      await waitFor(() => expect(server.waiting()).toEqual(['av_1']));
+
+      await server.take();
+      await waitFor(() => expect(server.waiting()).toEqual(['av_3']));
+      await server.take();
+      expect(screen.getByTestId('ideas-kept-bar')).toHaveTextContent('2 kept');
+    });
+
+    it('a refused second keep says why and does not take back the first one', async () => {
+      await renderPage(none());
+      const server = keepServer(none());
+      const bar = screen.getByTestId('ideas-kept-bar');
+
+      keepFirstOf(1);
+      keepFirstOf(2);
+      await server.take({ newestFirst: false });
+      await server.refuse();
+
+      expect(
+        await screen.findByText('This ad is no longer here. Refresh the page.')
+      ).toBeInTheDocument();
+      await waitFor(() => expect(bar).toHaveTextContent('1 kept'));
+      expect(
+        within(claim(1)).getAllByRole('button', { name: 'Kept' })
+      ).toHaveLength(1);
+      expect(
+        within(claim(2)).queryAllByRole('button', { name: 'Kept' })
+      ).toHaveLength(0);
+    });
   });
 
   it('shows a placeholder for an image being made and a retry entry for a failed one', async () => {
