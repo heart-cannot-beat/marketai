@@ -19,7 +19,12 @@ const IdeasPage: NextPageWithLayout<Props> = ({ bootstrap }) => {
   if (!bootstrap) return null;
   return (
     <ProductFrame productId={router.query.productId as string} view="ideas">
-      {(product) => <ProductIdeas product={product} />}
+      {(product) => (
+        <ProductIdeas
+          product={product}
+          startWithCheck={router.query.check === '1'}
+        />
+      )}
     </ProductFrame>
   );
 };

@@ -29,6 +29,7 @@ import {
 import { renewRestores } from '@/lib/ideas/photos';
 import {
   productViewHref,
+  takeToTestHref,
   type WorkspaceProduct,
 } from '@/lib/products/workspace-products';
 import { AdCard } from './AdCard';
@@ -70,10 +71,19 @@ type Screen =
  * Product photos are checked in the check before downloading and on the
  * product profile (#229).
  *
- * Left for later on purpose: taking ads to a test (step 2) and the image
- * model's own instructions (no server path yet).
+ * The bottom bar also takes the kept ads to a test (step 2, ADR 0019, #256).
+ *
+ * Left for later on purpose: the image model's own instructions (no server
+ * path yet).
  */
-export function IdeasPage({ product }: { product: WorkspaceProduct }) {
+export function IdeasPage({
+  product,
+  startWithCheck = false,
+}: {
+  product: WorkspaceProduct;
+  /** Open on the check before downloading ("take to test" sends the user here, #256). */
+  startWithCheck?: boolean;
+}) {
   const { t } = useTranslation('ideas');
   const projectId = product.ideas?.projectId;
   if (!projectId)
@@ -82,15 +92,23 @@ export function IdeasPage({ product }: { product: WorkspaceProduct }) {
         {t('ideas-none')}
       </p>
     );
-  return <IdeasProject product={product} projectId={projectId} />;
+  return (
+    <IdeasProject
+      product={product}
+      projectId={projectId}
+      startWithCheck={startWithCheck}
+    />
+  );
 }
 
 function IdeasProject({
   product,
   projectId,
+  startWithCheck,
 }: {
   product: WorkspaceProduct;
   projectId: string;
+  startWithCheck: boolean;
 }) {
   const { t, i18n } = useTranslation('ideas');
   const { current } = useWorkspace();
@@ -102,7 +120,9 @@ function IdeasProject({
   const view = useMemo(() => (detail ? ideasView(detail) : null), [detail]);
   const [busyAd, setBusyAd] = useState<string | null>(null);
   const [keepProblem, setKeepProblem] = useState<string | null>(null);
-  const [screen, setScreen] = useState<Screen>({ kind: 'ideas' });
+  const [screen, setScreen] = useState<Screen>({
+    kind: startWithCheck ? 'check' : 'ideas',
+  });
   const [uploading, setUploading] = useState(false);
   const [telling, setTelling] = useState<string | null>(null);
   // One claim's "More" is open at a time (#224).
@@ -532,6 +552,7 @@ function IdeasProject({
         keptCount={view.keptCount}
         problem={keepProblem}
         onCheck={() => setScreen({ kind: 'check' })}
+        testHref={takeToTestHref(current.slug, product.productId)}
       />
     </div>
   );
@@ -686,18 +707,21 @@ function EarlierSection({
 }
 
 /**
- * "N kept" stays at the bottom of the screen (design §5.8). Its button leads
- * to the check before downloading (#201). With nothing kept it cannot be used
+ * "N kept" stays at the bottom of the screen (design §5.8). Its buttons take
+ * the kept ads to a test (ADR 0019, #256) or lead to the check before
+ * downloading only the images (#201). With nothing kept neither can be used
  * (design §5.3).
  */
 function KeptBar({
   keptCount,
   problem,
   onCheck,
+  testHref,
 }: {
   keptCount: number;
   problem: string | null;
   onCheck: () => void;
+  testHref: string;
 }) {
   const { t } = useTranslation('ideas');
   return (
@@ -719,14 +743,33 @@ function KeptBar({
             {keptCount === 0 ? t('ideas-kept-none-hint') : t('ideas-kept-hint')}
           </p>
         </div>
-        <button
-          type="button"
-          className="min-h-12 w-full rounded-lg bg-white px-5 text-sm font-semibold text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-          disabled={keptCount === 0}
-          onClick={onCheck}
-        >
-          {t('ideas-download-images')}
-        </button>
+        <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+          <button
+            type="button"
+            className="min-h-12 flex-1 rounded-lg border border-gray-500 px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+            disabled={keptCount === 0}
+            onClick={onCheck}
+          >
+            {t('ideas-download-images')}
+          </button>
+          {keptCount > 0 ? (
+            <GuardedLink
+              href={testHref}
+              className="flex min-h-12 flex-1 items-center justify-center rounded-lg bg-white px-5 text-sm font-semibold text-gray-900 sm:flex-none"
+              data-testid="ideas-take-to-test"
+            >
+              {t('ideas-take-to-test')}
+            </GuardedLink>
+          ) : (
+            <button
+              type="button"
+              className="min-h-12 flex-1 rounded-lg bg-white px-5 text-sm font-semibold text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+              disabled
+            >
+              {t('ideas-take-to-test')}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

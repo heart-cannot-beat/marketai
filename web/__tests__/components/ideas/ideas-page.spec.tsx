@@ -145,7 +145,7 @@ describe('IdeasPage (#196)', () => {
       )
     ).toBeInTheDocument();
 
-    // S13 (#201) adds the buttons S8 left out; taking ads to a test is step 2.
+    // S13 (#201) adds the buttons S8 left out; step 2 takes the kept ads to a test (#256).
     expect(within(first).getAllByRole('button', { name: 'Edit' })).toHaveLength(
       2
     );
@@ -153,8 +153,10 @@ describe('IdeasPage (#196)', () => {
       screen.getByRole('button', { name: 'Download images only' })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /take to a test/i })
-    ).toBeNull();
+      within(screen.getByTestId('ideas-kept-bar')).getByRole('link', {
+        name: 'Take to test',
+      })
+    ).toHaveAttribute('href', '/w/acme/p/prod_home/take-to-test');
   });
 
   it('shows two claims when the ideas have only two, never six empty slots', async () => {
@@ -465,6 +467,12 @@ describe('IdeasPage (#196)', () => {
     expect(
       within(bar).getByRole('button', { name: 'Download images only' })
     ).toBeDisabled();
+    expect(
+      within(bar).getByRole('button', { name: 'Take to test' })
+    ).toBeDisabled();
+    expect(
+      within(bar).queryByRole('link', { name: 'Take to test' })
+    ).toBeNull();
 
     mockGateway.setMarketingAdKept.mockResolvedValue(
       ok(
@@ -483,6 +491,9 @@ describe('IdeasPage (#196)', () => {
     });
     await waitFor(() => expect(button).toBeEnabled());
     expect(bar).toHaveTextContent('1 kept');
+    expect(
+      within(bar).getByRole('link', { name: 'Take to test' })
+    ).toHaveAttribute('href', '/w/acme/p/prod_home/take-to-test');
 
     // It leads to the check before downloading (#201), not to a placeholder.
     fireEvent.click(button);
@@ -493,6 +504,21 @@ describe('IdeasPage (#196)', () => {
       })
     ).toBeInTheDocument();
     expect(screen.queryByText(/aren't open yet/)).toBeNull();
+  });
+
+  it('opens on the check before downloading when "take to test" sends the user there (#256)', async () => {
+    mockGateway.getMarketingIdeas.mockResolvedValue(ok(ideasDetail()));
+    render(
+      <Fresh>
+        <IdeasPage product={product()} startWithCheck />
+      </Fresh>
+    );
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Check once before downloading',
+      })
+    ).toBeInTheDocument();
   });
 
   it('shows the facts the AI read on the side, each not checked yet until it is', async () => {

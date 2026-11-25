@@ -200,6 +200,11 @@ export function productViewHref(
   return `/w/${slug}/p/${encodeURIComponent(productId)}/${view}`;
 }
 
+/** "Take to test": a product's kept ads become a test (ADR 0019, #256); shown under its Tests view. */
+export function takeToTestHref(slug: string, productId: string): string {
+  return `/w/${slug}/p/${encodeURIComponent(productId)}/take-to-test`;
+}
+
 /** The product view the overview's main button opens for a step. */
 export function stepView(step: NextStepKind): ProductView {
   if (step === 'report_missing') return 'tests';
