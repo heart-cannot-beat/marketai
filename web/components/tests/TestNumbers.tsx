@@ -135,6 +135,7 @@ function Deviations({
   headlines: Map<string, string>;
 }) {
   const { t, i18n } = useTranslation('tests');
+  const { t: tc } = useTranslation('common');
   const id = useId();
   const progress = run.progress!;
   const entries = run.round?.handoff?.entries ?? [];
@@ -180,7 +181,7 @@ function Deviations({
                 {t('run-deviation-record', {
                   groups: deviation.comparison_ids
                     .map((comparison) => labels.get(comparison) ?? comparison)
-                    .join(t('list-comma', { ns: 'common' })),
+                    .join(tc('list-comma')),
                   at: formatDateTime(i18n.language, deviation.created_at),
                 })}
               </p>
@@ -268,7 +269,7 @@ function Deviations({
                   count: affected.length,
                   groups: affected
                     .map((comparison) => comparison.label)
-                    .join(t('list-comma', { ns: 'common' })),
+                    .join(tc('list-comma')),
                 })}
               </p>
               <p>{t('run-deviation-warning-kept')}</p>
