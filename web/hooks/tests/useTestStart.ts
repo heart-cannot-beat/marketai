@@ -49,9 +49,10 @@ export function problemParams<T = Record<string, unknown>>(
 /**
  * One command runner per hook: one action id per intended command, kept
  * until it is answered, so asking again after a lost reply replays the same
- * command (idempotency) instead of starting a second one.
+ * command (idempotency) instead of starting a second one. The "test in
+ * progress" screen (#257) runs its commands the same way.
  */
-function useRunner() {
+export function useRunner() {
   const actions = useRef(new Map<string, string>());
   return useCallback(
     async <T>(

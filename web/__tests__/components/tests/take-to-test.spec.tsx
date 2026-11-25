@@ -21,11 +21,13 @@ import { ad, ideasDetail, product } from '../ideas/fixtures';
  * package made by itself and downloaded.
  */
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('next/router', () => ({
   useRouter: () => ({
     asPath: '/w/acme/p/prod_home/take-to-test',
     query: {},
     push: mockPush,
+    replace: mockReplace,
   }),
 }));
 jest.mock('@/components/workspace/WorkspaceProvider', () => ({
@@ -657,6 +659,32 @@ describe('TakeToTest: after the start (#256)', () => {
       actionInstanceId: expect.any(String),
       roundId: 'mr_1',
     });
+    // Made while the page was open: shown here, with the way on to the test (#257).
+    expect(within(pack).getByTestId('test-open-run')).toHaveAttribute(
+      'href',
+      '/w/acme/p/prod_home/tests/mp_test'
+    );
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('a package ready before the page opened: carries on on the test’s own screen (#257)', async () => {
+    mockGateway.listMarketingTests.mockResolvedValue(
+      ok({ product_id: 'prod_home', tests: [TEST], earlier_tests: [] })
+    );
+    mockGateway.getMarketingRound.mockResolvedValue(
+      envelope({
+        ...testRound(['succeeded', 'succeeded']),
+        state: 'handoff',
+        handoff: handoff('ready'),
+      } as TestRound)
+    );
+    renderScreen();
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith(
+        '/w/acme/p/prod_home/tests/mp_test'
+      )
+    );
+    expect(mockGateway.completeMarketingTestStart).not.toHaveBeenCalled();
   });
 
   it('cancels before the package, after confirming, and goes back to change the ads', async () => {

@@ -18,6 +18,7 @@ import { ideasProblem } from '@/lib/ideas/ideas-problems';
 import type { IdeasDetail } from '@/lib/ideas/ideas-view';
 import {
   productViewHref,
+  testHref,
   type WorkspaceProduct,
 } from '@/lib/products/workspace-products';
 import {
@@ -84,6 +85,7 @@ export function TakeToTest({ product }: { product: WorkspaceProduct }) {
         key={running}
         testId={running}
         ideasHref={ideasHref}
+        runHref={testHref(current.slug, product.productId, running)}
         onRestart={() => {
           setRestarted(running);
           setTestId(null);

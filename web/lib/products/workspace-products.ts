@@ -205,6 +205,15 @@ export function takeToTestHref(slug: string, productId: string): string {
   return `/w/${slug}/p/${encodeURIComponent(productId)}/take-to-test`;
 }
 
+/** A test once its ad package is made: reports, numbers so far, schedule, result (#257). */
+export function testHref(
+  slug: string,
+  productId: string,
+  testId: string
+): string {
+  return `/w/${slug}/p/${encodeURIComponent(productId)}/tests/${encodeURIComponent(testId)}`;
+}
+
 /** The product view the overview's main button opens for a step. */
 export function stepView(step: NextStepKind): ProductView {
   if (step === 'report_missing') return 'tests';
