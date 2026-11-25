@@ -291,7 +291,7 @@ export function TestStartProgress({
                 />
                 <div className="min-w-0 text-sm">
                   <p className="truncate font-medium">{entry.headline}</p>
-                  <p className="break-all text-xs text-gray-600 dark:text-gray-400">
+                  <p className="break-words text-xs text-gray-600 dark:text-gray-400">
                     {t('take-ad-name', { name: entry.ad_name })}
                   </p>
                 </div>
