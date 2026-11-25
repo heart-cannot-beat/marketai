@@ -109,7 +109,8 @@ export default defineConfig({
     },
     {
       // The new opening (ADR 0018, #204): empty Workspace to downloaded
-      // images on the Compose stack whose web is built with the switch on
+      // images, and kept ads taken to a test through to its result (#259),
+      // on the Compose stack whose web is built with the switch on
       // (docker-compose.ads-first.yml, `make ads-first-e2e`).
       name: 'ads-first',
       testMatch: [/ads-first\/.*\.spec\.ts/],

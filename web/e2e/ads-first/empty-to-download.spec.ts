@@ -17,136 +17,43 @@
  */
 import { randomUUID } from 'crypto';
 import { writeFileSync } from 'fs';
-import type { Download, Page } from '@playwright/test';
-import {
-  expect,
-  test,
-  totpCode,
-  provisionWorkspace,
-  type WorkspaceProvisionResult,
-} from '../golden-path/fixtures';
+import type { Download } from '@playwright/test';
+import { expect, test } from '../golden-path/fixtures';
 import { en } from '../support/copy';
+import {
+  INTERNAL_ID,
+  PRODUCT_TEXT,
+  SKIP_REASON,
+  adsFirstEnabled,
+  provisionAdsFirst,
+  shot,
+  signUpOwner,
+  useControlledMock,
+  type AdsFirstWorkspace,
+} from './journey';
 
 const RUN_SUFFIX = `af-${randomUUID().slice(0, 8)}`;
-const MFA_ENCRYPTION_KEY = Buffer.from(
-  process.env.MFA_ENCRYPTION_KEY ??
-    'Y29tcG9zZS1tZmEtZW5jcnlwdGlvbi1rZXktMzJiISE=',
-  'base64'
-);
-const INTERNAL_ID =
-  /\b(prod|lib|libver|gd|gr|av|pi|op|mp|mfb|run|pc)_[A-Za-z0-9]{6,}/;
-/** A fictional product, pasted as text. */
-const PRODUCT_TEXT =
-  'Acme Charge Home is a wall-mounted home charger for electric cars. ' +
-  'It charges at up to 7 kW, schedules charging from the Acme Charge app ' +
-  'and has an IP55 weatherproof case for outdoor driveways.';
 
-let ws: WorkspaceProvisionResult;
-let prisma: any;
-let domainDb: any;
-let dispatchCurrentSnapshot: (
-  teamId: string,
-  dispatcherId: string
-) => Promise<string>;
+let provisioned: AdsFirstWorkspace;
 
 test.beforeAll(async () => {
-  test.skip(
-    process.env.E2E_ADS_FIRST !== 'true',
-    'Needs the web built with NEXT_PUBLIC_MARKETAI_ADS_FIRST=true (make ads-first-e2e).'
-  );
-  const provisioned = await provisionWorkspace({
-    suffix: RUN_SUFFIX,
-    mfaEncryptionKey: MFA_ENCRYPTION_KEY,
-  });
-  ws = provisioned.result;
-  prisma = provisioned.prisma;
-  domainDb = provisioned.domainDb;
-  dispatchCurrentSnapshot = provisioned.dispatchCurrentSnapshot;
+  test.skip(!adsFirstEnabled(), SKIP_REASON);
+  provisioned = await provisionAdsFirst(RUN_SUFFIX);
 });
 
 test.afterAll(async () => {
-  await prisma?.$disconnect();
-  await domainDb?.$disconnect();
+  await provisioned?.prisma?.$disconnect();
+  await provisioned?.domainDb?.$disconnect();
 });
-
-/**
- * Turns the first batch's quote and start into Controlled Mock: the page asks
- * for `byok`, the test makes it `mock`. Nothing else is touched.
- */
-async function useControlledMock(page: Page) {
-  await page.route('**/marketing/first-batch-quote*', (route) =>
-    route.continue({
-      url: route
-        .request()
-        .url()
-        .replace('execution_mode=byok', 'execution_mode=mock'),
-    })
-  );
-  await page.route('**/marketing/first-batch', async (route) => {
-    const request = route.request();
-    if (request.method() !== 'POST') return route.continue();
-    const body = JSON.parse(request.postData() ?? '{}');
-    return route.continue({
-      postData: JSON.stringify({ ...body, execution_mode: 'mock' }),
-    });
-  });
-}
-
-/**
- * With `E2E_ADS_FIRST_SHOTS` set to a folder, keeps a screenshot of each
- * screen for the tutorial (#204); otherwise does nothing.
- */
-async function shot(page: Page, name: string) {
-  const dir = process.env.E2E_ADS_FIRST_SHOTS;
-  if (!dir) return;
-  // The view a person sees from the top of the page: a full-page capture
-  // misplaces the sticky sidebar and the kept bar.
-  await page.setViewportSize({ width: 1280, height: 1100 });
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: `${dir}/${name}.png` });
-}
 
 test('empty Workspace → start → ideas → check once → download the two kept images', async ({
   page,
 }) => {
   test.setTimeout(900_000);
-  const slug = ws.workspaceSlug;
+  const slug = provisioned.result.workspaceSlug;
 
   await test.step('the Owner signs up, enrolls MFA and the Workspace activates', async () => {
-    await page.goto(
-      `/auth/join?token=${encodeURIComponent(ws.invitationToken)}`
-    );
-    await page.locator('input[name="name"]').fill('Ads First Owner');
-    await page.locator('input[name="password"]').fill(ws.ownerPassword);
-    await page.getByRole('button', { name: 'Create Account' }).click();
-    await page.waitForURL(/\/auth\/login\?callbackUrl=/);
-    await page.locator('input[name="email"]').fill(ws.ownerEmail);
-    await page.locator('input[name="password"]').fill(ws.ownerPassword);
-    await page.getByRole('button', { name: /sign in/i }).click();
-    await page.waitForURL(/\/settings\/security\?onboarding=/);
-    await page.getByRole('button', { name: 'Set up MFA' }).click();
-    const secret = (await page.locator('code').first().innerText()).trim();
-    await page.getByLabel('Authenticator code').fill(totpCode(secret));
-    await page.getByRole('button', { name: 'Confirm MFA' }).click();
-    await expect(
-      page.getByText(/Save these one-time recovery codes/)
-    ).toBeVisible();
-    await dispatchCurrentSnapshot(
-      ws.workspaceId,
-      `e2e-af-initial-${RUN_SUFFIX}`
-    );
-    await expect
-      .poll(async () => {
-        const team = await prisma.team.findUnique({
-          where: { id: ws.workspaceId },
-        });
-        return team?.lifecycle;
-      })
-      .toBe('ACTIVE');
-    await dispatchCurrentSnapshot(
-      ws.workspaceId,
-      `e2e-af-active-${RUN_SUFFIX}`
-    );
+    await signUpOwner(page, provisioned, RUN_SUFFIX);
   });
 
   await test.step('an empty Workspace opens the start page; without a key the Owner is asked for one, and the examples say so', async () => {

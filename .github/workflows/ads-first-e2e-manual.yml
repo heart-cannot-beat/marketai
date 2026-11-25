@@ -2,9 +2,11 @@ name: Ads-first E2E (manual)
 
 # The new opening (ADR 0018, #204) on the Compose stack whose web is built with
 # NEXT_PUBLIC_MARKETAI_ADS_FIRST=true (docker-compose.ads-first.yml): an empty
-# Workspace to two downloaded images, Controlled Mock only. Manual only, like
-# e2e-suites-manual.yml: it never runs on pull requests, pushes or a schedule,
-# because the switch is off in production until the maintainer turns it on.
+# Workspace to two downloaded images, and (step 2, #259) two kept ads taken to
+# a test, its package, two reports sent back, the result and the test history.
+# Controlled Mock only. Manual only, like e2e-suites-manual.yml: it never runs
+# on pull requests, pushes or a schedule, because the switch is off in
+# production until the maintainer turns it on.
 # ci.yml's golden-path-e2e keeps testing the switch-off build on every PR.
 on:
   workflow_dispatch:

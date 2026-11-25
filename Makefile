@@ -115,8 +115,9 @@ golden-path-e2e:
 	  npx playwright test --project golden-path --workers 1 --reporter=html,json
 	@echo "Results in web/test-results/ and web/playwright-report/"
 
-# The new opening (ADR 0018, #204): the web built with NEXT_PUBLIC_MARKETAI_ADS_FIRST=true,
-# Controlled Mock only. Tear down with `docker compose -p ads-first down -v --rmi local`.
+# The new opening (ADR 0018, #204; step 2 take to test, ADR 0019, #259): the web built with
+# NEXT_PUBLIC_MARKETAI_ADS_FIRST=true, Controlled Mock only.
+# Tear down with `docker compose -p ads-first down -v --rmi local`.
 ADS_FIRST_COMPOSE = docker compose -p ads-first -f docker-compose.yml -f docker-compose.ads-first.yml --env-file deploy/docker/.env.compose
 
 ads-first-e2e:
