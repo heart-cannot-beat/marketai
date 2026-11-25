@@ -132,8 +132,11 @@ export function ReportUpload({ run }: { run: TestInProgress }) {
     setSuggestions(null);
     setMatched(false);
     setKeptStart(false);
-    if (uploaded.issues.length) return;
-    const names = settle(await run.suggest(uploaded.id));
+    if (!uploaded.issues.length) await readNames(uploaded.id);
+  }
+
+  async function readNames(batchId: string) {
+    const names = settle(await run.suggest(batchId));
     if (names) setSuggestions(names);
   }
 
@@ -375,6 +378,16 @@ export function ReportUpload({ run }: { run: TestInProgress }) {
             </div>
           ) : (
             <>
+              {!suggestions && (problem || uncertain) && (
+                <button
+                  type="button"
+                  className={BUTTON}
+                  disabled={run.busy}
+                  onClick={() => void readNames(report.id)}
+                >
+                  {t('take-retry')}
+                </button>
+              )}
               {suggestions && !matched && (
                 <BindingConfirm
                   suggestions={suggestions}

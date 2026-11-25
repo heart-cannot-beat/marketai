@@ -583,6 +583,19 @@ describe('TestInProgress: the report comes back (#257)', () => {
     ).toBeInTheDocument();
   });
 
+  it('reading the ad names failed: asks again without uploading again', async () => {
+    mockGateway.previewMarketingTestReport.mockResolvedValue(ok(report(), 201));
+    mockGateway.suggestMarketingTestBindings
+      .mockResolvedValueOnce(refused('batch_not_found'))
+      .mockResolvedValue(ok(SUGGESTIONS));
+    renderScreen();
+    await upload();
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByTestId('binding-confirm')).toBeInTheDocument();
+    expect(mockGateway.previewMarketingTestReport).toHaveBeenCalledTimes(1);
+    expect(mockGateway.suggestMarketingTestBindings).toHaveBeenCalledTimes(2);
+  });
+
   it('a later full report says it replaces the days it repeats', async () => {
     mockGateway.getMarketingRound.mockResolvedValue(
       envelope(
