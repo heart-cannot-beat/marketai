@@ -455,6 +455,9 @@ export function useStartProgress(testId: string): StartProgress {
   }, [gateway, mutateRound, round, run, slug]);
 
   const refresh = useCallback(async () => {
+    // Reasons given for an older check would be refused (`check_changed`):
+    // the newest check's findings open again instead.
+    accepted.current = [];
     setRefusal(null);
     attempted.current = null;
     await testQuery.mutate();

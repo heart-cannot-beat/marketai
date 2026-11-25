@@ -725,6 +725,42 @@ describe('TakeToTest: after the start (#256)', () => {
   });
 });
 
+describe('TakeToTest: a refusal to look at again (#256)', () => {
+  it('a check changed meanwhile: says so, and Refresh asks again without old reasons', async () => {
+    mockGateway.listMarketingTests.mockResolvedValue(
+      ok({ product_id: 'prod_home', tests: [TEST], earlier_tests: [] })
+    );
+    mockGateway.getMarketingRound.mockResolvedValue(
+      envelope(testRound(['succeeded', 'succeeded']))
+    );
+    mockGateway.completeMarketingTestStart
+      .mockResolvedValueOnce(refused('check_changed'))
+      .mockResolvedValueOnce(
+        refused('check_findings_open', {
+          findings: [
+            {
+              asset_version_id: 'av_3',
+              check_id: 'qc_3',
+              finding_ids: ['comparison_faithful'],
+            },
+          ],
+        })
+      );
+    renderScreen();
+    expect(
+      await screen.findByText(
+        "This ad's check result has changed. Refresh and look at it again."
+      )
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByTestId('test-open-findings')).toBeInTheDocument();
+    expect(mockGateway.completeMarketingTestStart).toHaveBeenCalledTimes(2);
+    expect(mockGateway.completeMarketingTestStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ body: { accepted_findings: [] } })
+    );
+  });
+});
+
 describe('TakeToTest: nothing to take', () => {
   it('points back to the ad ideas when nothing is kept', async () => {
     mockGateway.getMarketingIdeas.mockResolvedValue(

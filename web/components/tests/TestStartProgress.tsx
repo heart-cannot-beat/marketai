@@ -213,9 +213,19 @@ export function TestStartProgress({
       )}
 
       {stage === 'blocked' && progress.problem && (
-        <p className="text-sm text-red-700 dark:text-red-300" role="alert">
-          {errorMessage(t, progress.problem)}
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-red-700 dark:text-red-300" role="alert">
+            {errorMessage(t, progress.problem)}
+          </p>
+          <button
+            type="button"
+            className={BUTTON}
+            disabled={progress.busy}
+            onClick={() => void progress.refresh()}
+          >
+            {t('take-refresh')}
+          </button>
+        </div>
       )}
 
       {stage === 'package_failed' && (
