@@ -80,6 +80,7 @@ def test_unbounded_or_ambiguous_brushes_are_rejected(values):
 
 
 class TestBrushWorkflow(MarketingWorkflowFixtures):
+    generated_size = supplier.TestSupplierImageTools.generated_size
     setup_round = supplier.TestSupplierImageTools.setup_round
     refresh = supplier.TestSupplierImageTools.refresh
     prepare = supplier.TestSupplierImageTools.prepare

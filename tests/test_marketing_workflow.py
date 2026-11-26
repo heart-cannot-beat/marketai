@@ -22,6 +22,9 @@ from app.platform.blob_store import CommittedBlobRef
 
 
 class MarketingWorkflowFixtures(MarketingPlanningFixtures):
+    #: The fake provider's image size in ``run_drafts``.
+    generated_size = (80, 60)
+
     def confirmed(self):
         project = self.drafted()
         # These loops check one execution per combination; the planned default of two is covered by #225's tests.
@@ -56,7 +59,7 @@ class MarketingWorkflowFixtures(MarketingPlanningFixtures):
         if not getattr(self, "blobs", None):
             self.blobs = LocalFileBlobStore(root=config.DATA_DIR / new_id("blobs"), public_base_url="http://localhost:9000", signing_secret=b"test-only")
         adapter = AsyncMock()
-        adapter.execute.return_value = ProviderCallResult(png_bytes(colour=colour), "external-request", False)
+        adapter.execute.return_value = ProviderCallResult(png_bytes(size=self.generated_size, colour=colour), "external-request", False)
         for draft_id in draft_ids:
             draft = self.client.get(f"/api/v1/generation/drafts/{draft_id}").json()
             preview = self.client.post(f"/api/v1/generation/drafts/{draft_id}/previews", headers=self.headers(draft["revision"]))
