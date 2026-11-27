@@ -353,8 +353,8 @@ class FirstBatchCheckTests(IdeasChecksFixtures):
         self.assertEqual(done["state"], "done", done["attention"])
         self.assertEqual(self.qc_complete.await_count, 6)
         self.assertEqual(Decimal(done["reserved_total"]), self.reserved(done))
-        self.assertEqual(Decimal(done["confirmed_max_cost"]) - Decimal(done["reserved_total"]), Decimal("0.1"),
-                         "only the unused extra drafting is left")
+        self.assertEqual(Decimal(done["confirmed_max_cost"]) - Decimal(done["reserved_total"]), Decimal("0.2"),
+                         "only the two unused extra draftings (understanding and ideas, #267) are left")
         with tenant_session(self.context) as session:
             for call in self.check_calls(done["project_id"]):
                 reservation = session.scalar(select(SpendReservationRecord).where(SpendReservationRecord.job_id == call.job_id))

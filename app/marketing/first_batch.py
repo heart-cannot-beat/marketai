@@ -2,8 +2,9 @@
 
 "Start" reads the product, drafts the understanding, drafts the ideas, makes their images and checks
 each image (#197) without another click. The user confirms one number, the start button's maximum: the maxima of the steps plus
-one extra planning call, kept for drafting the ideas again when the application refuses the first draft
-(maintainer decision on #193). Every step is still an ordinary record -- the product intake, the
+two extra planning calls, one kept for drafting the ideas again when the application refuses the first draft
+(maintainer decision on #193) and one for drafting the understanding again when it refuses its facts
+(maintainer decision on #267). Every step is still an ordinary record -- the product intake, the
 planning calls, one generation run per ad, one single-image check per image -- reserved and settled on
 its own. The checks are admitted by the advance in the Worker too (maintainer decision on #197; the cost
 contract §11 lists the steps).
@@ -16,11 +17,11 @@ queues through ``notify``; ``resume`` runs it in the request after the user acte
 
 The batch stops and waits for the user (``needs_attention``) when the page lists several models, when
 the ideas have fewer than 2 claims (no images then), when the next step would pass the confirmed number,
-when the ideas were refused twice, when a step failed, or while a call's outcome is uncertain (an
-uncertain call is never sent again on its own). It also stops when the advance itself kept failing
-(``fault``, #269): an error of ours, not of a step, so continuing from it confirms no higher number. A
-page that cannot be read ends the batch (``failed``): the remedy is to start again with pasted text or
-screenshots.
+when the ideas were refused twice, when a step failed (the understanding's facts refused twice among them),
+or while a call's outcome is uncertain (an uncertain call is never sent again on its own). It also stops
+when the advance itself kept failing (``fault``, #269): an error of ours, not of a step, so continuing from
+it confirms no higher number. A page that cannot be read ends the batch (``failed``): the remedy is to
+start again with pasted text or screenshots.
 """
 from __future__ import annotations
 
@@ -50,10 +51,12 @@ ENDED = ("done", "failed")
 ADS = 6
 #: The extra planning call the confirmed total keeps for drafting the ideas again once (#193).
 IDEAS_RETRIES = 1
+#: The extra planning call it keeps for drafting the understanding again once when its facts are refused (#267).
+UNDERSTANDING_RETRIES = 1
 #: The first batch's images: one per way of telling, portrait for the feed (design doc §12 leaves it to us).
 IMAGE_FORMAT = {"aspect_ratio": "4:5", "image_size": "1K", "variants": 1}
 SOURCE_LIMIT = 16000
-QUOTE_VERSION = "first-batch-v1"
+QUOTE_VERSION = "first-batch-v2"  # v2: the understanding's retry (#267)
 #: Run item states of an image still being made.
 IMAGE_IN_FLIGHT = ("pending", "queued", "running", "qc_pending", "paused")
 #: Stops the user can continue from; the others end the batch or wait for a reconciliation.
@@ -110,7 +113,8 @@ def _check_unit(session, ctx, mode: str, assuming: tuple[str, ...] = ()) -> tupl
 
 
 def quote(session, ctx, execution_mode: str = "byok") -> dict:
-    """The start button's maximum: reading, understanding, ideas, one more ideas draft, the images and their checks.
+    """The start button's maximum: reading, understanding, one more understanding, ideas, one more ideas draft,
+    the images and their checks.
 
     Step 1 runs on one OpenAI key (design D8): without an active OpenAI key -- for instance with a
     Gemini key only -- the quote says ``openai_key_required`` before anything is started.
@@ -132,7 +136,8 @@ def quote(session, ctx, execution_mode: str = "byok") -> dict:
         unit, obstacle = Decimal("0"), obstacle or exc.code
     check, check_cap = _check_unit(session, ctx, execution_mode, assuming)
     obstacle = obstacle or check_cap["reason"]
-    planned = (("reading", 1, reading), ("understanding", 1, planning), ("ideas", 1, planning),
+    planned = (("reading", 1, reading), ("understanding", 1, planning),
+               ("understanding_retry", UNDERSTANDING_RETRIES, planning), ("ideas", 1, planning),
                ("ideas_retry", IDEAS_RETRIES, planning), ("images", ADS, unit), ("checks", ADS, check))
     total = sum((unit_cost * quantity for _, quantity, unit_cost in planned), Decimal("0"))
     if obstacle is None and execution_mode == "byok":
@@ -144,7 +149,7 @@ def quote(session, ctx, execution_mode: str = "byok") -> dict:
             obstacle = exc.code
     reason = "openai_key_required" if missing_key else obstacle
     quote_hash = service.digest([QUOTE_VERSION, execution_mode, str(reading), planning_hash, str(planning),
-                                 image, str(unit), ADS, IDEAS_RETRIES,
+                                 image, str(unit), ADS, IDEAS_RETRIES, UNDERSTANDING_RETRIES,
                                  [check_cap["provider"], check_cap["model"], str(check)]])
     return {"available": reason is None, "unavailable_reason": reason, "execution_mode": execution_mode,
             "maximum_cost": _money(total) if obstacle is None else "0", "currency": "USD",
@@ -210,7 +215,7 @@ def start(session, ctx, *, url, upload_intent_ids, text, market, ad_language, st
     batch = MarketingFirstBatchRecord(
         id=batch_id, workspace_id=ctx.workspace_id, intake_id=intake.id, market=market.strip(), ad_language=ad_language,
         strategy_language=strategy_language, execution_mode=execution_mode, state="reading",
-        progress_json={"image": _image(execution_mode), "ideas_retry_used": False,
+        progress_json={"image": _image(execution_mode), "ideas_retry_used": False, "understanding_retry_used": False,
                        "steps": [{"step": "reading", "resource_id": intake.id, "maximum": _money(reading)}]},
         confirmed_max_cost=quoted["maximum_cost"], reserved_total=_money(reading), quote_hash=quote_hash,
         operation_id=operation.id, initiator_id=ctx.initiator_id)
@@ -363,7 +368,14 @@ def advance(session, ctx, batch, *, resumed: bool = False) -> None:
         return
     if row.state == "input":
         if call is not None and call.kind == "understanding" and call.state == "failed" and not resumed:
-            _stop(session, ctx, batch, "step_failed", "understanding", code=call.error_code)
+            # A batch started before the understanding's retry was quoted has no ``understanding_retry_used``.
+            retry_kept = (batch.progress_json or {}).get("understanding_retry_used") is False
+            if call.error_code == "planner_output_invalid" and retry_kept:
+                # The confirmed total kept one planning call for this (#267): the next draft carries the refused
+                # draft and the facts it got wrong (``service.planning_repair_context``).
+                _admit_planning(session, ctx, batch, row, "understanding", retry=True)
+            else:
+                _stop(session, ctx, batch, "step_failed", "understanding", code=call.error_code)
             return
         _admit_planning(session, ctx, batch, row, "understanding")
         return
@@ -532,7 +544,7 @@ def _admit_planning(session, ctx, batch, row, kind: str, *, retry: bool = False)
         _stop(session, ctx, batch, "step_failed", step, code=_code(exc))
         return
     if retry:
-        batch.progress_json = {**(batch.progress_json or {}), "ideas_retry_used": True}
+        batch.progress_json = {**(batch.progress_json or {}), f"{kind}_retry_used": True}
     _record_step(batch, step, Decimal(call.maximum_cost), resource_id=call.id, **({"retry": True} if retry else {}))
     _set_state(batch, "understanding" if kind == "understanding" else "ideas")
 
@@ -771,7 +783,10 @@ def resume_offer(session, ctx, batch) -> dict | None:
     check, check_cap = _check_unit(session, ctx, batch.execution_mode)
     if unavailable or check_cap["reason"]:
         return None
-    retries = 0 if (batch.progress_json or {}).get("ideas_retry_used") else IDEAS_RETRIES
+    progress = batch.progress_json or {}
+    retries = 0 if progress.get("ideas_retry_used") else IDEAS_RETRIES
+    # Only a batch whose confirmed number included it may still draft the understanding again on its own.
+    understanding_retries = UNDERSTANDING_RETRIES if progress.get("understanding_retry_used") is False else 0
     concerned = len(attention.get("combination_ids") or []) or ADS
     if reason == "fault":
         remaining = Decimal(0)
@@ -784,7 +799,7 @@ def resume_offer(session, ctx, batch) -> dict | None:
     elif step == "ideas" and reason != "too_few_claims":
         remaining = planning * (1 + retries) + (unit + check) * ADS
     else:  # several models, too few claims, or the understanding: the understanding and everything after it
-        remaining = planning * (2 + retries) + (unit + check) * ADS
+        remaining = planning * (2 + retries + understanding_retries) + (unit + check) * ADS
     maximum = max(Decimal(batch.reserved_total) + remaining, Decimal(batch.confirmed_max_cost))
     requires = (["selected_variant"] if reason == "several_models" else []) + (
         ["additional_text"] if reason == "too_few_claims" else [])

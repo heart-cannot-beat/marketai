@@ -6,8 +6,10 @@ checks (#197), a fake vision model: no paid call.
 """
 import asyncio
 import json
+import unittest
 from contextlib import ExitStack
 from datetime import timedelta
+from functools import partial
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,7 +28,7 @@ from app.entitlements.cost_models import SpendReservationRecord
 from app.entitlements.credential_admin import CredentialAdmin
 from app.entitlements.credential_protector import CredentialProtector
 from app.generation.models import RunItemRecord
-from app.marketing import first_batch, ideas
+from app.marketing import first_batch, ideas, service
 from app.marketing.ai_qc_worker import execute_ai_qc
 from app.marketing.ideas_contracts import FirstBatchDetail, FirstBatchPage, FirstBatchQuote, IdeasProjectDetail
 from app.marketing.models import MarketingFirstBatchRecord, MarketingGenerationLinkRecord, MarketingProjectRecord, PlanningCallRecord
@@ -122,6 +124,28 @@ def repeated_mechanism(inputs):
     first = drafted["angles"][0]["expressions"]
     first[1]["visual_mechanism"] = first[0]["visual_mechanism"]
     return drafted
+
+
+def spliced_quote(inputs):
+    """An understanding the application refuses (#267): its second fact quotes two passages of the source
+    that are not next to each other, as one."""
+    drafted = example_result("understanding", inputs)
+    source = inputs["source_text"]
+    quote = source[:24] + " " + source[-24:]
+    assert quote not in source
+    drafted["facts"].append({"id": "f2", "statement": quote, "source_quote": quote, "confirmation": "unconfirmed"})
+    return drafted
+
+
+def understandings(*answers):
+    """``planner.example_result`` answering each drafting of the understanding with the next of ``answers``."""
+    queue = list(answers)
+
+    def answer(kind, inputs):
+        if kind == "understanding" and queue:
+            return queue.pop(0)(inputs)
+        return example_result(kind, inputs)
+    return answer
 
 
 class FakeWeb:
@@ -291,6 +315,11 @@ class FirstBatchFixtures(IdeasPlanningFixtures):
     def byok(self, planning=None):
         """An OpenAI key, a spend limit, a priced image model and image checks; every answer comes from a fake model."""
         self.paid_setup()
+        # The whole batch is about $1.05 with both extra draftings (#267); the planning fixture allows $1 per operation.
+        from app.entitlements.cost_models import SpendGuardrailRecord
+        with tenant_session(self.context) as session:
+            session.execute(update(SpendGuardrailRecord).where(SpendGuardrailRecord.workspace_id == self.context.workspace_id)
+                            .values(per_operation_limit=Decimal("2")))
         for name, value in {**PLANNING_ENV, **QC_ENV}.items():
             patcher = patch.dict("os.environ", {name: value})
             patcher.start()
@@ -321,13 +350,17 @@ class FirstBatchFixtures(IdeasPlanningFixtures):
                       "mock": MockLlmChatAdapter()},
             blob_store=self.blobs)
         self.planning_answers = list(planning or [])
+        self.understanding_answers = []
+        self.planning_requests = []
 
         async def complete(provider, model, credential, system, user):
+            self.planning_requests.append((system, user))
             inputs = json.loads(user)
             if "expression_catalog" in inputs:  # drafting the ideas
                 draft = self.planning_answers.pop(0) if self.planning_answers else EXAMPLE
                 return json.dumps(draft(inputs))
-            return json.dumps(example_result("understanding", inputs))
+            draft = self.understanding_answers.pop(0) if self.understanding_answers else partial(example_result, "understanding")
+            return json.dumps(draft(inputs))
         self.complete = AsyncMock(side_effect=complete)
         self.qc_complete = AsyncMock(side_effect=lambda provider, model, credential, inputs, images: check_report(inputs))
 
@@ -571,6 +604,57 @@ class FirstBatchStopTests(FirstBatchFixtures):
         self.assertEqual(self.batch(stopped["id"])["state"], "done")
         self.assertEqual(len(self.calls(stopped["project_id"])), 4)
 
+    def test_a_refused_understanding_is_drafted_again_once_naming_the_facts(self):
+        # #267: one quote joined two passages of the source; the other facts were right.
+        with patch("app.marketing.planner.example_result", side_effect=understandings(spliced_quote)):
+            done = self.started_and_drained()
+        self.assertEqual(done["state"], "done", done["attention"])
+        calls = self.calls(done["project_id"])
+        self.assertEqual([(c.kind, c.state) for c in calls],
+                         [("understanding", "failed"), ("understanding", "succeeded"), ("ideas", "succeeded")])
+        self.assertEqual(calls[0].error_code, "planner_output_invalid")
+        [error] = calls[0].output_json["validation_errors"]
+        self.assertEqual((error["type"], error["loc"]), ("fact_source_missing", ["facts", 1, "source_quote"]))
+        self.assertIn("f2", error["msg"])
+        # The second draft reads the refused draft and which fact to correct.
+        feedback = calls[1].input_json["rejected_plan_feedback"]
+        self.assertEqual((feedback["policy"], feedback["previous_call_id"]), (service.REPAIRS["understanding"], calls[0].id))
+        self.assertEqual(feedback["validation_errors"][0]["loc"], ["facts", 1, "source_quote"])
+        self.assertEqual([f["id"] for f in feedback["rejected_plan"]["facts"]], ["f1", "f2"])
+        progress = self.record(done["id"]).progress_json
+        self.assertEqual((progress["understanding_retry_used"], progress["ideas_retry_used"]), (True, False))
+        self.assertEqual(self.runs(), 6)
+
+    def test_an_understanding_refused_twice_stops(self):
+        with patch("app.marketing.planner.example_result", side_effect=understandings(spliced_quote, spliced_quote)):
+            stopped = self.started_and_drained()
+            self.assertEqual((stopped["state"], stopped["attention"]["reason"], stopped["attention"]["step"]),
+                             ("needs_attention", "step_failed", "understanding"))
+            self.assertEqual(stopped["attention"]["code"], "planner_output_invalid")
+            self.assertEqual([(c.kind, c.state) for c in self.calls(stopped["project_id"])],
+                             [("understanding", "failed")] * 2)
+            self.assertEqual(self.runs(), 0)
+            # The user may ask for one more draft, which carries the last refusal too.
+            self.assertEqual(stopped["resume"]["requires"], [])
+            self.resume(stopped)
+            self.drain()
+        self.assertEqual(self.batch(stopped["id"])["state"], "done")
+        calls = self.calls(stopped["project_id"])
+        self.assertEqual([c.kind for c in calls], ["understanding"] * 3 + ["ideas"])
+        self.assertEqual(calls[2].input_json["rejected_plan_feedback"]["previous_call_id"], calls[1].id)
+
+    def test_a_batch_started_before_the_retry_was_quoted_keeps_stopping(self):
+        # Its confirmed maximum has no second understanding in it.
+        batch = self.start()
+        with tenant_session(self.context) as session:
+            row = session.get(MarketingFirstBatchRecord, batch["id"])
+            row.progress_json = {k: v for k, v in row.progress_json.items() if k != "understanding_retry_used"}
+        with patch("app.marketing.planner.example_result", side_effect=understandings(spliced_quote)):
+            self.drain()
+        stopped = self.batch(batch["id"])
+        self.assertEqual((stopped["attention"]["reason"], stopped["attention"]["step"]), ("step_failed", "understanding"))
+        self.assertEqual(len(self.calls(stopped["project_id"])), 1)
+
 
 class FirstBatchWayBackTests(FirstBatchFixtures):
     """A user who left the reading page before the product existed finds the batch again (#204)."""
@@ -626,18 +710,21 @@ class FirstBatchPaidTests(FirstBatchFixtures):
         super().setUp()
         self.byok()
 
-    def test_the_quote_is_every_step_plus_one_more_drafting(self):
+    def test_the_quote_is_every_step_plus_one_more_drafting_of_each(self):
         quoted = self.quote("byok")
         self.assertTrue(quoted["available"], quoted)
         steps = {step["step"]: step for step in quoted["steps"]}
         reading = first_batch._reading_maximum()
         self.assertEqual(Decimal(steps["reading"]["maximum_cost"]), reading)
-        self.assertEqual([Decimal(steps[s]["maximum_cost"]) for s in ("understanding", "ideas", "ideas_retry")],
-                         [Decimal("0.1")] * 3)
+        # One more understanding (#267) and one more ideas draft (#193), each kept for a refused draft.
+        self.assertEqual([step["step"] for step in quoted["steps"]],
+                         ["reading", "understanding", "understanding_retry", "ideas", "ideas_retry", "images", "checks"])
+        self.assertEqual([Decimal(steps[s]["maximum_cost"]) for s in ("understanding", "understanding_retry", "ideas", "ideas_retry")],
+                         [Decimal("0.1")] * 4)
         self.assertEqual((steps["images"]["quantity"], Decimal(steps["images"]["unit_maximum"])), (6, Decimal("0.05")))
         # Each image's check is in the confirmed total too (#197).
         self.assertEqual((steps["checks"]["quantity"], Decimal(steps["checks"]["unit_maximum"])), (6, Decimal("0.05")))
-        self.assertEqual(Decimal(quoted["maximum_cost"]), reading + Decimal("0.3") + Decimal("0.3") + Decimal("0.3"))
+        self.assertEqual(Decimal(quoted["maximum_cost"]), reading + Decimal("0.4") + Decimal("0.3") + Decimal("0.3"))
         self.assertEqual((quoted["image_provider"], quoted["image_model"]), ("openai", config.OPENAI_IMAGE_MODEL))
 
     def test_a_retried_draft_finishes_within_the_confirmed_total(self):
@@ -649,8 +736,8 @@ class FirstBatchPaidTests(FirstBatchFixtures):
         self.assertEqual([c.kind for c in self.calls(done["project_id"])], ["understanding", "ideas", "ideas"])
         self.assertEqual(Decimal(done["reserved_total"]), self.reserved(done))
         self.assertLessEqual(Decimal(done["reserved_total"]), Decimal(done["confirmed_max_cost"]))
-        self.assertEqual(Decimal(done["reserved_total"]), Decimal(done["confirmed_max_cost"]),
-                         "the extra drafting was used, so every confirmed step was reserved once")
+        self.assertEqual(Decimal(done["confirmed_max_cost"]) - Decimal(done["reserved_total"]), Decimal("0.1"),
+                         "the extra ideas draft was used; only the extra understanding was not reserved")
         self.assertEqual(self.images.calls, 6)
         with tenant_session(self.context) as session:
             states = set(session.scalars(select(SpendReservationRecord.state).where(
@@ -663,7 +750,27 @@ class FirstBatchPaidTests(FirstBatchFixtures):
         done = self.batch(batch["id"])
         self.assertEqual(done["state"], "done", done["attention"])
         self.assertEqual(Decimal(done["reserved_total"]), self.reserved(done))
-        self.assertEqual(Decimal(done["confirmed_max_cost"]) - Decimal(done["reserved_total"]), Decimal("0.1"))
+        self.assertEqual(Decimal(done["confirmed_max_cost"]) - Decimal(done["reserved_total"]), Decimal("0.2"))
+
+    def test_a_refused_understanding_is_drafted_again_within_the_confirmed_total(self):
+        self.understanding_answers = [spliced_quote]
+        batch = self.start("byok")
+        self.drain()
+        done = self.batch(batch["id"])
+        self.assertEqual(done["state"], "done", done["attention"])
+        self.assertEqual([c.kind for c in self.calls(done["project_id"])], ["understanding", "understanding", "ideas"])
+        self.assertEqual(Decimal(done["reserved_total"]), self.reserved(done))
+        self.assertEqual(Decimal(done["confirmed_max_cost"]) - Decimal(done["reserved_total"]), Decimal("0.1"),
+                         "the extra understanding was used; only the extra ideas draft was not reserved")
+        # The model is told, after its refused draft, which fact to correct and how.
+        from app.marketing.planner import completion_messages
+        retry = [user for _, user in self.planning_requests if "rejected_plan_feedback" in json.loads(user)]
+        self.assertEqual(len(retry), 1)
+        messages = completion_messages("system", retry[0])
+        self.assertEqual([m["role"] for m in messages], ["system", "user", "assistant", "user"])
+        self.assertIn("f2", json.loads(messages[2]["content"])["facts"][1]["id"])
+        self.assertIn('"loc": ["facts", 1, "source_quote"]', messages[3]["content"])
+        self.assertIn("连续的一段原文", messages[3]["content"])
 
     def test_the_same_advance_twice_adds_no_reservation(self):
         batch = self.start("byok")
@@ -679,7 +786,7 @@ class FirstBatchPaidTests(FirstBatchFixtures):
         self.drain(job_types=("products.intake",))
         # The planning price went up after the user confirmed the start button's maximum (which includes the
         # image checks, #197, so the new price must pass it on the first planning call).
-        with patch.dict("os.environ", {"MARKETAI_PLANNING_MAX_COST_USD": "0.95"}):
+        with patch.dict("os.environ", {"MARKETAI_PLANNING_MAX_COST_USD": "1.05"}):
             self.drain()
             stopped = self.batch(batch["id"])
             self.assertEqual((stopped["state"], stopped["attention"]["reason"], stopped["attention"]["step"]),
@@ -745,9 +852,10 @@ class FirstBatchKeyTests(FirstBatchFixtures):
             self.assertEqual((quoted["available"], quoted["unavailable_reason"]), (False, "openai_key_required"))
             reading = first_batch._reading_maximum()
             self.assertEqual({step["step"]: Decimal(step["maximum_cost"]) for step in quoted["steps"]},
-                             {"reading": reading, "understanding": Decimal("0.1"), "ideas": Decimal("0.1"),
-                              "ideas_retry": Decimal("0.1"), "images": Decimal("0.3"), "checks": Decimal("0.3")})
-            self.assertEqual(Decimal(quoted["maximum_cost"]), reading + Decimal("0.9"))
+                             {"reading": reading, "understanding": Decimal("0.1"), "understanding_retry": Decimal("0.1"),
+                              "ideas": Decimal("0.1"), "ideas_retry": Decimal("0.1"), "images": Decimal("0.3"),
+                              "checks": Decimal("0.3")})
+            self.assertEqual(Decimal(quoted["maximum_cost"]), reading + Decimal("1.0"))
             # Naming the number starts nothing: without the key the start is still refused.
             refused = self.start("byok", quote_hash=quoted["quote_hash"], expect=409)
             self.assertEqual(refused["params"]["reason"], "openai_key_required")
@@ -766,7 +874,7 @@ class FirstBatchKeyTests(FirstBatchFixtures):
                          (False, "openai_key_required", "0"))
 
     def test_missing_the_key_a_total_over_the_spend_limit_names_no_maximum(self):
-        # The whole batch is about 0.95; a limit of 0.5 per operation would refuse it once the key is saved.
+        # The whole batch is about 1.05; a limit of 0.5 per operation would refuse it once the key is saved.
         self.spend_limit("0.5")
         with patch.dict("os.environ", {**PLANNING_ENV, **QC_ENV}), patch.object(config, "GENERATION_MAX_COSTS_JSON", IMAGE_PRICES):
             quoted = self.quote("byok")
@@ -953,3 +1061,40 @@ def last_attempt(context):
     with platform_session() as session:
         session.execute(update(JobRecord).where(JobRecord.workspace_id == context.workspace_id,
                                                 JobRecord.type == first_batch.JOB_TYPE).values(max_attempts=1))
+
+
+class FactErrorTests(unittest.TestCase):
+    """#267: a refused understanding names every fact it got wrong; an edit is refused exactly as before."""
+
+    SOURCE = "Acme Charge Home charges at 11 kW. It fits most garages. Rated IP65 for outdoor use."
+
+    def understanding(self):
+        from app.marketing.ideas_contracts import IdeasUnderstanding
+        drafted = example_result("understanding", {"source_text": self.SOURCE})
+        drafted["facts"] += [
+            {"id": "f2", "statement": "Charges at 11 kW, rated IP65", "confirmation": "unconfirmed",
+             "source_quote": "Acme Charge Home charges at 11 kW. Rated IP65"},
+            {"id": "f3", "statement": "Charges at 22 kW in most garages", "confirmation": "unconfirmed",
+             "source_quote": "It fits most garages."}]
+        return IdeasUnderstanding.model_validate(drafted)
+
+    def test_every_wrong_fact_is_named_with_where_it_is_wrong(self):
+        errors = service.fact_errors(self.SOURCE, self.understanding())
+        self.assertEqual([(e["type"], e["loc"]) for e in errors],
+                         [("fact_source_missing", ["facts", 1, "source_quote"]),
+                          ("fact_claim_unsupported", ["facts", 2, "statement"])])
+        self.assertIn("f2", errors[0]["msg"])
+        self.assertIn("f3", errors[1]["msg"])
+        self.assertEqual(service.fact_errors(self.SOURCE, understanding_of(self.SOURCE)), [])
+
+    def test_validating_an_edit_raises_the_first_error_as_before(self):
+        with self.assertRaises(service.MarketingError) as raised:
+            service.validate_understanding(SimpleNamespace(source_text=self.SOURCE), self.understanding())
+        self.assertEqual((raised.exception.code, raised.exception.detail, raised.exception.field_errors),
+                         ("fact_source_missing", "事实引用必须能在原始资料中找到；新增信息请先补充产品资料。", []))
+
+
+def understanding_of(source):
+    """The Controlled Mock understanding of ``source``, whose one fact quotes it."""
+    from app.marketing.ideas_contracts import IdeasUnderstanding
+    return IdeasUnderstanding.model_validate(example_result("understanding", {"source_text": source}))

@@ -8898,6 +8898,7 @@ export interface components {
       step:
         | 'reading'
         | 'understanding'
+        | 'understanding_retry'
         | 'ideas'
         | 'ideas_retry'
         | 'images'
