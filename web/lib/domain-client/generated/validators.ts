@@ -6912,6 +6912,7 @@ const COMPONENT_SCHEMAS: Record<string, object> = {
         enum: [
           'reading',
           'understanding',
+          'understanding_retry',
           'ideas',
           'ideas_retry',
           'images',

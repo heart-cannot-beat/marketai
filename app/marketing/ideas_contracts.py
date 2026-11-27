@@ -516,7 +516,7 @@ class StartIdeasChecks(Document):
 
 
 class FirstBatchQuoteStep(Document):
-    step: Literal["reading", "understanding", "ideas", "ideas_retry", "images", "checks"]
+    step: Literal["reading", "understanding", "understanding_retry", "ideas", "ideas_retry", "images", "checks"]
     quantity: int
     unit_maximum: str
     maximum_cost: str

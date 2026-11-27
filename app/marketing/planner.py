@@ -175,6 +175,14 @@ def completion_messages(system, user):
             "追加的讲法的visual_mechanism不能和同一主张已有讲法的相同；每个表达都写how_to_tell、visual_mechanism和evidence_basis；"
             "每个表达正好1个组合；fact_ids只引用understanding里的事实。拒收草稿中的文案不是已核对的事实。"})
         return messages
+    if feedback["policy"] == service.REPAIRS["understanding"]:
+        messages.append({"role": "user", "content":
+            "应用校验拒收了上一版产品理解；这是显式修正请求，不要原样复述。错误：" + errors
+            + "。依据最初的产品资料重新输出完整的产品理解：每条事实的source_quote必须是原始资料里连续的一段原文，逐字照抄，"
+            "不能把不相邻的句子拼在一起，也不能改写或翻译；一条事实需要两处原文时，拆成两条事实；"
+            "找不到一段原文能支撑的说法，不要写成事实，放进unsupported_claims。statement里的认证、参数和价格必须出现在它的source_quote里。"
+            "所有事实的confirmation都是unconfirmed。拒收草稿中的内容不是已核对的事实。"})
+        return messages
     if feedback["policy"] == service.REPAIRS["ideas"]:
         messages.append({"role": "user", "content":
             "应用校验拒收了上一版广告想法；这是显式修正请求，不要原样复述。错误：" + errors
@@ -777,6 +785,9 @@ async def execute_planning(ctx, call_id, *, complete=text_completion):
             # do not put customer input or credential material in shared logs.
             errors = (exc.errors(include_input=False, include_url=False, include_context=False)
                 if isinstance(exc, ValidationError) else [{"type": getattr(exc, "code", "invalid_json"), "loc": []}])
+            if call.kind == "understanding" and isinstance(exc, service.MarketingError) and exc.code in service.FACT_ERRORS:
+                # Every fact the draft got wrong, by place, so drafting it again can say which to rewrite (#267).
+                errors = service.fact_errors(row.source_text, value)
             if call.kind == "ideas" and isinstance(exc, service.MarketingError) and exc.field_errors:
                 # Ideas name where the draft failed, so an explicit retry can say which way of telling to rewrite.
                 errors = [{"type": exc.code, "msg": exc.detail, "loc": [int(part) if part.isdigit() else part

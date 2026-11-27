@@ -227,13 +227,31 @@ def advance(session, ctx, row, revision, reason, *, allow_call=False, **fields):
     checkpoint(session, ctx, row, reason)
 
 
-def validate_understanding(row, understanding):
+#: The codes ``validate_understanding`` refuses a fact with.
+FACT_ERRORS = ("fact_source_missing", "fact_claim_unsupported")
+
+
+def fact_errors(source_text, understanding):
+    """Every fact whose quote is not one unbroken passage of ``source_text``, or whose statement claims more
+    than its quote, named by place (#267): a refused draft says which facts to rewrite."""
     from .claims import unsupported_claims
-    for fact in understanding.facts:
-        if fact.source_quote not in row.source_text:
+    errors = []
+    for index, fact in enumerate(understanding.facts):
+        if fact.source_quote not in source_text:
+            errors.append({"type": "fact_source_missing", "loc": ["facts", index, "source_quote"],
+                           "msg": f"事实 {fact.id} 的 source_quote 不是原始资料里连续的一段原文"})
+        elif unsupported_claims(fact.statement, fact.source_quote):
+            errors.append({"type": "fact_claim_unsupported", "loc": ["facts", index, "statement"],
+                           "msg": f"事实 {fact.id} 的认证、参数或价格在它的 source_quote 里没有依据"})
+    return errors
+
+
+def validate_understanding(row, understanding):
+    """Refuse the first fact that fails, as an edit always was; ``fact_errors`` names every one (#267)."""
+    for error in fact_errors(row.source_text, understanding)[:1]:
+        if error["type"] == "fact_source_missing":
             raise MarketingError("fact_source_missing", "事实引用必须能在原始资料中找到；新增信息请先补充产品资料。")
-        if unsupported_claims(fact.statement, fact.source_quote):
-            raise MarketingError("fact_claim_unsupported", "认证、参数和价格声明必须有对应原文依据，不能仅引用产品名。")
+        raise MarketingError("fact_claim_unsupported", "认证、参数和价格声明必须有对应原文依据，不能仅引用产品名。")
 
 
 def validate_plan(row, plan, *, require_brief=True, confirming=False, basis=None, citation=None):
@@ -362,7 +380,9 @@ def planner_capability(session, ctx, *, assuming: tuple[str, ...] = ()):
 #: Per drafting kind, the policy its explicit repair carries; the planner renders each its own correction turn.
 REPAIRS = {"plan": "marketing-explicit-plan-repair-v1", "ideas": "marketing-explicit-ideas-repair-v1",
            # One more claim or way of telling for drafted ideas (#200): its own correction turn.
-           "ideas_addition": "marketing-explicit-ideas-addition-repair-v1"}
+           "ideas_addition": "marketing-explicit-ideas-addition-repair-v1",
+           # An ads-first understanding whose facts the application refused (#267).
+           "understanding": "marketing-explicit-understanding-repair-v1"}
 
 
 def planning_repair_context(session, ctx, row, kind="plan"):
@@ -384,8 +404,8 @@ def planning_repair_context(session, ctx, row, kind="plan"):
         "validation_errors": errors}
     rejected = output.get("rejected_output")
     if isinstance(rejected, dict):
-        from .ideas_contracts import Ideas
-        fields = Ideas.model_fields if kind == "ideas" else TestPlan.model_fields
+        from .ideas_contracts import Ideas, IdeasUnderstanding
+        fields = {"ideas": Ideas, "understanding": IdeasUnderstanding}.get(kind, TestPlan).model_fields
         candidate = {k: v for k, v in rejected.items() if k in fields}
         if len(json.dumps(candidate, ensure_ascii=False).encode()) <= 16000:
             feedback["rejected_plan"] = candidate
@@ -410,6 +430,10 @@ def start_planning(session, ctx, row, revision, kind, mode, quote_hash, directio
     if flow == "ads_first" and kind == "understanding":
         # An ads-first understanding also lists the claims read without a source (#224); plan-first inputs are unchanged.
         inputs["flow"] = flow
+        # A drafting again after a refusal reads the refused draft and the facts it got wrong (#267).
+        repair = planning_repair_context(session, ctx, row, "understanding")
+        if repair:
+            inputs["rejected_plan_feedback"] = repair
     if kind == "plan":
         from .progression import planning_history
         from .expression_catalog import planner_reference
