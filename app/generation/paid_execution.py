@@ -105,18 +105,23 @@ def _sync_operation(session, ctx, run_id):
 PROMPT_LAYOUT = "product-facts-last-v1"
 
 
-def dispatch_prompt(frozen, variant_index):
+def dispatch_prompt(frozen, variant_index, provider=None):
     """The exact text the image model receives for one variation of a frozen recipe.
 
     Product facts are claim evidence, not ad copy (#289): sent as frozen, never translated, in a closing
-    section after every instruction. A plan's confirmed ad language is the only copy exception the header names."""
+    section after every instruction. A plan's confirmed ad language is the only copy exception the header names.
+    A ``provider`` that renders a nearby canvas is told the frame the Worker keeps (``canvas_fit``, #268)."""
     import json
+    from . import canvas_fit
     parts = [frozen["prompt"]]
     if frozen.get("source_image"):
         parts.append("Reference image 1 is the original creative to edit. Any additional references are product photos for appearance fidelity. Apply the requested changes to the original creative.")
     if frozen.get("image_tool"):
         from .image_tools import instruction
         parts.append(instruction(frozen["image_tool"]))
+    fitted = canvas_fit.plan(provider, frozen["format"].get("aspect_ratio"), frozen.get("image_tool"))
+    if fitted:
+        parts.append(canvas_fit.note(fitted))
     parts.append(f"Creative variation {variant_index + 1} of {frozen['format']['variants']}.")
     language = (frozen.get("marketing_intent") or {}).get("ad_language")
     header = ("Product facts (claim evidence only, not ad copy): never render their words, labels or language as image text, "
@@ -238,11 +243,14 @@ def _prepare(session, ctx, job_id, item_id):
         chargeability="charged" if item.execution_mode == "byok" else "legacy_reserved",
     )
     _transition_item(session, ctx, item, state="running")
+    from . import canvas_fit
+    fitted = canvas_fit.plan(recipe["provider"], frozen["format"].get("aspect_ratio"), frozen.get("image_tool"))
     append_event(session, workspace_id=ctx.workspace_id, provider_call_attempt_id=attempt.id,
                  event_type="dispatch_started", payload={"provider": recipe["provider"], "model": recipe["model"],
-                                                         "prompt_layout": PROMPT_LAYOUT},
+                                                         "prompt_layout": PROMPT_LAYOUT,
+                                                         **({"canvas_fit": canvas_fit.POLICY} if fitted else {})},
                  executor="worker")
-    prompt = dispatch_prompt(frozen, item.variant_index)
+    prompt = dispatch_prompt(frozen, item.variant_index, recipe["provider"])
     return {"attempt_id": attempt.id, "run_id": run.id, "recipe": recipe,
             "credential_scope": credential_scope, "prompt": prompt, "reservation_id": reservation.id}
 
@@ -351,7 +359,7 @@ async def execute_run_item(ctx, job_id, item_id, blob_store, *, adapter=None):
             expected_delivery = reference_delivery_metadata(references)
             if any(result.metadata.get(k) != v for k, v in expected_delivery.items()):
                 raise ValueError("provider_reference_delivery_unverified")
-        tool_evidence = None
+        tool_evidence = fit_evidence = None
         if tool_spec:
             from .image_tools import delivery_metadata, finish
             if recipe["execution_mode"] == "byok" and any(result.metadata.get(k) != v for k, v in delivery_metadata(tool_spec["kind"], edit_mask).items()):
@@ -360,6 +368,11 @@ async def execute_run_item(ctx, job_id, item_id, blob_store, *, adapter=None):
             tool_evidence["delivery"] = delivery_metadata(tool_spec["kind"], edit_mask)
         else:
             content = result.output_bytes
+            # GPT-Image renders 4:5 as 2:3; keep the central 4:5 the user chose (#268).
+            from . import canvas_fit
+            fitted = canvas_fit.plan(recipe["provider"], fmt["aspect_ratio"])
+            if fitted:
+                content, fit_evidence = canvas_fit.fit(content, fitted)
         with Image.open(io.BytesIO(content)) as image:
             image.verify()
             mime = Image.MIME[image.format]
@@ -415,6 +428,8 @@ async def execute_run_item(ctx, job_id, item_id, blob_store, *, adapter=None):
         import hashlib
         output = {"object_key": blob.committed_key, "storage_version": blob.storage_version_id,
                   "content_sha256": hashlib.sha256(content).hexdigest(), "byte_size": len(content), "mime_type": mime}
+        if fit_evidence:
+            output["canvas_fit"] = fit_evidence
         if tool_evidence:
             output["image_tool"] = tool_evidence
             from math import gcd

@@ -112,6 +112,9 @@ def test_opaque_or_empty_cutout_cannot_become_a_success(transparent_color):
 
 
 class TestSupplierImageTools(MarketingWorkflowFixtures):
+    # The round's images are 4:5 like GPT-Image's stored 4:5 output (#268), and the tools say so.
+    generated_size = (80, 100)
+
     def setup_round(self, paid=False):
         from tests.test_marketing_ai_qc import TestMarketingAIQC
         return TestMarketingAIQC.setup_round(self, paid=paid)
@@ -122,7 +125,7 @@ class TestSupplierImageTools(MarketingWorkflowFixtures):
     def prepare(self, row, kind, **values):
         row = self.command(row, "feedback-drafts", {"asset_version_id": row["assets"][0]["asset_version_id"],
             "provider": "openai" if row["execution_mode"] == "byok" else "mock",
-            "model": config.OPENAI_IMAGE_MODEL if row["execution_mode"] == "byok" else "mock-v1", "image_tool": spec(kind, **values)}, 201)
+            "model": config.OPENAI_IMAGE_MODEL if row["execution_mode"] == "byok" else "mock-v1", "image_tool": spec(kind, **{"source_width": 80, "source_height": 100, **values})}, 201)
         draft = self.client.get(f"/api/v1/generation/drafts/{row['feedback_drafts'][-1]['draft_id']}").json()
         preview = self.client.post(f"/api/v1/generation/drafts/{draft['id']}/previews", headers=self.headers(draft["revision"]))
         self.assertEqual(preview.status_code, 201, preview.text)
@@ -172,7 +175,7 @@ class TestSupplierImageTools(MarketingWorkflowFixtures):
                     reservation = session.scalar(select(SpendReservationRecord).where(SpendReservationRecord.run_item_id == item_id))
                     self.assertEqual(reservation.state, "settled")
                 content = asyncio.run(read_committed(self.blobs, blob, 1000000))
-                self.assertEqual(Image.open(io.BytesIO(content)).size, (160,120) if kind == "upscale" else (80,60))
+                self.assertEqual(Image.open(io.BytesIO(content)).size, (160,200) if kind == "upscale" else (80,100))
                 child = next(a for a in row["assets"] if a["asset_version_id"] == child_id)
                 self.assertIsNone(child["quality"])
                 self.assertIsNone(child["ai_qc"])
